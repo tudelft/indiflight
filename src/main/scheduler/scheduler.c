@@ -501,7 +501,11 @@ FAST_CODE void scheduler(void)
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_FILTER), currentTimeUs);
             }
             if (pidLoopReady()) {
+#ifdef USE_INDI
+                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_INDI), currentTimeUs);
+#else
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_PID), currentTimeUs);
+#endif
             }
 
             // Check for incoming RX data. Don't do this in the checker as that is called repeatedly within

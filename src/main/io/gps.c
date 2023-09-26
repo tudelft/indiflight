@@ -760,6 +760,7 @@ static void updateGpsIndicator(timeUs_t currentTimeUs)
     static uint32_t GPSLEDTime;
     if ((int32_t)(currentTimeUs - GPSLEDTime) >= 0 && STATE(GPS_FIX) && (gpsSol.numSat >= gpsRescueConfig()->minSats)) {
         GPSLEDTime = currentTimeUs + 150000;
+        //GPSLEDTime = currentTimeUs + 75000;
         LED1_TOGGLE;
     }
 }

@@ -58,11 +58,14 @@
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/position.h"
+#include "flight/pos_ctl.h"
+#include "flight/att_ctl.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
 #include "io/dashboard.h"
 #include "io/flashfs.h"
+#include "io/external_pos.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
 #include "io/piniobox.h"
@@ -317,11 +320,27 @@ void taskUpdateRangefinder(timeUs_t currentTimeUs)
 #ifdef USE_TELEMETRY
 static void taskTelemetry(timeUs_t currentTimeUs)
 {
-    if (!cliMode && featureIsEnabled(FEATURE_TELEMETRY)) {
-        subTaskTelemetryPollSensors(currentTimeUs);
+    //if (!cliMode && featureIsEnabled(FEATURE_TELEMETRY)) {
+    //    subTaskTelemetryPollSensors(currentTimeUs);
 
         telemetryProcess(currentTimeUs);
-    }
+    //}
+}
+#endif
+
+#ifdef USE_GPS_PI
+static void taskGpsPi(timeUs_t currentTimeUs)
+{
+    getExternalPos(currentTimeUs);
+    getFakeGps(currentTimeUs);
+    getPosSetpoint(currentTimeUs);
+}
+#endif
+
+#ifdef USE_POS_CTL
+static void taskPosCtl(timeUs_t currentTimeUs)
+{
+    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -369,6 +388,9 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_GYRO] = DEFINE_TASK("GYRO", NULL, NULL, taskGyroSample, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
     [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
     [TASK_PID] = DEFINE_TASK("PID", NULL, NULL, taskMainPidLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+#ifdef USE_INDI
+    [TASK_INDI] = DEFINE_TASK("INDI", NULL, NULL, taskMainIndiLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+#endif
 
 #ifdef USE_ACC
     [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
@@ -411,7 +433,15 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_TELEMETRY
-    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(250), TASK_PRIORITY_LOW),
+    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(2000), TASK_PRIORITY_LOW),
+#endif
+
+#ifdef USE_GPS_PI
+    [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#endif
+
+#ifdef USE_POS_CTL
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -504,9 +534,13 @@ void tasksInit(void)
         rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
         rescheduleTask(TASK_PID, gyro.targetLooptime);
+#ifdef USE_INDI
+        rescheduleTask(TASK_INDI, gyro.targetLooptime);
+#endif
         setTaskEnabled(TASK_GYRO, true);
         setTaskEnabled(TASK_FILTER, true);
         setTaskEnabled(TASK_PID, true);
+        setTaskEnabled(TASK_INDI, true);
         schedulerEnableGyro();
     }
 
@@ -559,6 +593,7 @@ void tasksInit(void)
 #ifdef USE_TELEMETRY
     if (featureIsEnabled(FEATURE_TELEMETRY)) {
         setTaskEnabled(TASK_TELEMETRY, true);
+        /*
         if (rxRuntimeState.serialrxProvider == SERIALRX_JETIEXBUS) {
             // Reschedule telemetry to 500hz for Jeti Exbus
             rescheduleTask(TASK_TELEMETRY, TASK_PERIOD_HZ(500));
@@ -566,7 +601,17 @@ void tasksInit(void)
             // Reschedule telemetry to 500hz, 2ms for CRSF
             rescheduleTask(TASK_TELEMETRY, TASK_PERIOD_HZ(500));
         }
+        */
     }
+#endif
+
+#ifdef USE_GPS_PI
+    // todo! CHECK OTHER FLAGS for consistency
+    setTaskEnabled(TASK_GPS_PI, true);
+#endif
+
+#ifdef USE_POS_CTL
+    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_LED_STRIP

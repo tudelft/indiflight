@@ -112,6 +112,7 @@ quaternion offset = QUATERNION_INITIALIZE;
 
 // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
 attitudeEulerAngles_t attitude = EULER_INITIALIZE;
+quaternion attitude_q = QUATERNION_INITIALIZE;
 
 PG_REGISTER_WITH_RESET_TEMPLATE(imuConfig_t, imuConfig, PG_IMU_CONFIG, 2);
 
@@ -315,6 +316,9 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     q.x *= recipNorm;
     q.y *= recipNorm;
     q.z *= recipNorm;
+
+    // copy to extern
+    attitude_q = q;
 
     // Pre-compute rotation matrix from quaternion
     imuComputeRotationMatrix();

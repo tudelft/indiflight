@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "start-openocd",
+            "command": "/usr/bin/sshpass",
+            "args": [
+                "-p",
+                "pi",
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "ConnectTimeout=3",
+                "pi@10.0.0.1",
+                "sudo",
+                "systemctl",
+                "start",
+                "openocd.service"
+            ],
+            "type": "shell",
+            "presentation": {
+                "reveal": "silent",
+                "revealProblems": "onProblem",
+                "close": true
+            }
+        }
+    ]
+}

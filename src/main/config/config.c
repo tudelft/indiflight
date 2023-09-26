@@ -240,8 +240,14 @@ static void validateAndFixConfig(void)
     }
 #endif
     if (
+// keep FEATURE_GPS enabled if: GPS_MSP, gpsSerial, GPS via PI uplink
 #if defined(USE_GPS)
-        gpsConfig()->provider != GPS_MSP && !gpsSerial &&
+        !(gpsConfig()->provider == GPS_MSP 
+            || gpsSerial
+#if defined(USE_TELEMETRY_PI) && defined(TELEMETRY_PI_UPLINK) && defined(USE_GPS_PI)
+            || (findSerialPortConfig(FUNCTION_TELEMETRY_PI))
+#endif
+        ) &&
 #endif
         true) {
         featureDisableImmediate(FEATURE_GPS);

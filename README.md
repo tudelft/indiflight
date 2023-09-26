@@ -1,10 +1,47 @@
-![Betaflight](docs/assets/images/bf_logo.png)
+![Betaflight](docs/assets/images/IndiflightLogoFull.png)
 
 [![Latest version](https://img.shields.io/github/v/release/betaflight/betaflight)](https://github.com/betaflight/betaflight/releases) [![Build](https://img.shields.io/github/actions/workflow/status/betaflight/betaflight/nightly.yml?branch=master)](https://github.com/betaflight/betaflight/actions/workflows/nightly.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Join us on Discord!](https://img.shields.io/discord/868013470023548938)](https://discord.gg/n4E6ak4u3c)
 
 Betaflight is flight controller software (firmware) used to fly multi-rotor craft and fixed wing craft.
 
 This fork differs from Baseflight and Cleanflight in that it focuses on flight performance, leading-edge feature additions, and wide target support.
+
+## Custom make command
+
+TODO: this can be improved
+
+For Tills MATEKH743 MINI V3:
+```bash
+make STM32H743 EXTRA_FLAGS="-D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_BARO -DUSE_BARO_BMP280 -DUSE_BARO_DPS310 -DUSE_DSHOT -DUSE_GPS -DUSE_GPS_PLUS_CODES -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_TELEMETRY -DUSE_TELEMETRY_CRSF -DUSE_VTX -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DTELEMETRY_PI_UPLINK"
+```
+
+This has been improved. Put all that junk in `make/local.mk`:
+```Makefile
+TARGET=STM32H743
+EXTRA_FLAGS=-D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_BARO -DUSE_BARO_BMP280 -DUSE_BARO_DPS310 -DUSE_DSHOT -DUSE_GPS -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DTELEMETRY_PI_UPLINK -DUSE_GPS_PI
+```
+
+## Flashing and Debugging over pi
+
+For context, see REAMDME's of https://github.com/tblaha/pi-kompaan.
+
+Furthermore, install:
+```shell
+apt install gdb-multiarch binutils-multiarch sshpass
+```
+
+If connected to the pi-kompaan raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash:
+```bash
+make remote_flash
+# make DEBUG=GDB remote_flash  # to compile with symbols and without optimisations
+```
+
+To debug within VScode, just hit `CTRL+SHIFT+D`, hit play and be a little bit patient (15sec or so? Then youll be taken to the start of `main()`).
+
+DO NOT CLICK ON `Global` variables, this froze and crashed by VScode.
+
+You can reset and execution of betaflight by typing `monitor reset` in the `DEBUG CONSOLE`.
+
 
 ## Events
 

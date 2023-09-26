@@ -33,14 +33,14 @@ typedef enum {
 } portMode_e;
 
 typedef enum {
-    SERIAL_NOT_INVERTED  = 0 << 0,
-    SERIAL_INVERTED      = 1 << 0,
-    SERIAL_STOPBITS_1    = 0 << 1,
-    SERIAL_STOPBITS_2    = 1 << 1,
-    SERIAL_PARITY_NO     = 0 << 2,
-    SERIAL_PARITY_EVEN   = 1 << 2,
-    SERIAL_UNIDIR        = 0 << 3,
-    SERIAL_BIDIR         = 1 << 3,
+    SERIAL_NOT_INVERTED  = 0 << 0, // 0000 all the "0 << x" are the defaults // tblaha: analysis
+    SERIAL_INVERTED      = 1 << 0, // 0001
+    SERIAL_STOPBITS_1    = 0 << 1, // 0000
+    SERIAL_STOPBITS_2    = 1 << 1, // 0010
+    SERIAL_PARITY_NO     = 0 << 2, // 0000
+    SERIAL_PARITY_EVEN   = 1 << 2, // 0100
+    SERIAL_UNIDIR        = 0 << 3, // 0000
+    SERIAL_BIDIR         = 1 << 3, // 1000
 
     /*
      * Note on SERIAL_BIDIR_PP
@@ -49,10 +49,10 @@ typedef enum {
      * To ensure the first start bit to be sent, prepend a zero byte (0x00)
      * to actual data bytes.
      */
-    SERIAL_BIDIR_OD        = 0 << 4,
-    SERIAL_BIDIR_PP        = 1 << 4,
-    SERIAL_BIDIR_NOPULL    = 1 << 5, // disable pulls in BIDIR RX mode
-    SERIAL_BIDIR_PP_PD     = 1 << 6, // PP mode, normall inverted, but with PullDowns, to fix SA after bidir issue fixed (#10220)
+    SERIAL_BIDIR_OD        = 0 << 4, // 0000 0000
+    SERIAL_BIDIR_PP        = 1 << 4, // 0001 0000
+    SERIAL_BIDIR_NOPULL    = 1 << 5, // 0010 0000 disable pulls in BIDIR RX mode
+    SERIAL_BIDIR_PP_PD     = 1 << 6, // 0100 0000 PP mode, normall inverted, but with PullDowns, to fix SA after bidir issue fixed (#10220)
 } portOptions_e;
 
 // Define known line control states which may be passed up by underlying serial driver callback

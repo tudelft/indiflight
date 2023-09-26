@@ -171,6 +171,8 @@ bool cliMode = false;
 
 #include "telemetry/frsky_hub.h"
 #include "telemetry/telemetry.h"
+#include "pi-protocol.h"
+#include "pi-messages.h"
 
 #include "cli.h"
 
@@ -438,6 +440,15 @@ void cliPrintf(const char *format, ...)
     va_end(va);
 }
 
+int cliPrintfi(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    cliPrintfva(format, va);
+    va_end(va);
+
+    return 0;
+}
 
 void cliPrintLinef(const char *format, ...)
 {
@@ -446,6 +457,17 @@ void cliPrintLinef(const char *format, ...)
     cliPrintfva(format, va);
     va_end(va);
     cliPrintLinefeed();
+}
+
+int cliPrintLinefi(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    cliPrintfva(format, va);
+    va_end(va);
+    cliPrintLinefeed();
+
+    return 0;
 }
 
 static void cliPrintErrorVa(const char *cmdName, const char *format, va_list va)
@@ -6009,6 +6031,23 @@ static void cliTimer(const char *cmdName, char *cmdline)
 }
 #endif
 
+#ifdef TELEMETRY_PI_UPLINK
+static void cliUplink(const char *cmdName, char *cmdline)
+{
+    if (strcasecmp(cmdline, "stats") == 0) {
+#ifdef PI_STATS
+        piPrintStats(&cliPrintLinefi);
+#endif
+    } else if (strcasecmp(cmdline, "msgs") == 0) {
+#ifdef PI_USE_PRINT_MSGS
+        piPrintMsgs(&cliPrintLinefi);
+#endif
+    } else {
+        cliShowParseError(cmdName);
+    }
+}
+#endif
+
 #if defined(USE_RESOURCE_MGMT)
 static void cliResource(const char *cmdName, char *cmdline)
 {
@@ -6613,6 +6652,9 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_TIMER_MGMT
     CLI_COMMAND_DEF("timer", "show/set timers", "<> | <pin> list | <pin> [af<alternate function>|none|<option(deprecated)>] | list | show", cliTimer),
 #endif
+#ifdef TELEMETRY_PI_UPLINK
+    CLI_COMMAND_DEF("uplink", "show pi uplink stats/msgs", "stats | msgs", cliUplink),
+#endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI
@@ -6860,7 +6902,7 @@ void cliEnter(serialPort_t *serialPort)
 #else
     cliPrintLine("\r\nCLI");
 #endif
-    setArmingDisabled(ARMING_DISABLED_CLI);
+    //setArmingDisabled(ARMING_DISABLED_CLI); // tblaha: highway to the dangerzone TODO
 
     cliPrompt();
 

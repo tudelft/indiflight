@@ -77,6 +77,74 @@ void ui2a(unsigned int num, unsigned int base, int uc, char *bf)
     *bf = 0;
 }
 
+void f2a (double dbl, unsigned int base, char *bf)
+{
+    // we have 12 chars to play with.
+    // format: -2.345e-100  (NULL terminated, so 12)
+
+    if ((base > 16) || (base < 8)) {
+        return;
+    }
+    //unsigned int d = 1;
+    double d = 1.;
+    int e = 0;
+    int sign;
+    if (dbl >= 0.L) {
+        sign = +1;
+    } else {
+        sign = -1;
+        dbl = -dbl;
+    }
+
+    if ((float) dbl < 1e-38F) {
+        // assume 0
+        memcpy (bf, "+0.000e+0\0", 10);
+        //ui2a (0, 10, 0, bf);
+        return;
+    } else if ((float) dbl > 1e38F) {
+        //assume inf
+        *(bf++) = sign == +1 ? '+' : '-';
+        memcpy(bf, "inf\0", 4);
+        return;
+    }
+
+    unsigned int first_digit;
+    unsigned int remainder;
+    if (dbl >= (double) base) {
+        while ((first_digit = ((dbl / d) >= 127.L) ? (base + 1) : (unsigned int) (dbl / d)) >= base) {
+	        d *= base;
+	        e++;
+	    }
+        remainder = (unsigned int) ((((dbl / d) - first_digit) * 1e3L) + .5L);
+    } else {
+        while ((first_digit = (unsigned int) (dbl * d)) < 1) {
+	        d *= base;
+	        e--;
+	    }
+        remainder = (unsigned int) ((((dbl * d) - first_digit) * 1e3L) + .5L);
+    }
+
+    if ((first_digit >= base) || (first_digit < 1)) {
+        // panic
+        memcpy(bf, "+6.666e+666\0", 12);
+        return;
+    }
+
+    *bf++ = (sign == +1) ? '+' : '-';
+
+    *bf++ = (first_digit < 10) ? '0' + first_digit : 'a' + (first_digit - 10);
+    *bf++ = '.';
+
+    ui2a (remainder, base, 0, bf);
+
+    bf = bf + 3;			//i dont know why.. allez
+    *bf++ = 'e';
+    *bf++ = (e >= 0) ? '+' : '-';	// override the \0 asigned by ui2a
+    unsigned int emag = (e >= 0) ? e : -e;
+
+    ui2a (emag, base, 0, bf);
+}
+
 void i2a(int num, char *bf)
 {
     if (num < 0) {

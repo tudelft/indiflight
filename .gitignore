@@ -38,7 +38,7 @@ stm32.mak
 /support/ozone
 
 # artefacts for VS Code
-/.vscode/
+/.vscode/settings.json
 
 # artefacts for Visual Studio 
 /.vs
@@ -55,3 +55,5 @@ eeprom.bin
 
 # board scratch space used for automated build API, and developers
 /src/main/board
+
+make/local.mk

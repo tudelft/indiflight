@@ -50,6 +50,7 @@ typedef union {
 #define EULER_INITIALIZE  { { 0, 0, 0 } }
 
 extern attitudeEulerAngles_t attitude;
+extern quaternion attitude_q;
 extern float rMat[3][3];
 
 typedef struct imuConfig_s {

@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible Node.js debug attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "cwd": "${workspaceRoot}",
+            "executable": "obj/main/betaflight_STM32H743.elf",
+            "name": "Cortex OpenOCD",
+            "request": "launch",
+            "preLaunchTask": "start-openocd", 
+            "type": "cortex-debug",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 2
+            },
+            "servertype": "external",
+            "gdbTarget": "10.0.0.1:3333",
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "none",
+            "objdumpPath": "/usr/bin/objdump"
+        }
+    ]
+}

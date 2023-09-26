@@ -68,12 +68,15 @@
 
 #include "flight/imu.h"
 #include "flight/mixer.h"
+#include "flight/mixer_init.h"
 #include "flight/pid.h"
+#include "flight/att_ctl.h"
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 
 #include "io/beeper.h"
+#include "io/external_pos.h"
 #include "io/gps.h"
 #include "io/pidaudio.h"
 #include "io/serial.h"
@@ -996,12 +999,27 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
+#ifdef USE_POS_CTL
+    if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && sensors(SENSOR_ACC)) {
+        // logic can be improved by considering ext_pos_state. this logic means
+        // that whenever external pos drops out, we will get a 1 0 0 0 attitude
+        // command, but no automatic piloted-fallback
+        if (!FLIGHT_MODE(ANGLE_MODE))
+            ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
+
+        if (!FLIGHT_MODE(POSITION_MODE))
+            ENABLE_FLIGHT_MODE(POSITION_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(POSITION_MODE);
+    }
+#endif
+
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
-        LED1_ON;
+        //LED1_ON; // @tblaha this LED is used for debugging now.
         // increase frequency of attitude task to reduce drift when in angle or horizon mode
         rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)imuConfig()->imu_process_denom));
     } else {
-        LED1_OFF;
+        //LED1_OFF;
         rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(100));
     }
 
@@ -1084,6 +1102,85 @@ void processRxModes(timeUs_t currentTimeUs)
 
     pidSetAntiGravityState(IS_RC_MODE_ACTIVE(BOXANTIGRAVITY) || featureIsEnabled(FEATURE_ANTI_GRAVITY));
 }
+
+bool isTouchingGround(void) {
+    // if total trust is low, but we have high total accel then we are likely touching ground
+    // this breaks down for fixed wings, and probably "3D" thrust ESCs
+    bool accHigh = (sq(acc.dev.acc_1G_rec) * (
+        sq(acc.accADC[X])
+        + sq(acc.accADC[Y])
+        + sq(acc.accADC[Z])
+        )) > 0.8*0.8;
+
+    bool throttleLow = true;
+    if (FLIGHT_MODE(POSITION_MODE)) {
+        // new flight mode
+        throttleLow = spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+    } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
+        // existing GPS rescue, no idea if works, never tried
+        throttleLow = gpsRescueGetThrottle() < 0.1f;
+    } else {
+        // human pilot, get RC throttle
+        float throttleLowThresh = (float) (rxConfig()->mincheck + 50);
+        throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
+    }
+
+    return (accHigh && throttleLow);
+}
+
+#ifdef USE_INDI
+static FAST_CODE_NOINLINE void subTaskIndiController(timeUs_t currentTimeUs) {
+    UNUSED(currentTimeUs);
+    indiController();
+}
+
+static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeUs) {
+    UNUSED(currentTimeUs);
+
+    uint8_t numMotors = motorDeviceCount();
+
+    //static timeUs_t firstArmed = 0;
+
+    if (!ARMING_FLAG(ARMED)) {
+        for (int i = 0; i < numMotors; i++) {
+            motor[i] = mixerRuntime.disarmMotorOutput;
+        }
+        //firstArmed = 0;
+    } else {
+        /* test program for motor test bench. Use with care. Won't ask, just blast.
+        if (firstArmed == 0)
+            firstArmed = currentTimeUs;
+
+        u[0] = 0.;
+        int maxu = 7;
+        timeDelta_t interv = 1e6;
+        for (int i = 0; i <= maxu; i++) {
+            if (cmpTimeUs(currentTimeUs, firstArmed) > i*interv)
+                u[0] = i * 0.1f;
+        }
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+1)*interv)
+            u[0] = 0.0f;
+
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+5)*interv)
+            u[0] = 0.8f;
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+6)*interv)
+            u[0] = 0.9f;
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+7)*interv)
+            u[0] = 0.0f;
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+11)*interv)
+            u[0] = 1.0f;
+        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+12)*interv)
+            u[0] = 0.0f;
+        */
+
+        for (int i = 0; i < numMotors; i++) {
+            motor[i] = scaleRangef(u_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+        }
+    }
+
+    writeMotors();
+}
+#endif
 
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 {
@@ -1269,6 +1366,24 @@ FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
     gyroFiltering(currentTimeUs);
 
 }
+
+#ifdef USE_INDI
+FAST_CODE void taskMainIndiLoop(timeUs_t currentTimeUs)
+{
+#ifdef USE_RPM_FILTER
+    rpmFilterUpdate();
+#endif
+
+    subTaskRcCommand(currentTimeUs);
+    subTaskIndiController(currentTimeUs);
+    subTaskIndiApplyToActuators(currentTimeUs);
+#ifdef USE_BLACKBOX
+    if (!cliMode && blackboxConfig()->device) {
+        blackboxUpdate(currentTimeUs);
+    }
+#endif
+}
+#endif
 
 // Function for loop trigger
 FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
