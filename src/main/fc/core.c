@@ -1000,17 +1000,32 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_POS_CTL
-    if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && sensors(SENSOR_ACC)) {
+    if (IS_RC_MODE_ACTIVE(BOXPOSCTL)) {// && sensors(SENSOR_ACC)) {
         // logic can be improved by considering ext_pos_state. this logic means
         // that whenever external pos drops out, we will get a 1 0 0 0 attitude
         // command, but no automatic piloted-fallback
-        if (!FLIGHT_MODE(ANGLE_MODE))
-            ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
+        //if (!FLIGHT_MODE(ANGLE_MODE))
+        //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
 
         if (!FLIGHT_MODE(POSITION_MODE))
             ENABLE_FLIGHT_MODE(POSITION_MODE);
     } else {
         DISABLE_FLIGHT_MODE(POSITION_MODE);
+    }
+#endif
+
+#ifdef USE_VEL_CTL
+    if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {
+        // logic can be improved by considering ext_pos_state. this logic means
+        // that whenever external pos drops out, we will get a 1 0 0 0 attitude
+        // command, but no automatic piloted-fallback
+        //if (!FLIGHT_MODE(ANGLE_MODE))
+        //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
+
+        if (!FLIGHT_MODE(VELOCITY_MODE))
+            ENABLE_FLIGHT_MODE(VELOCITY_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(VELOCITY_MODE);
     }
 #endif
 

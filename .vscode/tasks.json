@@ -24,6 +24,12 @@
                 "revealProblems": "onProblem",
                 "close": true
             }
+        },
+        {
+            "label": "getLogs",
+            "command": "${workspaceFolder}/support/scripts/get_logs.sh",
+            "args": ["${workspaceFolder}/../../../WorkData/BlackboxLogs/MIRROR"],
+            "type": "shell",
         }
     ]
 }

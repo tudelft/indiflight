@@ -198,6 +198,19 @@ typedef struct fp_quaternion {
  */
 void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q);
 
+
+/**
+ * @brief get quaternion from ax-ang rotation formalism
+ * https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
+ * 
+ * @param q Quaternion output
+ * @param ax axis to rotate about
+ * @param angle to rotate about (keep within -2pi to +pi)
+ * 
+*/
+void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle);
+
+
 // https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/arithmetic/index.htm
 fp_quaternion_t quatMult(fp_quaternion_t ql, fp_quaternion_t qr);
 t_fp_vector quatRotate(fp_quaternion_t q, t_fp_vector v);

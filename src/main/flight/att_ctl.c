@@ -13,6 +13,7 @@
 #include "flight/imu.h"
 #include "flight/pid.h"
 #include "flight/mixer_init.h"
+#include "flight/pos_ctl.h"
 #include "drivers/motor.h"
 #include "drivers/dshot.h"
 #include <math.h>
@@ -49,6 +50,7 @@ t_fp_vector yawRateSpBody = {0};
 t_fp_vector spfSpBody = {0};
 
 t_fp_vector attGains = {.V.X = 100.f, .V.Y = 100.f, .V.Z = 50.f};
+t_fp_vector attGainsCasc;
 t_fp_vector rateGains = {.V.X = 15.f, .V.Y = 15.f, .V.Z = 7.f};
 
 float u[MAXU] = {0.f};
@@ -72,6 +74,9 @@ biquadFilter_t actNotch[MAXU];
 dtermLowpass_t actLowpass[MAXU];
 dtermLowpass_t actLowpass2[MAXU];
 
+uint8_t attRateDenom = 8; // do att control only every 8 invokations
+uint8_t attExecCounter = 0;
+
 float k_thrust  = 2.58e-7f;
 float tau_rpm = 0.02f;
 float Tmax = 4.5f;
@@ -91,8 +96,20 @@ dtermLowpass_t erpmLowpass[MAXU];
 
 quadLin_t thrustLin = {.A = 0.f, .B = 0.f, .C = 0.f, .k = 0.f};
 
+bool controlAttitude = false;
+bool trackAttitudeYaw = false;
+
+// todo: tie to rate profile?
+float maxRateAttTilt = DEGREES_TO_RADIANS(800.f);
+float maxRateAttYaw = DEGREES_TO_RADIANS(400.f);
+
 void indiInit(const pidProfile_t * pidProfile) {
     UNUSED(pidProfile);
+
+    // emulate parallel PD with cascaded (so we can limit velocity)
+    attGainsCasc.V.X = attGains.V.X / rateGains.V.X;
+    attGainsCasc.V.Y = attGains.V.Y / rateGains.V.Y;
+    attGainsCasc.V.Z = attGains.V.Z / rateGains.V.Z;
 
     erpmToRad = ERPM_PER_LSB / 60.f / (motorConfig()->motorPoleCount / 2.f) * (2.f * M_PIf);
 
@@ -140,14 +157,114 @@ void indiInit(const pidProfile_t * pidProfile) {
 }
 
 void indiController(void) {
-    getAlphaBody();
-    getSpfSpBodyZ();
+    if (flightModeFlags) {
+        // any flight mode but ACRO --> get attitude setpoint
+        if ( !((attExecCounter++)%attRateDenom) ) {
+            // rate limit attitude control
+            getSetpoints();
+            attExecCounter = 0;
+        }
+    } else {
+        // function is cheap, let's go
+        getSetpoints();
+    }
+
+    // for any flight mode:
+    // 1. compute desired angular accelerations
+    getAlphaSpBody();
 
     // allocation and INDI
     getMotor();
 }
 
-void getAlphaBody(void) {
+void getSetpoints(void) {
+    // sets:
+    // 1. at least one of attSpNed and/or rateSpBody
+    // 2. spfSpBody
+    // 3. controlAttitude
+    // 4. trackAttitudeYaw
+
+    spfSpBody.V.X = 0.f;
+    spfSpBody.V.Y = 0.f;
+    spfSpBody.V.Z = 0.f;
+
+    rateSpBody.V.X = 0.f;
+    rateSpBody.V.Y = 0.f;
+    rateSpBody.V.Z = 0.f;
+
+    controlAttitude = true;
+    trackAttitudeYaw = false;
+    if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
+        trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
+
+        // convert acc setpoint from position mode
+        getAttSpNedFromAccSpNed(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
+        rateSpBody = coordinatedYaw(yawRateSpFromOuter);
+
+    } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
+        // get desired attitude setpoints from sticks
+
+        // get proper yaw
+        float Psi = getYawWithoutSingularity();
+
+        // find tilt axis --> this can be done better! 
+        // Now combined XY input gives bigger tilt angle before limiting,
+        // which results in a sort of radial deadzone past the x*y=1 circle
+        float roll = getRcDeflection(ROLL);
+        float pitch = -getRcDeflection(PITCH);
+        float maxTilt = DEGREES_TO_RADIANS(MAX_BANK_DEGREE);
+
+        t_fp_vector axis = {
+            .V.X = maxTilt*roll,
+            .V.Y = maxTilt*pitch,
+            .V.Z = 0.f,
+        };
+        VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
+        fp_quaternion_t attSpYaw;
+        float_quat_of_axang(&attSpYaw, &axis, VEC3_XY_LENGTH(axis));
+
+        fp_quaternion_t yawNed = {
+            .qi = cos_approx(Psi/2.f),
+            .qx = 0.f,
+            .qy = 0.f,
+            .qz = sin_approx(Psi/2.f),
+        };
+
+        // this is probaby the most expensive operation... can be half the cost if
+        // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
+        attSpNed = quatMult(yawNed, attSpYaw);
+
+        // convert throttle
+        spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
+        spfSpBody.V.Z *= RC_SCALE_THROTTLE * RC_MAX_SPF_Z;
+
+        // get yaw rate
+        rateSpBody = coordinatedYaw(DEGREES_TO_RADIANS(-getSetpointRate(YAW)));
+
+        //todo: RC_MAX_SPF_Z replace by sum of Fz-row in G1
+        //DONE todo: replace call to getAttSpNed by logic more suited to manual flying
+        //      ie. just yaw * tilt?
+
+    } else if (flightModeFlags) {
+        trackAttitudeYaw = true;
+
+        // unknown, but not acro flight mode, just command upright
+        attSpNed.qi = 1.0f;
+        attSpNed.qx = 0.f;
+        attSpNed.qy = 0.f;
+        attSpNed.qz = 0.f;
+
+        spfSpBody.V.Z = 2.f; // low but downwards
+    } else {
+        controlAttitude = false;
+        // acro
+        rateSpBody.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
+        rateSpBody.V.Y = DEGREES_TO_RADIANS(-getSetpointRate(PITCH));
+        rateSpBody.V.Z = DEGREES_TO_RADIANS(-getSetpointRate(YAW));
+    }
+}
+
+void getAlphaSpBody(void) {
 
     // get body rates in z-down, x-fwd frame
     t_fp_vector rateEstBody = {
@@ -156,53 +273,60 @@ void getAlphaBody(void) {
         .V.Z = DEGREES_TO_RADIANS(-gyro.gyroADCf[FD_YAW]),
     };
 
-    // emulate parallel PD with cascaded (so we can limit velocity)
-    t_fp_vector attGainsCasc = {
-        .V.X = attGains.V.X / rateGains.V.X,
-        .V.Y = attGains.V.Y / rateGains.V.Y,
-        .V.Z = attGains.V.Z / rateGains.V.Z
+    fp_quaternion_t attEstNed = {
+        .qi = attitude_q.w,
+        .qx = attitude_q.x,
+        .qy = -attitude_q.y,
+        .qz = -attitude_q.z,
     };
+    fp_quaternion_t attEstNedInv = attEstNed;
+    attEstNedInv.qi = -attEstNed.qi;
 
-    // --- get body rates setpoint
-    // initialize to yaw-rate (transform) from higher level controllers/sticks
-    getYawRateSpBody();
-    rateSpBody = yawRateSpBody;
+    t_fp_vector rateSpBodyUse = rateSpBody;
+    if (controlAttitude) {
+        // add in the error term based on attitude quaternion error
+        // todo: fix this. Shortest-distance quat division is no bueno for position control with yaw tracking
+        attErrBody = quatMult(attEstNedInv, attSpNed);
 
-    // add in the error term based on attitude quaternion error
-    getAttErrBody(); // sets attErrBody
+        float angleErr = 2.f*acos_approx(attErrBody.qi); // should never be above 1 or below -1
+        if (angleErr > M_PIf)
+            angleErr -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
+            // some heuristic could be used here, because this is far from optimal
+            // in cases where we have high angular rate and the most efficient way
+            // to get to the setpoint is actually to continue through a flip, and
+            // not counter steer initially
 
-    float angleErr = 2.f*acos_approx(attErrBody.qi); // should never be above 1 or below -1
-    if (angleErr > M_PIf)
-        angleErr -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
-        // some heuristic could be used here, because this is far from optimal
-        // in cases where we have high angular rate and the most efficient way
-        // to get to the setpoint is actually to continue through a flip, and
-        // not counter steer initially
+        t_fp_vector attErrAxis = {.V.X = 1.f};
+        float norm = sqrtf(1.f - attErrBody.qi*attErrBody.qi);
+        if (norm > 1e-8f) {
+            // procede as normal
+            float normInv = 1.f / norm;
+            attErrAxis.V.X = normInv * attErrBody.qx;
+            attErrAxis.V.Y = normInv * attErrBody.qy;
+            attErrAxis.V.Z = normInv * attErrBody.qz;
+        } // else {
+            // qi = +- 1 singularity. But this means the error angle is so small, 
+            // that we don't care abuot this axis. So chose axis to remain 1,0,0
+        // }
 
-    t_fp_vector attErrAxis = {.V.X = 1.f};
-    float norm = sqrtf(1.f - attErrBody.qi*attErrBody.qi);
-    if (norm > 1e-8f) {
-        // procede as normal
-        float normInv = 1.f / norm;
-        attErrAxis.V.X = normInv * attErrBody.qx;
-        attErrAxis.V.Y = normInv * attErrBody.qy;
-        attErrAxis.V.Z = normInv * attErrBody.qz;
-    } // else {
-        // qi = +- 1 singularity. But this means the error angle is so small, 
-        // that we don't care abuot this axis. So chose axis to remain 1,0,0
-    // }
+        // final error is angle times axis
+        VEC3_SCALAR_MULT(attErrAxis, angleErr);
 
-    // final error is angle times axis
-    VEC3_SCALAR_MULT(attErrAxis, angleErr);
+        // multiply with gains and add in
+        rateSpBodyUse.V.X += attGainsCasc.V.X * attErrAxis.V.X;
+        rateSpBodyUse.V.Y += attGainsCasc.V.Y * attErrAxis.V.Y;
+        if (trackAttitudeYaw)
+            rateSpBodyUse.V.Z += attGainsCasc.V.Z * attErrAxis.V.Z;
+        // else: just keep rateSpBody.V.Z that has been set
 
-    // multiply with gains and constrain
-    VEC3_ELEM_MULT_ADD(rateSpBody, attGainsCasc, attErrAxis);
-    VEC3_CONSTRAIN_XY_LENGTH(rateSpBody, DEGREES_TO_RADIANS(ATT_MAX_RATE_XY));
-    rateSpBody.V.Z = constrainf(rateSpBody.V.Z, -DEGREES_TO_RADIANS(ATT_MAX_RATE_Z), DEGREES_TO_RADIANS(ATT_MAX_RATE_Z));
+        // constrain to be safe
+        VEC3_CONSTRAIN_XY_LENGTH(rateSpBodyUse, DEGREES_TO_RADIANS(maxRateAttTilt));
+        rateSpBodyUse.V.Z = constrainf(rateSpBodyUse.V.Z, -maxRateAttYaw, maxRateAttYaw);
+    }
 
     // --- get rotation acc setpoint simply by multiplying with gains
     // rateErr = rateSpBody - rateEstBody
-    t_fp_vector rateErr = rateSpBody;
+    t_fp_vector rateErr = rateSpBodyUse;
     VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, rateEstBody);
 
     // alphaSpBody = rateGains * rateErr
@@ -405,180 +529,150 @@ void getMotor(void) {
     }
 }
 
-void getYawRateSpBody(void) {
-    // get yawRateSpNed, unless assumed set by position controller
-    if ( (!FLIGHT_MODE(POSITION_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)) ) {
-        // human pilot, get from RC
-        yawRateSpNed = -getSetpointRate(YAW) * RC_SCALE_STICKS;
-        yawRateSpNed *= DEGREES_TO_RADIANS(RC_MAX_YAWRATE_DEG_S);
-    }
-    // no else... just assume that yawRateSpNed has been set properly by the posiotion controller
+// --- helpers --- //
+float getYawWithoutSingularity(void) {
+    // get yaw from bodyX or bodyY axis expressed in inertial space, not from
+    // eulers, which has singularity at pitch +-pi/2
 
+    // first, get bodyX and bodyY in NED from the attitude DCM
+    t_fp_vector bodyXNed = {
+        .V.X =  rMat[0][0],
+        .V.Y = -rMat[0][1],
+        .V.Z = -rMat[0][2]
+    };
+    t_fp_vector bodyYNed = {
+        .V.X = -rMat[1][0],
+        .V.Y =  rMat[1][1],
+        .V.Z =  rMat[1][2],
+    };
+
+    // second, find which one projects to the longest vector in the xy plane
+    float bodyXProjLen = VEC3_XY_LENGTH(bodyXNed);
+    float bodyYProjLen = VEC3_XY_LENGTH(bodyYNed);
+
+    if (bodyXProjLen > bodyYProjLen) { // can never be close to 0 at the same time, from the geometry
+        // third, get fwd axis as a xy coordinate system aligned with
+        // either the bodyX or bodyY projection onto xy
+        bodyXNed.V.X /= bodyXProjLen;
+        bodyXNed.V.Y /= bodyXProjLen;
+    } else {
+        bodyXNed.V.X = bodyYNed.V.Y / bodyYProjLen;
+        bodyXNed.V.Y = -bodyYNed.V.X / bodyYProjLen;
+    }
+    float yaw = atan2_approx(bodyXNed.V.Y, bodyXNed.V.X);
+
+    return yaw;
+}
+
+void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz) {
+    /*
+    * system of equations:
+    * 
+    * a^I = Rz(Psi) @ axang(alpha, axis) @ f^B   +   (0 0 G)'
+    *   where:
+    *       a^I: craft acceleration in inertial frame
+    *       Psi: craft yaw
+    *       alpha: tilt angle (assume positive)
+    *       axis: tilt axis (tx ty 0), where (tx^2 + ty^2 == 1)
+    *       f^B: body forces in body frame. Assume for MC: f^B == (0 0 -fz)
+    *       G: gravity (9.80665)
+    * 
+    * define    v^Y := Rz(Psi)^(-1) @ ( a^I - (0 0 G)' )   which results in:
+    * 
+    * v^Y = axang(alpha, axis) @ f^B  +  (0 0 G)'
+    * 
+    * We require to solve tilt/thrust setpoint. Ie: solve the following 
+    * system for (fz alpha tx ty):
+    *   1      ==   tx**2  +  ty**2
+    *   vx^Y   ==   ty * sin(alpha) * (-fz)
+    *   vy^Y   ==  -tx * sin(alpha) * (-fz)
+    *   vz^Y   ==        cos(alpha) * (-fz)
+    * 
+    * where we obtain the axang multplication from the last column of https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
+    * 
+    * 
+    * The solution of the system is given by:
+    *   tx      =  sgn(vy) * 1 / sqrt( 1 + (vx / vy)^2 ) = vy / sqrt(vy^2 + vx^2)
+    *   ty      =  - (vx * tx) / vy
+    *   alpha   =  atan( sqrt(vx^2 + vy^2) / (-vz) )
+    *   fz      =  - vz / cos(alpha)
+    *
+    */
+
+    //float Psi = (float) DECIDEGREES_TO_RADIANS(-attitude.values.yaw);
+    float Psi = getYawWithoutSingularity();
+    float cPsi = cos_approx(Psi);
+    float sPsi = sin_approx(Psi);
+
+    // a^I - g^I
+    t_fp_vector aSp_min_g = {
+        .V.X = accSpNed->V.X,
+        .V.Y = accSpNed->V.Y,
+        .V.Z = accSpNed->V.Z - 9.80665f,
+    };
+
+    // v^I = Rz(Psi)^(-1) @ aSp_min_g
+    t_fp_vector v = {
+        .V.X =  cPsi * aSp_min_g.V.X  +  sPsi * aSp_min_g.V.Y,
+        .V.Y = -sPsi * aSp_min_g.V.X  +  cPsi * aSp_min_g.V.Y,
+        .V.Z =                                                  aSp_min_g.V.Z,
+    };
+
+    t_fp_vector ax = {0};
+    float XYnorm = sqrtf( v.V.X*v.V.X  +  v.V.Y*v.V.Y );
+    if (fabsf(v.V.X) < 1e-3f) {
+        // 0.1% of a g
+        ax.V.X = 0.f;
+        ax.V.Y = 1.f;
+    } else if (fabsf(v.V.Y) < 1e-3f) {
+        ax.V.X = 1.f;
+        ax.V.Y = 0.f;
+    } else {
+        // base case
+        if (fabsf(v.V.Y) > fabsf(v.V.X)) {
+            ax.V.X  =  v.V.Y  /  XYnorm;
+            ax.V.Y  =  - (v.V.X * ax.V.X) / v.V.Y;
+        } else {
+            ax.V.Y  =  v.V.X  /  XYnorm;
+            ax.V.X  =  - (v.V.Y * ax.V.Y) / v.V.X;
+        }
+    }
+
+    float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
+    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE)); //todo: make parameter
+
+    *fz = -v.V.Z / cos_approx(alpha);
+
+    // attitude setpoint in the yaw frame
+    fp_quaternion_t attSpYaw;
+    float_quat_of_axang(&attSpYaw, &ax, alpha);
+
+    // add in the yaw
+    fp_quaternion_t yawNed = {
+        .qi = cos_approx(Psi/2.f),
+        .qx = 0.f,
+        .qy = 0.f,
+        .qz = sin_approx(Psi/2.f),
+    };
+
+    // this is probaby the most expensive operation... can be half the cost if
+    // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
+    *attSpNed = quatMult(yawNed, attSpYaw);
+}
+
+t_fp_vector coordinatedYaw(float yaw) {
     // convert yawRateSpNed to Body
     // todo: this local is defined twice.. make static somehow
     fp_quaternion_t attEstNedInv = {
         .qi = -attitude_q.w,
         .qx = attitude_q.x,
-        .qy = attitude_q.y,
-        .qz = attitude_q.z,
-    };
-    yawRateSpBody = quatRotMatCol(attEstNedInv, 2);
-    VEC3_SCALAR_MULT(yawRateSpBody, yawRateSpNed);
-}
-
-void getSpfSpBodyZ(void) {
-    // similar to getYawRateSpBody, decide which Ned z accel to use and transform
-
-    if (FLIGHT_MODE(POSITION_MODE)) {
-        // assume that zAccSpNed has been set by position controller
-        spfSpBody.V.Z = (-9.81f + zAccSpNed);
-
-        float cos_tilt_angle = getCosTiltAngle();
-        if ((cos_tilt_angle < 0.5f) && (cos_tilt_angle > 0.f)) {
-            // high tilt, but not inverted, limit divisor to 0.5
-            cos_tilt_angle = 0.5f;
-        } else if (cos_tilt_angle <= 0.f) {
-            // inverted: disable throttle correction
-            cos_tilt_angle = 1.0f;
-        }
-
-        spfSpBody.V.Z /= cos_tilt_angle;
-        // note: this only gives offset free pos control, if spfSpBodyZ is reached 
-        //       offset-free, ie through INDI
-        // note2: if accSpNed.V.Z is non-zero, then accSpNed is over or undershot.
-        //        Can we compromise on both at the same time somehow? or adjust 
-        //        tilt angle setpoint based on accSpNed? There will be a system of 
-        //        constrained nl equations that can be solved within bounds.
-
-        // this should probably be in pos_ctl, because of the tradeoff... another allocation step?
-    } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
-        // get from RC directly
-        spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
-        spfSpBody.V.Z *= RC_SCALE_THROTTLE * RC_MAX_SPF_Z;
-    } else {
-        // command a downwards setpoint (positive)
-        spfSpBody.V.Z = 2.f;
-    }
-}
-
-void getAttErrBody(void) {
-    // get attitude estimate and inverse
-    // todo: rewrite with the quaternion type defined in imu
-    fp_quaternion_t attEstNed = {
-        .qi = attitude_q.w,
-        .qx = attitude_q.x,
         .qy = -attitude_q.y,
         .qz = -attitude_q.z,
     };
-    fp_quaternion_t attEstNedInv = attEstNed;
-    attEstNedInv.qi = -attEstNed.qi;
+    yawRateSpBody = quatRotMatCol(attEstNedInv, 2);
+    VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 
-    // get error
-    if (FLIGHT_MODE(POSITION_MODE)) {
-        attErrBody = quatMult(attEstNedInv, attSpNed);
-    } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
-
-        // slow, but good code clarity
-        t_fp_vector bodyXNed = quatRotMatCol(attEstNed, 0);
-        float bodyXProjLen = VEC3_XY_LENGTH(bodyXNed);
-        t_fp_vector bodyYNed = quatRotMatCol(attEstNed, 1);
-        float bodyYProjLen = VEC3_XY_LENGTH(bodyYNed);
-
-        t_fp_vector stickXNed = {0};
-        t_fp_vector stickYNed = {0};
-        if (bodyXProjLen > bodyYProjLen) { // can never be 0 together
-            // stickX
-            stickXNed.V.X = bodyXNed.V.X / bodyXProjLen;
-            stickXNed.V.Y = bodyXNed.V.Y / bodyXProjLen;
-            // stickY
-            stickYNed.V.X = -stickXNed.V.Y;
-            stickYNed.V.Y = +stickXNed.V.X;
-        } else {
-            // stickY
-            stickYNed.V.X = bodyYNed.V.X / bodyYProjLen;
-            stickYNed.V.Y = bodyYNed.V.Y / bodyYProjLen;
-            // stickX
-            stickXNed.V.X = +stickYNed.V.Y;
-            stickXNed.V.Y = -stickYNed.V.X;
-        }
-
-        // find tilt axis --> this can be done better! 
-        // Now combined XY input gives bigger tilt angle before limiting,
-        // which results in a sort of radial deadzone past the x*y=1 circle
-        float roll = getSetpointRate(ROLL) * RC_SCALE_STICKS;
-        float pitch = getSetpointRate(PITCH) * RC_SCALE_STICKS;
-#define RC_MAX_TILT_DEG 20.f
-        float rc_scaler = tan_approx(DEGREES_TO_RADIANS(RC_MAX_TILT_DEG));
-        t_fp_vector bodyZspNed = {
-            .V.X = rc_scaler * (-stickXNed.V.X * pitch + -stickYNed.V.X * roll),
-            .V.Y = rc_scaler * (-stickXNed.V.Y * pitch + -stickYNed.V.Y * roll),
-            .V.Z = 1.
-        };
-        VEC3_CONSTRAIN_XY_LENGTH(bodyZspNed, rc_scaler); // limit total tilt
-        VEC3_SCALAR_MULT(bodyZspNed, 1/VEC3_LENGTH(bodyZspNed)); // normalize
-
-        // construct shortest possible rotation quaternion from BodyZ to 
-        // BodyZ setpoint
-        // https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
-        // http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/halfAngle.htm
-
-        t_fp_vector bodyZNed = quatRotMatCol(attEstNed, 2);
-        float k_cos_theta = VEC3_DOT(bodyZNed, bodyZspNed);
-        t_fp_vector axis;
-        if (k_cos_theta <= -0.9999f) {
-            // we are upside down with respect to the target z axis.
-            // --> choose some orthogonal axis and rotate 180 degrees.
-            attErrBody.qi = 0.f;
-
-            // in particular choose cross product with the most orthogonal
-            // coordinate axis for speed.
-            float x = fabsf(bodyZNed.V.X);
-            float y = fabsf(bodyZNed.V.Y);
-            float z = fabsf(bodyZNed.V.Z);
-            int most_ortho = (x < y) ? ((x < z) ? 0 : 1) : ((y < z) ? 1 : 2);
-            // axis = normalize( cross(bodyZNed, most_ortho) )
-            switch(most_ortho){
-                case 0:
-                    axis.V.X = 0.f;
-                    axis.V.Y = +bodyZNed.V.Z;
-                    axis.V.Z = -bodyZNed.V.Y;
-                    break;
-                case 1:
-                    axis.V.X = -bodyZNed.V.Z;
-                    axis.V.Y = 0.f;
-                    axis.V.Z = +bodyZNed.V.X;
-                    break;
-                case 2:
-                    axis.V.X = +bodyZNed.V.Y;
-                    axis.V.Y = -bodyZNed.V.X;
-                    axis.V.Z = 0.f;
-                    break;
-            }
-            VEC3_NORMALIZE(axis);
-            attErrBody.qx = axis.V.X;
-            attErrBody.qy = axis.V.Y;
-            attErrBody.qz = axis.V.Z;
-        } else {
-            // normal case, just follow http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/halfAngle.htm
-            // scalar = k_cos_theta + 1
-            // axis = cross(bodyZNed, bodyZSpNed)
-            // normalize the quat
-            attErrBody.qi = k_cos_theta + 1.f;
-            VEC3_CROSS(axis, bodyZspNed, bodyZNed);
-            axis = quatRotate(attEstNedInv, axis);
-            attErrBody.qx = axis.V.X;
-            attErrBody.qy = axis.V.Y;
-            attErrBody.qz = axis.V.Z;
-            QUAT_NORMALIZE(attErrBody);
-        }
-    } else {
-        // not sure what happened, just command upright
-        attSpNed.qi = 1.f;
-        attSpNed.qx = 0.f;
-        attSpNed.qy = 0.f;
-        attSpNed.qz = 0.f;
-        attErrBody = quatMult(attEstNedInv, attSpNed);
-    }
+    return yawRateSpBody;
 }
 
 float indiThrustLinearization(quadLin_t lin, float in) {
@@ -602,13 +696,15 @@ float indiThrustCurve(quadLin_t lin, float in) {
  * 1. DONE use FLIGHT_MODE to decide rc mode
  * 2. DONE incoorperate thrust linearization
  * 3. DONE deal with G2
- * 4. logging of quat setpoint, quat attitude, omega setpoint, omega, alpha setpoint, alpha, motor setpoint
+ * 4. DONE logging of quat setpoint, quat attitude, omega setpoint, omega, alpha setpoint, alpha, motor setpoint
  * 5. use actual settings built-ins
- * 6. rewrite with different quaternion structs
+ * 6. NOPE rewrite with different quaternion structs
  * 7. DONE activeSetSolve
- * 8. do not check min throttle for indi integrating, breakes down in pos_ctl
+ * 8. TO BE TESTED do not check min throttle for indi integrating, breakes down in pos_ctl
  * 9. deal with what happens if neither pos not att are selected
  * 10. compiler macros for USE_ACC
  * 11. REMOVE OMEGA_DOT_FEEDBACK compiler macro
  * 12. REMOVE some PI compiler macros
+ * 13. analyse attitude mode wrt yaw/tilt trajectory
+ * 14. implement rate control and use rate config from PID
 */

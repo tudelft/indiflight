@@ -60,7 +60,7 @@ typedef struct quadLin_s {
     float k;
 } quadLin_t;
 
-#define MAX_BANK_DEGREE 50.f
+#define MAX_BANK_DEGREE 40.f
 #define ATT_MAX_RATE_XY 500.f
 #define ATT_MAX_RATE_Z 150.f
 
@@ -81,11 +81,12 @@ extern float alpha[XYZ_AXIS_COUNT];
 
 void indiInit(const pidProfile_t * pidProfile);
 void indiController(void);
-float indiThrustCurve(quadLin_t lin, float in);
 float indiThrustLinearization(quadLin_t lin, float in);
+float indiThrustCurve(quadLin_t lin, float in);
 
-void getYawRateSpBody(void);
-void getAttErrBody(void);
-void getAlphaBody(void);
-void getSpfSpBodyZ(void);
+float getYawWithoutSingularity(void);
+void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz);
+t_fp_vector coordinatedYaw(float yaw);
+void getSetpoints(void);
+void getAlphaSpBody(void);
 void getMotor(void);

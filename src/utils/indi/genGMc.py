@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.constants import g as GRAVITY
 
-def pendulumInertiaFromPeriod(P, R, m):
+def inertiaFromPendulumPeriod(P, R, m):
     # assuming a phyiscal pendulum with centroid R from the rotation point and
     # mass m. If it oscillates with period P, we can readily calculate the 
     # inertia I.
@@ -21,6 +21,17 @@ def pendulumInertiaFromPeriod(P, R, m):
     # subtract parallel axis term, as Iaxle = I + m*R*R
     return Iaxle - m*R*R
 
+def inertiaFromGyrationRadius(m, Rg):
+    return m * Rg * Rg
+
+def inertiaBellFromMotorNumber(num):
+    D = int( num / 100 ) + 2 # assume 2mm bell thickness (including magnets)
+    L  = num % 100
+    G_PER_L_AND_D2 = 7.6 / 7 / (14*14) # N = 1...
+    m = 1e-3 * G_PER_L_AND_D2 * L * (D * D)
+    Rg = 1e-3 * (D - 2.) / 2. # assume radius of gyration is at inside edge of magnets
+
+    return inertiaFromGyrationRadius(m, Rg)
 
 ###################################
 #%% properties
@@ -43,9 +54,7 @@ Rp = 36.0 * 1e-3 # 1mm error: 10% error in inertia --> estimated precision 0.5mm
 mp = 1.40 * 1e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # motor bell inertia
-mb = 7.6e-3 # measured
-Rb = 0.8 * (19e-3)/2 # radius of gyration, assumed 80% of outside radius
-
+motorNumber = 1407
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
@@ -102,14 +111,31 @@ direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along
 Rx = width/2 - Raxle
 Ry = length/2 - Raxle
 Rz = diagonal/2 - Raxle # distance for z-axis rotation
-Ixx = pendulumInertiaFromPeriod(Px, Rx, m)
-Iyy = pendulumInertiaFromPeriod(Py, Ry, m)
-Izz = pendulumInertiaFromPeriod(Pz, Rz, m)
-Iprop = pendulumInertiaFromPeriod(Pp, Rp, mp)  +  mb * Rb*Rb
+Ixx = inertiaFromPendulumPeriod(Px, Rx, m)
+Iyy = inertiaFromPendulumPeriod(Py, Ry, m)
+Izz = inertiaFromPendulumPeriod(Pz, Rz, m)
+Iprop = inertiaFromPendulumPeriod(Pp, Rp, mp) \
+        +  inertiaBellFromMotorNumber(motorNumber)
 
 # 1% error in P: 7% error in inertia --> estimated precision 0.5ms, so bueno
 # 1% error in R: 1.5% error in inertia --> estimated precision 5mm, so 8%...
 # 1% error in m: 1% error in inertia --> estimated precision 0.1g, so bueno
+
+# fall back inertia examples
+def inertiaFromPropData(m, Dinch):
+    Rg_prop = 0.4 * (Dinch * 0.0254 / 2.) # assume gyration radius 40% of actual
+    return inertiaFromGyrationRadius(m, Rg_prop)
+
+# these probably highly depend on the type of quad
+Rg_frac_xx = 0.58
+Rg_frac_yy = 0.85
+Rg_frac_zz = 0.5
+
+Ixx_bak = inertiaFromGyrationRadius(m, Rg_frac_xx * width/2)
+Iyy_bak = inertiaFromGyrationRadius(m, Rg_frac_yy * length/2)
+Izz_bak = inertiaFromGyrationRadius(m, Rg_frac_zz * diagonal/2)
+Iprop_bak = inertiaFromPropData(mp, 3.)
+Iprop_bak += inertiaBellFromMotorNumber(1407)
 
 
 #%% matrices

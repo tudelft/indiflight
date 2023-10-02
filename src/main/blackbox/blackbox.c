@@ -254,19 +254,19 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 
     /* INDI stuff*/
 #ifdef USE_INDI
-    {"quat",        0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quat",        1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quat",        2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quat",        3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
+    {"quat",        0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quat",        1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quat",        2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quat",        3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
     {"alpha",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alpha",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alpha",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
-    {"quatSp",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quatSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quatSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
-    {"quatSp",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_4S16), CONDITION(INDI)},
+    {"quatSp",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSp",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
     {"gyroSp",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -947,9 +947,10 @@ static void writeInterframe(void)
     if (testBlackboxCondition(CONDITION(INDI))) {
         // quat attitude
         arraySubInt16(deltas16, blackboxCurrent->quat, blackboxLast->quat, 4);
-        for (int i=0; i < 4; i++)
-            deltas[i] = deltas16[i];
-        blackboxWriteTag8_4S16(deltas);
+        //for (int i=0; i < 4; i++)
+        //    deltas[i] = deltas16[i];
+        //blackboxWriteTag8_4S16(deltas);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
         // rotational accel
         arraySubInt16(deltas16, blackboxCurrent->alpha, blackboxLast->alpha, XYZ_AXIS_COUNT);
@@ -957,9 +958,10 @@ static void writeInterframe(void)
 
         // quat setpoints
         arraySubInt16(deltas16, blackboxCurrent->quatSp, blackboxLast->quatSp, 4);
-        for (int i=0; i < 4; i++)
-            deltas[i] = deltas16[i];
-        blackboxWriteTag8_4S16(deltas);
+        //for (int i=0; i < 4; i++)
+        //    deltas[i] = deltas16[i];
+        //blackboxWriteTag8_4S16(deltas);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
         // rotational rate setpoint
         arraySubInt16(deltas16, blackboxCurrent->gyroSp, blackboxLast->gyroSp, XYZ_AXIS_COUNT);

@@ -107,6 +107,18 @@ float acos_approx(float x)
 }
 #endif
 
+void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle) {
+    // require ax to be normalized
+    float ang2 = angle * 0.5f;
+    float cang2 = cos_approx(ang2);
+    float sang2 = sin_approx(ang2);
+
+    q->qi = cang2;
+    q->qx = ax->V.X * sang2;
+    q->qy = ax->V.Y * sang2;
+    q->qz = ax->V.Z * sang2;
+}
+
 void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q)
 {
   // lis

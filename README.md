@@ -1,4 +1,6 @@
-![Betaflight](docs/assets/images/IndiflightLogoFull.png)
+![Indiflight](docs/assets/images/IndiflightLogoFull.png)
+
+This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras, or even offboard control is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
 
 [![Latest version](https://img.shields.io/github/v/release/betaflight/betaflight)](https://github.com/betaflight/betaflight/releases) [![Build](https://img.shields.io/github/actions/workflow/status/betaflight/betaflight/nightly.yml?branch=master)](https://github.com/betaflight/betaflight/actions/workflows/nightly.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Join us on Discord!](https://img.shields.io/discord/868013470023548938)](https://discord.gg/n4E6ak4u3c)
 
