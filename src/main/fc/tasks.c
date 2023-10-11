@@ -171,6 +171,7 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
 static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
 {
     accUpdate(currentTimeUs);
+    updateThrowFallStateMachine(currentTimeUs);
 }
 #endif
 

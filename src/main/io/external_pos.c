@@ -7,6 +7,7 @@
 #include "io/gps.h"
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
+#include "flight/imu.h"
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -81,13 +82,18 @@ void getExternalPos(timeUs_t current) {
     }
 
     // extrapolate position with speed info
-    timeDelta_t delta = cmpTimeUs(microsISR(), latestMsgTime);
-    if (delta > 0) {
+    /* removed, because now we include this info the observer in imu.h
+    static timeUs_t latestExtrapolationTime = 0;
+    timeUs_t currentExtrapolationTime = microsISR();
+    timeDelta_t delta = cmpTimeUs(currentExtrapolationTime, latestExtrapolationTime);
+    if ((latestExtrapolationTime > 0) && (delta > 0)) {
         extPosNed.pos.V.X += ((float) delta) * 1e-6f * extPosNed.vel.V.X;
         extPosNed.pos.V.Y += ((float) delta) * 1e-6f * extPosNed.vel.V.Y;
         extPosNed.pos.V.Z += ((float) delta) * 1e-6f * extPosNed.vel.V.Z;
-        // todo: extrapolate psi from body rates somehow using the quat
     }
+    latestExtrapolationTime = currentExtrapolationTime;
+    */
+        // todo: extrapolate psi from body rates somehow using the quat
 }
 
 void getFakeGps(timeUs_t current) {

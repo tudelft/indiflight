@@ -66,6 +66,7 @@
 #include "flight/position.h"
 #include "flight/imu.h"
 #include "flight/att_ctl.h"
+#include "flight/pos_ctl.h"
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -329,6 +330,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
+    {"extPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
     {"posSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"posSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"posSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -336,6 +341,18 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"vel",         0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"vel",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"vel",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"extVel",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extVel",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extVel",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"velSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"velSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"velSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"accSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"accSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"accSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
 
 };
@@ -433,8 +450,12 @@ typedef struct blackboxMainState_s {
 #endif
 #ifdef USE_POS_CTL
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t velSp[XYZ_AXIS_COUNT]; 
+    int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
 #endif
 } blackboxMainState_t;
 
@@ -796,8 +817,12 @@ static void writeIntraframe(void)
 #ifdef USE_POS_CTL
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->extPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
     }
 #endif
 
@@ -1010,10 +1035,22 @@ static void writeInterframe(void)
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
+        arraySubInt32(deltas, blackboxCurrent->extPos, blackboxLast->extPos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
+
         arraySubInt32(deltas, blackboxCurrent->posSp, blackboxLast->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->vel, blackboxLast->vel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->extVel, blackboxLast->extVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->velSp, blackboxLast->velSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
     }
 #endif
@@ -1349,9 +1386,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quatSp[1] = lrintf(attSpNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[2] = lrintf(attSpNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[3] = lrintf(attSpNed.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
-    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBody.V.X));
-    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBody.V.Y));
-    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBody.V.Z));
+    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.X));
+    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Y));
+    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Z));
     blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.X));
     blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Y));
     blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Z));
@@ -1368,15 +1405,27 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 #endif
 #ifdef USE_POS_CTL
-    blackboxCurrent->pos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
-    blackboxCurrent->pos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
-    blackboxCurrent->pos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
+    blackboxCurrent->pos[0] = lrintf(posNed.V.X * METER_TO_MM);
+    blackboxCurrent->pos[1] = lrintf(posNed.V.Y * METER_TO_MM);
+    blackboxCurrent->pos[2] = lrintf(posNed.V.Z * METER_TO_MM);
+    blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
+    blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
+    blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->posSp[0] = lrintf(posSetpointNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->posSp[1] = lrintf(posSetpointNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->posSp[2] = lrintf(posSetpointNed.pos.V.Z * METER_TO_MM);
-    blackboxCurrent->vel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
-    blackboxCurrent->vel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
-    blackboxCurrent->vel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->vel[0] = lrintf(velNed.V.X * METER_TO_CM);
+    blackboxCurrent->vel[1] = lrintf(velNed.V.Y * METER_TO_CM);
+    blackboxCurrent->vel[2] = lrintf(velNed.V.Z * METER_TO_CM);
+    blackboxCurrent->extVel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->extVel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->extVel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->velSp[0] = lrintf(posSetpointNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->velSp[1] = lrintf(posSetpointNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->velSp[2] = lrintf(posSetpointNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->accSp[0] = lrintf(accSpNed.V.X * METER_TO_CM);
+    blackboxCurrent->accSp[1] = lrintf(accSpNed.V.Y * METER_TO_CM);
+    blackboxCurrent->accSp[2] = lrintf(accSpNed.V.Z * METER_TO_CM);
 #endif
 
 #else
@@ -2015,7 +2064,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
 
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
-        if (ARMING_FLAG(ARMED)) {
+        if (ARMING_FLAG(ARMED) || (IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
             blackboxOpen();
             blackboxStart();
         }
@@ -2133,6 +2182,8 @@ void blackboxUpdate(timeUs_t currentTimeUs)
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
         if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
+        } else if ((!ARMING_FLAG(ARMED)) && isModeActivationConditionPresent(BOXTHROWTOARM) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+            blackboxFinish();
         } else {
             blackboxLogIteration(currentTimeUs);
         }

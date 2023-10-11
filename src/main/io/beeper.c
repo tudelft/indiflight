@@ -172,6 +172,11 @@ static const uint8_t beep_rcSmoothingInitFail[] = {
     10, 10, 10, 10, 10, 10, 50, 25, BEEPER_COMMAND_STOP
 };
 
+// Danger: THROWTOARM is active - 4 short 1 long, repeat
+static const uint8_t beep_throwToArm[] = {
+    5, 5, 5, 5, 5, 5, 5, 5, 50, BEEPER_COMMAND_REPEAT
+};
+
 // array used for variable # of beeps (reporting GPS sat count, etc)
 static uint8_t beep_multiBeeps[MAX_MULTI_BEEPS + 1];
 
@@ -230,7 +235,8 @@ static const beeperTableEntry_t beeperTable[] = {
     { BEEPER_ENTRY(BEEPER_CAM_CONNECTION_OPEN,   21, beep_camOpenBeep,     "CAM_CONNECTION_OPEN") },
     { BEEPER_ENTRY(BEEPER_CAM_CONNECTION_CLOSE,  22, beep_camCloseBeep,    "CAM_CONNECTION_CLOSE") },
     { BEEPER_ENTRY(BEEPER_RC_SMOOTHING_INIT_FAIL,23, beep_rcSmoothingInitFail, "RC_SMOOTHING_INIT_FAIL") },
-    { BEEPER_ENTRY(BEEPER_ALL,                   24, NULL,                 "ALL") },
+    { BEEPER_ENTRY(BEEPER_THROW_TO_ARM,          24, beep_throwToArm,      "THROW_TO_ARM") },
+    { BEEPER_ENTRY(BEEPER_ALL,                   25, NULL,                 "ALL") },
 };
 
 static const beeperTableEntry_t *currentBeeperEntry = NULL;

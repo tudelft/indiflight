@@ -32,26 +32,26 @@
 //    )
 //}
 
-#define RC_SCALE_STICKS 0.002f
 #define RC_SCALE_THROTTLE 0.001f
 #define RC_OFFSET_THROTTLE 1000.f
-#define RC_MAX_YAWRATE_DEG_S 300.f
 #define RC_MAX_SPF_Z -30.f
 
 fp_quaternion_t attSpNed = {.qi=1.f};
-bool attTrackYaw = true;
 float zAccSpNed;
 float yawRateSpNed;
+bool controlAttitude = false;
+bool trackAttitudeYaw = false;
 
 fp_quaternion_t attErrBody = {.qi=1.f};
 t_fp_vector rateSpBody = {0};
+t_fp_vector rateSpBodyUse = {0};
 t_fp_vector alphaSpBody = {0};
 t_fp_vector yawRateSpBody = {0};
 t_fp_vector spfSpBody = {0};
 
-t_fp_vector attGains = {.V.X = 100.f, .V.Y = 100.f, .V.Z = 50.f};
+t_fp_vector attGains = {.V.X = 200.f, .V.Y = 200.f, .V.Z = 80.f};
 t_fp_vector attGainsCasc;
-t_fp_vector rateGains = {.V.X = 15.f, .V.Y = 15.f, .V.Z = 7.f};
+t_fp_vector rateGains = {.V.X = 20.f, .V.Y = 20.f, .V.Z = 10.f};
 
 float u[MAXU] = {0.f};
 float u_output[MAXU] = {0.f};
@@ -93,11 +93,10 @@ dtermLowpass_t erpmLowpass[MAXU];
 #if (MAXU > AS_N_U) || (MAXV > AS_N_V)
 #error "Sizes may be too much for ActiveSetCtlAlloc library"
 #endif
+static activeSetExitCode as_exit_code = AS_SUCCESS;
+static uint8_t nanCounter = 0;
 
 quadLin_t thrustLin = {.A = 0.f, .B = 0.f, .C = 0.f, .k = 0.f};
-
-bool controlAttitude = false;
-bool trackAttitudeYaw = false;
 
 // todo: tie to rate profile?
 float maxRateAttTilt = DEGREES_TO_RADIANS(800.f);
@@ -159,7 +158,7 @@ void indiInit(const pidProfile_t * pidProfile) {
 void indiController(void) {
     if (flightModeFlags) {
         // any flight mode but ACRO --> get attitude setpoint
-        if ( !((attExecCounter++)%attRateDenom) ) {
+        if ( !((++attExecCounter)%attRateDenom) ) {
             // rate limit attitude control
             getSetpoints();
             attExecCounter = 0;
@@ -195,11 +194,15 @@ void getSetpoints(void) {
     controlAttitude = true;
     trackAttitudeYaw = false;
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
-        trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
+        //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
         // convert acc setpoint from position mode
         getAttSpNedFromAccSpNed(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
-        rateSpBody = coordinatedYaw(yawRateSpFromOuter);
+        //rateSpBody = coordinatedYaw(yawRateSpFromOuter);
+        if (FLIGHT_MODE(POSITION_MODE))
+            rateSpBody.V.Z = yawRateSpFromOuter;
+        else
+            rateSpBody = coordinatedYaw(yawRateSpFromOuter);
 
     } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
         // get desired attitude setpoints from sticks
@@ -220,8 +223,10 @@ void getSetpoints(void) {
             .V.Z = 0.f,
         };
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
+        float angle = VEC3_XY_LENGTH(axis);
+        VEC3_NORMALIZE(axis);
         fp_quaternion_t attSpYaw;
-        float_quat_of_axang(&attSpYaw, &axis, VEC3_XY_LENGTH(axis));
+        float_quat_of_axang(&attSpYaw, &axis, angle);
 
         fp_quaternion_t yawNed = {
             .qi = cos_approx(Psi/2.f),
@@ -261,6 +266,10 @@ void getSetpoints(void) {
         rateSpBody.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         rateSpBody.V.Y = DEGREES_TO_RADIANS(-getSetpointRate(PITCH));
         rateSpBody.V.Z = DEGREES_TO_RADIANS(-getSetpointRate(YAW));
+
+        // convert throttle
+        spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
+        spfSpBody.V.Z *= RC_SCALE_THROTTLE * RC_MAX_SPF_Z;
     }
 }
 
@@ -282,22 +291,32 @@ void getAlphaSpBody(void) {
     fp_quaternion_t attEstNedInv = attEstNed;
     attEstNedInv.qi = -attEstNed.qi;
 
-    t_fp_vector rateSpBodyUse = rateSpBody;
+    rateSpBodyUse = rateSpBody;
     if (controlAttitude) {
+        // for better readibility and logs, flip setpoint quaternion if needed
+        // the resulting quaterion is always exactly equivalent
+        if (attEstNed.qi * attSpNed.qi < 0.f)
+            QUAT_SCALAR_MULT(attSpNed, -1.f);
+
         // add in the error term based on attitude quaternion error
         // todo: fix this. Shortest-distance quat division is no bueno for position control with yaw tracking
         attErrBody = quatMult(attEstNedInv, attSpNed);
 
-        float angleErr = 2.f*acos_approx(attErrBody.qi); // should never be above 1 or below -1
+        // this would ideally be a normalize instead of constrain, but that is slow...
+        attErrBody.qi = constrainf(attErrBody.qi, -1.f, +1.f);
+
+        float angleErr = 2.f*acos_approx(attErrBody.qi);
         if (angleErr > M_PIf)
             angleErr -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
             // some heuristic could be used here, because this is far from optimal
             // in cases where we have high angular rate and the most efficient way
             // to get to the setpoint is actually to continue through a flip, and
             // not counter steer initially
+            // NOTE: if you change this to not be [-pi, pi], then line 345 breaks!
 
         t_fp_vector attErrAxis = {.V.X = 1.f};
         float norm = sqrtf(1.f - attErrBody.qi*attErrBody.qi);
+        // todo: nan happens here!
         if (norm > 1e-8f) {
             // procede as normal
             float normInv = 1.f / norm;
@@ -320,7 +339,7 @@ void getAlphaSpBody(void) {
         // else: just keep rateSpBody.V.Z that has been set
 
         // constrain to be safe
-        VEC3_CONSTRAIN_XY_LENGTH(rateSpBodyUse, DEGREES_TO_RADIANS(maxRateAttTilt));
+        VEC3_CONSTRAIN_XY_LENGTH(rateSpBodyUse, maxRateAttTilt);
         rateSpBodyUse.V.Z = constrainf(rateSpBodyUse.V.Z, -maxRateAttYaw, maxRateAttYaw);
     }
 
@@ -478,7 +497,6 @@ void getMotor(void) {
     setupWLS_A(G1G2, Wv_as, Wu_as, MAXV, nu, theta, cond_bound, A_as, &gamma_used);
     setupWLS_b(dv, du_pref, Wv_as, Wu_as, MAXV, nu, gamma_used, b_as);
     static int8_t Ws[MAXU];
-    static int8_t as_exit_code = AS_SUCCESS;
 
     for (int i=0; i < nu; i++) {
       du_as[i] = (du_min[i] + du_max[i]) * 0.5;
@@ -503,13 +521,24 @@ void getMotor(void) {
 
     //float G1G2_inv[MAXU][MAXV];
     // pseudoinverse or something?
+    if (as_exit_code >= AS_NAN_FOUND_Q) {
+        nanCounter++;
+    } else {
+        if (ARMING_FLAG(ARMED))
+            nanCounter = 0;
+    }
+
+    if (nanCounter > 10) {
+        disarm(DISARM_REASON_ALLOC_FAILURE);
+    }
 
     // du = Ginv * dv and then constrain between 0 and 1
     for (int i=0; i < nu; i++) {
         //float accumulate = G1G2_inv[i][0] * dv[0];
         //for (int j=1; j < nv; j++)
         //    accumulate += G1G2_inv[i][j] * dv[j];
-        u[i] = constrainf(doIndi*u_state[i] + du_as[i], 0.f, motorMax);// currentPidProfile->motor_output_limit * 0.01f);
+        if (as_exit_code < AS_NAN_FOUND_Q)
+            u[i] = constrainf(doIndi*u_state_sync[i] + du_as[i], 0.f, motorMax);// currentPidProfile->motor_output_limit * 0.01f);
 
         // apply lag filter to simulate spinup dynamics
         if (ARMING_FLAG(ARMED) || true) {
@@ -523,6 +552,7 @@ void getMotor(void) {
         u_output[i] = indiThrustLinearization(thrustLin, u[i]);
 
         // apply dgyro filters to sync with input
+        // also apply gyro filters here?
         u_state_sync[i] = pidRuntime.dtermNotchApplyFn((filter_t *)&actNotch[i], u_state[i]);
         u_state_sync[i] = pidRuntime.dtermLowpassApplyFn((filter_t *)&actLowpass[i], u_state_sync[i]);
         u_state_sync[i] = pidRuntime.dtermLowpass2ApplyFn((filter_t *)&actLowpass2[i], u_state_sync[i]);
@@ -537,13 +567,13 @@ float getYawWithoutSingularity(void) {
     // first, get bodyX and bodyY in NED from the attitude DCM
     t_fp_vector bodyXNed = {
         .V.X =  rMat[0][0],
-        .V.Y = -rMat[0][1],
-        .V.Z = -rMat[0][2]
+        .V.Y = -rMat[1][0],
+        .V.Z = -rMat[2][0]
     };
     t_fp_vector bodyYNed = {
-        .V.X = -rMat[1][0],
+        .V.X = -rMat[0][1],
         .V.Y =  rMat[1][1],
-        .V.Z =  rMat[1][2],
+        .V.Z =  rMat[2][1],
     };
 
     // second, find which one projects to the longest vector in the xy plane
@@ -574,7 +604,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     *       Psi: craft yaw
     *       alpha: tilt angle (assume positive)
     *       axis: tilt axis (tx ty 0), where (tx^2 + ty^2 == 1)
-    *       f^B: body forces in body frame. Assume for MC: f^B == (0 0 -fz)
+    *       f^B: body forces in body frame. Assume for MC: f^B == (0 0 fz)
     *       G: gravity (9.80665)
     * 
     * define    v^Y := Rz(Psi)^(-1) @ ( a^I - (0 0 G)' )   which results in:
@@ -584,9 +614,9 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     * We require to solve tilt/thrust setpoint. Ie: solve the following 
     * system for (fz alpha tx ty):
     *   1      ==   tx**2  +  ty**2
-    *   vx^Y   ==   ty * sin(alpha) * (-fz)
-    *   vy^Y   ==  -tx * sin(alpha) * (-fz)
-    *   vz^Y   ==        cos(alpha) * (-fz)
+    *   vx^Y   ==   ty * sin(alpha) * fz
+    *   vy^Y   ==  -tx * sin(alpha) * fz
+    *   vz^Y   ==        cos(alpha) * fz
     * 
     * where we obtain the axang multplication from the last column of https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
     * 
@@ -595,7 +625,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     *   tx      =  sgn(vy) * 1 / sqrt( 1 + (vx / vy)^2 ) = vy / sqrt(vy^2 + vx^2)
     *   ty      =  - (vx * tx) / vy
     *   alpha   =  atan( sqrt(vx^2 + vy^2) / (-vz) )
-    *   fz      =  - vz / cos(alpha)
+    *   fz      =  vz / cos(alpha)
     *
     */
 
@@ -619,21 +649,22 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     };
 
     t_fp_vector ax = {0};
-    float XYnorm = sqrtf( v.V.X*v.V.X  +  v.V.Y*v.V.Y );
-    if (fabsf(v.V.X) < 1e-3f) {
-        // 0.1% of a g
-        ax.V.X = 0.f;
-        ax.V.Y = 1.f;
-    } else if (fabsf(v.V.Y) < 1e-3f) {
-        ax.V.X = 1.f;
-        ax.V.Y = 0.f;
+    float vx2 = v.V.X*v.V.X;
+    float vy2 = v.V.Y*v.V.Y;
+    float XYnorm = sqrtf( vx2  +  vy2 );
+    if ( XYnorm < 1e-4f ) {
+        // 0.01% of a g
+        // fall back logic, either ax = (+-1 0 0) or (0 +-1 0)
+        // doesnt really matter since alpha will be tiny or close to pi
+        ax.V.X = (vy2 >= vx2) ? ((v.V.Y >= 0.f) ? +1.f : -1.f) : 0.f;
+        ax.V.Y = (vy2 <  vx2) ? ((v.V.X >= 0.f) ? -1.f : +1.f) : 0.f;
     } else {
         // base case
-        if (fabsf(v.V.Y) > fabsf(v.V.X)) {
+        if (vy2 > vx2) {
             ax.V.X  =  v.V.Y  /  XYnorm;
             ax.V.Y  =  - (v.V.X * ax.V.X) / v.V.Y;
         } else {
-            ax.V.Y  =  v.V.X  /  XYnorm;
+            ax.V.Y  =  - v.V.X  /  XYnorm;
             ax.V.X  =  - (v.V.Y * ax.V.Y) / v.V.X;
         }
     }
@@ -641,7 +672,8 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
     alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE)); //todo: make parameter
 
-    *fz = -v.V.Z / cos_approx(alpha);
+    // *fz = v.V.Z / cos_approx(alpha);
+    float fz_target = v.V.Z / cos_approx(alpha);
 
     // attitude setpoint in the yaw frame
     fp_quaternion_t attSpYaw;
@@ -658,6 +690,15 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     // this is probaby the most expensive operation... can be half the cost if
     // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
     *attSpNed = quatMult(yawNed, attSpYaw);
+
+    // discount thrust of we have not yet reached our attitude
+    t_fp_vector zDesNed = quatRotMatCol(*attSpNed, 2);
+    float zDotProd = 
+        zDesNed.V.X * rMat[0][2]
+        + zDesNed.V.Y * rMat[1][2] 
+        + zDesNed.V.Z * rMat[2][2];
+
+    *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
 }
 
 t_fp_vector coordinatedYaw(float yaw) {

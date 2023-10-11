@@ -68,7 +68,7 @@ typedef enum {
 } mspPendingSystemRequest_e;
 
 #define MSP_PORT_INBUF_SIZE 192
-#define MSP_PORT_OUTBUF_SIZE_MIN 320
+#define MSP_PORT_OUTBUF_SIZE_MIN 400
 
 #ifdef USE_FLASHFS
 #define MSP_PORT_DATAFLASH_BUFFER_SIZE 4096

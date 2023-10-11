@@ -6,7 +6,7 @@
     "configurations": [
         {
             "cwd": "${workspaceRoot}",
-            "executable": "obj/main/betaflight_STM32H743.elf",
+            "executable": "obj/main/indiflight_STM32H743.elf",
             "name": "Cortex OpenOCD",
             "request": "launch",
             "preLaunchTask": "start-openocd", 

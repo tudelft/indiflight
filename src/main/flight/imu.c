@@ -45,6 +45,7 @@
 #include "flight/pid.h"
 
 #include "io/gps.h"
+#include "io/external_pos.h"
 
 #include "scheduler/scheduler.h"
 
@@ -201,7 +202,7 @@ static float invSqrt(float x)
 
 static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
                                 bool useAcc, float ax, float ay, float az,
-                                bool useMag,
+                                bool useMag, bool useExtPosYaw,
                                 float cogYawGain, float courseOverGround, const float dcmKpGain)
 {
     static float integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;    // integral error terms scaled by Ki
@@ -257,6 +258,26 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     }
 #else
     UNUSED(useMag);
+#endif
+
+#ifdef USE_GPS_PI
+    // external position transmits psi
+    if (useExtPosYaw) {
+        float yawI = -extPosNed.psi;
+        while (yawI >  M_PIf) {
+            yawI -= (2.0f * M_PIf);
+        }
+        while (yawI < -M_PIf) {
+            yawI += (2.0f * M_PIf);
+        }
+        // reduce effect of error with tilt
+        const float ez_ef = sin_approx(yawI) * rMat[0][0] - cos_approx(yawI) * rMat[1][0];
+        ex += rMat[2][0] * ez_ef;
+        ey += rMat[2][1] * ez_ef;
+        ez += rMat[2][2] * ez_ef;
+    }
+#else
+    UNUSED(useExtPosYaw);
 #endif
 
     // Use measured acceleration vector
@@ -325,6 +346,34 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 
     attitudeIsEstablished = true;
 }
+
+#ifdef USE_GPS_PI
+t_fp_vector posNed = {0};
+t_fp_vector velNed = {0};
+
+static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp, float Ki) {
+    // convert local accel measurement to NED
+    t_fp_vector aNed = {
+        .V.X =    rMat[0][0] * ax + rMat[0][1] * ay + rMat [0][2] * az,
+        .V.Y = - (rMat[1][0] * ax + rMat[1][1] * ay + rMat [1][2] * az),
+        .V.Z = - (rMat[2][0] * ax + rMat[2][1] * ay + rMat [2][2] * az) + acc.dev.acc_1G,
+    };
+
+    t_fp_vector velErrorNed = extPosNed.vel;
+    VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velNed);
+
+    UNUSED(Ki);
+
+    VEC3_SCALAR_MULT_ADD(velNed, dt*acc.dev.acc_1G_rec*9.80665f, aNed);
+    VEC3_SCALAR_MULT_ADD(velNed, dt*Kp, velErrorNed);
+
+    t_fp_vector posErrorNed = extPosNed.pos;
+    VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posNed);
+
+    VEC3_SCALAR_MULT_ADD(posNed, dt, velNed);
+    VEC3_SCALAR_MULT_ADD(posNed, dt*Kp, posErrorNed);
+}
+#endif
 
 STATIC_UNIT_TESTED void imuUpdateEulerAngles(void)
 {
@@ -530,14 +579,30 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     }
 
     useAcc = imuIsAccelerometerHealthy(acc.accADC); // all smoothed accADC values are within 20% of 1G
+#ifdef USE_GPS_PI
+    bool useExtPosYaw = (extPosState >= EXT_POS_STILL_VALID);
+#else
+    bool useExtPosYaw = false;
+#endif
 
+    float Kp = imuCalcKpGain(currentTimeUs, useAcc, gyroAverage);
     imuMahonyAHRSupdate(deltaT * 1e-6f,
                         DEGREES_TO_RADIANS(gyroAverage[X]), DEGREES_TO_RADIANS(gyroAverage[Y]), DEGREES_TO_RADIANS(gyroAverage[Z]),
                         useAcc, acc.accADC[X], acc.accADC[Y], acc.accADC[Z],
-                        useMag,
-                        cogYawGain, courseOverGround,  imuCalcKpGain(currentTimeUs, useAcc, gyroAverage));
+                        useMag, useExtPosYaw,
+                        cogYawGain, courseOverGround, Kp);
 
     imuUpdateEulerAngles();
+
+#ifdef USE_GPS_PI
+    Kp *= extPosState >= EXT_POS_STILL_VALID;
+    if (deltaT < 50000) {
+        // 50ms max interval
+        imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
+            acc.accADC[X], acc.accADC[Y], acc.accADC[Z], Kp*5.f, 0.f);
+    }
+#endif
+
 #endif
 }
 

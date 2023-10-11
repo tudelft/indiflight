@@ -61,11 +61,9 @@ typedef struct quadLin_s {
 } quadLin_t;
 
 #define MAX_BANK_DEGREE 40.f
-#define ATT_MAX_RATE_XY 500.f
-#define ATT_MAX_RATE_Z 150.f
 
 extern fp_quaternion_t attSpNed;
-extern t_fp_vector rateSpBody;
+extern t_fp_vector rateSpBodyUse;
 extern t_fp_vector alphaSpBody;
 extern t_fp_vector spfSpBody;
 extern float zAccSpNed;
@@ -74,6 +72,7 @@ extern bool attTrackYaw;
 extern float dv[MAXV];
 extern float u[MAXU];
 extern float u_state[MAXU];
+extern float u_state_sync[MAXU];
 extern float u_output[MAXU];
 extern float omega[MAXU];
 extern float omega_dot[MAXU];

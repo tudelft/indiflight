@@ -269,6 +269,140 @@ static bool accNeedsCalibration(void)
 }
 #endif
 
+#ifdef USE_ACC
+
+#define THROW_ACC_HIGH_THRESH 20.f
+#define THROW_MOMENTUM_THRESH 4.f
+#define THROW_ACC_LOW_AGAIN_THRESH 13.f
+#define THROW_RELEASE_DELAY_MS 250
+
+#define FALL_ACC_LOW_THRESH 3.f
+#define FALL_ACC_LOW_TIME_MS 400
+
+typedef enum {
+    THROW_STATE_DISABLED = -1,
+    THROW_STATE_READY = 0,
+    THROW_STATE_ACC_HIGH,
+    THROW_STATE_ENOUGH_MOMENTUM,
+    THROW_STATE_ACC_LOW_AGAIN,
+    THROW_STATE_THROWN,
+} throwState_t;
+static throwState_t throwState = THROW_STATE_DISABLED;
+
+typedef enum {
+    FALL_STATE_DISABLED = -1,
+    FALL_STATE_READY = 0,
+    FALL_STATE_ACC_LOW,
+    FALL_STATE_FALLING
+} fallState_t;
+static fallState_t fallState = FALL_STATE_ACC_LOW;
+static float momentumAtArm = 0;
+
+static float totalAccSq(void) {
+    return sq(9.81f) * sq(acc.dev.acc_1G_rec) * 
+        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
+}
+
+// If some of these flags are set, then we cannot arm from throw. Disable 
+// throwing mode, which also disables the beeper so we notice.
+// If the pilot has already started throwing, then too bad.
+armingDisableFlags_e doNotTolerateDuringThrow = (
+    ARMING_DISABLED_NO_GYRO 
+    | ARMING_DISABLED_FAILSAFE
+    | ARMING_DISABLED_RX_FAILSAFE
+    | ARMING_DISABLED_BAD_RX_RECOVERY
+    | ARMING_DISABLED_BOXFAILSAFE
+    | ARMING_DISABLED_PARALYZE
+);
+
+void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
+    static float momentum = 0;
+    static timeUs_t accLowSince = 0;
+    static timeUs_t accLowAfterHighSince = 0;
+
+    // handle timings
+    static timeUs_t lastCall = 0;
+    timeDelta_t delta = cmpTimeUs(currentTimeUs, lastCall);
+    bool timingValid = ((delta < 100000) && (delta > 0) && (lastCall > 0));
+    lastCall = currentTimeUs;
+
+    // disable state machines (and possibly abort throw/fall if in progress)
+    bool disableConditions = ARMING_FLAG(ARMED) || (getArmingDisableFlags() & doNotTolerateDuringThrow) || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE);
+
+    if (disableConditions && (throwState >= THROW_STATE_READY)) {
+        throwState = THROW_STATE_DISABLED;
+        beeper(BEEPER_SILENCE);
+    }
+
+    // throwing state machine
+    switch(throwState) {
+        case THROW_STATE_DISABLED: {
+            // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
+            bool enableConditions = 
+                !disableConditions
+                && acc.isAccelUpdatedAtLeastOnce
+                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
+
+            if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }
+            break; }
+        case THROW_STATE_READY:
+            //todo: what happens on link loss?
+            if (totalAccSq() > sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_ACC_HIGH; }
+            momentum = 0.f;
+            break;
+        case THROW_STATE_ACC_HIGH: {
+            float accLimited = constrainf(sqrtf(totalAccSq()), 0., 40.f);
+            momentum += ( accLimited - 9.81f ) * 1e-6f * ((float) delta);
+            if (momentum > THROW_MOMENTUM_THRESH) { throwState = THROW_STATE_ENOUGH_MOMENTUM; }
+            if (totalAccSq() < sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_READY; }
+            break; }
+        case THROW_STATE_ENOUGH_MOMENTUM: {
+            // will definitely arm, just waiting for release
+
+            // continue incrementing momentum for logging
+            float accLimited = constrainf(sqrtf(totalAccSq()), 0., 40.f);
+            momentum += ( accLimited - 9.81f ) * 1e-6f * ((float) delta);
+            if (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH)) {
+                momentumAtArm = momentum;
+                accLowAfterHighSince = currentTimeUs;
+                throwState = THROW_STATE_ACC_LOW_AGAIN;
+            }
+            break; }
+        case THROW_STATE_ACC_LOW_AGAIN: {
+            timeDelta_t timeSinceRelease = cmpTimeUs(currentTimeUs, accLowAfterHighSince);
+            if (timeSinceRelease > (1e3 * THROW_RELEASE_DELAY_MS)) { throwState = THROW_STATE_THROWN; }
+            break; }
+        case THROW_STATE_THROWN:
+            break;
+    }
+
+    // falling state machine
+    if (throwState == THROW_STATE_DISABLED) { fallState = FALL_STATE_DISABLED; }
+
+    switch(fallState) {
+        case FALL_STATE_DISABLED:
+            if (throwState >= THROW_STATE_READY) { fallState = FALL_STATE_READY; }
+            break;
+        case FALL_STATE_READY:
+            if (totalAccSq() < sq(FALL_ACC_LOW_THRESH)) {
+                accLowSince = currentTimeUs;
+                fallState = FALL_STATE_ACC_LOW;
+            }
+            break;
+        case FALL_STATE_ACC_LOW:
+            if (totalAccSq() > sq(FALL_ACC_LOW_THRESH)) { fallState = FALL_STATE_READY; }
+
+            timeDelta_t timeAccLow = cmpTimeUs(currentTimeUs, accLowSince);
+            if (timeAccLow > (1e3 * FALL_ACC_LOW_TIME_MS)) { fallState = FALL_STATE_FALLING; }
+            break;
+        case FALL_STATE_FALLING:
+            break;
+    }
+
+    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
+}
+#endif
+
 void updateArmingStatus(void)
 {
     if (ARMING_FLAG(ARMED)) {
@@ -345,6 +479,25 @@ void updateArmingStatus(void)
                 setArmingDisabled(ARMING_DISABLED_NOPREARM);
             }
         }
+
+        /*
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && IS_RC_MODE_ACTIVE(BOXARM) && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_NOPREARM | ARMING_DISABLED_ARM_SWITCH))) {
+            beeper(BEEPER_THROW_TO_ARM);
+        } else {
+            beeper(BEEPER_SILENCE);
+        }
+
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && isAccLow() && (noThrowToArmSince > 0)) {
+            //unsetArmingDisabled(ARMING_DISABLED_THROTTLE); // may be dangerous
+            if (cmpTimeUs(microsISR(), noThrowToArmSince) > 250000) {
+                unsetArmingDisabled(ARMING_DISABLED_ANGLE);
+                unsetArmingDisabled(ARMING_DISABLED_NOPREARM);
+                unsetArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
+            }
+        } else {
+            noThrowToArmSince = microsISR();
+        }
+        */
 
 #ifdef USE_GPS_RESCUE
         if (gpsRescueIsConfigured()) {
@@ -425,6 +578,15 @@ void updateArmingStatus(void)
             }
         }
 
+#ifdef USE_ACC
+        if ( ((throwState == THROW_STATE_THROWN) && true)
+                || ((fallState == FALL_STATE_FALLING) && false) ) {
+            // unset all but doNotTolerate.
+            unsetArmingDisabled(~doNotTolerateDuringThrow);
+        }
+            // yeet
+#endif
+
         if (isArmingDisabled()) {
             warningLedFlash();
         } else {
@@ -455,7 +617,7 @@ void disarm(flightLogDisarmReason_e reason)
         eventData.reason = reason;
         blackboxLogEvent(FLIGHT_LOG_EVENT_DISARM, (flightLogEventData_t*)&eventData);
 
-        if (blackboxConfig()->device && blackboxConfig()->mode != BLACKBOX_MODE_ALWAYS_ON) { // Close the log upon disarm except when logging mode is ALWAYS ON
+        if (blackboxConfig()->device && blackboxConfig()->mode != BLACKBOX_MODE_ALWAYS_ON && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) { // Close the log upon disarm except when logging mode is ALWAYS ON
             blackboxFinish();
         }
 #else
@@ -1029,7 +1191,7 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
-    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
+    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE) || true) {
         //LED1_ON; // @tblaha this LED is used for debugging now.
         // increase frequency of attitude task to reduce drift when in angle or horizon mode
         rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)imuConfig()->imu_process_denom));

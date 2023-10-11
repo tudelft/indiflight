@@ -102,7 +102,8 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXBEEPERMUTE, .boxName = "BEEPER MUTE", .permanentId = 52},
     { .boxId = BOXREADY, .boxName = "READY", .permanentId = 53},
     { .boxId = BOXVELCTL, .boxName = "VELOCITY CONTROL", .permanentId = 54},
-    { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55}
+    { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55},
+    { .boxId = BOXTHROWTOARM, .boxName = "THROWTOARM", .permanentId = 56 }
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -189,6 +190,7 @@ void initActiveBoxIds(void)
 #define BME(boxId) do { bitArraySet(&ena, boxId); } while (0)
     BME(BOXARM);
     BME(BOXPREARM);
+    BME(BOXTHROWTOARM);
     if (!featureIsEnabled(FEATURE_AIRMODE)) {
         BME(BOXAIRMODE);
     }
@@ -341,6 +343,9 @@ void initActiveBoxIds(void)
     BME(BOXREADY);
 #ifdef USE_POS_CTL
     BME(BOXPOSCTL);
+#endif
+#ifdef USE_VEL_CTL
+    BME(BOXVELCTL);
 #endif
 
 #undef BME

@@ -60,6 +60,7 @@ typedef enum {
     BEEPER_CAM_CONNECTION_CLOSE,    // When the 5 key simulation stop
     BEEPER_RC_SMOOTHING_INIT_FAIL,  // Warning beep pattern when armed and rc smoothing has not initialized filters
     BEEPER_ARMING_GPS_NO_FIX,       // Beep a special tone when arming the board and GPS has no fix
+    BEEPER_THROW_TO_ARM,            // THROW TO ARM is active
     BEEPER_ALL,                     // Turn ON or OFF all beeper conditions
     // BEEPER_ALL must remain at the bottom of this enum
 } beeperMode_e;
@@ -90,11 +91,13 @@ typedef enum {
     | BEEPER_GET_FLAG(BEEPER_CAM_CONNECTION_CLOSE) \
     | BEEPER_GET_FLAG(BEEPER_RC_SMOOTHING_INIT_FAIL) \
     | BEEPER_GET_FLAG(BEEPER_ARMING_GPS_NO_FIX) \
+    | BEEPER_GET_FLAG(BEEPER_THROW_TO_ARM) \
     )
 
 #define DSHOT_BEACON_ALLOWED_MODES ( \
     BEEPER_GET_FLAG(BEEPER_RX_LOST) \
-    | BEEPER_GET_FLAG(BEEPER_RX_SET) )
+    | BEEPER_GET_FLAG(BEEPER_RX_SET) \
+    )
 
 void beeper(beeperMode_e mode);
 void beeperSilence(void);
