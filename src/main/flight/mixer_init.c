@@ -285,9 +285,10 @@ bool mixerIsTricopter(void)
 void initEscEndpoints(void)
 {
     float motorOutputLimit = 1.0f;
-    if (currentPidProfile->motor_output_limit < 100) {
-        motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
-    }
+    //if (currentPidProfile->motor_output_limit < 100) {
+    //    motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
+    //}
+    // this now gets managed in att_ctl, so the controller is aware
     motorInitEndpoints(motorConfig(), motorOutputLimit, &mixerRuntime.motorOutputLow, &mixerRuntime.motorOutputHigh, &mixerRuntime.disarmMotorOutput, &mixerRuntime.deadbandMotor3dHigh, &mixerRuntime.deadbandMotor3dLow);
 }
 

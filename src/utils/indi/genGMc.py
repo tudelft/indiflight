@@ -42,23 +42,34 @@ def inertiaBellFromMotorNumber(num):
 # let quad oscillate as a pendulum around the motor axles in all 3 directions
 # record oscillation periods in seconds using the IMU
 # MAKE SURE THAT COG IS EXACTLY IN THE CENTER
-m = 0.3826 # kg
-Px = 0.5801
-Py = 0.5709
-Pz = 0.6295 # Period for z-axis rotation
+# FOR SAFETY, REMOVE PROPS. WE'LL ADD THEIR CONTRIBUTION LATER
+
+# before new bottom plate and bumpers
+# m = 0.3826 # kg
+# Px = 0.5801
+# Py = 0.5709
+# Pz = 0.6295 # Period for z-axis rotation
+
+# after modifications
+m = 0.4280 # kg
+Px = 0.5955
+Py = 0.5852
+Pz = 0.6417
+
 Raxle = 5 * 0.5e-3 # motor axle radius (to calculate location of rotation point)
 
 # prop inertia measurements (measured for red 2.1inch prop)
 Pp = (525 - 275) / 30 / 20 # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
 Rp = 36.0 * 1e-3 # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
 mp = 1.40 * 1e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
+#mp = 1.60 * 1e-3 # black prop (assume same distribution of mass, ie same period)
 
 # motor bell inertia
 motorNumber = 1407
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
-tau = 0.015 # spinup/spindown time constant
+tau = 0.02 # spinup/spindown time constant
 k = 1.89e-7 # constant in T = k omega^2 -- red 2.1inch pitch prop
 Tmax = 4.2 # max thrust red prop
 #k = 2.66e-7 # black 3inch pitch prop
@@ -111,9 +122,11 @@ direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along
 Rx = width/2 - Raxle
 Ry = length/2 - Raxle
 Rz = diagonal/2 - Raxle # distance for z-axis rotation
-Ixx = inertiaFromPendulumPeriod(Px, Rx, m)
-Iyy = inertiaFromPendulumPeriod(Py, Ry, m)
-Izz = inertiaFromPendulumPeriod(Pz, Rz, m)
+
+# inertia tests are to be done without props, so we add them back in
+Ixx = inertiaFromPendulumPeriod(Px, Rx, m - (4*mp)) + (4*mp) * (width/2)**2
+Iyy = inertiaFromPendulumPeriod(Py, Ry, m - (4*mp)) + (4*mp) * (length/2)**2
+Izz = inertiaFromPendulumPeriod(Pz, Rz, m - (4*mp)) + (4*mp) * (diagonal/2)**2
 Iprop = inertiaFromPendulumPeriod(Pp, Rp, mp) \
         +  inertiaBellFromMotorNumber(motorNumber)
 

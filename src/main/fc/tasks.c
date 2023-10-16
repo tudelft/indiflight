@@ -442,7 +442,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_POS_CTL
-    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_LED_STRIP

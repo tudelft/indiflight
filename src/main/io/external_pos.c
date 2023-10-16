@@ -93,7 +93,7 @@ void getExternalPos(timeUs_t current) {
     }
     latestExtrapolationTime = currentExtrapolationTime;
     */
-        // todo: extrapolate psi from body rates somehow using the quat
+        // todo: DONE in imu.c extrapolate psi from body rates somehow using the quat
 }
 
 void getFakeGps(timeUs_t current) {
@@ -113,6 +113,10 @@ void getFakeGps(timeUs_t current) {
         sensorsSet(SENSOR_GPS);
         ENABLE_STATE(GPS_FIX);
         ENABLE_STATE(GPS_FIX_EVER);
+    }
+
+    if (extPosState == EXT_POS_NO_SIGNAL) {
+        DISABLE_STATE(GPS_FIX);
     }
 }
 

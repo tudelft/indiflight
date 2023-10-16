@@ -348,8 +348,8 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 }
 
 #ifdef USE_GPS_PI
-t_fp_vector posNed = {0};
-t_fp_vector velNed = {0};
+t_fp_vector posEstNed = {0};
+t_fp_vector velEstNed = {0};
 
 static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp, float Ki) {
     // convert local accel measurement to NED
@@ -360,18 +360,18 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
     };
 
     t_fp_vector velErrorNed = extPosNed.vel;
-    VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velNed);
+    VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
 
     UNUSED(Ki);
 
-    VEC3_SCALAR_MULT_ADD(velNed, dt*acc.dev.acc_1G_rec*9.80665f, aNed);
-    VEC3_SCALAR_MULT_ADD(velNed, dt*Kp, velErrorNed);
+    VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*9.80665f, aNed);
+    VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
 
     t_fp_vector posErrorNed = extPosNed.pos;
-    VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posNed);
+    VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posEstNed);
 
-    VEC3_SCALAR_MULT_ADD(posNed, dt, velNed);
-    VEC3_SCALAR_MULT_ADD(posNed, dt*Kp, posErrorNed);
+    VEC3_SCALAR_MULT_ADD(posEstNed, dt, velEstNed);
+    VEC3_SCALAR_MULT_ADD(posEstNed, dt*Kp, posErrorNed);
 }
 #endif
 
@@ -595,11 +595,11 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     imuUpdateEulerAngles();
 
 #ifdef USE_GPS_PI
-    Kp *= extPosState >= EXT_POS_STILL_VALID;
+    Kp *= (extPosState >= EXT_POS_STILL_VALID);
     if (deltaT < 50000) {
         // 50ms max interval
         imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
-            acc.accADC[X], acc.accADC[Y], acc.accADC[Z], Kp*5.f, 0.f);
+            acc.accADC[X], acc.accADC[Y], acc.accADC[Z], Kp*8.f, 0.f);
     }
 #endif
 

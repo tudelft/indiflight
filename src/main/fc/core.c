@@ -269,25 +269,38 @@ static bool accNeedsCalibration(void)
 }
 #endif
 
+// throwing mode
 #ifdef USE_ACC
+
+static float totalAccSq(void) {
+    return sq(9.81f) * sq(acc.dev.acc_1G_rec) * 
+        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
+}
+
+static float totalGyroSq(void) {
+    return sq(gyro.gyroADCf[X]) + sq(gyro.gyroADCf[Y]) + sq(gyro.gyroADCf[Z]);
+}
 
 #define THROW_ACC_HIGH_THRESH 20.f
 #define THROW_MOMENTUM_THRESH 4.f
 #define THROW_ACC_LOW_AGAIN_THRESH 13.f
 #define THROW_RELEASE_DELAY_MS 250
-
-#define FALL_ACC_LOW_THRESH 3.f
-#define FALL_ACC_LOW_TIME_MS 400
+#define THROW_GYRO_HIGH 720.f
 
 typedef enum {
     THROW_STATE_DISABLED = -1,
     THROW_STATE_READY = 0,
     THROW_STATE_ACC_HIGH,
     THROW_STATE_ENOUGH_MOMENTUM,
-    THROW_STATE_ACC_LOW_AGAIN,
+    THROW_STATE_LEFT_HAND,
     THROW_STATE_THROWN,
 } throwState_t;
 static throwState_t throwState = THROW_STATE_DISABLED;
+static float momentumAtLeavingHand = 0;
+
+#ifdef THROW_TO_ARM_USE_FALL_LOGIC
+#define FALL_ACC_LOW_THRESH 3.f
+#define FALL_ACC_LOW_TIME_MS 400
 
 typedef enum {
     FALL_STATE_DISABLED = -1,
@@ -296,12 +309,7 @@ typedef enum {
     FALL_STATE_FALLING
 } fallState_t;
 static fallState_t fallState = FALL_STATE_ACC_LOW;
-static float momentumAtArm = 0;
-
-static float totalAccSq(void) {
-    return sq(9.81f) * sq(acc.dev.acc_1G_rec) * 
-        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
-}
+#endif
 
 // If some of these flags are set, then we cannot arm from throw. Disable 
 // throwing mode, which also disables the beeper so we notice.
@@ -317,8 +325,7 @@ armingDisableFlags_e doNotTolerateDuringThrow = (
 
 void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     static float momentum = 0;
-    static timeUs_t accLowSince = 0;
-    static timeUs_t accLowAfterHighSince = 0;
+    static timeUs_t leftHandSince = 0;
 
     // handle timings
     static timeUs_t lastCall = 0;
@@ -327,7 +334,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     lastCall = currentTimeUs;
 
     // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED) || (getArmingDisableFlags() & doNotTolerateDuringThrow) || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE);
+    bool disableConditions = ARMING_FLAG(ARMED) 
+        || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
+        || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_READY)) {
         throwState = THROW_STATE_DISABLED;
@@ -335,47 +344,48 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     }
 
     // throwing state machine
+    bool enableConditions;
+    timeDelta_t timeSinceRelease;
     switch(throwState) {
-        case THROW_STATE_DISABLED: {
+        case THROW_STATE_DISABLED:
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
-            bool enableConditions = 
+            enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce
+                && (extPosState >= EXT_POS_STILL_VALID)
                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }
-            break; }
+            break;
         case THROW_STATE_READY:
-            //todo: what happens on link loss?
             if (totalAccSq() > sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_ACC_HIGH; }
             momentum = 0.f;
             break;
-        case THROW_STATE_ACC_HIGH: {
-            float accLimited = constrainf(sqrtf(totalAccSq()), 0., 40.f);
-            momentum += ( accLimited - 9.81f ) * 1e-6f * ((float) delta);
+        case THROW_STATE_ACC_HIGH:
+            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
             if (momentum > THROW_MOMENTUM_THRESH) { throwState = THROW_STATE_ENOUGH_MOMENTUM; }
             if (totalAccSq() < sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_READY; }
-            break; }
-        case THROW_STATE_ENOUGH_MOMENTUM: {
-            // will definitely arm, just waiting for release
-
-            // continue incrementing momentum for logging
-            float accLimited = constrainf(sqrtf(totalAccSq()), 0., 40.f);
-            momentum += ( accLimited - 9.81f ) * 1e-6f * ((float) delta);
-            if (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH)) {
-                momentumAtArm = momentum;
-                accLowAfterHighSince = currentTimeUs;
-                throwState = THROW_STATE_ACC_LOW_AGAIN;
+            break;
+        case THROW_STATE_ENOUGH_MOMENTUM: // will definitely arm, just waiting for release
+            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
+            if ( (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH))
+                    || (totalGyroSq() < sq(THROW_GYRO_HIGH)) ) {
+                momentumAtLeavingHand = momentum;
+                leftHandSince = currentTimeUs;
+                throwState = THROW_STATE_LEFT_HAND;
             }
-            break; }
-        case THROW_STATE_ACC_LOW_AGAIN: {
-            timeDelta_t timeSinceRelease = cmpTimeUs(currentTimeUs, accLowAfterHighSince);
+            break;
+        case THROW_STATE_LEFT_HAND:
+            timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
             if (timeSinceRelease > (1e3 * THROW_RELEASE_DELAY_MS)) { throwState = THROW_STATE_THROWN; }
-            break; }
+            break;
         case THROW_STATE_THROWN:
             break;
     }
 
+    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
+
+#ifdef THROW_TO_ARM_USE_FALL_LOGIC
     // falling state machine
     if (throwState == THROW_STATE_DISABLED) { fallState = FALL_STATE_DISABLED; }
 
@@ -398,8 +408,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
         case FALL_STATE_FALLING:
             break;
     }
-
-    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
+#endif
 }
 #endif
 
@@ -1283,11 +1292,17 @@ void processRxModes(timeUs_t currentTimeUs)
 bool isTouchingGround(void) {
     // if total trust is low, but we have high total accel then we are likely touching ground
     // this breaks down for fixed wings, and probably "3D" thrust ESCs
+    bool gyroLow = (
+        sq(gyro.gyroADCf[X])
+        + sq(gyro.gyroADCf[Y])
+        + sq(gyro.gyroADCf[Z])
+        ) < sq(100.f);
+
     bool accHigh = (sq(acc.dev.acc_1G_rec) * (
         sq(acc.accADC[X])
         + sq(acc.accADC[Y])
         + sq(acc.accADC[Z])
-        )) > 0.8*0.8;
+        )) > sq(0.8f);
 
     bool throttleLow = true;
     if (FLIGHT_MODE(POSITION_MODE)) {
@@ -1302,7 +1317,7 @@ bool isTouchingGround(void) {
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
     }
 
-    return (accHigh && throttleLow);
+    return (accHigh && throttleLow && gyroLow);
 }
 
 #ifdef USE_INDI

@@ -49,9 +49,9 @@ t_fp_vector alphaSpBody = {0};
 t_fp_vector yawRateSpBody = {0};
 t_fp_vector spfSpBody = {0};
 
-t_fp_vector attGains = {.V.X = 200.f, .V.Y = 200.f, .V.Z = 80.f};
+t_fp_vector attGains = {.V.X = 200.f, .V.Y = 200.f, .V.Z = 100.f};
 t_fp_vector attGainsCasc;
-t_fp_vector rateGains = {.V.X = 20.f, .V.Y = 20.f, .V.Z = 10.f};
+t_fp_vector rateGains = {.V.X = 20.f, .V.Y = 20.f, .V.Z = 20.f};
 
 float u[MAXU] = {0.f};
 float u_output[MAXU] = {0.f};
@@ -68,7 +68,6 @@ biquadFilter_t dgyroNotch[XYZ_AXIS_COUNT];
 dtermLowpass_t dgyroLowpass[XYZ_AXIS_COUNT];
 dtermLowpass_t dgyroLowpass2[XYZ_AXIS_COUNT];
 
-float actTimeConst = 0.02f; // sec. Don't go below 0.01
 pt1Filter_t actLag[MAXU];
 biquadFilter_t actNotch[MAXU];
 dtermLowpass_t actLowpass[MAXU];
@@ -77,9 +76,55 @@ dtermLowpass_t actLowpass2[MAXU];
 uint8_t attRateDenom = 8; // do att control only every 8 invokations
 uint8_t attExecCounter = 0;
 
-float k_thrust  = 2.58e-7f;
-float tau_rpm = 0.02f;
-float Tmax = 4.5f;
+// to generate G1 and G2, see python code src/utils/indi/genGMc.py
+// FL, FR, RR, RL
+/* black props
+static float G1[MAXV][MAXU] = {
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    { -10.51f,  -10.51f,  -10.51f,  -10.51f},
+    {-395.5f , -395.5f ,  395.5f ,  395.5f},
+    {-263.9f ,  263.9f , -263.9f ,  263.9f},
+    { -50.60f,   50.60f,   50.60f,  -50.60f},
+};
+
+static float G2[MAXV][MAXU] = {
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {-0.004538, 0.004538,  0.004538, -0.004538},
+};
+
+static float kThrust  = 2.66e-7f;
+static float tauRpm = 0.02f;
+static float Tmax = 4.5f;
+*/
+
+static float G1[MAXV][MAXU] = {
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {  -9.81308411f,   -9.81308411f,   -9.81308411f,   -9.81308411},
+    {-370.11790216f, -370.11790216f,  370.11790216f,  370.11790216},
+    {-246.35977299f,  246.35977299f, -246.35977299f,  246.35977299},
+    { -47.40225619f,   47.40225619f,   47.40225619f,  -47.40225619},
+};
+
+static float G2[MAXV][MAXU] = {
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {-0.004008, 0.004008,  0.004008, -0.004008},
+};
+
+static float kThrust  = 1.89e-7f;
+static float tauRpm = 0.02f;
+static float Tmax = 4.2f;
+
+static float G2_normalizer;
 
 #define ERPM_PER_LSB             100.0f
 float erpmToRad;
@@ -122,6 +167,9 @@ void indiInit(const pidProfile_t * pidProfile) {
     for (int i = 0; i < MAXV; i++)
         dv[i] = 0.f;
 
+    // indi G2 normalization constant 1 / (2 tau k)
+    G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
+
     // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
     float k_conf = pidProfile->thrustLinearization / 100.f;
     if ((k_conf > 0.025) && (k_conf < 0.7)) {
@@ -140,7 +188,7 @@ void indiInit(const pidProfile_t * pidProfile) {
 
     for (int i = 0; i < nu; i++) {
         // init backup actuator state filters
-        pt1FilterInit(&actLag[i], pt1FilterGain(1.f / (2.f * M_PIf * actTimeConst), pidRuntime.dT));
+        pt1FilterInit(&actLag[i], pt1FilterGain(1.f / (2.f * M_PIf * tauRpm), pidRuntime.dT));
 
         // rpm feedback filter. A bit handwavy, but using filter constant from
         // alpha lp seems most correct
@@ -357,12 +405,7 @@ void getAlphaSpBody(void) {
 void getMotor(void) {
     // mix! And call writeMotors or whatever
 
-    // to generate G1 and G2, see python code src/utils/indi/genGMc.py
 
-    // TODO: just use activeSetSolve
-    // TODO: Done. scale with currentPidProfile->motor_output_limit / 100.0f
-
-    // FL, FR, RR, RL
     /*
     float Ginv[4][4] = {
         {-0.0254842f,   0.00042246f,  0.0007886f,   0.00246437f},
@@ -371,27 +414,6 @@ void getMotor(void) {
         {-0.0254842f,   0.00042246f, -0.0007886f,  -0.00246437f},
     };
     */
-
-    float G1[MAXV][4] = {
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        { -10.97752222f,  -10.97752222f,  -10.97752222f,  -10.97752222f},
-        { -505.80871408f, -505.80871408f,  505.80871408f,  505.80871408f},
-        { -305.98392703f,  305.98392703f, -305.98392703f,  305.98392703f},
-        { -63.62310934f,   63.62310934f,   63.62310934f,  -63.62310934f},
-    };
-
-    float G2[MAXV][4] = {
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {0.f, 0.f, 0.f, 0.f},
-        {-0.00507791f, 0.00507791f,  0.00507791f, -0.00507791f},
-    };
-
-    // 1 / (2 tau k)
-    float G2_normalizer = 176366843.f;
 
     static float du[MAXU] = {0.f};
     static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
@@ -430,8 +452,8 @@ void getMotor(void) {
         omega_inv[i] = (fabsf(omega[i]) > (0.5f * omega_hover)) ? 1.f / omega[i] : 1.f / omega_hover;
     }
 
-    // use INDI only when in the air, solve global problem otherwise
-    bool doIndi = !isTouchingGround();
+    // use INDI only when in the air, solve linearized global problem otherwise
+    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
     // get motor acceleration
     for (int i = 0; i < nu; i++) {
@@ -485,7 +507,7 @@ void getMotor(void) {
     float du_max[MAXU];
     float du_pref[MAXU];
 
-    float motorMax = constrainf(50.f * 0.01f, 0.05f, 1.0f); // make parameter
+    float motorMax = constrainf(currentPidProfile->motor_output_limit * 0.01f, 0.05f, 1.0f); // make parameter
     for (int i=0; i < nu; i++) {
         // todo: what if negative u are possible?
         du_min[i]  = 0.f - doIndi*u_state[i];

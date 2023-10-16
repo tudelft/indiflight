@@ -89,7 +89,7 @@ bool shouldInitializeGPSHeading(void);
 bool isUpright(void);
 
 #ifdef USE_GPS_PI
-extern t_fp_vector posNed;
-extern t_fp_vector velNed;
+extern t_fp_vector posEstNed;
+extern t_fp_vector velEstNed;
 //void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp);
 #endif

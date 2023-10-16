@@ -20,6 +20,3 @@ remote_flash : $(TARGET_ELF)
 		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
 			'openocd -f /opt/openocd/openocd.cfg \
 			-c "program /home/pi/indiflight/$(TARGET_ELF) verify reset exit"'
-
-
-

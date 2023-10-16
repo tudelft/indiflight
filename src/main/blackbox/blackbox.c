@@ -1405,18 +1405,18 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 #endif
 #ifdef USE_POS_CTL
-    blackboxCurrent->pos[0] = lrintf(posNed.V.X * METER_TO_MM);
-    blackboxCurrent->pos[1] = lrintf(posNed.V.Y * METER_TO_MM);
-    blackboxCurrent->pos[2] = lrintf(posNed.V.Z * METER_TO_MM);
+    blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
+    blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
+    blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
     blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->posSp[0] = lrintf(posSetpointNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->posSp[1] = lrintf(posSetpointNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->posSp[2] = lrintf(posSetpointNed.pos.V.Z * METER_TO_MM);
-    blackboxCurrent->vel[0] = lrintf(velNed.V.X * METER_TO_CM);
-    blackboxCurrent->vel[1] = lrintf(velNed.V.Y * METER_TO_CM);
-    blackboxCurrent->vel[2] = lrintf(velNed.V.Z * METER_TO_CM);
+    blackboxCurrent->vel[0] = lrintf(velEstNed.V.X * METER_TO_CM);
+    blackboxCurrent->vel[1] = lrintf(velEstNed.V.Y * METER_TO_CM);
+    blackboxCurrent->vel[2] = lrintf(velEstNed.V.Z * METER_TO_CM);
     blackboxCurrent->extVel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
     blackboxCurrent->extVel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
     blackboxCurrent->extVel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
@@ -2182,7 +2182,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
         if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
-        } else if ((!ARMING_FLAG(ARMED)) && isModeActivationConditionPresent(BOXTHROWTOARM) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+        } else if ((!ARMING_FLAG(ARMED)) && isModeActivationConditionPresent(BOXTHROWTOARM) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && !startedLoggingInTestMode) {
             blackboxFinish();
         } else {
             blackboxLogIteration(currentTimeUs);

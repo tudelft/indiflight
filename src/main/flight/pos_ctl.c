@@ -3,6 +3,7 @@
 #include "io/external_pos.h"
 #include "flight/imu.h"
 #include "common/maths.h"
+#include "fc/runtime_config.h"
 
 #include "pos_ctl.h"
 
@@ -18,39 +19,48 @@ float yawRateSpFromOuter = {0};
 
 // position controller configuration
 // todo DONE: split in horizontal/vertical, not XYZ.. thats kinda meaningless with yaw
-float posHGainP = 0.4;
-float posHGainD = 1.5;
-float posVGainP = 1.0;
+float posHGainP = 1.5;
+float posHGainD = 2.5;
+float velHGainI = 0.1;
+float posVGainP = 2.0;
 float posVGainD = 2.5;
-float velSpLimitXY = 1.5;
-float velSpLimitZ  = 0.5;
-float yawGainP = 1.;
+float velVGainI = 0.1;
+float velSpLimitXY = 2.5;
+float velSpLimitZ  = 1.;
+float yawGainP = 2.;
 float weathervaneP = 0.;
 
+t_fp_vector velIError = {0};
+
+static void resetIterms(void) { velIError.V.X=0.f; velIError.V.Y=0.f; velIError.V.Z=0.f; }
+
 void updatePosCtl(timeUs_t current) {
-    UNUSED(current);
 
     if (extPosState == EXT_POS_NO_SIGNAL) {
         // panic and level craft
+        resetIterms();
         accSpNed.V.X = 0.f;
         accSpNed.V.Y = 0.f;
-        accSpNed.V.Z = 0.f;
+        accSpNed.V.Z = 0.5f; // also command slight downwards acceleration
         return;
     }
 
-    getAccSpNed();
+    if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) {
+        resetIterms();
+    }
+
+    getAccSpNed(current);
 }
 
-void getAccSpNed(void) {
+void getAccSpNed(timeUs_t current) {
     // precalculations
-    float accMax = tan_approx( DEGREES_TO_RADIANS( 40.f ) );
+    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 40.f ) );
     float posHGainPCasc = posHGainP / posHGainD; // emulate parallel PD with Casc system
     float posVGainPCasc = posVGainP / posVGainD;
 
     // pos error = pos setpoint - pos estimate
     t_fp_vector posError = posSetpointNed.pos;
-    //VEC3_SCALAR_MULT_ADD(posError, -1.0f, extPosNed.pos);
-    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posNed);
+    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // extPosNed.pos
 
     // vel setpoint = posGains * posError
     posSetpointNed.vel.V.X = posError.V.X * posHGainPCasc;
@@ -59,19 +69,42 @@ void getAccSpNed(void) {
 
     // constrain magnitude here
     VEC3_CONSTRAIN_XY_LENGTH(posSetpointNed.vel, velSpLimitXY);
+
     posSetpointNed.vel.V.Z = constrainf(posSetpointNed.vel.V.Z, -velSpLimitZ, +velSpLimitZ);
 
     // vel error = vel setpoint - vel estimate
     t_fp_vector velError = posSetpointNed.vel;
     //VEC3_SCALAR_MULT_ADD(velError, -1.0f, extPosNed.vel);
-    VEC3_SCALAR_MULT_ADD(velError, -1.0f, velNed);
+    VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
+
+    static bool accSpXYSaturated = true;
+    static bool accSpZSaturated = true;
+    static timeUs_t lastCall = 0;
+    timeDelta_t delta = cmpTimeUs(current, lastCall);
+    if ((lastCall > 0) && (delta > 0) && (delta < 50000)) {
+        if (!accSpXYSaturated) {
+            velIError.V.X += delta * 1e-6f * velError.V.X;
+            velIError.V.Y += delta * 1e-6f * velError.V.Y;
+        }
+
+        if (!accSpZSaturated)
+            velIError.V.Z += delta * 1e-6f * velError.V.Z;
+
+        VEC3_CONSTRAIN_XY_LENGTH(velIError, 2.f);
+        velIError.V.Z = constrainf(velIError.V.Z, -1.f, 1.f);
+    }
+    lastCall = current;
 
     // acceleration setpoint = velGains * velError
-    accSpNed.V.X = velError.V.X * posHGainD;
-    accSpNed.V.Y = velError.V.Y * posHGainD;
-    accSpNed.V.Z = velError.V.Z * posVGainD;
+    accSpNed.V.X = velError.V.X * posHGainD  +  velIError.V.X * velHGainI;
+    accSpNed.V.Y = velError.V.Y * posHGainD  +  velIError.V.Y * velHGainI;
+    accSpNed.V.Z = velError.V.Z * posVGainD  +  velIError.V.Z * velVGainI;
 
     // limit such that max acceleration likely results in bank angle below 40 deg
+    // but log if acceleration saturated, so we can pause error integration
+    accSpXYSaturated = VEC3_XY_LENGTH(accSpNed) > accMax;
+    accSpZSaturated = (accSpNed.V.Z < MAX_ACC_Z_NEG) || (accSpNed.V.Z > MAX_ACC_Z_POS);
+
     VEC3_CONSTRAIN_XY_LENGTH(accSpNed, accMax);
     accSpNed.V.Z = constrainf(accSpNed.V.Z, MAX_ACC_Z_NEG, MAX_ACC_Z_POS);
 
@@ -84,7 +117,7 @@ void getAccSpNed(void) {
 
     yawRateSpFromOuter = yawError;
     // todo: weathervaning
-    // todo: transform acc measurement from body to global and use INDI on acc
+    // DONE todo: transform acc measurement from body to global and use INDI on acc --> settled for PI on vel and NDI on acc
 }
 
 // TODO
