@@ -5,7 +5,7 @@
 #include "common/maths.h"
 #include "fc/runtime_config.h"
 
-#ifdef USE_PI_GPS
+#ifdef USE_GPS_PI
 #include "pos_ctl.h"
 
 // --- control variables
