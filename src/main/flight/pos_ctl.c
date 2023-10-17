@@ -5,6 +5,7 @@
 #include "common/maths.h"
 #include "fc/runtime_config.h"
 
+#ifdef USE_PI_GPS
 #include "pos_ctl.h"
 
 // --- control variables
@@ -122,3 +123,5 @@ void getAccSpNed(timeUs_t current) {
 
 // TODO
 // 1. velocity control..
+
+#endif // USE_PI_GPS

@@ -1028,7 +1028,9 @@ static void writeInterframe(void)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
     }
-#endif
+#else
+    UNUSED(deltas16);
+#endif // USE_INDI
 
 #ifdef USE_POS_CTL
     if (testBlackboxCondition(CONDITION(POS))) {
@@ -1053,6 +1055,8 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
     }
+#else
+    UNUSED(deltas16);
 #endif
 
     //Rotate our history buffers

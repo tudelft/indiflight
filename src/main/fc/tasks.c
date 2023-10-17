@@ -535,13 +535,13 @@ void tasksInit(void)
         rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
         rescheduleTask(TASK_PID, gyro.targetLooptime);
-#ifdef USE_INDI
-        rescheduleTask(TASK_INDI, gyro.targetLooptime);
-#endif
         setTaskEnabled(TASK_GYRO, true);
         setTaskEnabled(TASK_FILTER, true);
         setTaskEnabled(TASK_PID, true);
+#ifdef USE_INDI
+        rescheduleTask(TASK_INDI, gyro.targetLooptime);
         setTaskEnabled(TASK_INDI, true);
+#endif
         schedulerEnableGyro();
     }
 

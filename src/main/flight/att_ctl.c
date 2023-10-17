@@ -417,7 +417,9 @@ void getMotor(void) {
 
     static float du[MAXU] = {0.f};
     static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+#ifdef USE_OMEGA_DOT_FEEDBACK
     static float omega_prev[MAXU] = {0.f};
+#endif
 
     // get (filtered) gyro rate derivative
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -435,7 +437,9 @@ void getMotor(void) {
     for (int i = 0; i < nu; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
         if (isDshotTelemetryActive()) {
+#ifdef USE_OMEGA_DOT_FEEDBACK
             omega_prev[i] = omega[i];
+#endif
 
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
             omega[i] = pidRuntime.dtermLowpassApplyFn((filter_t *) &erpmLowpass[i], erpmToRad * getDshotTelemetry(i));
