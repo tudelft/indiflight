@@ -223,7 +223,7 @@ extern char __custom_defaults_end;
 static bool processingCustomDefaults = false;
 static char cliBufferTemp[CLI_IN_BUFFER_SIZE];
 
-#define CUSTOM_DEFAULTS_START_PREFIX ("# " FC_FIRMWARE_NAME)
+#define CUSTOM_DEFAULTS_START_PREFIX ("# " FC_CUSTOM_DEFAULT_FIRMWARE_NAME)
 
 #define MAX_CHANGESET_ID_LENGTH 8
 #define MAX_DATE_LENGTH 20
