@@ -588,8 +588,12 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_ACC
-        if ( ((throwState == THROW_STATE_THROWN) && true)
-                || ((fallState == FALL_STATE_FALLING) && false) ) {
+        if ( (throwState == THROW_STATE_THROWN)
+#ifdef THROW_TO_ARM_USE_FALL_LOGIC
+                || (fallState == FALL_STATE_FALLING) ) {
+#else
+        ) {
+#endif
             // unset all but doNotTolerate.
             unsetArmingDisabled(~doNotTolerateDuringThrow);
         }

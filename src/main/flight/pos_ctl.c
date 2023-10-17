@@ -45,7 +45,7 @@ void updatePosCtl(timeUs_t current) {
         return;
     }
 
-    if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) {
+    if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
         resetIterms();
     }
 
