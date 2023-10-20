@@ -1383,9 +1383,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quat[1] = lrintf(attitude_q.x  * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[2] = lrintf(-attitude_q.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[3] = lrintf(-attitude_q.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
-    blackboxCurrent->alpha[0] = lrintf(RADIANS_TO_DEGREES(alpha[FD_ROLL]));
-    blackboxCurrent->alpha[1] = lrintf(RADIANS_TO_DEGREES(alpha[FD_PITCH]));
-    blackboxCurrent->alpha[2] = lrintf(RADIANS_TO_DEGREES(alpha[FD_YAW]));
+    blackboxCurrent->alpha[0] = lrintf(RADIANS_TO_DEGREES(alpha[FD_ROLL]) * 0.1f);
+    blackboxCurrent->alpha[1] = lrintf(RADIANS_TO_DEGREES(alpha[FD_PITCH]) * 0.1f);
+    blackboxCurrent->alpha[2] = lrintf(RADIANS_TO_DEGREES(alpha[FD_YAW]) * 0.1f);
     blackboxCurrent->quatSp[0] = lrintf(attSpNed.qi * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[1] = lrintf(attSpNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[2] = lrintf(attSpNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
@@ -1393,9 +1393,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.X));
     blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Y));
     blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Z));
-    blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.X));
-    blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Y));
-    blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Z));
+    blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.X) * 0.1f);
+    blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Y) * 0.1f);
+    blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Z) * 0.1f);
     blackboxCurrent->spfSp[0] = lrintf(spfSpBody.V.X*100.f);
     blackboxCurrent->spfSp[1] = lrintf(spfSpBody.V.Y*100.f);
     blackboxCurrent->spfSp[2] = lrintf(spfSpBody.V.Z*100.f);
