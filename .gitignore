@@ -57,3 +57,4 @@ eeprom.bin
 /src/main/board
 
 make/local.mk
+__pycache__
