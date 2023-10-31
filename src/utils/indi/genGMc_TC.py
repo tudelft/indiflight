@@ -27,7 +27,7 @@ def inertiaFromGyrationRadius(m, Rg):
 def inertiaBellFromMotorNumber(num):
     D = int( num / 100 ) + 2 # assume 2mm bell thickness (including magnets)
     L  = num % 100
-    G_PER_L_AND_D2 = 7.6 / 7 / (14*14) # N = 1...
+    G_PER_L_AND_D2 = 7.6 / 7 / (14*14)  * (D / 14) # N = 1... assume linear relation between D and thickness of material, probably wrong for bigger motors or very small motors
     m = 1e-3 * G_PER_L_AND_D2 * L * (D * D)
     Rg = 1e-3 * (D - 2.) / 2. # assume radius of gyration is at inside edge of magnets
 
@@ -51,11 +51,14 @@ def inertiaFromPropData(m, Dinch):
 #  \ / 
 #  / \
 # 3   1
-width = 127e-3 # width in meters
-length = 91e-3
+width = 53e-3 # width in meters
+length = 53e-3
+# dimensions from motor axle to motor axle
+diagonal = np.hypot(width, length)
 
-m = 0.428 # allup mass in kg
-direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
+
+m = 0.040 # allup mass in kg
+direc = [1, -1, -1, 1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
 
 
 #%% inertia measurements
@@ -65,46 +68,48 @@ direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along
 # record oscillation periods in seconds using the IMU
 # MAKE SURE THAT COG IS EXACTLY IN THE CENTER
 # FOR SAFETY, REMOVE PROPS. WE'LL ADD THEIR CONTRIBUTION LATER
-Px = 0.5955
-Py = 0.5852
-Pz = 0.6417
+Px = None
+Py = None
+Pz = None
 Raxle = 5 * 0.5e-3 # motor axle radius (to calculate location of rotation point)
 
 # Option 2: direct
-Ixx = None
-Iyy = None
-Izz = None
+rg_over_diag_xx = 0.263
+rg_over_diag_yy = 0.272
+rg_over_diag_zz = 0.291
+Ixx = 2*inertiaFromGyrationRadius(m, rg_over_diag_xx * diagonal)
+Iyy = 2*inertiaFromGyrationRadius(m, rg_over_diag_yy * diagonal)
+Izz = 2*inertiaFromGyrationRadius(m, rg_over_diag_zz * diagonal)
 
 
 #%% prop and motor inertia
 
 # always needed: prop mass
-mp = 1.40e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
-#mp = 1.60e-3 # black prop
+mp = 0.88e-3
 
 # Option 1: prop inertia measurements (measured for red 2.1inch prop) using pendulum period
-Pp = (525 - 275) / 30 / 20 # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
-Rp = 36.0 * 1e-3 # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
+Pp = None
+Rp = None
 # 1% mass error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 2: prop inertia estimation via mass and diameter
-Dpinch = None # prop diameter in inch
+Dpinch = 40. / 25.4 # prop diameter in inch
 
 # get motor bell inertia from motor dimensions, very crude
-motorNumber = 1407
+motorNumber = 803
 
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
 tau = 0.02 # spinup/spindown time constant
-k = 1.89e-7 # constant in T = k omega^2 -- red 2.1inch pitch prop
-Tmax = 4.2 # max thrust red prop
+Tmax = 0.5 # shameless guesstimate
+k = Tmax / (75000. / 60. * 2 * np.pi)**2 # constant in T = k omega^2 -- shameless guess
 #k = 2.66e-7 # black 3inch pitch prop
 #Tmax = 4.5 # max thrust black prop
 CM = 0.01 # steady-state moment coefficient M = CM * T
 
 # ESC+motor+prop performance at around 60% charge
-k_ESC = 0.55 # nonlinearity of non-dimensional input to non-dimensional thrust according to T / Tmax = ku^2 + (1-k)u
+k_ESC = 0.55 # who knows
 
 
 #%% configuration: position, thrust axis and direction.
@@ -114,9 +119,6 @@ k_ESC = 0.55 # nonlinearity of non-dimensional input to non-dimensional thrust a
 #   ^ x
 #   | 
 # z x--> y 
-
-# dimensions from motor axle to motor axle
-diagonal = np.hypot(width, length)
 
 # configuration
 N = 4

@@ -102,6 +102,7 @@ static float tauRpm = 0.02f;
 static float Tmax = 4.5f;
 */
 
+# red props racequad
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -123,6 +124,31 @@ static float G2[MAXV][MAXU] = {
 static float kThrust  = 1.89e-7f;
 static float tauRpm = 0.02f;
 static float Tmax = 4.2f;
+
+/*
+// trashcan 2S first estimate
+static float G1[MAXV][MAXU] = {
+    {   0.        ,    0.        ,    0.        ,    0.        },
+    {   0.        ,    0.        ,    0.        ,    0.        },
+    { -12.5       ,  -12.5       ,  -12.5       ,  -12.5       },
+    {-400.43771272, -400.43771272,  400.43771272,  400.43771272},
+    {-400.959669  ,  400.959669  , -400.959669  ,  400.959669  },
+    { 262.74974316, -262.74974316, -262.74974316,  262.74974316}
+};
+
+static float G2[MAXV][MAXU] = {
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.00198f, -0.00198f,  -0.00198f, 0.00198f},
+};
+
+static float kThrust  = 8.1e-9f;
+static float tauRpm = 0.03f;
+static float Tmax = 0.5f;
+*/
 
 static float G2_normalizer;
 
