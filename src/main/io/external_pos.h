@@ -2,6 +2,8 @@
 #include "drivers/time.h"
 #include "common/maths.h"
 
+#ifdef USE_GPS_PI
+
 typedef enum {
     EXT_POS_NO_SIGNAL,
     EXT_POS_STILL_VALID,
@@ -35,3 +37,4 @@ void checkNewPos(void);
 void getExternalPos(timeUs_t current);
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
+#endif

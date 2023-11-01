@@ -8,6 +8,7 @@
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
 #include "flight/imu.h"
+#ifdef USE_GPS_PI
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -145,3 +146,5 @@ void getPosSetpoint(timeUs_t current) {
         }
     }
 }
+
+#endif

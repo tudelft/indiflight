@@ -24,7 +24,8 @@
 
 #define FC_FIRMWARE_NAME            "Indiflight"
 #define FC_CUSTOM_DEFAULT_FIRMWARE_NAME "Betaflight" // this is a hack, because I didnt yet figure out how to reflash custom defaults
-#define FC_FIRMWARE_IDENTIFIER      "INFL"
+// #define FC_FIRMWARE_IDENTIFIER      "INFL"
+#define FC_FIRMWARE_IDENTIFIER      "BTFL"
 #define FC_VERSION_MAJOR            5  // increment when a major release is made (big new feature, etc)
 #define FC_VERSION_MINOR            0  // increment when a minor release is made (small new feature, change etc)
 #define FC_VERSION_PATCH_LEVEL      0  // increment when a bug is fixed

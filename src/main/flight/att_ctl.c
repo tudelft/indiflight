@@ -99,17 +99,17 @@ static float G2[MAXV][MAXU] = {
 
 static float kThrust  = 2.66e-7f;
 static float tauRpm = 0.02f;
-static float Tmax = 4.5f;
+static float Tmax = 4.5f;/
 */
 
-# red props racequad
+// red props racequad
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
-    {  -9.81308411f,   -9.81308411f,   -9.81308411f,   -9.81308411},
-    {-370.11790216f, -370.11790216f,  370.11790216f,  370.11790216},
-    {-246.35977299f,  246.35977299f, -246.35977299f,  246.35977299},
-    { -47.40225619f,   47.40225619f,   47.40225619f,  -47.40225619},
+    {  -28.84615385f,   -28.84615385f,   -28.84615385f,   -28.84615385f},
+    {-1040.82649651f, -1040.82649651,  1040.82649651f,  1040.82649651f},
+    {-725.15631768f,  725.15631768f, -725.15631768f,  725.15631768f},
+    { -84.64688606f,   84.64688606f,   84.64688606f,  -84.64688606f},
 };
 
 static float G2[MAXV][MAXU] = {
@@ -118,12 +118,15 @@ static float G2[MAXV][MAXU] = {
     {0.f, 0.f, 0.f, 0.f},
     {0.f, 0.f, 0.f, 0.f},
     {0.f, 0.f, 0.f, 0.f},
-    {-0.004008, 0.004008,  0.004008, -0.004008},
+    {-0.04854287, 0.04854287,  0.04854287, -0.04854287},
 };
 
-static float kThrust  = 1.89e-7f;
+// static float kThrust  = 1.89e-7f;
+// static float tauRpm = 0.02f;
+// static float Tmax = 4.2f;
+// static float kThrust  = 1.447e-6f;
 static float tauRpm = 0.02f;
-static float Tmax = 4.2f;
+static float Tmax = 15.8f;
 
 /*
 // trashcan 2S first estimate
@@ -194,7 +197,9 @@ void indiInit(const pidProfile_t * pidProfile) {
         dv[i] = 0.f;
 
     // indi G2 normalization constant 1 / (2 tau k)
-    G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
+    // G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
+    G2_normalizer = 17271807.70190637;
+
 
     // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
     float k_conf = pidProfile->thrustLinearization / 100.f;
@@ -239,6 +244,7 @@ void indiController(void) {
         }
     } else {
         // function is cheap, let's go
+        //stavrow here we get setpoints
         getSetpoints();
     }
 
@@ -267,6 +273,7 @@ void getSetpoints(void) {
 
     controlAttitude = true;
     trackAttitudeYaw = false;
+    // stavrow different flight modes are here
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
@@ -428,6 +435,8 @@ void getAlphaSpBody(void) {
     alphaSpBody.V.Z = rateGains.V.Z * rateErr.V.Z;
 }
 
+
+// stavrow I think the real INDI is happening here
 void getMotor(void) {
     // mix! And call writeMotors or whatever
 
