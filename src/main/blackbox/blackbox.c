@@ -353,6 +353,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"accSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"accSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"accSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"extAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
 
 };
@@ -456,6 +460,7 @@ typedef struct blackboxMainState_s {
     int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
+    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/100
 #endif
 } blackboxMainState_t;
 
@@ -823,6 +828,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
     }
 #endif
 
@@ -1053,6 +1059,9 @@ static void writeInterframe(void)
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
     }
 #else
@@ -1430,6 +1439,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->accSp[0] = lrintf(accSpNed.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNed.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNed.V.Z * METER_TO_CM);
+    blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
+    blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
+    blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
 #endif
 
 #else

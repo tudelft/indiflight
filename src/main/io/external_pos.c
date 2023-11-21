@@ -74,12 +74,15 @@ void getExternalPos(timeUs_t current) {
         extPosNed.vel.V.Z = -piMsgExternalPoseRx->enu_zd;
         fp_angles_t eulers;
         fp_quaternion_t quat;
+        // the quaternion x,y,z are in ENU, we convert them to NED
         quat.qi = piMsgExternalPoseRx->body_qi;
-        quat.qx = piMsgExternalPoseRx->body_qx;
-        quat.qy = piMsgExternalPoseRx->body_qy;
-        quat.qz = piMsgExternalPoseRx->body_qz;
+        quat.qx = piMsgExternalPoseRx->body_qy;
+        quat.qy = piMsgExternalPoseRx->body_qx;
+        quat.qz =-piMsgExternalPoseRx->body_qz;
         float_eulers_of_quat(&eulers, &quat);
-        extPosNed.psi = -eulers.angles.yaw;
+        extPosNed.att.angles.roll = eulers.angles.roll;
+        extPosNed.att.angles.pitch = eulers.angles.pitch;
+        extPosNed.att.angles.yaw = eulers.angles.yaw;
     }
 
     // extrapolate position with speed info

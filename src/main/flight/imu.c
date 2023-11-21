@@ -263,7 +263,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 #ifdef USE_GPS_PI
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = -extPosNed.psi;
+        float yawI = -extPosNed.att.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }
