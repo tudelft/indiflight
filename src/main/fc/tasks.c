@@ -61,6 +61,10 @@
 #include "flight/pos_ctl.h"
 #include "flight/att_ctl.h"
 
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -345,6 +349,72 @@ static void taskPosCtl(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_EKF
+bool ekf_initialized = false;
+timeUs_t lastTimeUs = 0;
+
+static void taskEkf(timeUs_t currentTimeUs)
+{
+    // when ekf is not initialized, we need to wait for the first external position message
+    if (!ekf_initialized) {
+        if (extPosState != EXT_POS_NO_SIGNAL) {
+            // INIT EKF
+            // sets initial state and covariance
+            float X0[N_STATES] = {
+                extPosNed.pos.V.X,
+                extPosNed.pos.V.Y,
+                extPosNed.pos.V.Z,
+                0., 0., 0., // vel
+                extPosNed.att.angles.roll,
+                extPosNed.att.angles.pitch,
+                extPosNed.att.angles.yaw,
+                0., 0., 0., 0., 0., 0. // acc and gyro biases
+            };
+            float P_diag0[N_STATES] = {
+                1., 1., 1., // pos
+                1., 1., 1., // vel
+                1., 1., 1., // att
+                1., 1., 1., 1., 1., 1. // acc and gyro biases
+            };
+            ekf_init(X0, P_diag0);
+            ekf_initialized = true;
+        }
+    } else {
+        // ekf is initialized, we can run the ekf
+
+        // PREDICTION STEP
+        // gyro and acc transformed from FLU to FRD
+        float U[N_INPUTS] = {
+            DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
+            DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
+            DEGREES_TO_RADIANS(-gyro.gyroADCf[2]),
+            9.81 * acc.accADC[0] * acc.dev.acc_1G_rec,
+            9.81 *-acc.accADC[1] * acc.dev.acc_1G_rec,
+            9.81 *-acc.accADC[2] * acc.dev.acc_1G_rec
+        };
+
+        // get delta t
+        float dt = (currentTimeUs - lastTimeUs) / 1000000.0f;
+        lastTimeUs = currentTimeUs;
+
+        ekf_predict(U, dt);
+
+        // UPDATE STEP
+        if (extPosState == EXT_POS_NEW_MESSAGE) {
+            float Z[N_MEASUREMENTS] = {
+                extPosNed.pos.V.X,
+                extPosNed.pos.V.Y,
+                extPosNed.pos.V.Z,
+                extPosNed.att.angles.roll,
+                extPosNed.att.angles.pitch,
+                extPosNed.att.angles.yaw
+            };
+            ekf_update(Z);
+        }
+    }
+}
+#endif
+
 #ifdef USE_CAMERA_CONTROL
 static void taskCameraControl(uint32_t currentTime)
 {
@@ -443,6 +513,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_POS_CTL
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
+#endif
+
+#ifdef USE_EKF
+    [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -613,6 +687,10 @@ void tasksInit(void)
 
 #ifdef USE_POS_CTL
     setTaskEnabled(TASK_POS_CTL, true);
+#endif
+
+#ifdef USE_EKF
+    setTaskEnabled(TASK_EKF, true);
 #endif
 
 #ifdef USE_LED_STRIP

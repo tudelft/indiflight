@@ -68,6 +68,10 @@
 #include "flight/att_ctl.h"
 #include "flight/pos_ctl.h"
 
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+
 #include "io/beeper.h"
 #include "io/gps.h"
 #include "io/serial.h"
@@ -358,7 +362,27 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
+#ifdef USE_EKF
+    {"ekf_pos",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_pos",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_pos",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
+    {"ekf_vel",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_vel",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)
+
+    {"ekf_att",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_att",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_att",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+
+    {"ekf_acc_b",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_acc_b",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_acc_b",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+
+    {"ekf_gyro_b",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_gyro_b",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_gyro_b",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+#endif
 };
 
 #ifdef USE_GPS
@@ -460,7 +484,14 @@ typedef struct blackboxMainState_s {
     int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
-    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/100
+    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
+#endif
+#ifdef USE_EKF
+    int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t ekf_att[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t ekf_acc_b[XYZ_AXIS_COUNT];
+    int16_t ekf_gyro_b[XYZ_AXIS_COUNT];
 #endif
 } blackboxMainState_t;
 
@@ -639,6 +670,13 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
     case CONDITION(POS):
 #ifdef USE_POS_CTL
         return isFieldEnabled(FIELD_SELECT(POS));
+#else
+        return false;
+#endif
+    
+    case CONDITION(EKF):
+#ifdef USE_EKF
+        return isFieldEnabled(FIELD_SELECT(EKF));
 #else
         return false;
 #endif
@@ -829,6 +867,15 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
+    }
+#endif
+#ifdef USE_EKF
+    if (testBlackboxCondition(CONDITION(EKF))) {
+        blackboxWriteSignedVBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_att, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_gyro_b, XYZ_AXIS_COUNT);
     }
 #endif
 
@@ -1062,6 +1109,27 @@ static void writeInterframe(void)
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+    }
+#else
+    UNUSED(deltas16);
+#endif
+
+#ifdef USE_EKF
+    if (testBlackboxCondition(CONDITION(EKF))) {
+        arraySubInt16(deltas16, blackboxCurrent->ekf_pos, blackboxLast->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->ekf_vel, blackboxLast->ekf_vel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->ekf_att, blackboxLast->ekf_att, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->ekf_acc_b, blackboxLast->ekf_acc_b, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->ekf_gyro_b, blackboxLast->ekf_gyro_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
     }
 #else
@@ -1442,6 +1510,25 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
     blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
     blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
+#endif
+
+#ifdef USE_EKF
+    float *ekf_X = ekf_get_state();
+    blackboxCurrent->ekf_pos[0] = lrintf(ekf_X[0] * METER_TO_MM);
+    blackboxCurrent->ekf_pos[1] = lrintf(ekf_X[1] * METER_TO_MM);
+    blackboxCurrent->ekf_pos[2] = lrintf(ekf_X[2] * METER_TO_MM);
+    blackboxCurrent->ekf_vel[0] = lrintf(ekf_X[3] * METER_TO_CM);
+    blackboxCurrent->ekf_vel[1] = lrintf(ekf_X[4] * METER_TO_CM);
+    blackboxCurrent->ekf_vel[2] = lrintf(ekf_X[5] * METER_TO_CM);
+    blackboxCurrent->ekf_att[0] = lrintf(ekf_X[6] * 1000); // milirad
+    blackboxCurrent->ekf_att[1] = lrintf(ekf_X[7] * 1000); // milirad
+    blackboxCurrent->ekf_att[2] = lrintf(ekf_X[8] * 1000); // milirad
+    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(RADIANS_TO_DEGREES(ekf_X[12]) * 1000); // deg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(RADIANS_TO_DEGREES(ekf_X[13]) * 1000); // deg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(RADIANS_TO_DEGREES(ekf_X[14]) * 1000); // deg/s
 #endif
 
 #else
