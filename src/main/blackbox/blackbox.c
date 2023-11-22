@@ -369,7 +369,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 
     {"ekf_vel",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_vel",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)
+    {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
     {"ekf_att",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_att",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -871,7 +871,7 @@ static void writeIntraframe(void)
 #endif
 #ifdef USE_EKF
     if (testBlackboxCondition(CONDITION(EKF))) {
-        blackboxWriteSignedVBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_att, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);

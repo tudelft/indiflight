@@ -61,7 +61,7 @@ void ekf_init(float X0[N_STATES], float P_diag0[N_STATES]) {
     }
 }
 
-float* ekf_get_state() {
+float* ekf_get_state(void) {
     return X;
 }
 
@@ -73,16 +73,16 @@ void ekf_get_Pdiag(float P_diag[N_STATES]) {
 
 void ekf_predict(float U[N_INPUTS], float dt) {
     // PREDICTION STEP X_new, P_new = ...
-    tmp[0] = cos(X[8]);
-	tmp[1] = cos(X[7]);
+    tmp[0] = cosf(X[8]);
+	tmp[1] = cosf(X[7]);
 	tmp[2] = U[0] - X[9];
 	tmp[3] = tmp[1]*tmp[2];
 	tmp[4] = U[2] - X[11];
-	tmp[5] = sin(X[6]);
-	tmp[6] = sin(X[8]);
+	tmp[5] = sinf(X[6]);
+	tmp[6] = sinf(X[8]);
 	tmp[7] = tmp[5]*tmp[6];
-	tmp[8] = sin(X[7]);
-	tmp[9] = cos(X[6]);
+	tmp[8] = sinf(X[7]);
+	tmp[9] = cosf(X[6]);
 	tmp[10] = tmp[0]*tmp[9];
 	tmp[11] = tmp[10]*tmp[8] + tmp[7];
 	tmp[12] = U[1] - X[10];
@@ -98,7 +98,7 @@ void ekf_predict(float U[N_INPUTS], float dt) {
 	tmp[22] = tmp[12]*tmp[5];
 	tmp[23] = tmp[4]*tmp[9];
 	tmp[24] = tmp[1]*tmp[22] + tmp[1]*tmp[23] - tmp[2]*tmp[8];
-	tmp[25] = tan(X[7]);
+	tmp[25] = tanf(X[7]);
 	tmp[26] = U[4] - X[13];
 	tmp[27] = tmp[26]*tmp[5];
 	tmp[28] = U[5] - X[14];
@@ -130,8 +130,8 @@ void ekf_predict(float U[N_INPUTS], float dt) {
 	tmp[54] = P[50]*dt;
 	tmp[55] = P[71]*dt;
 	tmp[56] = P[60]*dt;
-	tmp[57] = pow(tmp[1], 2);
-	tmp[58] = pow(dt, 2);
+	tmp[57] = powf(tmp[1], 2);
+	tmp[58] = powf(dt, 2);
 	tmp[59] = Q_diag[0]*tmp[58];
 	tmp[60] = tmp[57]*tmp[59];
 	tmp[61] = Q_diag[2]*tmp[58];
@@ -182,12 +182,12 @@ void ekf_predict(float U[N_INPUTS], float dt) {
 	tmp[106] = P[33] + P[34]*tmp[90] - P[35]*tmp[92] + P[52]*tmp[83] - P[62]*tmp[85] - P[73]*tmp[87];
 	tmp[107] = P[26] + P[27]*tmp[90] - P[34]*tmp[92] + P[51]*tmp[83] - P[61]*tmp[85] - P[72]*tmp[87];
 	tmp[108] = P[41] + P[42]*tmp[90] - P[43]*tmp[92] + P[53]*tmp[83] - P[63]*tmp[85] - P[74]*tmp[87];
-	tmp[109] = pow(tmp[5], 2);
-	tmp[110] = pow(tmp[9], 2);
+	tmp[109] = powf(tmp[5], 2);
+	tmp[110] = powf(tmp[9], 2);
 	tmp[111] = tmp[25]*tmp[86];
 	tmp[112] = tmp[25]*tmp[84];
 	tmp[113] = tmp[25]*tmp[31] + 1;
-	tmp[114] = pow(tmp[25], 2);
+	tmp[114] = powf(tmp[25], 2);
 	tmp[115] = tmp[114] + 1;
 	tmp[116] = P[81]*dt;
 	tmp[117] = P[108]*dt;
@@ -297,18 +297,18 @@ void ekf_predict(float U[N_INPUTS], float dt) {
 	P_new[6] = P[21]*tmp[41] + P[28]*tmp[39] - P[36]*tmp[21] - P[45]*tmp[36] - P[55]*tmp[38] - P[66]*tmp[37] + P[6] + dt*(P[24]*dt*tmp[40] + P[31]*dt*tmp[0]*tmp[24] + P[9] - tmp[44] - tmp[46] - tmp[48] - tmp[49]);
 	P_new[7] = P[22]*tmp[41] + P[29]*tmp[39] - P[37]*tmp[21] - P[46]*tmp[36] - P[56]*tmp[38] - P[67]*tmp[37] + P[7] + dt*(P[13] + P[25]*dt*tmp[40] + P[32]*dt*tmp[0]*tmp[24] - P[40]*tmp[21] - tmp[11]*tmp[51] - tmp[15]*tmp[52] - tmp[43]*tmp[50]);
 	P_new[8] = P[23]*tmp[41] + P[30]*tmp[39] - P[38]*tmp[21] - P[47]*tmp[36] - P[57]*tmp[38] - P[68]*tmp[37] + P[8] + dt*(P[26]*dt*tmp[40] + P[33]*dt*tmp[0]*tmp[24] - P[41]*tmp[21] - tmp[11]*tmp[55] - tmp[15]*tmp[56] - tmp[43]*tmp[54] - tmp[53]);
-	P_new[9] = P[24]*tmp[41] + P[31]*tmp[39] + P[9] + pow(tmp[0], 2)*tmp[60] + pow(tmp[11], 2)*tmp[61] + pow(tmp[15], 2)*tmp[62] - tmp[21]*(P[42]*dt*tmp[40] + P[43]*dt*tmp[0]*tmp[24] - P[44]*tmp[21] - P[53]*tmp[36] - P[63]*tmp[38] - P[74]*tmp[37] - tmp[66]) - tmp[36]*tmp[63] - tmp[37]*tmp[64] - tmp[38]*tmp[65] + tmp[39]*(P[31] + P[34]*dt*tmp[40] + P[35]*dt*tmp[0]*tmp[24] - P[43]*tmp[21] - P[52]*tmp[36] - P[62]*tmp[38] - P[73]*tmp[37]) + tmp[41]*(P[24] + P[27]*dt*tmp[40] + P[34]*dt*tmp[0]*tmp[24] - P[42]*tmp[21] - P[51]*tmp[36] - P[61]*tmp[38] - P[72]*tmp[37]) - tmp[44] - tmp[46] - tmp[48] - tmp[49];
+	P_new[9] = P[24]*tmp[41] + P[31]*tmp[39] + P[9] + powf(tmp[0], 2)*tmp[60] + powf(tmp[11], 2)*tmp[61] + powf(tmp[15], 2)*tmp[62] - tmp[21]*(P[42]*dt*tmp[40] + P[43]*dt*tmp[0]*tmp[24] - P[44]*tmp[21] - P[53]*tmp[36] - P[63]*tmp[38] - P[74]*tmp[37] - tmp[66]) - tmp[36]*tmp[63] - tmp[37]*tmp[64] - tmp[38]*tmp[65] + tmp[39]*(P[31] + P[34]*dt*tmp[40] + P[35]*dt*tmp[0]*tmp[24] - P[43]*tmp[21] - P[52]*tmp[36] - P[62]*tmp[38] - P[73]*tmp[37]) + tmp[41]*(P[24] + P[27]*dt*tmp[40] + P[34]*dt*tmp[0]*tmp[24] - P[42]*tmp[21] - P[51]*tmp[36] - P[61]*tmp[38] - P[72]*tmp[37]) - tmp[44] - tmp[46] - tmp[48] - tmp[49];
 	P_new[10] = P[10] - P[21]*tmp[73] + P[28]*tmp[71] + P[36]*tmp[17] - P[45]*tmp[68] - P[55]*tmp[69] + P[66]*tmp[70] + dt*tmp[75];
 	P_new[11] = P[11] - P[22]*tmp[73] + P[29]*tmp[71] + P[37]*tmp[17] - P[46]*tmp[68] - P[56]*tmp[69] + P[67]*tmp[70] + dt*tmp[76];
 	P_new[12] = P[12] - P[23]*tmp[73] + P[30]*tmp[71] + P[38]*tmp[17] - P[47]*tmp[68] - P[57]*tmp[69] + P[68]*tmp[70] + dt*(P[19] - P[26]*tmp[73] + P[33]*tmp[71] + P[41]*tmp[17] - tmp[18]*tmp[56] + tmp[19]*tmp[55] - tmp[54]*tmp[74]);
 	P_new[13] = tmp[0]*tmp[60]*tmp[6] - tmp[11]*tmp[19]*tmp[61] + tmp[15]*tmp[18]*tmp[62] - tmp[21]*tmp[80] - tmp[36]*tmp[82] - tmp[37]*tmp[78] - tmp[38]*tmp[79] + tmp[39]*tmp[81] + tmp[41]*tmp[77] + tmp[75];
-	P_new[14] = tmp[17]*tmp[80] + pow(tmp[18], 2)*tmp[62] + pow(tmp[19], 2)*tmp[61] + tmp[60]*pow(tmp[6], 2) - tmp[68]*tmp[82] - tmp[69]*tmp[79] + tmp[70]*tmp[78] + tmp[71]*tmp[81] - tmp[73]*tmp[77] + tmp[76];
+	P_new[14] = tmp[17]*tmp[80] + powf(tmp[18], 2)*tmp[62] + powf(tmp[19], 2)*tmp[61] + tmp[60]*powf(tmp[6], 2) - tmp[68]*tmp[82] - tmp[69]*tmp[79] + tmp[70]*tmp[78] + tmp[71]*tmp[81] - tmp[73]*tmp[77] + tmp[76];
 	P_new[15] = P[15] + P[21]*tmp[90] - P[28]*tmp[92] + P[45]*tmp[83] - P[55]*tmp[85] - P[66]*tmp[87] + dt*(P[18] + P[24]*tmp[90] + tmp[42]*tmp[8] - tmp[94] - tmp[96] - tmp[97]);
 	P_new[16] = P[16] + P[22]*tmp[90] - P[29]*tmp[92] + P[46]*tmp[83] - P[56]*tmp[85] - P[67]*tmp[87] + dt*(P[19] + P[25]*tmp[90] - tmp[100] + tmp[50]*tmp[8] - tmp[98] - tmp[99]);
 	P_new[17] = P[17] + P[23]*tmp[90] - P[30]*tmp[92] + P[47]*tmp[83] - P[57]*tmp[85] - P[68]*tmp[87] + dt*tmp[101];
 	P_new[18] = P[24]*dt*tmp[1]*tmp[88] + P[48]*dt*tmp[8] + Q_diag[1]*tmp[15]*tmp[1]*tmp[58]*tmp[5] + Q_diag[2]*tmp[11]*tmp[1]*tmp[58]*tmp[9] + dt*tmp[0]*tmp[106]*tmp[24] + dt*tmp[107]*tmp[40] - tmp[102]*tmp[43] - tmp[103]*tmp[36] - tmp[104]*tmp[37] - tmp[105]*tmp[38] - tmp[108]*tmp[21] - tmp[53] - tmp[94] - tmp[96] - tmp[97];
 	P_new[19] = P[19] + P[25]*dt*tmp[1]*tmp[88] + P[49]*dt*tmp[8] + Q_diag[1]*tmp[18]*tmp[1]*tmp[58]*tmp[5] + dt*tmp[104]*tmp[19] + dt*tmp[106]*tmp[24]*tmp[6] + dt*tmp[108]*tmp[16] - tmp[100] - tmp[102]*tmp[74] - tmp[103]*tmp[68] - tmp[105]*tmp[69] - tmp[107]*tmp[73] - tmp[19]*tmp[61]*tmp[95] - tmp[98] - tmp[99];
-	P_new[20] = tmp[101] + tmp[103]*tmp[83] - tmp[104]*tmp[87] - tmp[105]*tmp[85] - tmp[106]*tmp[92] + tmp[107]*tmp[90] + tmp[109]*tmp[57]*tmp[62] + tmp[110]*tmp[57]*tmp[61] + tmp[59]*pow(tmp[8], 2);
+	P_new[20] = tmp[101] + tmp[103]*tmp[83] - tmp[104]*tmp[87] - tmp[105]*tmp[85] - tmp[106]*tmp[92] + tmp[107]*tmp[90] + tmp[109]*tmp[57]*tmp[62] + tmp[110]*tmp[57]*tmp[61] + tmp[59]*powf(tmp[8], 2);
 	P_new[21] = -P[105]*tmp[111] + P[21]*tmp[113] + P[28]*dt*tmp[115]*tmp[33] - P[78]*dt - P[91]*tmp[112] - dt*tmp[122];
 	P_new[22] = -P[106]*tmp[111] + P[22]*tmp[113] + P[29]*dt*tmp[115]*tmp[33] - P[79]*dt - P[92]*tmp[112] - dt*tmp[126];
 	P_new[23] = -P[107]*tmp[111] + P[23]*tmp[113] + P[30]*dt*tmp[115]*tmp[33] - P[80]*dt - P[93]*tmp[112] - dt*tmp[130];
@@ -425,15 +425,15 @@ void ekf_update(float Z[N_MEASUREMENTS]) {
 	tmp[1] = 1.0/(P[0] + R_diag[0]);
 	tmp[2] = P[1]*tmp[1];
 	tmp[3] = -P[36]*tmp[2] + P[37];
-	tmp[4] = 1.0/(-pow(P[1], 2)*tmp[1] + P[2] + R_diag[1]);
+	tmp[4] = 1.0/(-powf(P[1], 2)*tmp[1] + P[2] + R_diag[1]);
 	tmp[5] = -P[3]*tmp[2] + P[4];
-	tmp[6] = 1.0/(-pow(P[3], 2)*tmp[1] + P[5] + R_diag[2] - tmp[4]*pow(tmp[5], 2));
+	tmp[6] = 1.0/(-powf(P[3], 2)*tmp[1] + P[5] + R_diag[2] - tmp[4]*powf(tmp[5], 2));
 	tmp[7] = P[3]*tmp[1];
 	tmp[8] = tmp[4]*tmp[5];
 	tmp[9] = -P[36]*tmp[7] + P[38] - tmp[3]*tmp[8];
 	tmp[10] = -P[21]*tmp[2] + P[22];
 	tmp[11] = -P[21]*tmp[7] + P[23] - tmp[10]*tmp[8];
-	tmp[12] = 1.0/(-pow(P[21], 2)*tmp[1] + P[27] + R_diag[3] - pow(tmp[10], 2)*tmp[4] - pow(tmp[11], 2)*tmp[6]);
+	tmp[12] = 1.0/(-powf(P[21], 2)*tmp[1] + P[27] + R_diag[3] - powf(tmp[10], 2)*tmp[4] - powf(tmp[11], 2)*tmp[6]);
 	tmp[13] = P[21]*tmp[1];
 	tmp[14] = tmp[10]*tmp[4];
 	tmp[15] = tmp[11]*tmp[6];
@@ -441,14 +441,14 @@ void ekf_update(float Z[N_MEASUREMENTS]) {
 	tmp[17] = -P[28]*tmp[2] + P[29];
 	tmp[18] = -P[28]*tmp[7] + P[30] - tmp[17]*tmp[8];
 	tmp[19] = -P[28]*tmp[13] + P[34] - tmp[14]*tmp[17] - tmp[15]*tmp[18];
-	tmp[20] = 1.0/(-pow(P[28], 2)*tmp[1] + P[35] + R_diag[4] - tmp[12]*pow(tmp[19], 2) - pow(tmp[17], 2)*tmp[4] - pow(tmp[18], 2)*tmp[6]);
+	tmp[20] = 1.0/(-powf(P[28], 2)*tmp[1] + P[35] + R_diag[4] - tmp[12]*powf(tmp[19], 2) - powf(tmp[17], 2)*tmp[4] - powf(tmp[18], 2)*tmp[6]);
 	tmp[21] = P[28]*tmp[1];
 	tmp[22] = tmp[17]*tmp[4];
 	tmp[23] = tmp[18]*tmp[6];
 	tmp[24] = tmp[12]*tmp[19];
 	tmp[25] = -P[36]*tmp[21] + P[43] - tmp[16]*tmp[24] - tmp[22]*tmp[3] - tmp[23]*tmp[9];
-	tmp[26] = tmp[20]*pow(tmp[25], 2);
-	tmp[27] = 1.0/(-pow(P[36], 2)*tmp[1] + P[44] + R_diag[5] - tmp[12]*pow(tmp[16], 2) - tmp[26] - pow(tmp[3], 2)*tmp[4] - tmp[6]*pow(tmp[9], 2));
+	tmp[26] = tmp[20]*powf(tmp[25], 2);
+	tmp[27] = 1.0/(-powf(P[36], 2)*tmp[1] + P[44] + R_diag[5] - tmp[12]*powf(tmp[16], 2) - tmp[26] - powf(tmp[3], 2)*tmp[4] - tmp[6]*powf(tmp[9], 2));
 	tmp[28] = P[36]*tmp[27];
 	tmp[29] = tmp[20]*tmp[25];
 	tmp[30] = tmp[27]*tmp[29];

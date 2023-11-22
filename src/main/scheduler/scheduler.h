@@ -146,6 +146,9 @@ typedef enum {
 #ifdef USE_POS_CTL
     TASK_POS_CTL,
 #endif
+#ifdef USE_EKF
+    TASK_EKF,
+#endif
 #ifdef USE_LED_STRIP
     TASK_LEDSTRIP,
 #endif
