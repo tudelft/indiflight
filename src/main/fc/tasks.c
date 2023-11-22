@@ -394,7 +394,7 @@ static void taskEkf(timeUs_t currentTimeUs)
         };
 
         // get delta t
-        float dt = (currentTimeUs - lastTimeUs) / 1000000.0f;
+        float dt = (currentTimeUs - lastTimeUs) * 1e-6;
         lastTimeUs = currentTimeUs;
 
         ekf_predict(U, dt);
