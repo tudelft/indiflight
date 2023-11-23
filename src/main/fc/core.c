@@ -352,7 +352,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce
-                && (extPosState >= EXT_POS_STILL_VALID)
+                && FLIGHT_MODE(POSITION_MODE) && (extPosState >= EXT_POS_STILL_VALID)
                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }

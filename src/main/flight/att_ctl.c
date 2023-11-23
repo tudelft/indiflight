@@ -102,7 +102,7 @@ static float tauRpm = 0.02f;
 static float Tmax = 4.5f;
 */
 
-# red props racequad
+// red props racequad
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -462,7 +462,7 @@ void getMotor(void) {
     float omega_inv[MAXU];
     for (int i = 0; i < nu; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive()) {
+        if (isDshotTelemetryActive() || false) {
 #ifdef USE_OMEGA_DOT_FEEDBACK
             omega_prev[i] = omega[i];
 #endif
@@ -482,13 +482,10 @@ void getMotor(void) {
         omega_inv[i] = (fabsf(omega[i]) > (0.5f * omega_hover)) ? 1.f / omega[i] : 1.f / omega_hover;
     }
 
-    // use INDI only when in the air, solve linearized global problem otherwise
-    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
-
     // get motor acceleration
     for (int i = 0; i < nu; i++) {
 #if defined(USE_OMEGA_DOT_FEEDBACK) && defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive()) {
+        if (isDshotTelemetryActive() || false ) {
             omega_dot[i] = (omega[i] - omega_prev[i]) * pidRuntime.pidFrequency;
             // probably do some limiting here
         } else
@@ -497,6 +494,9 @@ void getMotor(void) {
             omega_dot[i] = (Tmax * du[i]) * omega_inv[i] * G2_normalizer;
         }
     }
+
+    // use INDI only when in the air, solve linearized global problem otherwise
+    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
     // compute pseudocontrol
     dv[0] = 0.f;
