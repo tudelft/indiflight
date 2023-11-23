@@ -352,9 +352,15 @@ static void taskPosCtl(timeUs_t currentTimeUs)
 #ifdef USE_EKF
 bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
+float ekf_Z[N_MEASUREMENTS] = {0.};
 
 static void taskEkf(timeUs_t currentTimeUs)
 {
+    // reset ekf if not in position mode
+    if (!FLIGHT_MODE(POSITION_MODE)) {
+        ekf_initialized = false;
+    }
+
     // when ekf is not initialized, we need to wait for the first external position message
     if (!ekf_initialized) {
         if (extPosState != EXT_POS_NO_SIGNAL) {
@@ -388,9 +394,9 @@ static void taskEkf(timeUs_t currentTimeUs)
             DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
             DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
             DEGREES_TO_RADIANS(-gyro.gyroADCf[2]),
-            9.81 * acc.accADC[0] * acc.dev.acc_1G_rec,
-            9.81 *-acc.accADC[1] * acc.dev.acc_1G_rec,
-            9.81 *-acc.accADC[2] * acc.dev.acc_1G_rec
+            9.81 * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G),
+            9.81 *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G),
+            9.81 *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G)
         };
 
         // get delta t
@@ -400,16 +406,14 @@ static void taskEkf(timeUs_t currentTimeUs)
         ekf_predict(U, dt);
 
         // UPDATE STEP
-        if (extPosState == EXT_POS_NEW_MESSAGE) {
-            float Z[N_MEASUREMENTS] = {
-                extPosNed.pos.V.X,
-                extPosNed.pos.V.Y,
-                extPosNed.pos.V.Z,
-                extPosNed.att.angles.roll,
-                extPosNed.att.angles.pitch,
-                extPosNed.att.angles.yaw
-            };
-            ekf_update(Z);
+        if (ekf_Z[0] != extPosNed.pos.V.X) { // only update if new data is available [TODO: make this more elegant]
+            ekf_Z[0] = extPosNed.pos.V.X;
+            ekf_Z[1] = extPosNed.pos.V.Y;
+            ekf_Z[2] = extPosNed.pos.V.Z;
+            ekf_Z[3] = extPosNed.att.angles.roll;
+            ekf_Z[4] = extPosNed.att.angles.pitch;
+            ekf_Z[5] = extPosNed.att.angles.yaw;
+            ekf_update(ekf_Z);
         }
     }
 }
