@@ -359,6 +359,7 @@ static void taskEkf(timeUs_t currentTimeUs)
     // reset ekf if not in position mode
     if (!FLIGHT_MODE(POSITION_MODE)) {
         ekf_initialized = false;
+        return;
     }
 
     // when ekf is not initialized, we need to wait for the first external position message
@@ -401,7 +402,6 @@ static void taskEkf(timeUs_t currentTimeUs)
 
         // get delta t
         float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-        lastTimeUs = currentTimeUs;
 
         ekf_predict(U, dt);
 
@@ -416,6 +416,7 @@ static void taskEkf(timeUs_t currentTimeUs)
             ekf_update(ekf_Z);
         }
     }
+    lastTimeUs = currentTimeUs;
 }
 #endif
 
