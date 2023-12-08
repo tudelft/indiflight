@@ -350,73 +350,9 @@ static void taskPosCtl(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_EKF
-bool ekf_initialized = false;
-timeUs_t lastTimeUs = 0;
-float ekf_Z[N_MEASUREMENTS] = {0.};
-
 static void taskEkf(timeUs_t currentTimeUs)
 {
-    // reset ekf if not in position mode
-    if (!FLIGHT_MODE(POSITION_MODE)) {
-        ekf_initialized = false;
-        return;
-    }
-
-    // when ekf is not initialized, we need to wait for the first external position message
-    if (!ekf_initialized) {
-        if (extPosState != EXT_POS_NO_SIGNAL) {
-            // INIT EKF
-            // sets initial state and covariance
-            float X0[N_STATES] = {
-                extPosNed.pos.V.X,
-                extPosNed.pos.V.Y,
-                extPosNed.pos.V.Z,
-                0., 0., 0., // vel
-                extPosNed.att.angles.roll,
-                extPosNed.att.angles.pitch,
-                extPosNed.att.angles.yaw,
-                0., 0., 0., 0., 0., 0. // acc and gyro biases
-            };
-            float P_diag0[N_STATES] = {
-                1., 1., 1., // pos
-                1., 1., 1., // vel
-                1., 1., 1., // att
-                1., 1., 1., 1., 1., 1. // acc and gyro biases
-            };
-            ekf_init(X0, P_diag0);
-            ekf_initialized = true;
-        }
-    } else {
-        // ekf is initialized, we can run the ekf
-
-        // PREDICTION STEP
-        // gyro and acc transformed from FLU to FRD
-        float U[N_INPUTS] = {
-            DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
-            DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
-            DEGREES_TO_RADIANS(-gyro.gyroADCf[2]),
-            9.81 * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G),
-            9.81 *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G),
-            9.81 *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G)
-        };
-
-        // get delta t
-        float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-
-        ekf_predict(U, dt);
-
-        // UPDATE STEP
-        if (ekf_Z[0] != extPosNed.pos.V.X) { // only update if new data is available [TODO: make this more elegant]
-            ekf_Z[0] = extPosNed.pos.V.X;
-            ekf_Z[1] = extPosNed.pos.V.Y;
-            ekf_Z[2] = extPosNed.pos.V.Z;
-            ekf_Z[3] = extPosNed.att.angles.roll;
-            ekf_Z[4] = extPosNed.att.angles.pitch;
-            ekf_Z[5] = extPosNed.att.angles.yaw;
-            ekf_update(ekf_Z);
-        }
-    }
-    lastTimeUs = currentTimeUs;
+    updateEkf(currentTimeUs);
 }
 #endif
 
