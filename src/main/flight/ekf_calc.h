@@ -13,13 +13,13 @@
 #define N_MEASUREMENTS 6
 
 // set to 1 to use phi, theta, psi measurements
-float ekf_use_phi;
-float ekf_use_theta;
-float ekf_use_psi;
+extern float ekf_use_phi;
+extern float ekf_use_theta;
+extern float ekf_use_psi;
 
 // getters
-float* ekf_get_X();     // get state vector
-float* ekf_get_P();     // get covariance matrix (lower diagonal)
+float* ekf_get_X(void);     // get state vector
+float* ekf_get_P(void);     // get covariance matrix (lower diagonal)
 
 #define ekf_P_index(i,j) ((i>=j) ? ekf_get_P()[i*(i+1)/2+j] : ekf_get_P()[j*(j+1)/2+i])
 #define ekf_X_index(i) ekf_get_X()[i]

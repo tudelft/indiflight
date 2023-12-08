@@ -2,7 +2,7 @@
 #ifndef EKF_H
 #define EKF_H
 
-#include "common/maths.h"
+#include "common/time.h"			// for timeUs_t
 #include "ekf_calc.h"
 
 // useful macros

@@ -38,11 +38,11 @@ float *R = ekf_R;
 // pointer for swapping
 float *swap_ptr;
 
-float* ekf_get_X() {
+float* ekf_get_X(void) {
     return X;
 }
 
-float* ekf_get_P() {
+float* ekf_get_P(void) {
     return P;
 }
 

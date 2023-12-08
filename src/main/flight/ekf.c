@@ -10,7 +10,7 @@ bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
 float ekf_Z[N_MEASUREMENTS] = {0.};
 
-void initEkf() {
+void initEkf(timeUs_t currentTimeUs) {
 	// set ekf parameters
 	ekf_use_phi = 1;
 	ekf_use_theta = 1;
@@ -63,9 +63,10 @@ void initEkf() {
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
+	lastTimeUs = currentTimeUs;
 }
 
-void runEkf(currentTimeUs) {
+void runEkf(timeUs_t currentTimeUs) {
 	// PREDICTION STEP
 	// gyro and acc transformed from FLU to FRD
 	float U[N_INPUTS] = {
@@ -106,7 +107,7 @@ void updateEkf(timeUs_t currentTimeUs) {
     if (!ekf_initialized) {
         if (extPosState != EXT_POS_NO_SIGNAL) {
             // INIT EKF
-            initEkf();
+            initEkf(currentTimeUs);
         }
     } else {
         // ekf is initialized, we can run the ekf
