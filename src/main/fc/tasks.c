@@ -59,6 +59,7 @@
 #include "flight/pid.h"
 #include "flight/position.h"
 #include "flight/pos_ctl.h"
+#include "flight/trajectory_tracker.h"
 #include "flight/att_ctl.h"
 
 #ifdef USE_EKF
@@ -346,6 +347,7 @@ static void taskGpsPi(timeUs_t currentTimeUs)
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
+    updateTrajectoryTracker(currentTimeUs);
 }
 #endif
 
