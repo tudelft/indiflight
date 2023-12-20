@@ -57,7 +57,7 @@ float u[MAXU] = {0.f};
 float u_output[MAXU] = {0.f};
 float omega[MAXU] = {0.f};
 float omega_dot[MAXU] = {0.f};
-float omega_hover = 1900.f;
+float omega_hover = 500.f;
 float u_state[MAXU];
 float u_state_sync[MAXU];
 float dv[MAXV];
@@ -78,7 +78,7 @@ uint8_t attExecCounter = 0;
 
 // to generate G1 and G2, see python code src/utils/indi/genGMc.py
 // FL, FR, RR, RL
-/* black props
+/*
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -99,10 +99,35 @@ static float G2[MAXV][MAXU] = {
 
 static float kThrust  = 2.66e-7f;
 static float tauRpm = 0.02f;
-static float Tmax = 4.5f;/
+static float Tmax = 4.5f;
 */
 
+// iris in sim
+static float G1[MAXV][MAXU] = {
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    { -5.351f,  -5.351f,  -5.351f,  -5.351f},
+    {-220.5f , -220.5f ,  220.5f ,  220.5f},
+    {-69.9f ,  69.9f , -69.9f ,  69.9f},
+    { -9.60f,   9.60f,   9.60f,  -9.60f},
+};
+
+static float G2[MAXV][MAXU] = {
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {-0.079, 0.079,  0.079, -0.079},
+};
+
+static float kThrust  = 9.9e-6f;
+static float tauRpm = 0.02f;
+static float Tmax = 8.f;
+
+
 // red props racequad
+/*
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -127,16 +152,17 @@ static float G2[MAXV][MAXU] = {
 // static float kThrust  = 1.447e-6f;
 static float tauRpm = 0.02f;
 static float Tmax = 15.8f;
+*/
 
 /*
 // trashcan 2S first estimate
 static float G1[MAXV][MAXU] = {
     {   0.        ,    0.        ,    0.        ,    0.        },
     {   0.        ,    0.        ,    0.        ,    0.        },
-    { -12.5       ,  -12.5       ,  -12.5       ,  -12.5       },
-    {-400.43771272, -400.43771272,  400.43771272,  400.43771272},
-    {-400.959669  ,  400.959669  , -400.959669  ,  400.959669  },
-    { 262.74974316, -262.74974316, -262.74974316,  262.74974316}
+    { -7.0       ,  -7.0       ,  -7.0       ,  -7.0       },
+    {-250.43771272, -250.43771272,  250.43771272,  250.43771272},
+    {-250.959669  ,  250.959669  , -250.959669  ,  250.959669  },
+    { 70.74974316, -70.74974316, -70.74974316,  70.74974316}
 };
 
 static float G2[MAXV][MAXU] = {
@@ -145,7 +171,7 @@ static float G2[MAXV][MAXU] = {
     {0.f, 0.f, 0.f, 0.f},
     {0.f, 0.f, 0.f, 0.f},
     {0.f, 0.f, 0.f, 0.f},
-    {0.00198f, -0.00198f,  -0.00198f, 0.00198f},
+    {0.0005, -0.0005,  -0.0005, 0.0005},
 };
 
 static float kThrust  = 8.1e-9f;
@@ -197,13 +223,13 @@ void indiInit(const pidProfile_t * pidProfile) {
         dv[i] = 0.f;
 
     // indi G2 normalization constant 1 / (2 tau k)
-    // G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
-    G2_normalizer = 17271807.70190637;
+    G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
+    // G2_normalizer = 17271807.70190637;
 
 
     // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
     float k_conf = pidProfile->thrustLinearization / 100.f;
-    if ((k_conf > 0.025) && (k_conf < 0.7)) {
+    if ((k_conf > 0.025f) && (k_conf < 0.7f)) {
         thrustLin.k = k_conf;
         thrustLin.A = 1.f / thrustLin.k;
         thrustLin.B = (sq(thrustLin.k) - 2.f*thrustLin.k + 1.f) / (4.f*sq(thrustLin.k));
@@ -435,6 +461,9 @@ void getAlphaSpBody(void) {
     alphaSpBody.V.Z = rateGains.V.Z * rateErr.V.Z;
 }
 
+#if !(defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && defined(USE_OMEGA_DOT_FEEDBACK)
+    #undef USE_OMEGA_DOT_FEEDBACK
+#endif
 
 // stavrow I think the real INDI is happening here
 void getMotor(void) {
@@ -560,7 +589,7 @@ void getMotor(void) {
     static int8_t Ws[MAXU];
 
     for (int i=0; i < nu; i++) {
-      du_as[i] = (du_min[i] + du_max[i]) * 0.5;
+      du_as[i] = (du_min[i] + du_max[i]) * 0.5f;
       // Assume warmstart is always desired and reset working set Ws only if 
       // if NAN errors were encountered
       if (as_exit_code >= AS_NAN_FOUND_Q)

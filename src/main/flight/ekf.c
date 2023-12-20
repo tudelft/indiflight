@@ -1,6 +1,9 @@
 
+
 #include "ekf.h"
 #include <math.h>
+
+#ifdef USE_EKF
 
 // Kalman filter process noise covariance matrix (diagonal)
 // TODO: make this configurable
@@ -870,3 +873,5 @@ void ekf_update(float Z[N_MEASUREMENTS]) {
     P = P_new;
     P_new = swap_ptr;
 }
+
+#endif // USE_EKF

@@ -5,6 +5,30 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "INDIflight SITL",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/obj/main/indiflight_SITL.elf",
+            "args": ["127.0.0.1"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "cwd": "${workspaceRoot}",
             "executable": "obj/main/indiflight_STM32H743.elf",
             "name": "Cortex OpenOCD",

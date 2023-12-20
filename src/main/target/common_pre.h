@@ -252,7 +252,7 @@ extern uint8_t _dmaram_end__;
 #define USE_CLI
 #define USE_SERIAL_PASSTHROUGH
 #define USE_GYRO_REGISTER_DUMP  // Adds gyroregisters command to cli to dump configured register values
-#define USE_IMU_CALC
+//#define USE_IMU_CALC
 
 // all the settings for classic build
 #if !defined(CLOUD_BUILD) && !defined(SITL)

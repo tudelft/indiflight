@@ -51,15 +51,15 @@ def inertiaFromPropData(m, Dinch):
 #  \ / 
 #  / \
 # 3   1
-width = 53e-3 # width in meters
-length = 53e-3
+width = 440e-3 # width in meters
+length = 260e-3
 # dimensions from motor axle to motor axle
 diagonal = np.hypot(width, length)
 
 
 #m = 0.040 # allup mass in kg
-m = 0.070 # allup mass in kg, with PI
-direc = [1, -1, -1, 1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
+m = 1.5 # allup mass in kg, with PI
+direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along prop thrust vector)
 
 
 #%% inertia measurements
@@ -75,39 +75,42 @@ Pz = None
 Raxle = 5 * 0.5e-3 # motor axle radius (to calculate location of rotation point)
 
 # Option 2: direct
-rg_over_diag_xx = 0.263
-rg_over_diag_yy = 0.272
-rg_over_diag_zz = 0.291
-Ixx = 2*inertiaFromGyrationRadius(m, rg_over_diag_xx * diagonal)
-Iyy = 2*inertiaFromGyrationRadius(m, rg_over_diag_yy * diagonal)
-Izz = 2*inertiaFromGyrationRadius(m, rg_over_diag_zz * diagonal)
+#rg_over_diag_xx = 0.263
+#rg_over_diag_yy = 0.272
+#rg_over_diag_zz = 0.291
+#Ixx = 2*inertiaFromGyrationRadius(m, rg_over_diag_xx * diagonal)
+#Iyy = 2*inertiaFromGyrationRadius(m, rg_over_diag_yy * diagonal)
+#Izz = 2*inertiaFromGyrationRadius(m, rg_over_diag_zz * diagonal)
+Ixx = 0.008
+Iyy = 0.015
+Izz = 0.017
 
 
 #%% prop and motor inertia
 
 # always needed: prop mass
-mp = 0.88e-3
+#mp = 25e-3
 
 # Option 1: prop inertia measurements (measured for red 2.1inch prop) using pendulum period
-Pp = None
-Rp = None
+#Pp = None
+#Rp = None
 # 1% mass error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 2: prop inertia estimation via mass and diameter
-Dpinch = 40. / 25.4 # prop diameter in inch
+#Dpinch = 40. / 25.4 # prop diameter in inch
 
 # get motor bell inertia from motor dimensions, very crude
-motorNumber = 803
+#motorNumber = 
 
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
-tau = 0.035 # spinup/spindown time constant
-Tmax = 0.47 # 
-k = Tmax / (75000. / 60. * 2 * np.pi)**2 # constant in T = k omega^2 -- shameless guess
+tau = 0.02 # spinup/spindown time constant
+Tmax = 8 # 
+k = Tmax / (900)**2 # constant in T = k omega^2 -- shameless guess
 #k = 2.66e-7 # black 3inch pitch prop
 #Tmax = 4.5 # max thrust black prop
-CM = 0.01 # steady-state moment coefficient M = CM * T
+CM = 0.02 # steady-state moment coefficient M = CM * T
 
 # ESC+motor+prop performance at around 60% charge
 k_ESC = 0.40 # who knows
@@ -152,14 +155,15 @@ elif (Px and Py and Pz):
 else:
     raise ValueError("Must have either Px, Py, Pz or Ixx, Iyy, Izz defined")
 
-if (Pp and Rp and mp):
-    Iprop = inertiaFromPendulumPeriod(Pp, Rp, mp)
-elif (mp and Dpinch):
-    Iprop = inertiaFromPropData(mp, Dpinch)
-else:
-    raise ValueError("Must have either Pp, Rp, mp or Dpinch, mp defined")
-
-Imotorprop = Iprop + inertiaBellFromMotorNumber(motorNumber)
+Imotorprop = 1.68e-4
+#if (Pp and Rp and mp):
+#    Iprop = inertiaFromPendulumPeriod(Pp, Rp, mp)
+#elif (mp and Dpinch):
+#    Iprop = inertiaFromPropData(mp, Dpinch)
+#else:
+#    raise ValueError("Must have either Pp, Rp, mp or Dpinch, mp defined")
+#
+#Imotorprop = Iprop + inertiaBellFromMotorNumber(motorNumber)
 
 # 1% error in P: 7% error in inertia --> estimated precision 0.5ms, so bueno
 # 1% error in R: 1.5% error in inertia --> estimated precision 5mm, so 8%...

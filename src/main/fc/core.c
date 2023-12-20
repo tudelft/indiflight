@@ -500,13 +500,13 @@ void updateArmingStatus(void)
 
         if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && isAccLow() && (noThrowToArmSince > 0)) {
             //unsetArmingDisabled(ARMING_DISABLED_THROTTLE); // may be dangerous
-            if (cmpTimeUs(microsISR(), noThrowToArmSince) > 250000) {
+            if (cmpTimeUs(micros(), noThrowToArmSince) > 250000) {
                 unsetArmingDisabled(ARMING_DISABLED_ANGLE);
                 unsetArmingDisabled(ARMING_DISABLED_NOPREARM);
                 unsetArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
             }
         } else {
-            noThrowToArmSince = microsISR();
+            noThrowToArmSince = micros();
         }
         */
 
