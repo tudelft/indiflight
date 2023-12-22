@@ -57,7 +57,8 @@ length = 53e-3
 diagonal = np.hypot(width, length)
 
 
-m = 0.040 # allup mass in kg
+#m = 0.040 # allup mass in kg
+m = 0.070 # allup mass in kg, with PI
 direc = [1, -1, -1, 1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
 
 
@@ -101,15 +102,15 @@ motorNumber = 803
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
-tau = 0.02 # spinup/spindown time constant
-Tmax = 0.5 # shameless guesstimate
+tau = 0.035 # spinup/spindown time constant
+Tmax = 0.47 # 
 k = Tmax / (75000. / 60. * 2 * np.pi)**2 # constant in T = k omega^2 -- shameless guess
 #k = 2.66e-7 # black 3inch pitch prop
 #Tmax = 4.5 # max thrust black prop
 CM = 0.01 # steady-state moment coefficient M = CM * T
 
 # ESC+motor+prop performance at around 60% charge
-k_ESC = 0.55 # who knows
+k_ESC = 0.40 # who knows
 
 
 #%% configuration: position, thrust axis and direction.

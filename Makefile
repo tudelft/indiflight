@@ -663,4 +663,4 @@ $(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildca
 # include auto-generated dependencies
 -include $(TARGET_DEPS)
 
-include $(ROOT)/make/remote_openocd.mk
+include $(ROOT)/make/remote_flash.mk

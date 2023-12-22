@@ -42,69 +42,68 @@ def inertiaFromPropData(m, Dinch):
 #%% properties
 ###################################
 
-#%% dimensions and configuration
-
-# using betaflight numbering
-#   ^
-#   |      # don't ask...
-# 4   2
-#  \ / 
-#  / \
-# 3   1
-width = 127e-3 # width in meters
-length = 91e-3
-
-m = 0.428 # allup mass in kg
-direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
-
+width = 200e-3
+length = 150e-3
 
 #%% inertia measurements
+
+# before new bottom plate and bumpers
+# m = 0.3826 # kg
+# Px = 0.5801
+# Py = 0.5709
+# Pz = 0.6295 # Period for z-axis rotation
+
+# after modifications
+m = 0.520 # kg
+direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
+
+# inertia
 
 # Option 1: from pendulum periods
 # let quad oscillate as a pendulum around the motor axles in all 3 directions
 # record oscillation periods in seconds using the IMU
 # MAKE SURE THAT COG IS EXACTLY IN THE CENTER
 # FOR SAFETY, REMOVE PROPS. WE'LL ADD THEIR CONTRIBUTION LATER
-Px = 0.5955
-Py = 0.5852
-Pz = 0.6417
+Px = None
+Py = None
+Pz = None
 Raxle = 5 * 0.5e-3 # motor axle radius (to calculate location of rotation point)
 
 # Option 2: direct
-Ixx = None
-Iyy = None
-Izz = None
+Ixx = 0.0007205811943796118 * 2.
+Iyy = 0.0007756948209436508 * 2.
+Izz = 0.0008860337750707033 * 2.
 
 
 #%% prop and motor inertia
 
 # always needed: prop mass
-mp = 1.40e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
-#mp = 1.60e-3 # black prop
+mp = 4.7 * 1e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 1: prop inertia measurements (measured for red 2.1inch prop) using pendulum period
-Pp = (525 - 275) / 30 / 20 # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
-Rp = 36.0 * 1e-3 # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
+Pp = None # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
+Rp = None # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
 # 1% mass error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 2: prop inertia estimation via mass and diameter
-Dpinch = None # prop diameter in inch
+Dpinch = 5. # prop diameter in inch
 
-# get motor bell inertia from motor dimensions, very crude
-motorNumber = 1407
+# motor bell inertia from motor dimensions, very crude
+motorNumber = 2207
+
 
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
 tau = 0.02 # spinup/spindown time constant
-k = 1.89e-7 # constant in T = k omega^2 -- red 2.1inch pitch prop
-Tmax = 4.2 # max thrust red prop
+Tmax = 15. # max thrust red prop
+k = 7 / (21000 / 60. * 2 * np.pi)**2 # constant in T = k omega^2 -- Emax eco II 2207 datasheet
 #k = 2.66e-7 # black 3inch pitch prop
 #Tmax = 4.5 # max thrust black prop
 CM = 0.01 # steady-state moment coefficient M = CM * T
 
 # ESC+motor+prop performance at around 60% charge
-k_ESC = 0.55 # nonlinearity of non-dimensional input to non-dimensional thrust according to T / Tmax = ku^2 + (1-k)u
+k_ESC = 0.45 # nonlinearity of non-dimensional input to non-dimensional thrust according to T / Tmax = ku^2 + (1-k)u
 
 
 #%% configuration: position, thrust axis and direction.

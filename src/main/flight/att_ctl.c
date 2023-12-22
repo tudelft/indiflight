@@ -428,6 +428,10 @@ void getAlphaSpBody(void) {
     alphaSpBody.V.Z = rateGains.V.Z * rateErr.V.Z;
 }
 
+#if !(defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && defined(USE_OMEGA_DOT_FEEDBACK)
+    #undef USE_OMEGA_DOT_FEEDBACK
+#endif
+
 void getMotor(void) {
     // mix! And call writeMotors or whatever
 

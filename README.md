@@ -34,8 +34,8 @@ apt install gdb-multiarch binutils-multiarch sshpass
 
 If connected to the pi-kompaan raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash:
 ```bash
-make remote_flash
-# make DEBUG=GDB remote_flash  # to compile with symbols and without optimisations
+make remote_flash_swd
+# make DEBUG=GDB remote_flash_swd  # to compile with symbols and without optimisations
 ```
 
 To debug within VScode, just hit `CTRL+SHIFT+D`, hit play and be a little bit patient (15sec or so? Then youll be taken to the start of `main()`).

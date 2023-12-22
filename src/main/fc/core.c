@@ -352,7 +352,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce
-                && FLIGHT_MODE(POSITION_MODE) && (extPosState >= EXT_POS_STILL_VALID)
+                #ifdef USE_GPS_PI
+                    && (extPosState >= EXT_POS_STILL_VALID)
+                #endif
                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }
@@ -498,13 +500,13 @@ void updateArmingStatus(void)
 
         if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && isAccLow() && (noThrowToArmSince > 0)) {
             //unsetArmingDisabled(ARMING_DISABLED_THROTTLE); // may be dangerous
-            if (cmpTimeUs(microsISR(), noThrowToArmSince) > 250000) {
+            if (cmpTimeUs(micros(), noThrowToArmSince) > 250000) {
                 unsetArmingDisabled(ARMING_DISABLED_ANGLE);
                 unsetArmingDisabled(ARMING_DISABLED_NOPREARM);
                 unsetArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
             }
         } else {
-            noThrowToArmSince = microsISR();
+            noThrowToArmSince = micros();
         }
         */
 

@@ -8,6 +8,7 @@
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
 #include "flight/imu.h"
+#ifdef USE_GPS_PI
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -44,7 +45,7 @@ void checkNewPos(void) {
         }
 
         // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(microsISR(), latestMsgTime);
+        timeDelta_t delta = cmpTimeUs(micros(), latestMsgTime);
         if (delta > EXT_POS_TIMEOUT_US) {
             // signal lost
             extPosState = EXT_POS_NO_SIGNAL;
@@ -73,6 +74,7 @@ void getExternalPos(timeUs_t current) {
         extPosNed.vel.V.Z = -piMsgExternalPoseRx->enu_zd;
         fp_angles_t eulers;
         fp_quaternion_t quat;
+        // the quaternion x,y,z are in ENU, we convert them to NED
         quat.qi = piMsgExternalPoseRx->body_qi;
         quat.qx = piMsgExternalPoseRx->body_qx;
         quat.qy = piMsgExternalPoseRx->body_qy;
@@ -84,7 +86,7 @@ void getExternalPos(timeUs_t current) {
     // extrapolate position with speed info
     /* removed, because now we include this info the observer in imu.h
     static timeUs_t latestExtrapolationTime = 0;
-    timeUs_t currentExtrapolationTime = microsISR();
+    timeUs_t currentExtrapolationTime = micros();
     timeDelta_t delta = cmpTimeUs(currentExtrapolationTime, latestExtrapolationTime);
     if ((latestExtrapolationTime > 0) && (delta > 0)) {
         extPosNed.pos.V.X += ((float) delta) * 1e-6f * extPosNed.vel.V.X;
@@ -145,3 +147,5 @@ void getPosSetpoint(timeUs_t current) {
         }
     }
 }
+
+#endif
