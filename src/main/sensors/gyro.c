@@ -45,6 +45,10 @@
 #include "config/config.h"
 #include "fc/runtime_config.h"
 
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
+
 #ifdef USE_DYN_NOTCH_FILTER
 #include "flight/dyn_notch_filter.h"
 #endif
@@ -402,6 +406,12 @@ static FAST_CODE void gyroUpdateSensor(gyroSensor_t *gyroSensor)
 
 FAST_CODE void gyroUpdate(void)
 {
+#ifdef HIL_BUILD
+    gyro.gyroADC[X] = hilInput.gyro[X];
+    gyro.gyroADC[Y] = hilInput.gyro[Y];
+    gyro.gyroADC[Z] = hilInput.gyro[Z];
+    UNUSED(gyroUpdateSensor);
+#else
     switch (gyro.gyroToUse) {
     case GYRO_CONFIG_USE_GYRO_1:
         gyroUpdateSensor(&gyro.gyroSensor1);
@@ -429,8 +439,9 @@ FAST_CODE void gyroUpdate(void)
             gyro.gyroADC[Z] = ((gyro.gyroSensor1.gyroDev.gyroADC[Z] * gyro.gyroSensor1.gyroDev.scale) + (gyro.gyroSensor2.gyroDev.gyroADC[Z] * gyro.gyroSensor2.gyroDev.scale)) / 2.0f;
         }
         break;
-#endif
+#endif // defined (USE_MULTI_GYRO)
     }
+#endif // defined(HIL_BUILD)
 
     if (gyro.downsampleFilterEnabled) {
         // using gyro lowpass 2 filter for downsampling

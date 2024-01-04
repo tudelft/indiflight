@@ -85,6 +85,7 @@
 #include "io/transponder_ir.h"
 #include "io/vtx_control.h"
 #include "io/vtx_rtc6705.h"
+#include "io/hil.h"
 
 #include "msp/msp_serial.h"
 
@@ -1377,7 +1378,12 @@ static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeU
         }
     }
 
+#ifdef HIL_BUILD
+    hilSendActuators();
+#else
     writeMotors();
+#endif
+
 }
 #endif
 

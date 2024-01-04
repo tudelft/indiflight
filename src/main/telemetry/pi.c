@@ -214,6 +214,8 @@ void processPiTelemetry(void)
     piSendIMU();
 }
 
+pi_parse_states_t p_telem;
+
 void processPiUplink(void)
 {
 #ifdef PI_BETAFLIGHT_DEBUG
@@ -226,7 +228,7 @@ void processPiUplink(void)
 #endif
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
-            piParse(serialRead(piPort));
+            piParse(&p_telem, serialRead(piPort));
         }
     }
 }

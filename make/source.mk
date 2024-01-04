@@ -67,6 +67,7 @@ COMMON_SRC = \
             io/usb_cdc_hid.c \
             io/usb_msc.c \
             io/external_pos.c \
+			io/hil.c \
             msp/msp.c \
             msp/msp_box.c \
             msp/msp_serial.c \

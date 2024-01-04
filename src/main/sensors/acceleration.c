@@ -39,6 +39,10 @@
 
 #include "acceleration.h"
 
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
+
 FAST_DATA_ZERO_INIT acc_t acc;                       // acc access functions
 
 static void applyAccelerationTrims(const flightDynamicsTrims_t *accelerationTrims)
@@ -58,7 +62,11 @@ void accUpdate(timeUs_t currentTimeUs)
     acc.isAccelUpdatedAtLeastOnce = true;
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+#ifdef HIL_BUILD
+        const int16_t val = hilInput.acc[axis] * acc.dev.acc_1G;
+#else
         const int16_t val =  acc.dev.ADCRaw[axis];
+#endif
         acc.accADC[axis] = val;
     }
 

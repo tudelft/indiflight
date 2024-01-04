@@ -140,6 +140,9 @@ typedef enum {
 #ifdef USE_TELEMETRY
     TASK_TELEMETRY,
 #endif
+#ifdef HIL_BUILD
+    TASK_HIL,
+#endif
 #ifdef USE_GPS_PI
     TASK_GPS_PI,
 #endif

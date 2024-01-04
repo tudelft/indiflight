@@ -47,6 +47,10 @@
 #include "rx/rx.h"
 #include "dshot.h"
 
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
+
 void dshotInitEndpoints(const motorConfig_t *motorConfig, float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow)
 {
     float outputLimitOffset = DSHOT_RANGE * (1 - outputLimit);
@@ -258,6 +262,17 @@ static void dshotUpdateTelemetryData(uint8_t motorIndex, dshotTelemetryType_t ty
 
 uint16_t getDshotTelemetry(uint8_t index)
 {
+#ifdef HIL_BUILD
+
+#define ERPM_PER_LSB 100.0f
+
+    if (index > 3) return 0;
+    else return (uint16_t) ( hilInput.rpm[index] * motorConfig()->motorPoleCount / 2 / ERPM_PER_LSB );
+
+    UNUSED(dshotUpdateTelemetryData);
+    UNUSED(dshot_decode_telemetry_value);
+
+#else
     // Process telemetry in case it haven´t been processed yet
     if (dshotTelemetryState.rawValueState == DSHOT_RAW_VALUE_STATE_NOT_PROCESSED) {
         const unsigned motorCount = motorDeviceCount();
@@ -291,6 +306,7 @@ uint16_t getDshotTelemetry(uint8_t index)
     }
 
     return dshotTelemetryState.motorState[index].telemetryData[DSHOT_TELEMETRY_TYPE_eRPM];
+#endif
 }
 
 bool isDshotMotorTelemetryActive(uint8_t motorIndex)

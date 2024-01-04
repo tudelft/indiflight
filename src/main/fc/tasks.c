@@ -65,6 +65,10 @@
 #include "flight/ekf.h"
 #endif
 
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
+
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -333,6 +337,14 @@ static void taskTelemetry(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef HIL_BUILD
+static void taskHil(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    handleHil();
+}
+#endif
+
 #ifdef USE_GPS_PI
 static void taskGpsPi(timeUs_t currentTimeUs)
 {
@@ -512,6 +524,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(2000), TASK_PRIORITY_LOW),
 #endif
 
+#ifdef HIL_BUILD
+    [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(500), TASK_PRIORITY_HIGH),
+#endif
+
 #ifdef USE_GPS_PI
     [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
@@ -683,6 +699,10 @@ void tasksInit(void)
         }
         */
     }
+#endif
+
+#ifdef HIL_BUILD
+    setTaskEnabled(TASK_HIL, true);
 #endif
 
 #ifdef USE_GPS_PI
