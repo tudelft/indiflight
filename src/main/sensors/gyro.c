@@ -410,6 +410,7 @@ FAST_CODE void gyroUpdate(void)
     gyro.gyroADC[X] = hilInput.gyro[X];
     gyro.gyroADC[Y] = hilInput.gyro[Y];
     gyro.gyroADC[Z] = hilInput.gyro[Z];
+    gyro.gyroSensor1.calibration.cyclesRemaining = 0;
     UNUSED(gyroUpdateSensor);
 #else
     switch (gyro.gyroToUse) {

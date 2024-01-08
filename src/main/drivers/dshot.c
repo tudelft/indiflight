@@ -316,6 +316,9 @@ bool isDshotMotorTelemetryActive(uint8_t motorIndex)
 
 bool isDshotTelemetryActive(void)
 {
+#ifdef HIL_BUILD
+    return true;
+#endif
     const unsigned motorCount = motorDeviceCount();
     if (motorCount) {
         for (unsigned i = 0; i < motorCount; i++) {

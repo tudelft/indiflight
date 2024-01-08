@@ -148,10 +148,8 @@ void hilSendActuators(void)
     piMsgHilOutTx.set_3 = (int16_t) (MOTOR_TO_HIL * motor[2]);
     piMsgHilOutTx.set_4 = (int16_t) (MOTOR_TO_HIL * motor[3]);
 
-    // debugging
-    piMsgHilOutTx.set_1 = 1000;
-
-    piSendMsg(&piMsgImuTx, &serialWriter);
+    //UNUSED(serialWriter);
+    piSendMsg(&piMsgHilOutTx, &serialWriter);
 }
 
 //void processHilOutput(void)
@@ -177,19 +175,21 @@ void processHilInput(void)
 
     // TODO: check if messages time updated
     // TODO: actually write this too the correct global variables
-#define HIL_TO_DEGS 0.1
-#define HIL_TO_G 0.001
-#define HIL_TO_RPM 10
-    hilInput.gyro[0] = HIL_TO_DEGS * piMsgHilInRx->gyro_x;
-    hilInput.gyro[1] = HIL_TO_DEGS * piMsgHilInRx->gyro_y;
-    hilInput.gyro[2] = HIL_TO_DEGS * piMsgHilInRx->gyro_z;
-    hilInput.acc[0]  = HIL_TO_G * piMsgHilInRx->acc_x;
-    hilInput.acc[1]  = HIL_TO_G * piMsgHilInRx->acc_y;
-    hilInput.acc[2]  = HIL_TO_G * piMsgHilInRx->acc_z;
-    hilInput.rpm[0]  = HIL_TO_RPM * piMsgHilInRx->rpm_1;
-    hilInput.rpm[1]  = HIL_TO_RPM * piMsgHilInRx->rpm_2;
-    hilInput.rpm[2]  = HIL_TO_RPM * piMsgHilInRx->rpm_3;
-    hilInput.rpm[3]  = HIL_TO_RPM * piMsgHilInRx->rpm_4;
+#define HIL_TO_DEGS 0.1f
+#define HIL_TO_G 0.001f
+#define HIL_TO_RPM 10.f
+    if (piMsgHilInRxState != PI_MSG_RX_STATE_NONE) {
+        hilInput.gyro[0] = HIL_TO_DEGS * piMsgHilInRx->gyro_x;
+        hilInput.gyro[1] = HIL_TO_DEGS * piMsgHilInRx->gyro_y;
+        hilInput.gyro[2] = HIL_TO_DEGS * piMsgHilInRx->gyro_z;
+        hilInput.acc[0]  = HIL_TO_G * piMsgHilInRx->acc_x;
+        hilInput.acc[1]  = HIL_TO_G * piMsgHilInRx->acc_y;
+        hilInput.acc[2]  = HIL_TO_G * piMsgHilInRx->acc_z;
+        hilInput.rpm[0]  = HIL_TO_RPM * piMsgHilInRx->rpm_1;
+        hilInput.rpm[1]  = HIL_TO_RPM * piMsgHilInRx->rpm_2;
+        hilInput.rpm[2]  = HIL_TO_RPM * piMsgHilInRx->rpm_3;
+        hilInput.rpm[3]  = HIL_TO_RPM * piMsgHilInRx->rpm_4;
+    }
 }
 
 void handleHil(void)
