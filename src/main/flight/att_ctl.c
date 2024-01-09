@@ -102,7 +102,8 @@ static float tauRpm = 0.02f;
 static float Tmax = 4.5f;
 */
 
-// iris in sim
+// x500 in sim
+/*
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -124,6 +125,7 @@ static float G2[MAXV][MAXU] = {
 static float kThrust  = 9.9e-6f;
 static float tauRpm = 0.02f;
 static float Tmax = 8.f;
+*/
 
 
 // red props racequad
@@ -153,6 +155,31 @@ static float G2[MAXV][MAXU] = {
 static float tauRpm = 0.02f;
 static float Tmax = 15.8f;
 */
+
+// black props racequad
+static float G1[MAXV][MAXU] = {
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {   0.f  ,    0.f  ,    0.f  ,    0.f},
+    {  -10.5f,   -10.5f,   -10.5f,  -10.5f},
+    { -400.f,   -400.f,   400.f,    400.f},
+    { -260.f,    260.f,  -260.f,    260.f},
+    { -51.f,      51.f,    51.f,    -51.f},
+};
+
+static float G2[MAXV][MAXU] = {
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {0.f, 0.f, 0.f, 0.f},
+    {-0.0045f, 0.0045f,  0.0045f, -0.0045f},
+};
+
+// static float kThrust  = 1.89e-7f;
+// static float tauRpm = 0.02f;
+static float kThrust  = 2.66e-7f;
+static float tauRpm = 0.02f;
+static float Tmax = 4.5f;
 
 /*
 // trashcan 2S first estimate

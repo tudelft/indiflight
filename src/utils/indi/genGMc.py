@@ -42,8 +42,8 @@ def inertiaFromPropData(m, Dinch):
 #%% properties
 ###################################
 
-width = 200e-3
-length = 150e-3
+width = 127e-3
+length = 91e-3
 
 #%% inertia measurements
 
@@ -54,7 +54,7 @@ length = 150e-3
 # Pz = 0.6295 # Period for z-axis rotation
 
 # after modifications
-m = 0.520 # kg
+m = 0.428 # kg
 direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along prop thrust vector), sequence FL, FR, RR, RL
 
 # inertia
@@ -64,42 +64,39 @@ direc = [-1, 1, 1, -1] # motor rotation directions (positive -> right hand along
 # record oscillation periods in seconds using the IMU
 # MAKE SURE THAT COG IS EXACTLY IN THE CENTER
 # FOR SAFETY, REMOVE PROPS. WE'LL ADD THEIR CONTRIBUTION LATER
-Px = None
-Py = None
-Pz = None
+Px = 0.5955
+Py = 0.5852
+Pz = 0.6417
 Raxle = 5 * 0.5e-3 # motor axle radius (to calculate location of rotation point)
 
 # Option 2: direct
-Ixx = 0.0007205811943796118 * 2.
-Iyy = 0.0007756948209436508 * 2.
-Izz = 0.0008860337750707033 * 2.
+Ixx = None
+Iyy = None
+Izz = None
 
 
 #%% prop and motor inertia
 
-# always needed: prop mass
-mp = 4.7 * 1e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
+# always needed: prop mass (black and yellow props)
+mp = 1.6 * 1e-3 # 1% error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 1: prop inertia measurements (measured for red 2.1inch prop) using pendulum period
-Pp = None # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
-Rp = None # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
+Pp = (525 - 275) / 30 / 20 # counting frames for 20 periods, fps 30.000. One frame error = 5% error in inertia...
+Rp = 36.0e-3 # 1mm error: 10% error in inertia --> estimated precision 0.5mm, so 5% error
 # 1% mass error: 1% error in inertia --> estimated precision 0.02g, so 1.5% error
 
 # Option 2: prop inertia estimation via mass and diameter
-Dpinch = 5. # prop diameter in inch
+Dpinch = None # prop diameter in inch
 
 # motor bell inertia from motor dimensions, very crude
-motorNumber = 2207
-
+motorNumber = 1407
 
 
 #%% propeller/ESC/motor performance at 4S battery (see prop.py)
 
 tau = 0.02 # spinup/spindown time constant
-Tmax = 15. # max thrust red prop
-k = 7 / (21000 / 60. * 2 * np.pi)**2 # constant in T = k omega^2 -- Emax eco II 2207 datasheet
-#k = 2.66e-7 # black 3inch pitch prop
-#Tmax = 4.5 # max thrust black prop
+Tmax = 4.5 # max thrust black prop
+k = 2.66e-7 # black prop
 CM = 0.01 # steady-state moment coefficient M = CM * T
 
 # ESC+motor+prop performance at around 60% charge
