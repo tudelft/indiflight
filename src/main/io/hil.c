@@ -51,6 +51,7 @@
 #include "io/hil.h"
 #include "pi-protocol.h"
 #include "pi-messages.h"
+#include "flight/mixer_init.h"
 
 #define USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
@@ -143,10 +144,10 @@ void hilSendActuators(void)
 {
     piMsgHilOutTx.time_ms = millis();
 #define MOTOR_TO_HIL 32767
-    piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * motor[0]);
-    piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * motor[1]);
-    piMsgHilOutTx.set_3 = (int16_t) (MOTOR_TO_HIL * motor[2]);
-    piMsgHilOutTx.set_4 = (int16_t) (MOTOR_TO_HIL * motor[3]);
+    piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[0], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[1], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    piMsgHilOutTx.set_3 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[2], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    piMsgHilOutTx.set_4 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[3], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
 
     //UNUSED(serialWriter);
     piSendMsg(&piMsgHilOutTx, &serialWriter);

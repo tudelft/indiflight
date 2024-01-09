@@ -525,7 +525,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef HIL_BUILD
-    [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(500), TASK_PRIORITY_HIGH),
+    [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
 #ifdef USE_GPS_PI
