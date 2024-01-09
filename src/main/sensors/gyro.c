@@ -45,9 +45,6 @@
 #include "config/config.h"
 #include "fc/runtime_config.h"
 
-#ifdef HIL_BUILD
-#include "io/hil.h"
-#endif
 
 #ifdef USE_DYN_NOTCH_FILTER
 #include "flight/dyn_notch_filter.h"
@@ -56,6 +53,7 @@
 
 #include "io/beeper.h"
 #include "io/statusindicator.h"
+#include "io/hil.h"
 
 #include "scheduler/scheduler.h"
 

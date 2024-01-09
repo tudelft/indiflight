@@ -349,7 +349,7 @@ void getSetpoints(void) {
         // which results in a sort of radial deadzone past the x*y=1 circle
         float roll = getRcDeflection(ROLL);
         float pitch = -getRcDeflection(PITCH);
-        float maxTilt = DEGREES_TO_RADIANS(MAX_BANK_DEGREE);
+        float maxTilt = DEGREES_TO_RADIANS(MAX_BANK_DEGREE_MANUAL);
 
         t_fp_vector axis = {
             .V.X = maxTilt*roll,
@@ -787,7 +787,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     }
 
     float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
-    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE)); //todo: make parameter
+    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE_POSITION)); //todo: make parameter
 
     // *fz = v.V.Z / cos_approx(alpha);
     float fz_target = v.V.Z / cos_approx(alpha);
@@ -816,6 +816,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
         + zDesNed.V.Z * rMat[2][2];
 
     *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
+    //*fz = fz_target;
 }
 
 t_fp_vector coordinatedYaw(float yaw) {

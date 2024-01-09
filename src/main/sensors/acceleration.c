@@ -32,6 +32,8 @@
 #include "common/filter.h"
 #include "common/utils.h"
 
+#include "io/hil.h"
+
 #include "config/feature.h"
 
 #include "sensors/acceleration_init.h"
@@ -39,9 +41,6 @@
 
 #include "acceleration.h"
 
-#ifdef HIL_BUILD
-#include "io/hil.h"
-#endif
 
 FAST_DATA_ZERO_INIT acc_t acc;                       // acc access functions
 

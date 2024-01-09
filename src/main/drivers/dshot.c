@@ -44,12 +44,11 @@
 
 #include "flight/mixer.h"
 
+#include "io/hil.h"
+
 #include "rx/rx.h"
 #include "dshot.h"
 
-#ifdef HIL_BUILD
-#include "io/hil.h"
-#endif
 
 void dshotInitEndpoints(const motorConfig_t *motorConfig, float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow)
 {

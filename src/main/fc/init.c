@@ -125,10 +125,7 @@
 #include "io/vtx_rtc6705.h"
 #include "io/vtx_smartaudio.h"
 #include "io/vtx_tramp.h"
-
-#ifdef HIL_BUILD
 #include "io/hil.h"
-#endif
 
 #include "msc/emfat_file.h"
 #ifdef USE_PERSISTENT_MSC_RTC

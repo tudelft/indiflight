@@ -65,9 +65,6 @@
 #include "flight/ekf.h"
 #endif
 
-#ifdef HIL_BUILD
-#include "io/hil.h"
-#endif
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -83,6 +80,7 @@
 #include "io/rcdevice_cam.h"
 #include "io/usb_cdc_hid.h"
 #include "io/vtx.h"
+#include "io/hil.h"
 
 #include "msp/msp.h"
 #include "msp/msp_serial.h"
