@@ -347,7 +347,7 @@ static void taskGpsPi(timeUs_t currentTimeUs)
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
-    updateTrajectoryTracker(currentTimeUs);
+    updateTrajectoryTracker(currentTimeUs); // overwrites setpoints set by updatePosCtl (when activated)
 }
 #endif
 
@@ -455,7 +455,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_POS_CTL
-    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_EKF

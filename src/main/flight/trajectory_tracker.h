@@ -3,16 +3,12 @@
 
 #include "common/time.h"		   // for timeUs_t
 
-// state of trajectory tracker:
-typedef enum {
-    INACTIVE,   // drone is not in trajectory tracker mode
-    INIT,       // drone is going to starting point of trajectory
-    ACTIVE,     // drone is tracking trajectory
-    EXIT        // stop tracking. TODO: safe way to exit trajectory tracker mode
-} tt_state_t;
+// UGLY HACK: initialization, setting speed and stopping happens in external_pos.c by using the velocity setpoints as communication
+void initTrajectoryTracker(void);
+void setSpeedTrajectoryTracker(float speed);
+void stopTrajectoryTracker(void);
 
-void setSpeedFactorTrajectoryTracker(float speed_factor);
-
+// main task
 void updateTrajectoryTracker(timeUs_t current);
 
 #endif

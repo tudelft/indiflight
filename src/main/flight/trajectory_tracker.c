@@ -6,7 +6,7 @@
 #include "pos_ctl.h"
 
 // state of trajectory tracker:
-tt_state_t tt_state = INACTIVE;
+bool tt_active = false;
 
 // acceleration and yaw rate setpoints
 float tt_acc_sp[3];
@@ -31,10 +31,6 @@ float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
 float tt_R = 2.0f;
-
-void setSpeedFactorTrajectoryTracker(float speed_factor) {
-    tt_speed_factor = speed_factor;
-}
 
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
@@ -88,99 +84,67 @@ void getSetpointsTrajectoryTracker(void) {
     tt_yaw_rate_sp = tt_yaw_rate_ref + tt_yaw_gain*yaw_error;
 }
 
+void initTrajectoryTracker(void) {
+    // reset everything
+    tt_progress = 0.0f;
+    tt_speed_factor = 0.0f;
+    tt_active = false;
+
+    // setpoint = starting point of trajectory
+    getRefsTrajectoryTracker(0.0f);
+    posSetpointNed.pos.V.X = tt_pos_ref[0];
+    posSetpointNed.pos.V.Y = tt_pos_ref[1];
+    posSetpointNed.pos.V.Z = tt_pos_ref[2];
+    posSetpointNed.psi = tt_yaw_ref;
+}
+
+void setSpeedTrajectoryTracker(float speed) {
+    tt_speed_factor = speed/tt_R;
+    tt_active = true;
+}
+
+void stopTrajectoryTracker(void) {
+    // set speed factor to zero, get new setpoints, and deactivate
+    tt_speed_factor = 0.0f;
+    getRefsTrajectoryTracker(tt_progress);
+    getSetpointsTrajectoryTracker();
+    tt_active = false;
+}
+
 void updateTrajectoryTracker(timeUs_t current) {
-    switch (tt_state) {
-        case INACTIVE: ;
-            // wait for posSetpointNed to be set to {2., 0, -1.5}
-            if (posSetpointNed.pos.V.X == 2.0f &&posSetpointNed.pos.V.Y == 0.0f && posSetpointNed.pos.V.Z == -1.5f) {
-                // setpoint = starting point of trajectory
-                getRefsTrajectoryTracker(0.0f);
-                posSetpointNed.pos.V.X = tt_pos_ref[0];
-                posSetpointNed.pos.V.Y = tt_pos_ref[1];
-                posSetpointNed.pos.V.Z = tt_pos_ref[2];
-                posSetpointNed.psi = tt_yaw_ref;
-                
-                // set state to INIT
-                tt_state = INIT;
-            }
-            break;
+    // only does something when tt_active is true
+    if (tt_active) {
+        // Track trajectory and overwrite pos_ctl
 
-        case INIT: ;
-            // wait until drone reaches starting point
-            float dx = posEstNed.V.X - posSetpointNed.pos.V.X;
-            float dy = posEstNed.V.Y - posSetpointNed.pos.V.Y;
-            float dz = posEstNed.V.Z - posSetpointNed.pos.V.Z;
-            float dpsi = DECIDEGREES_TO_RADIANS(attitude.values.yaw) - posSetpointNed.psi;
+        // update tt_progress
+        tt_progress += tt_speed_factor*(current - last)*1e-6f;
 
-            // wrap yaw error
-            while (dpsi > M_PIf)
-                dpsi -= 2.f * M_PIf;
-            while (dpsi < -M_PIf)
-                dpsi += 2.f * M_PIf;
+        // update references
+        getRefsTrajectoryTracker(tt_progress);
 
-            if (fabsf(dx) < 0.1f && fabsf(dy) < 0.1f && fabsf(dz) < 0.1f && fabsf(dpsi) < 0.1f) {
-                // INITIALIZE TRAJECTORY TRACKER
-                tt_speed_factor = 0.0f;
-                tt_progress = 0.0f;
-                last = current;
-                tt_state = ACTIVE;
+        // update acceleration and yaw rate setpoints
+        getSetpointsTrajectoryTracker();
 
-                // UGLY HACK: we set posSetpointNed.psi to 0.0f and use it as communication for setting tt_speed_factor
-                posSetpointNed.psi = 0.0f;                
-            }
-            break;
+        // overwrite accSpNed and yawRateSpFromOuter (from pos_ctl.c)
+        accSpNed.V.X = tt_acc_sp[0];
+        accSpNed.V.Y = tt_acc_sp[1];
+        accSpNed.V.Z = tt_acc_sp[2];
+        yawRateSpFromOuter = tt_yaw_rate_sp;
 
-        case ACTIVE: ;
-            // Track trajectory and overwrite pos_ctl
-            
-            // update tt_progress
-            tt_progress += tt_speed_factor*(current - last)*1e-6f;
+        // overwrite posSetpointNed (from pos_ctl.c)
+        posSetpointNed.pos.V.X = tt_pos_ref[0];
+        posSetpointNed.pos.V.Y = tt_pos_ref[1];
+        posSetpointNed.pos.V.Z = tt_pos_ref[2];
 
-            // update references
-            getRefsTrajectoryTracker(tt_progress);
+        // overwrite velSetpointNed (from pos_ctl.c)
+        posSetpointNed.vel.V.X = tt_vel_ref[0];
+        posSetpointNed.vel.V.Y = tt_vel_ref[1];
+        posSetpointNed.vel.V.Z = tt_vel_ref[2];
 
-            // update acceleration and yaw rate setpoints
-            getSetpointsTrajectoryTracker();
-
-            // overwrite accSpNed and yawRateSpFromOuter (from pos_ctl.c)
-            accSpNed.V.X = tt_acc_sp[0];
-            accSpNed.V.Y = tt_acc_sp[1];
-            accSpNed.V.Z = tt_acc_sp[2];
-            yawRateSpFromOuter = tt_yaw_rate_sp;
-
-            // overwrite posSetpointNed (from pos_ctl.c)
-            posSetpointNed.pos.V.X = tt_pos_ref[0];
-            posSetpointNed.pos.V.Y = tt_pos_ref[1];
-            posSetpointNed.pos.V.Z = tt_pos_ref[2];
-
-            // overwrite velSetpointNed (from pos_ctl.c)
-            posSetpointNed.vel.V.X = tt_vel_ref[0];
-            posSetpointNed.vel.V.Y = tt_vel_ref[1];
-            posSetpointNed.vel.V.Z = tt_vel_ref[2];
-
-            // overwrite yawSetpoint (from pos_ctl.c)
-            // posSetpointNed.psi = tt_yaw_ref;
-
-            // UGLY HACK: we set speed factor using posSetpointNed.psi
-            float speed = RADIANS_TO_DEGREES(posSetpointNed.psi);       // speed in m/s
-            tt_speed_factor = speed/tt_R;                               // rad/s
-
-            // if speed is negative, set state to EXIT
-            if (tt_speed_factor < 0.0f) {
-                tt_state = EXIT;
-            }
-            // update last
-            last = current;
-            break;
-    
-        case EXIT: ;
-            // reset stuff
-            posSetpointNed.psi = 0.0f;
-            tt_speed_factor = 0.0f;
-            tt_progress = 0.0f;
-
-            tt_state = INACTIVE;
-
-            break;
+        // overwrite yawSetpoint (from pos_ctl.c)
+        posSetpointNed.psi = tt_yaw_ref;
     }
+
+    // update last
+    last = current;
 }

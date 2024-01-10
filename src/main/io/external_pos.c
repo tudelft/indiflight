@@ -10,6 +10,11 @@
 #include "flight/imu.h"
 #ifdef USE_GPS_PI
 
+// UGLY HACK ----------------------------------------------
+#include "flight/trajectory_tracker.h"
+#include "fc/core.h"
+// --------------------------------------------------------
+
 //extern
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
@@ -134,15 +139,44 @@ void getPosSetpoint(timeUs_t current) {
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);
         bool newMsg = (deltaMsgs != 0);
         if (newMsg) {
+            // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------
+            
+            // call initTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 1
+            if (piMsgPosSetpointRx->enu_xd == 1) {
+                initTrajectoryTracker();
+                return;
+            }
+
+            // call stopTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 2
+            if (piMsgPosSetpointRx->enu_xd == 2) {
+                stopTrajectoryTracker();
+                return;
+            }
+
+            // disarm when piMsgPosSetpointRx->enu_xd == 3
+            if (piMsgPosSetpointRx->enu_xd == 3) {
+                disarm(DISARM_REASON_SWITCH);
+                return;
+            }
+
+            // call setSpeedTrajectoryTracker when piMsgPosSetpointRx->enu_yd > 0 and use piMsgPosSetpointRx->enu_yd as speed
+            if (piMsgPosSetpointRx->enu_yd > 0) {
+                setSpeedTrajectoryTracker(piMsgPosSetpointRx->enu_yd);
+                return;
+            }
+            
+            // -----------------------------------------------------------------------------------------------
             latestSetpointTime = currentSetpointTime;
             posSetpointNed.pos.V.X = piMsgPosSetpointRx->enu_y;
             posSetpointNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
             posSetpointNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
-            posSetpointNed.vel.V.X = piMsgPosSetpointRx->enu_yd;
-            posSetpointNed.vel.V.Y = piMsgPosSetpointRx->enu_xd;
-            posSetpointNed.vel.V.Z = -piMsgPosSetpointRx->enu_zd;
+            
+            posSetpointNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
+            posSetpointNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
+            posSetpointNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
             posSetpointNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
             posSetpointState = EXT_POS_NEW_MESSAGE;
+            
         } else {
             posSetpointState = EXT_POS_STILL_VALID;
             // no upper bound on still_valid for setpoints
