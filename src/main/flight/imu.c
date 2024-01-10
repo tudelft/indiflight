@@ -526,7 +526,7 @@ static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t in
 void setAttitudeState(attitudeEulerAngles_t att_set)
 {
     attitude = att_set;
-    imuComputeQuaternionFromRPY(&qP, attitude.values.roll, attitude.values.pitch, gpsSol.groundCourse);
+    imuComputeQuaternionFromRPY(&qP, att_set.values.roll, att_set.values.pitch, att_set.values.yaw);
 }
 
 void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)

@@ -6,6 +6,7 @@
 #include "sensors/gyro.h"			// for gyro
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
+#include "pi-messages.h"            // for keeping track of message times
 
 #ifdef USE_EKF
 
@@ -82,6 +83,7 @@ void initEkf(timeUs_t currentTimeUs) {
 }
 
 void runEkf(timeUs_t currentTimeUs) {
+    static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
 	// gyro and acc transformed from FLU to FRD
 	float U[N_INPUTS] = {
@@ -99,7 +101,8 @@ void runEkf(timeUs_t currentTimeUs) {
 	ekf_predict(U, dt);
 
 	// UPDATE STEP
-	if (ekf_Z[0] != extPosNed.pos.V.X) { // only update if new data is available [TODO: make this more elegant]
+	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) { // only update if new data is available [TODO: make this more elegant. DONE]
+        lastUpdateTimestamp = extLatestMsgTime;
 		ekf_Z[0] = extPosNed.pos.V.X;
 		ekf_Z[1] = extPosNed.pos.V.Y;
 		ekf_Z[2] = extPosNed.pos.V.Z;
@@ -139,7 +142,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         attitudeEulerAngles_t att_set;
         att_set.values.roll  = (int16_t) RADIANS_TO_DECIDEGREES( ekf_X[6] );
         att_set.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES( -ekf_X[7] );
-        att_set.values.yaw   = (int16_t) RADIANS_TO_DECIDEGREES( -ekf_X[8] );
+        att_set.values.yaw   = (int16_t) RADIANS_TO_DECIDEGREES( ekf_X[8] );
 
         setAttitudeState(att_set);
 #endif

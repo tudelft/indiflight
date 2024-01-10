@@ -27,6 +27,7 @@ extern ext_pos_ned_t extPosNed;
 extern ext_pos_state_t extPosState;
 extern pos_setpoint_ned_t posSetpointNed;
 extern ext_pos_state_t posSetpointState;
+extern timeUs_t extLatestMsgTime;
 
 #define EXT_POS_FREQ 50
 #define EXT_POS_TIMEOUT_US 300000

@@ -20,29 +20,27 @@ ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
 pos_setpoint_ned_t posSetpointNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
-
-//local
-timeUs_t latestMsgTime = 0;
+timeUs_t extLatestMsgTime = 0;
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_ms*1e3;
-        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, latestMsgTime);
+        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
         if (deltaMsgs != 0) {
         //if (deltaMsgs > 0) {
             // new message available
             // todo: how to catch stuck values? Like new messages comming in,
             // but the values are frozed, which is also basically signal loss
             extPosState = EXT_POS_NEW_MESSAGE;
-            latestMsgTime = currentMsgTime;
+            extLatestMsgTime = currentMsgTime;
         //} else if (deltaMsgs) < 0) {
             // I think this may happen if there is a 35 to 70min delay between
             // messages (or multiples of that). This will cause the difference 
             // calculations to roll-over (expected behaviour)
-            // panic for one call, but update latestMsgTime
+            // panic for one call, but update extLatestMsgTime
         //    extPosState = EXT_POS_NO_SIGMAL;
-        //    latestMsgTime = currentMsgTime;
+        //    extLatestMsgTime = currentMsgTime;
         //    return;
         } else {
             // assume still valid for now
@@ -50,7 +48,7 @@ void checkNewPos(void) {
         }
 
         // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(micros(), latestMsgTime);
+        timeDelta_t delta = cmpTimeUs(micros(), extLatestMsgTime);
         if (delta > EXT_POS_TIMEOUT_US) {
             // signal lost
             extPosState = EXT_POS_NO_SIGNAL;

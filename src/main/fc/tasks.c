@@ -579,7 +579,7 @@ void tasksInit(void)
     if (sensors(SENSOR_ACC) && acc.sampleRateHz) {
         setTaskEnabled(TASK_ACCEL, true);
         rescheduleTask(TASK_ACCEL, TASK_PERIOD_HZ(acc.sampleRateHz));
-#if defined(USE_EKF)
+#if !defined(USE_EKF)
         // attitude task is still run in ekf.c, as fallback
         setTaskEnabled(TASK_ATTITUDE, true);
 #endif
