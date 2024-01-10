@@ -476,9 +476,10 @@ static float imuCalcKpGain(timeUs_t currentTimeUs, bool useAcc, float *gyroAvera
     return ret;
 }
 
-#if defined(USE_GPS) || defined(USE_EKF)
+#if defined(USE_GPS)
 static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t initialRoll, int16_t initialPitch, int16_t initialYaw)
 {
+    // this function seems broken. It computes quaternionProducts, but they may get overriden by imuComputeRotationMatrix()
     if (initialRoll > 1800) {
         initialRoll -= 3600;
     }
@@ -523,17 +524,54 @@ static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t in
 }
 #endif
 
+#if defined(USE_EKF_ATTITUDE)
 void setAttitudeState(attitudeEulerAngles_t att_set)
 {
-    attitude = att_set;
-    imuComputeQuaternionFromRPY(&qP, att_set.values.roll, att_set.values.pitch, att_set.values.yaw);
-}
+    // expecting roll pitch yaw in decidegrees
+    while (att_set.values.roll > 1800) att_set.values.roll -= 3600;
+    while (att_set.values.roll < -1800) att_set.values.roll += 3600;
 
+    while (att_set.values.pitch > 1800) att_set.values.pitch -= 3600;
+    while (att_set.values.pitch < -1800) att_set.values.pitch += 3600;
+
+    while (att_set.values.yaw > 1800) att_set.values.yaw -= 3600;
+    while (att_set.values.yaw < -1800) att_set.values.yaw += 3600;
+
+    attitude = att_set;
+
+    const float cosRoll = cos_approx(DECIDEGREES_TO_RADIANS(att_set.values.roll) * 0.5f);
+    const float sinRoll = sin_approx(DECIDEGREES_TO_RADIANS(att_set.values.roll) * 0.5f);
+
+    const float cosPitch = cos_approx(DECIDEGREES_TO_RADIANS(att_set.values.pitch) * 0.5f);
+    const float sinPitch = sin_approx(DECIDEGREES_TO_RADIANS(att_set.values.pitch) * 0.5f);
+
+    const float cosYaw = cos_approx(DECIDEGREES_TO_RADIANS(-att_set.values.yaw) * 0.5f);
+    const float sinYaw = sin_approx(DECIDEGREES_TO_RADIANS(-att_set.values.yaw) * 0.5f);
+
+    const float q0 = cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw;
+    const float q1 = sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw;
+    const float q2 = cosRoll * sinPitch * cosYaw + sinRoll * cosPitch * sinYaw;
+    const float q3 = cosRoll * cosPitch * sinYaw - sinRoll * sinPitch * cosYaw;
+
+    q.w = q0;
+    q.x = q1;
+    q.y = q2;
+    q.z = q3;
+    attitude_q = q;
+
+    imuComputeRotationMatrix();
+
+    attitudeIsEstablished = true;
+}
+#endif
+
+#if defined(USE_EKF_POSITION)
 void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
 {
     posEstNed = posEstNed_set;
     velEstNed = velEstNed_set;
 }
+#endif
 
 
 static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
