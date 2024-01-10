@@ -178,18 +178,6 @@ void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correctio
     throttleAngleValue = throttle_correction_value;
 }
 
-void setAttitudeState(attitudeEulerAngles_t att_set)
-{
-    attitude = att_set;
-    imuComputeQuaternionFromRPY(&qP, attitude.values.roll, attitude.values.pitch, gpsSol.groundCourse);
-}
-
-void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
-{
-    posEstNed = posEstNed_set;
-    velEstNed = velEstNed_set;
-}
-
 void imuInit(void)
 {
 #ifdef USE_GPS
@@ -534,6 +522,19 @@ static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t in
     attitudeIsEstablished = true;
 }
 #endif
+
+void setAttitudeState(attitudeEulerAngles_t att_set)
+{
+    attitude = att_set;
+    imuComputeQuaternionFromRPY(&qP, attitude.values.roll, attitude.values.pitch, gpsSol.groundCourse);
+}
+
+void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
+{
+    posEstNed = posEstNed_set;
+    velEstNed = velEstNed_set;
+}
+
 
 static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 {

@@ -18,7 +18,7 @@
 #endif
 
 #ifndef USE_GPS_PI
-#error "USE_EKF requires USE_GPS_PI
+#error "USE_EKF requires USE_GPS_PI"
 #endif
 
 bool ekf_initialized = false;
@@ -129,6 +129,7 @@ void updateEkf(timeUs_t currentTimeUs) {
     // run fallback in advance so it doesnt lose sync
     imuUpdateAttitude(currentTimeUs);
 
+#if defined(USE_EKF_ATTITUDE) || defined(USE_EKF_POSITION)
     // update system state with EKF data, if possible
     if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
         // additional safety check: use EKF only, if recent update from optitrack
@@ -156,6 +157,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         setPositionState(posNed_set, velNed_set);
 #endif
     }
+#endif // defined(USE_EKF_ATTITUDE) || defined(USE_EKF_POSITION)
 }
 
 #endif // USE_EKF
