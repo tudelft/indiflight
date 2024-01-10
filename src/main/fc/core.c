@@ -1315,9 +1315,11 @@ bool isTouchingGround(void) {
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
         throttleLow = spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+#ifdef USE_GPS_RESCUE
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
         throttleLow = gpsRescueGetThrottle() < 0.1f;
+#endif
     } else {
         // human pilot, get RC throttle
         float throttleLowThresh = (float) (rxConfig()->mincheck + 50);

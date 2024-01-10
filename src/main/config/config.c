@@ -244,7 +244,7 @@ static void validateAndFixConfig(void)
 #if defined(USE_GPS)
         !(gpsConfig()->provider == GPS_MSP 
             || gpsSerial
-#if defined(USE_TELEMETRY_PI) && defined(TELEMETRY_PI_UPLINK) && defined(USE_GPS_PI)
+#if defined(USE_TELEMETRY_PI) && defined(USE_GPS_PI)
             || (findSerialPortConfig(FUNCTION_TELEMETRY_PI))
 #endif
         ) &&

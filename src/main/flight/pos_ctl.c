@@ -1,12 +1,20 @@
 
+#include "pos_ctl.h"
 
 #include "io/external_pos.h"
 #include "flight/imu.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
 
-#ifdef USE_GPS_PI
-#include "pos_ctl.h"
+#ifdef USE_POS_CTL
+
+#ifndef USE_GPS_PI
+#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
+#endif
+
+#ifndef USE_INDI
+#pragma message "USE_POS_CTL currently only has any effect with USE_INDI"
+#endif
 
 // --- control variables
 // externs
@@ -20,14 +28,14 @@ float yawRateSpFromOuter = {0};
 
 // position controller configuration
 // todo DONE: split in horizontal/vertical, not XYZ.. thats kinda meaningless with yaw
-float posHGainP = 6.; // mult by 4 for the fun of it
-float posHGainD = 10.;
-float velHGainI = 0.4;
-float posVGainP = 14.0;
-float posVGainD = 10.;
-float velVGainI = 0.4;
-float velSpLimitXY = 10.;
-float velSpLimitZ  = 8.;
+float posHGainP = 3.;
+float posHGainD = 5.;
+float velHGainI = 0.2;
+float posVGainP = 3.0;
+float posVGainD = 5.;
+float velVGainI = 0.2;
+float velSpLimitXY = 5.;
+float velSpLimitZ  = 2.;
 float yawGainP = 8.;
 float weathervaneP = 0.;
 
@@ -124,4 +132,4 @@ void getAccSpNed(timeUs_t current) {
 // TODO
 // 1. velocity control..
 
-#endif // USE_PI_GPS
+#endif // USE_POS_CTL

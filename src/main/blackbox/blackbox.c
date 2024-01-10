@@ -67,10 +67,7 @@
 #include "flight/imu.h"
 #include "flight/att_ctl.h"
 #include "flight/pos_ctl.h"
-
-#ifdef USE_EKF
 #include "flight/ekf.h"
-#endif
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -1513,7 +1510,7 @@ static void loadMainState(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_EKF
-    float *ekf_X = ekf_get_state();
+    float *ekf_X = ekf_get_X();
     blackboxCurrent->ekf_pos[0] = lrintf(ekf_X[0] * METER_TO_MM);
     blackboxCurrent->ekf_pos[1] = lrintf(ekf_X[1] * METER_TO_MM);
     blackboxCurrent->ekf_pos[2] = lrintf(ekf_X[2] * METER_TO_MM);

@@ -8,7 +8,12 @@
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
 #include "flight/imu.h"
+
 #ifdef USE_GPS_PI
+
+#ifndef USE_TELEMETRY_PI
+#error "USE_GPS_PI requires the use of USE_TELEMETRY_PI"
+#endif
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -105,6 +110,7 @@ void getFakeGps(timeUs_t current) {
     // just dump without checking anything
     UNUSED(current);
 
+#ifdef USE_GPS
     if (piMsgFakeGpsRx) {
         gpsSol.llh.lat = piMsgFakeGpsRx->lat;
         gpsSol.llh.lon = piMsgFakeGpsRx->lon;
@@ -122,6 +128,7 @@ void getFakeGps(timeUs_t current) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         DISABLE_STATE(GPS_FIX);
     }
+#endif
 }
 
 void getPosSetpoint(timeUs_t current) {

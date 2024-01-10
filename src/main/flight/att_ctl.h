@@ -61,7 +61,10 @@ typedef struct quadLin_s {
 } quadLin_t;
 
 #define MAX_BANK_DEGREE_MANUAL 40.f
-#define MAX_BANK_DEGREE_POSITION 180.f
+
+#ifndef MAX_BANK_DEGREE_AUTO
+#define MAX_BANK_DEGREE_AUTO 50.f
+#endif
 
 extern fp_quaternion_t attSpNed;
 extern t_fp_vector rateSpBodyUse;

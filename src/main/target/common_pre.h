@@ -421,6 +421,22 @@ extern uint8_t _dmaram_end__;
 
 #endif // !defined(CLOUD_BUILD)
 
+#if defined(HIL_BUILD)
+
+#ifndef USE_DSHOT
+#define USE_DSHOT
+#endif
+
+#ifndef USE_GYRO
+#define USE_GYRO
+#endif
+
+#ifndef USE_ACC
+#define USE_ACC
+#endif
+
+#endif // defined(HIL_BUILD)
+
 #if !defined(LED_MAX_STRIP_LENGTH)
 #ifdef USE_LED_STRIP_64
 #define LED_MAX_STRIP_LENGTH           64

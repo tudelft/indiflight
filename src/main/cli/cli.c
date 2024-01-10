@@ -6031,7 +6031,6 @@ static void cliTimer(const char *cmdName, char *cmdline)
 }
 #endif
 
-#ifdef TELEMETRY_PI_UPLINK
 static void cliUplink(const char *cmdName, char *cmdline)
 {
     if (strcasecmp(cmdline, "stats") == 0) {
@@ -6046,7 +6045,6 @@ static void cliUplink(const char *cmdName, char *cmdline)
         cliShowParseError(cmdName);
     }
 }
-#endif
 
 #if defined(USE_RESOURCE_MGMT)
 static void cliResource(const char *cmdName, char *cmdline)
@@ -6652,9 +6650,7 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_TIMER_MGMT
     CLI_COMMAND_DEF("timer", "show/set timers", "<> | <pin> list | <pin> [af<alternate function>|none|<option(deprecated)>] | list | show", cliTimer),
 #endif
-#ifdef TELEMETRY_PI_UPLINK
     CLI_COMMAND_DEF("uplink", "show pi uplink stats/msgs", "stats | msgs", cliUplink),
-#endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI

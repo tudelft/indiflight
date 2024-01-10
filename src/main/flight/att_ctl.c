@@ -76,34 +76,8 @@ dtermLowpass_t actLowpass2[MAXU];
 uint8_t attRateDenom = 8; // do att control only every 8 invokations
 uint8_t attExecCounter = 0;
 
-// to generate G1 and G2, see python code src/utils/indi/genGMc.py
-// FL, FR, RR, RL
-/*
-static float G1[MAXV][MAXU] = {
-    {   0.f  ,    0.f  ,    0.f  ,    0.f},
-    {   0.f  ,    0.f  ,    0.f  ,    0.f},
-    { -10.51f,  -10.51f,  -10.51f,  -10.51f},
-    {-395.5f , -395.5f ,  395.5f ,  395.5f},
-    {-263.9f ,  263.9f , -263.9f ,  263.9f},
-    { -50.60f,   50.60f,   50.60f,  -50.60f},
-};
-
-static float G2[MAXV][MAXU] = {
-    {0.f, 0.f, 0.f, 0.f},
-    {0.f, 0.f, 0.f, 0.f},
-    {0.f, 0.f, 0.f, 0.f},
-    {0.f, 0.f, 0.f, 0.f},
-    {0.f, 0.f, 0.f, 0.f},
-    {-0.004538, 0.004538,  0.004538, -0.004538},
-};
-
-static float kThrust  = 2.66e-7f;
-static float tauRpm = 0.02f;
-static float Tmax = 4.5f;
-*/
-
-// x500 in sim
-/*
+#ifdef USE_INDI_PROFILE_X500
+// x500 in sim, not very well tuned
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -125,11 +99,11 @@ static float G2[MAXV][MAXU] = {
 static float kThrust  = 9.9e-6f;
 static float tauRpm = 0.02f;
 static float Tmax = 8.f;
-*/
+#endif
 
 
 // red props racequad
-/*
+#ifdef USE_INDI_PROFILE_5INCHQUAD
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -151,12 +125,13 @@ static float G2[MAXV][MAXU] = {
 // static float kThrust  = 1.89e-7f;
 // static float tauRpm = 0.02f;
 // static float Tmax = 4.2f;
-// static float kThrust  = 1.447e-6f;
+static float kThrust  = 1.447e-6f; // results in the hardcoded G2 normalizer 17271808 used before
 static float tauRpm = 0.02f;
 static float Tmax = 15.8f;
-*/
+#endif
 
-// black props racequad
+#ifdef USE_INDI_PROFILE_CINERAT
+// black props racequad. Also controls simulation model very well
 static float G1[MAXV][MAXU] = {
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
     {   0.f  ,    0.f  ,    0.f  ,    0.f},
@@ -175,13 +150,12 @@ static float G2[MAXV][MAXU] = {
     {-0.0045f, 0.0045f,  0.0045f, -0.0045f},
 };
 
-// static float kThrust  = 1.89e-7f;
-// static float tauRpm = 0.02f;
 static float kThrust  = 2.66e-7f;
 static float tauRpm = 0.02f;
 static float Tmax = 4.5f;
+#endif
 
-/*
+#ifdef USE_INDI_PROFILE_TRASHCAN
 // trashcan 2S first estimate
 static float G1[MAXV][MAXU] = {
     {   0.        ,    0.        ,    0.        ,    0.        },
@@ -204,7 +178,8 @@ static float G2[MAXV][MAXU] = {
 static float kThrust  = 8.1e-9f;
 static float tauRpm = 0.03f;
 static float Tmax = 0.5f;
-*/
+#endif
+
 
 static float G2_normalizer;
 
@@ -251,7 +226,6 @@ void indiInit(const pidProfile_t * pidProfile) {
 
     // indi G2 normalization constant 1 / (2 tau k)
     G2_normalizer = 1.f / (2.f * tauRpm * kThrust);
-    // G2_normalizer = 17271807.70190637;
 
 
     // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
@@ -492,10 +466,7 @@ void getAlphaSpBody(void) {
     #undef USE_OMEGA_DOT_FEEDBACK
 #endif
 
-<<<<<<< HEAD
-=======
 // stavrow I think the real INDI is happening here
->>>>>>> simulation
 void getMotor(void) {
     // mix! And call writeMotors or whatever
 
@@ -790,7 +761,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     }
 
     float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
-    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE_POSITION)); //todo: make parameter
+    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE_AUTO)); //todo: make parameter
 
     // *fz = v.V.Z / cos_approx(alpha);
     float fz_target = v.V.Z / cos_approx(alpha);

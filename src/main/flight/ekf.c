@@ -1,877 +1,161 @@
-
-
 #include "ekf.h"
-#include <math.h>
+
+#include "io/external_pos.h"  		// for extPosNed
+#include "fc/runtime_config.h"		// for FLIGHT_MODE
+#include "common/maths.h"      		// for DEGREES_TO_RADIANS
+#include "sensors/gyro.h"			// for gyro
+#include "sensors/acceleration.h"   // for acc
+#include "imu.h"                    // for fallback if no GPS
 
 #ifdef USE_EKF
 
-// Kalman filter process noise covariance matrix (diagonal)
-// TODO: make this configurable
-float ekf_Q_diag[N_INPUTS] = {
-	0.5,  // ax
-	0.5,  // ay
-	0.5,  // az
-	0.01, // p
-	0.01, // q
-	0.01, // r
-};
+#ifndef USE_ACC
+#error "USE_EKF requires USE_ACC"
+#endif
 
-// Kalman filter measurement noise covariance matrix (diagonal)
-// TODO: make this configurable
-float ekf_R_diag[N_MEASUREMENTS] = {
-	0.001, // x
-	0.001, // y
-	0.001, // z
-	0.1,   // phi
-	0.1,   // theta
-	0.1,   // psi
-};
+#ifndef USE_GYRO
+#error "USE_EKF requires USE_GYRO"
+#endif
 
-// Kalman filter state
-float ekf_X[N_STATES];
-float ekf_X_new[N_STATES];
+#ifndef USE_GPS_PI
+#error "USE_EKF requires USE_GPS_PI
+#endif
 
-// Kalman filter covariance matrix (lower diagonal) P[i,j] = P_lower_diagonal[i*(i+1)/2+j] (if i>=j)
-float ekf_P_lower_diagonal[N_STATES*(N_STATES+1)/2];
-float ekf_P_lower_diagonal_new[N_STATES*(N_STATES+1)/2];
+bool ekf_initialized = false;
+timeUs_t lastTimeUs = 0;
+float ekf_Z[N_MEASUREMENTS] = {0.};
 
-// Temporary variables
-float tmp[304];
+void initEkf(timeUs_t currentTimeUs) {
+	// set ekf parameters
+	ekf_use_phi = 1;
+	ekf_use_theta = 1;
+	ekf_use_psi = 1;
 
-// pointers
-float *X = ekf_X;
-float *X_new = ekf_X_new;
+	// process noise covariance
+	float Q[N_STATES] = {
+		0.5, // ax
+		0.5, // ay
+		0.5, // az
+		0.1, // p
+		0.1, // q
+		0.1, // r
+	};
 
-float *P = ekf_P_lower_diagonal;
-float *P_new = ekf_P_lower_diagonal_new;
+	// measurement noise covariance
+	float R[N_MEASUREMENTS] = {
+		0.01, // posN
+		0.01, // posE
+		0.01, // posD
+		0.1,  // phi
+		0.1,  // theta
+		0.1,  // psi
+	};
 
-float *Q_diag = ekf_Q_diag;
-float *R_diag = ekf_R_diag;
 
-// pointer for swapping
-float *swap_ptr;
+	// sets initial state to the latest external pos and att
+	float X0[N_STATES] = {
+		extPosNed.pos.V.X,
+		extPosNed.pos.V.Y,
+		extPosNed.pos.V.Z,
+		0., 0., 0., // vel
+		extPosNed.att.angles.roll,
+		extPosNed.att.angles.pitch,
+		extPosNed.att.angles.yaw,
+		0., 0., 0., 0., 0., 0. // acc and gyro biases
+	};
 
-void ekf_init(float X0[N_STATES], float P_diag0[N_STATES]) {
-    // set P to zeros
-    for (int i=0; i<N_STATES*(N_STATES+1)/2; i++) {
-        P[i] = 0;
+	// sets initial covariance to 1
+	float P_diag0[N_STATES] = {
+		1., 1., 1., // pos
+		1., 1., 1., // vel
+		1., 1., 1., // att
+		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)
+	};
+	
+	// initialize ekf
+	ekf_set_Q(Q);
+	ekf_set_R(R);
+	ekf_set_X(X0);
+	ekf_set_P_diag(P_diag0);
+	ekf_initialized = true;
+	lastTimeUs = currentTimeUs;
+}
+
+void runEkf(timeUs_t currentTimeUs) {
+	// PREDICTION STEP
+	// gyro and acc transformed from FLU to FRD
+	float U[N_INPUTS] = {
+		9.81 * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G),
+		9.81 *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G),
+		9.81 *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G),
+		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
+		DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
+		DEGREES_TO_RADIANS(-gyro.gyroADCf[2])
+	};
+
+	// get delta t
+	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+
+	ekf_predict(U, dt);
+
+	// UPDATE STEP
+	if (ekf_Z[0] != extPosNed.pos.V.X) { // only update if new data is available [TODO: make this more elegant]
+		ekf_Z[0] = extPosNed.pos.V.X;
+		ekf_Z[1] = extPosNed.pos.V.Y;
+		ekf_Z[2] = extPosNed.pos.V.Z;
+		ekf_Z[3] = extPosNed.att.angles.roll;
+		ekf_Z[4] = extPosNed.att.angles.pitch;
+		ekf_Z[5] = extPosNed.att.angles.yaw;
+		ekf_update(ekf_Z);
+	}
+	lastTimeUs = currentTimeUs;
+}
+
+void updateEkf(timeUs_t currentTimeUs) {
+	// reset ekf if not in position mode
+    if (!FLIGHT_MODE(POSITION_MODE)) {
+        ekf_initialized = false;
+    } else if (!ekf_initialized) {
+        // when ekf is not initialized, we need to wait for the first external position message
+        if (extPosState != EXT_POS_NO_SIGNAL) {
+            // INIT EKF
+            initEkf(currentTimeUs);
+        }
+    } else {
+        // ekf is initialized and POSITION_MODE, we can run the ekf
+		runEkf(currentTimeUs);
     }
 
-    // initialize X and P
-    for (int i=0; i<N_STATES; i++) {
-        X[i] = X0[i];
-        P[i*(i+1)/2+i] = P_diag0[i];
+    // run fallback in advance so it doesnt lose sync
+    imuUpdateAttitude(currentTimeUs);
+
+    // update system state with EKF data, if possible
+    if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
+        // additional safety check: use EKF only, if recent update from optitrack
+        float *ekf_X = ekf_get_X();
+
+#ifdef USE_EKF_ATTITUDE
+        attitudeEulerAngles_t att_set;
+        att_set.values.roll  = (int16_t) RADIANS_TO_DECIDEGREES( ekf_X[6] );
+        att_set.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES( -ekf_X[7] );
+        att_set.values.yaw   = (int16_t) RADIANS_TO_DECIDEGREES( -ekf_X[8] );
+
+        setAttitudeState(att_set);
+#endif
+#ifdef USE_EKF_POSITION
+        t_fp_vector posNed_set;
+        posNed_set.V.X = ekf_X[0];
+        posNed_set.V.Y = ekf_X[1];
+        posNed_set.V.Z = ekf_X[2];
+
+        t_fp_vector velNed_set;
+        velNed_set.V.X = ekf_X[3];
+        velNed_set.V.Y = ekf_X[4];
+        velNed_set.V.Z = ekf_X[5];
+
+        setPositionState(posNed_set, velNed_set);
+#endif
     }
-}
-
-float* ekf_get_state(void) {
-    return X;
-}
-
-void ekf_get_Pdiag(float P_diag[N_STATES]) {
-    for (int i=0; i<N_STATES; i++) {
-        P_diag[i] = P[i*(i+1)/2+i];
-    }
-}
-
-void ekf_predict(float U[N_INPUTS], float dt) {
-    // PREDICTION STEP X_new, P_new = ...
-    tmp[0] = cosf(X[8]);
-	tmp[1] = cosf(X[7]);
-	tmp[2] = U[0] - X[9];
-	tmp[3] = tmp[1]*tmp[2];
-	tmp[4] = U[2] - X[11];
-	tmp[5] = sinf(X[6]);
-	tmp[6] = sinf(X[8]);
-	tmp[7] = tmp[5]*tmp[6];
-	tmp[8] = sinf(X[7]);
-	tmp[9] = cosf(X[6]);
-	tmp[10] = tmp[0]*tmp[9];
-	tmp[11] = tmp[10]*tmp[8] + tmp[7];
-	tmp[12] = U[1] - X[10];
-	tmp[13] = tmp[6]*tmp[9];
-	tmp[14] = tmp[0]*tmp[5];
-	tmp[15] = -tmp[13] + tmp[14]*tmp[8];
-	tmp[16] = tmp[0]*tmp[3] + tmp[11]*tmp[4] + tmp[12]*tmp[15];
-	tmp[17] = dt*tmp[16];
-	tmp[18] = tmp[10] + tmp[7]*tmp[8];
-	tmp[19] = -tmp[13]*tmp[8] + tmp[14];
-	tmp[20] = tmp[12]*tmp[18] - tmp[19]*tmp[4] + tmp[3]*tmp[6];
-	tmp[21] = dt*tmp[20];
-	tmp[22] = tmp[12]*tmp[5];
-	tmp[23] = tmp[4]*tmp[9];
-	tmp[24] = tmp[1]*tmp[22] + tmp[1]*tmp[23] - tmp[2]*tmp[8];
-	tmp[25] = tanf(X[7]);
-	tmp[26] = U[4] - X[13];
-	tmp[27] = tmp[26]*tmp[5];
-	tmp[28] = U[5] - X[14];
-	tmp[29] = tmp[28]*tmp[9];
-	tmp[30] = tmp[26]*tmp[9] - tmp[28]*tmp[5];
-	tmp[31] = dt*tmp[30];
-	tmp[32] = 1.0/tmp[1];
-	tmp[33] = tmp[27] + tmp[29];
-	tmp[34] = dt*tmp[33];
-	tmp[35] = dt*tmp[0];
-	tmp[36] = tmp[1]*tmp[35];
-	tmp[37] = dt*tmp[11];
-	tmp[38] = dt*tmp[15];
-	tmp[39] = tmp[24]*tmp[35];
-	tmp[40] = tmp[11]*tmp[12] - tmp[15]*tmp[4];
-	tmp[41] = dt*tmp[40];
-	tmp[42] = P[48]*dt;
-	tmp[43] = tmp[0]*tmp[1];
-	tmp[44] = tmp[42]*tmp[43];
-	tmp[45] = P[69]*dt;
-	tmp[46] = tmp[11]*tmp[45];
-	tmp[47] = P[58]*dt;
-	tmp[48] = tmp[15]*tmp[47];
-	tmp[49] = P[39]*tmp[21];
-	tmp[50] = P[49]*dt;
-	tmp[51] = P[70]*dt;
-	tmp[52] = P[59]*dt;
-	tmp[53] = -P[18];
-	tmp[54] = P[50]*dt;
-	tmp[55] = P[71]*dt;
-	tmp[56] = P[60]*dt;
-	tmp[57] = powf(tmp[1], 2);
-	tmp[58] = powf(dt, 2);
-	tmp[59] = Q_diag[0]*tmp[58];
-	tmp[60] = tmp[57]*tmp[59];
-	tmp[61] = Q_diag[2]*tmp[58];
-	tmp[62] = Q_diag[1]*tmp[58];
-	tmp[63] = P[48] + P[51]*dt*tmp[40] + P[52]*dt*tmp[0]*tmp[24] - P[53]*tmp[21] - P[54]*tmp[36] - P[64]*tmp[38] - P[75]*tmp[37];
-	tmp[64] = P[69] + P[72]*dt*tmp[40] + P[73]*dt*tmp[0]*tmp[24] - P[74]*tmp[21] - P[75]*tmp[36] - P[76]*tmp[38] - P[77]*tmp[37];
-	tmp[65] = P[58] + P[61]*dt*tmp[40] + P[62]*dt*tmp[0]*tmp[24] - P[63]*tmp[21] - P[64]*tmp[36] - P[65]*tmp[38] - P[76]*tmp[37];
-	tmp[66] = -P[39];
-	tmp[67] = dt*tmp[6];
-	tmp[68] = tmp[1]*tmp[67];
-	tmp[69] = dt*tmp[18];
-	tmp[70] = dt*tmp[19];
-	tmp[71] = tmp[24]*tmp[67];
-	tmp[72] = tmp[12]*tmp[19] + tmp[18]*tmp[4];
-	tmp[73] = dt*tmp[72];
-	tmp[74] = tmp[1]*tmp[6];
-	tmp[75] = P[13] - P[24]*tmp[73] + P[31]*tmp[71] + P[39]*tmp[17] - tmp[18]*tmp[47] + tmp[19]*tmp[45] - tmp[42]*tmp[74];
-	tmp[76] = P[14] - P[25]*tmp[73] + P[32]*tmp[71] + P[40]*tmp[17] - tmp[18]*tmp[52] + tmp[19]*tmp[51] - tmp[50]*tmp[74];
-	tmp[77] = P[25] - P[27]*tmp[73] + P[34]*tmp[71] + P[42]*tmp[17] - P[51]*tmp[68] - P[61]*tmp[69] + P[72]*tmp[70];
-	tmp[78] = P[70] - P[72]*tmp[73] + P[73]*tmp[71] + P[74]*tmp[17] - P[75]*tmp[68] - P[76]*tmp[69] + P[77]*tmp[70];
-	tmp[79] = P[59] - P[61]*tmp[73] + P[62]*tmp[71] + P[63]*tmp[17] - P[64]*tmp[68] - P[65]*tmp[69] + P[76]*tmp[70];
-	tmp[80] = P[40] - P[42]*tmp[73] + P[43]*tmp[71] + P[44]*tmp[17] - P[53]*tmp[68] - P[63]*tmp[69] + P[74]*tmp[70];
-	tmp[81] = P[32] - P[34]*tmp[73] + P[35]*tmp[71] + P[43]*tmp[17] - P[52]*tmp[68] - P[62]*tmp[69] + P[73]*tmp[70];
-	tmp[82] = P[49] - P[51]*tmp[73] + P[52]*tmp[71] + P[53]*tmp[17] - P[54]*tmp[68] - P[64]*tmp[69] + P[75]*tmp[70];
-	tmp[83] = dt*tmp[8];
-	tmp[84] = dt*tmp[5];
-	tmp[85] = tmp[1]*tmp[84];
-	tmp[86] = dt*tmp[9];
-	tmp[87] = tmp[1]*tmp[86];
-	tmp[88] = tmp[12]*tmp[9] - tmp[4]*tmp[5];
-	tmp[89] = tmp[1]*tmp[88];
-	tmp[90] = dt*tmp[89];
-	tmp[91] = tmp[22]*tmp[8] + tmp[23]*tmp[8] + tmp[3];
-	tmp[92] = dt*tmp[91];
-	tmp[93] = tmp[1]*tmp[5];
-	tmp[94] = tmp[47]*tmp[93];
-	tmp[95] = tmp[1]*tmp[9];
-	tmp[96] = tmp[45]*tmp[95];
-	tmp[97] = P[31]*tmp[92];
-	tmp[98] = tmp[52]*tmp[93];
-	tmp[99] = tmp[51]*tmp[95];
-	tmp[100] = P[32]*tmp[92];
-	tmp[101] = P[20] + P[26]*tmp[90] - P[33]*tmp[92] + tmp[54]*tmp[8] - tmp[55]*tmp[95] - tmp[56]*tmp[93];
-	tmp[102] = tmp[59]*tmp[8];
-	tmp[103] = P[50] + P[51]*tmp[90] - P[52]*tmp[92] + P[54]*tmp[83] - P[64]*tmp[85] - P[75]*tmp[87];
-	tmp[104] = P[71] + P[72]*tmp[90] - P[73]*tmp[92] + P[75]*tmp[83] - P[76]*tmp[85] - P[77]*tmp[87];
-	tmp[105] = P[60] + P[61]*tmp[90] - P[62]*tmp[92] + P[64]*tmp[83] - P[65]*tmp[85] - P[76]*tmp[87];
-	tmp[106] = P[33] + P[34]*tmp[90] - P[35]*tmp[92] + P[52]*tmp[83] - P[62]*tmp[85] - P[73]*tmp[87];
-	tmp[107] = P[26] + P[27]*tmp[90] - P[34]*tmp[92] + P[51]*tmp[83] - P[61]*tmp[85] - P[72]*tmp[87];
-	tmp[108] = P[41] + P[42]*tmp[90] - P[43]*tmp[92] + P[53]*tmp[83] - P[63]*tmp[85] - P[74]*tmp[87];
-	tmp[109] = powf(tmp[5], 2);
-	tmp[110] = powf(tmp[9], 2);
-	tmp[111] = tmp[25]*tmp[86];
-	tmp[112] = tmp[25]*tmp[84];
-	tmp[113] = tmp[25]*tmp[31] + 1;
-	tmp[114] = powf(tmp[25], 2);
-	tmp[115] = tmp[114] + 1;
-	tmp[116] = P[81]*dt;
-	tmp[117] = P[108]*dt;
-	tmp[118] = tmp[25]*tmp[9];
-	tmp[119] = P[94]*dt;
-	tmp[120] = tmp[25]*tmp[5];
-	tmp[121] = tmp[115]*tmp[34];
-	tmp[122] = -P[24]*tmp[113] - P[31]*tmp[121] + tmp[116] + tmp[117]*tmp[118] + tmp[119]*tmp[120];
-	tmp[123] = P[82]*dt;
-	tmp[124] = P[109]*dt;
-	tmp[125] = P[95]*dt;
-	tmp[126] = -P[25]*tmp[113] - P[32]*tmp[121] + tmp[118]*tmp[124] + tmp[120]*tmp[125] + tmp[123];
-	tmp[127] = P[83]*dt;
-	tmp[128] = P[110]*dt;
-	tmp[129] = P[96]*dt;
-	tmp[130] = -P[26]*tmp[113] - P[33]*tmp[121] + tmp[118]*tmp[128] + tmp[120]*tmp[129] + tmp[127];
-	tmp[131] = P[84]*dt;
-	tmp[132] = P[34]*tmp[34];
-	tmp[133] = P[111]*tmp[111] - P[27]*tmp[113] + P[97]*tmp[112] - tmp[115]*tmp[132] + tmp[131];
-	tmp[134] = P[113]*tmp[111] - P[42]*tmp[113] - P[43]*tmp[121] + P[86]*dt + P[99]*tmp[112];
-	tmp[135] = P[89]*dt;
-	tmp[136] = P[102]*tmp[112] + P[116]*tmp[111] - P[72]*tmp[113] - P[73]*tmp[121] + tmp[135];
-	tmp[137] = P[88]*dt;
-	tmp[138] = P[101]*tmp[112] + P[115]*tmp[111] - P[61]*tmp[113] - P[62]*tmp[121] + tmp[137];
-	tmp[139] = P[85]*dt;
-	tmp[140] = P[112]*tmp[111] - P[34]*tmp[113] - P[35]*tmp[121] + P[98]*tmp[112] + tmp[139];
-	tmp[141] = P[87]*dt;
-	tmp[142] = P[100]*tmp[112] + P[114]*tmp[111] - P[51]*tmp[113] - P[52]*tmp[121] + tmp[141];
-	tmp[143] = Q_diag[4]*tmp[58];
-	tmp[144] = tmp[109]*tmp[143];
-	tmp[145] = Q_diag[5]*tmp[58];
-	tmp[146] = tmp[110]*tmp[145];
-	tmp[147] = P[103]*dt;
-	tmp[148] = P[117]*dt;
-	tmp[149] = tmp[139]*tmp[33];
-	tmp[150] = -P[84]*tmp[113] + P[90]*dt - tmp[115]*tmp[149] + tmp[118]*tmp[148] + tmp[120]*tmp[147];
-	tmp[151] = P[118]*tmp[86];
-	tmp[152] = P[104]*tmp[112] - P[97]*tmp[113] - P[98]*tmp[121] + tmp[147] + tmp[151]*tmp[25];
-	tmp[153] = P[118]*tmp[84];
-	tmp[154] = -P[111]*tmp[113] - P[112]*tmp[121] + P[119]*tmp[111] + tmp[148] + tmp[153]*tmp[25];
-	tmp[155] = -P[24]*tmp[34] + P[31] + tmp[117]*tmp[5] - tmp[119]*tmp[9];
-	tmp[156] = -P[25]*tmp[34] + P[32] + tmp[124]*tmp[5] - tmp[125]*tmp[9];
-	tmp[157] = tmp[129]*tmp[9];
-	tmp[158] = P[26]*tmp[34];
-	tmp[159] = P[111]*tmp[84] - P[27]*tmp[34] + P[34] - P[97]*tmp[86];
-	tmp[160] = P[102]*tmp[86];
-	tmp[161] = -P[116]*tmp[84] + P[72]*tmp[34] - P[73] + tmp[160];
-	tmp[162] = P[115]*tmp[84];
-	tmp[163] = P[101]*tmp[86] + P[61]*tmp[34] - P[62] - tmp[162];
-	tmp[164] = P[113]*tmp[84] - P[42]*tmp[34] + P[43] - P[99]*tmp[86];
-	tmp[165] = P[112]*tmp[84] + P[35] - P[98]*tmp[86] - tmp[132];
-	tmp[166] = P[100]*tmp[86] - P[114]*tmp[84] + P[51]*tmp[34] - P[52];
-	tmp[167] = -tmp[166];
-	tmp[168] = -tmp[163];
-	tmp[169] = -tmp[161];
-	tmp[170] = P[117]*dt*tmp[5] + P[85] - tmp[131]*tmp[33] - tmp[147]*tmp[9];
-	tmp[171] = P[104]*tmp[86] - P[118]*dt*tmp[5] + P[97]*tmp[34] - P[98];
-	tmp[172] = -tmp[171];
-	tmp[173] = P[111]*tmp[34] - P[112] - P[119]*dt*tmp[5] + tmp[151];
-	tmp[174] = -tmp[173];
-	tmp[175] = tmp[32]*tmp[86];
-	tmp[176] = tmp[32]*tmp[84];
-	tmp[177] = tmp[31]*tmp[32];
-	tmp[178] = 1.0/tmp[57];
-	tmp[179] = tmp[178]*tmp[8];
-	tmp[180] = tmp[179]*tmp[34];
-	tmp[181] = tmp[32]*tmp[9];
-	tmp[182] = tmp[117]*tmp[181];
-	tmp[183] = tmp[32]*tmp[5];
-	tmp[184] = tmp[119]*tmp[183];
-	tmp[185] = P[25]*tmp[177] + P[32]*tmp[180] + P[40] - tmp[124]*tmp[181] - tmp[125]*tmp[183];
-	tmp[186] = tmp[128]*tmp[181];
-	tmp[187] = tmp[129]*tmp[183];
-	tmp[188] = -P[100]*tmp[176] - P[114]*tmp[175] + P[51]*tmp[177] + P[52]*tmp[180] + P[53];
-	tmp[189] = -P[102]*tmp[176] - P[116]*tmp[175] + P[72]*tmp[177] + P[73]*tmp[180] + P[74];
-	tmp[190] = -P[101]*tmp[176] - P[115]*tmp[175] + P[61]*tmp[177] + P[62]*tmp[180] + P[63];
-	tmp[191] = P[112]*tmp[175];
-	tmp[192] = P[98]*tmp[176];
-	tmp[193] = P[34]*tmp[177] + P[35]*tmp[180] + P[43] - tmp[191] - tmp[192];
-	tmp[194] = -P[111]*tmp[175] + P[27]*tmp[177] + P[42] - P[97]*tmp[176] + tmp[132]*tmp[179];
-	tmp[195] = -P[113]*tmp[175] + P[42]*tmp[177] + P[43]*tmp[180] + P[44] - P[99]*tmp[176];
-	tmp[196] = tmp[25]*tmp[32];
-	tmp[197] = P[84]*tmp[177] + P[86] - tmp[147]*tmp[183] - tmp[148]*tmp[181] + tmp[149]*tmp[179];
-	tmp[198] = -P[104]*tmp[176] + P[97]*tmp[177] + P[98]*tmp[180] + P[99] - tmp[151]*tmp[32];
-	tmp[199] = P[111]*tmp[177] + P[112]*tmp[180] + P[113] - P[119]*tmp[175] - tmp[153]*tmp[32];
-	X_new[0] = X[0] + X[3]*dt;
-	X_new[1] = X[1] + X[4]*dt;
-	X_new[2] = X[2] + X[5]*dt;
-	X_new[3] = X[3] + tmp[17];
-	X_new[4] = X[4] + tmp[21];
-	X_new[5] = X[5] + dt*(tmp[24] + 9.8100000000000005);
-	X_new[6] = X[6] + dt*(U[3] - X[12] + tmp[25]*tmp[27] + tmp[25]*tmp[29]);
-	X_new[7] = X[7] + tmp[31];
-	X_new[8] = X[8] + tmp[32]*tmp[34];
-	X_new[9] = X[9];
-	X_new[10] = X[10];
-	X_new[11] = X[11];
-	X_new[12] = X[12];
-	X_new[13] = X[13];
-	X_new[14] = X[14];
-	P_new[0] = P[0] + P[6]*dt + dt*(P[6] + P[9]*dt);
-	P_new[1] = P[10]*dt + P[1] + dt*(P[13]*dt + P[7]);
-	P_new[2] = P[11]*dt + P[2] + dt*(P[11] + P[14]*dt);
-	P_new[3] = P[15]*dt + P[3] + dt*(P[18]*dt + P[8]);
-	P_new[4] = P[16]*dt + P[4] + dt*(P[12] + P[19]*dt);
-	P_new[5] = P[17]*dt + P[5] + dt*(P[17] + P[20]*dt);
-	P_new[6] = P[21]*tmp[41] + P[28]*tmp[39] - P[36]*tmp[21] - P[45]*tmp[36] - P[55]*tmp[38] - P[66]*tmp[37] + P[6] + dt*(P[24]*dt*tmp[40] + P[31]*dt*tmp[0]*tmp[24] + P[9] - tmp[44] - tmp[46] - tmp[48] - tmp[49]);
-	P_new[7] = P[22]*tmp[41] + P[29]*tmp[39] - P[37]*tmp[21] - P[46]*tmp[36] - P[56]*tmp[38] - P[67]*tmp[37] + P[7] + dt*(P[13] + P[25]*dt*tmp[40] + P[32]*dt*tmp[0]*tmp[24] - P[40]*tmp[21] - tmp[11]*tmp[51] - tmp[15]*tmp[52] - tmp[43]*tmp[50]);
-	P_new[8] = P[23]*tmp[41] + P[30]*tmp[39] - P[38]*tmp[21] - P[47]*tmp[36] - P[57]*tmp[38] - P[68]*tmp[37] + P[8] + dt*(P[26]*dt*tmp[40] + P[33]*dt*tmp[0]*tmp[24] - P[41]*tmp[21] - tmp[11]*tmp[55] - tmp[15]*tmp[56] - tmp[43]*tmp[54] - tmp[53]);
-	P_new[9] = P[24]*tmp[41] + P[31]*tmp[39] + P[9] + powf(tmp[0], 2)*tmp[60] + powf(tmp[11], 2)*tmp[61] + powf(tmp[15], 2)*tmp[62] - tmp[21]*(P[42]*dt*tmp[40] + P[43]*dt*tmp[0]*tmp[24] - P[44]*tmp[21] - P[53]*tmp[36] - P[63]*tmp[38] - P[74]*tmp[37] - tmp[66]) - tmp[36]*tmp[63] - tmp[37]*tmp[64] - tmp[38]*tmp[65] + tmp[39]*(P[31] + P[34]*dt*tmp[40] + P[35]*dt*tmp[0]*tmp[24] - P[43]*tmp[21] - P[52]*tmp[36] - P[62]*tmp[38] - P[73]*tmp[37]) + tmp[41]*(P[24] + P[27]*dt*tmp[40] + P[34]*dt*tmp[0]*tmp[24] - P[42]*tmp[21] - P[51]*tmp[36] - P[61]*tmp[38] - P[72]*tmp[37]) - tmp[44] - tmp[46] - tmp[48] - tmp[49];
-	P_new[10] = P[10] - P[21]*tmp[73] + P[28]*tmp[71] + P[36]*tmp[17] - P[45]*tmp[68] - P[55]*tmp[69] + P[66]*tmp[70] + dt*tmp[75];
-	P_new[11] = P[11] - P[22]*tmp[73] + P[29]*tmp[71] + P[37]*tmp[17] - P[46]*tmp[68] - P[56]*tmp[69] + P[67]*tmp[70] + dt*tmp[76];
-	P_new[12] = P[12] - P[23]*tmp[73] + P[30]*tmp[71] + P[38]*tmp[17] - P[47]*tmp[68] - P[57]*tmp[69] + P[68]*tmp[70] + dt*(P[19] - P[26]*tmp[73] + P[33]*tmp[71] + P[41]*tmp[17] - tmp[18]*tmp[56] + tmp[19]*tmp[55] - tmp[54]*tmp[74]);
-	P_new[13] = tmp[0]*tmp[60]*tmp[6] - tmp[11]*tmp[19]*tmp[61] + tmp[15]*tmp[18]*tmp[62] - tmp[21]*tmp[80] - tmp[36]*tmp[82] - tmp[37]*tmp[78] - tmp[38]*tmp[79] + tmp[39]*tmp[81] + tmp[41]*tmp[77] + tmp[75];
-	P_new[14] = tmp[17]*tmp[80] + powf(tmp[18], 2)*tmp[62] + powf(tmp[19], 2)*tmp[61] + tmp[60]*powf(tmp[6], 2) - tmp[68]*tmp[82] - tmp[69]*tmp[79] + tmp[70]*tmp[78] + tmp[71]*tmp[81] - tmp[73]*tmp[77] + tmp[76];
-	P_new[15] = P[15] + P[21]*tmp[90] - P[28]*tmp[92] + P[45]*tmp[83] - P[55]*tmp[85] - P[66]*tmp[87] + dt*(P[18] + P[24]*tmp[90] + tmp[42]*tmp[8] - tmp[94] - tmp[96] - tmp[97]);
-	P_new[16] = P[16] + P[22]*tmp[90] - P[29]*tmp[92] + P[46]*tmp[83] - P[56]*tmp[85] - P[67]*tmp[87] + dt*(P[19] + P[25]*tmp[90] - tmp[100] + tmp[50]*tmp[8] - tmp[98] - tmp[99]);
-	P_new[17] = P[17] + P[23]*tmp[90] - P[30]*tmp[92] + P[47]*tmp[83] - P[57]*tmp[85] - P[68]*tmp[87] + dt*tmp[101];
-	P_new[18] = P[24]*dt*tmp[1]*tmp[88] + P[48]*dt*tmp[8] + Q_diag[1]*tmp[15]*tmp[1]*tmp[58]*tmp[5] + Q_diag[2]*tmp[11]*tmp[1]*tmp[58]*tmp[9] + dt*tmp[0]*tmp[106]*tmp[24] + dt*tmp[107]*tmp[40] - tmp[102]*tmp[43] - tmp[103]*tmp[36] - tmp[104]*tmp[37] - tmp[105]*tmp[38] - tmp[108]*tmp[21] - tmp[53] - tmp[94] - tmp[96] - tmp[97];
-	P_new[19] = P[19] + P[25]*dt*tmp[1]*tmp[88] + P[49]*dt*tmp[8] + Q_diag[1]*tmp[18]*tmp[1]*tmp[58]*tmp[5] + dt*tmp[104]*tmp[19] + dt*tmp[106]*tmp[24]*tmp[6] + dt*tmp[108]*tmp[16] - tmp[100] - tmp[102]*tmp[74] - tmp[103]*tmp[68] - tmp[105]*tmp[69] - tmp[107]*tmp[73] - tmp[19]*tmp[61]*tmp[95] - tmp[98] - tmp[99];
-	P_new[20] = tmp[101] + tmp[103]*tmp[83] - tmp[104]*tmp[87] - tmp[105]*tmp[85] - tmp[106]*tmp[92] + tmp[107]*tmp[90] + tmp[109]*tmp[57]*tmp[62] + tmp[110]*tmp[57]*tmp[61] + tmp[59]*powf(tmp[8], 2);
-	P_new[21] = -P[105]*tmp[111] + P[21]*tmp[113] + P[28]*dt*tmp[115]*tmp[33] - P[78]*dt - P[91]*tmp[112] - dt*tmp[122];
-	P_new[22] = -P[106]*tmp[111] + P[22]*tmp[113] + P[29]*dt*tmp[115]*tmp[33] - P[79]*dt - P[92]*tmp[112] - dt*tmp[126];
-	P_new[23] = -P[107]*tmp[111] + P[23]*tmp[113] + P[30]*dt*tmp[115]*tmp[33] - P[80]*dt - P[93]*tmp[112] - dt*tmp[130];
-	P_new[24] = dt*tmp[0]*tmp[142]*tmp[1] + dt*tmp[11]*tmp[136] + dt*tmp[134]*tmp[20] + dt*tmp[138]*tmp[15] - tmp[122] - tmp[133]*tmp[41] - tmp[140]*tmp[39];
-	P_new[25] = dt*tmp[133]*tmp[72] + dt*tmp[138]*tmp[18] + dt*tmp[142]*tmp[1]*tmp[6] - tmp[126] - tmp[134]*tmp[17] - tmp[136]*tmp[70] - tmp[140]*tmp[71];
-	P_new[26] = dt*tmp[136]*tmp[1]*tmp[9] + dt*tmp[138]*tmp[1]*tmp[5] + dt*tmp[140]*tmp[91] - tmp[130] - tmp[133]*tmp[90] - tmp[142]*tmp[83];
-	P_new[27] = Q_diag[3]*tmp[58] + dt*tmp[150] + tmp[111]*tmp[154] + tmp[112]*tmp[152] - tmp[113]*tmp[133] + tmp[114]*tmp[144] + tmp[114]*tmp[146] - tmp[121]*tmp[140];
-	P_new[28] = P[105]*tmp[84] - P[21]*tmp[34] + P[28] - P[91]*tmp[86] + dt*tmp[155];
-	P_new[29] = P[106]*tmp[84] - P[22]*tmp[34] + P[29] - P[92]*tmp[86] + dt*tmp[156];
-	P_new[30] = P[107]*tmp[84] - P[23]*tmp[34] + P[30] - P[93]*tmp[86] + dt*(P[33] + tmp[128]*tmp[5] - tmp[157] - tmp[158]);
-	P_new[31] = tmp[155] + tmp[159]*tmp[41] + tmp[161]*tmp[37] + tmp[163]*tmp[38] - tmp[164]*tmp[21] + tmp[165]*tmp[39] + tmp[166]*tmp[36];
-	P_new[32] = tmp[156] - tmp[159]*tmp[73] - tmp[161]*tmp[70] + tmp[163]*tmp[69] + tmp[164]*tmp[17] + tmp[165]*tmp[71] + tmp[166]*tmp[68];
-	P_new[33] = P[110]*dt*tmp[5] + P[33] + dt*tmp[159]*tmp[1]*tmp[88] + dt*tmp[167]*tmp[8] - tmp[157] - tmp[158] - tmp[165]*tmp[92] - tmp[168]*tmp[85] - tmp[169]*tmp[87];
-	P_new[34] = Q_diag[4]*tmp[25]*tmp[58]*tmp[5]*tmp[9] + dt*tmp[115]*tmp[165]*tmp[33] - dt*tmp[170] - tmp[111]*tmp[174] - tmp[112]*tmp[172] + tmp[113]*tmp[159] - tmp[118]*tmp[145]*tmp[5];
-	P_new[35] = tmp[109]*tmp[145] + tmp[110]*tmp[143] - tmp[159]*tmp[34] + tmp[165] + tmp[171]*tmp[86] - tmp[173]*tmp[84];
-	P_new[36] = -P[105]*tmp[175] + P[21]*tmp[177] + P[28]*tmp[180] + P[36] - P[91]*tmp[176] + dt*(P[24]*tmp[177] + P[31]*tmp[180] + P[39] - tmp[182] - tmp[184]);
-	P_new[37] = -P[106]*tmp[175] + P[22]*tmp[177] + P[29]*tmp[180] + P[37] - P[92]*tmp[176] + dt*tmp[185];
-	P_new[38] = -P[107]*tmp[175] + P[23]*tmp[177] + P[30]*tmp[180] + P[38] - P[93]*tmp[176] + dt*(P[26]*tmp[177] + P[33]*tmp[180] + P[41] - tmp[186] - tmp[187]);
-	P_new[39] = P[24]*dt*tmp[30]*tmp[32] + P[31]*dt*tmp[178]*tmp[33]*tmp[8] + dt*tmp[0]*tmp[193]*tmp[24] + dt*tmp[194]*tmp[40] - tmp[182] - tmp[184] - tmp[188]*tmp[36] - tmp[189]*tmp[37] - tmp[190]*tmp[38] - tmp[195]*tmp[21] - tmp[66];
-	P_new[40] = tmp[17]*tmp[195] + tmp[185] - tmp[188]*tmp[68] + tmp[189]*tmp[70] - tmp[190]*tmp[69] + tmp[193]*tmp[71] - tmp[194]*tmp[73];
-	P_new[41] = P[26]*dt*tmp[30]*tmp[32] + P[33]*dt*tmp[178]*tmp[33]*tmp[8] + P[41] + dt*tmp[188]*tmp[8] + dt*tmp[194]*tmp[1]*tmp[88] - tmp[186] - tmp[187] - tmp[189]*tmp[87] - tmp[190]*tmp[85] - tmp[193]*tmp[92];
-	P_new[42] = -dt*tmp[197] - tmp[111]*tmp[199] - tmp[112]*tmp[198] + tmp[113]*tmp[194] + tmp[121]*tmp[193] + tmp[144]*tmp[196] + tmp[146]*tmp[196];
-	P_new[43] = P[34]*dt*tmp[30]*tmp[32] + P[35]*dt*tmp[178]*tmp[33]*tmp[8] + P[43] + Q_diag[4]*tmp[32]*tmp[58]*tmp[5]*tmp[9] + dt*tmp[199]*tmp[5] - tmp[145]*tmp[181]*tmp[5] - tmp[191] - tmp[192] - tmp[194]*tmp[34] - tmp[198]*tmp[86];
-	P_new[44] = tmp[144]*tmp[178] + tmp[146]*tmp[178] - tmp[175]*tmp[199] - tmp[176]*tmp[198] + tmp[177]*tmp[194] + tmp[180]*tmp[193] + tmp[195];
-	P_new[45] = P[45] + tmp[42];
-	P_new[46] = P[46] + tmp[50];
-	P_new[47] = P[47] + tmp[54];
-	P_new[48] = tmp[63];
-	P_new[49] = tmp[82];
-	P_new[50] = tmp[103];
-	P_new[51] = -tmp[142];
-	P_new[52] = tmp[167];
-	P_new[53] = tmp[188];
-	P_new[54] = P[54];
-	P_new[55] = P[55] + tmp[47];
-	P_new[56] = P[56] + tmp[52];
-	P_new[57] = P[57] + tmp[56];
-	P_new[58] = tmp[65];
-	P_new[59] = tmp[79];
-	P_new[60] = tmp[105];
-	P_new[61] = -tmp[138];
-	P_new[62] = tmp[168];
-	P_new[63] = tmp[190];
-	P_new[64] = P[64];
-	P_new[65] = P[65];
-	P_new[66] = P[66] + tmp[45];
-	P_new[67] = P[67] + tmp[51];
-	P_new[68] = P[68] + tmp[55];
-	P_new[69] = tmp[64];
-	P_new[70] = tmp[78];
-	P_new[71] = tmp[104];
-	P_new[72] = -tmp[136];
-	P_new[73] = tmp[169];
-	P_new[74] = tmp[189];
-	P_new[75] = P[75];
-	P_new[76] = P[76];
-	P_new[77] = P[77];
-	P_new[78] = P[78] + tmp[116];
-	P_new[79] = P[79] + tmp[123];
-	P_new[80] = P[80] + tmp[127];
-	P_new[81] = P[81] + P[84]*dt*tmp[40] + P[85]*dt*tmp[0]*tmp[24] - P[86]*tmp[21] - tmp[11]*tmp[135] - tmp[137]*tmp[15] - tmp[141]*tmp[43];
-	P_new[82] = P[82] + P[86]*tmp[17] - tmp[131]*tmp[72] + tmp[135]*tmp[19] - tmp[137]*tmp[18] + tmp[139]*tmp[24]*tmp[6] - tmp[141]*tmp[74];
-	P_new[83] = P[83] + tmp[131]*tmp[89] - tmp[135]*tmp[95] - tmp[137]*tmp[93] - tmp[139]*tmp[91] + tmp[141]*tmp[8];
-	P_new[84] = -tmp[150];
-	P_new[85] = tmp[170];
-	P_new[86] = tmp[197];
-	P_new[87] = P[87];
-	P_new[88] = P[88];
-	P_new[89] = P[89];
-	P_new[90] = P[90];
-	P_new[91] = P[91] + tmp[119];
-	P_new[92] = P[92] + tmp[125];
-	P_new[93] = P[93] + tmp[129];
-	P_new[94] = -P[100]*tmp[36] - P[101]*tmp[38] - P[102]*tmp[37] + P[94] + P[97]*dt*tmp[40] + P[98]*dt*tmp[0]*tmp[24] - P[99]*tmp[21];
-	P_new[95] = -P[100]*tmp[68] - P[101]*tmp[69] + P[102]*tmp[70] + P[95] - P[97]*tmp[73] + P[98]*tmp[71] + P[99]*tmp[17];
-	P_new[96] = P[100]*tmp[83] - P[101]*tmp[85] + P[96] + P[97]*tmp[90] - P[98]*tmp[92] - tmp[160]*tmp[1];
-	P_new[97] = -tmp[152];
-	P_new[98] = tmp[172];
-	P_new[99] = tmp[198];
-	P_new[100] = P[100];
-	P_new[101] = P[101];
-	P_new[102] = P[102];
-	P_new[103] = P[103];
-	P_new[104] = P[104];
-	P_new[105] = P[105] + tmp[117];
-	P_new[106] = P[106] + tmp[124];
-	P_new[107] = P[107] + tmp[128];
-	P_new[108] = P[108] + P[111]*dt*tmp[40] + P[112]*dt*tmp[0]*tmp[24] - P[113]*tmp[21] - P[114]*tmp[36] - P[115]*tmp[38] - P[116]*tmp[37];
-	P_new[109] = P[109] - P[111]*tmp[73] + P[112]*tmp[71] + P[113]*tmp[17] - P[114]*tmp[68] - P[115]*tmp[69] + P[116]*tmp[70];
-	P_new[110] = P[110] + P[111]*tmp[90] - P[112]*tmp[92] + P[114]*tmp[83] - P[116]*tmp[87] - tmp[162]*tmp[1];
-	P_new[111] = -tmp[154];
-	P_new[112] = tmp[174];
-	P_new[113] = tmp[199];
-	P_new[114] = P[114];
-	P_new[115] = P[115];
-	P_new[116] = P[116];
-	P_new[117] = P[117];
-	P_new[118] = P[118];
-	P_new[119] = P[119];
-
-    // swap X, X_new and P, P_new pointers
-    swap_ptr = X;
-    X = X_new;
-    X_new = swap_ptr;
-
-    swap_ptr = P;
-    P = P_new;
-    P_new = swap_ptr;
-}
-
-void ekf_update(float Z[N_MEASUREMENTS]) {
-    // UPDATE STEP X_new, P_new = ...
-    tmp[0] = -X[8] + Z[5];
-	tmp[1] = 1.0/(P[0] + R_diag[0]);
-	tmp[2] = P[1]*tmp[1];
-	tmp[3] = -P[36]*tmp[2] + P[37];
-	tmp[4] = 1.0/(-powf(P[1], 2)*tmp[1] + P[2] + R_diag[1]);
-	tmp[5] = -P[3]*tmp[2] + P[4];
-	tmp[6] = 1.0/(-powf(P[3], 2)*tmp[1] + P[5] + R_diag[2] - tmp[4]*powf(tmp[5], 2));
-	tmp[7] = P[3]*tmp[1];
-	tmp[8] = tmp[4]*tmp[5];
-	tmp[9] = -P[36]*tmp[7] + P[38] - tmp[3]*tmp[8];
-	tmp[10] = -P[21]*tmp[2] + P[22];
-	tmp[11] = -P[21]*tmp[7] + P[23] - tmp[10]*tmp[8];
-	tmp[12] = 1.0/(-powf(P[21], 2)*tmp[1] + P[27] + R_diag[3] - powf(tmp[10], 2)*tmp[4] - powf(tmp[11], 2)*tmp[6]);
-	tmp[13] = P[21]*tmp[1];
-	tmp[14] = tmp[10]*tmp[4];
-	tmp[15] = tmp[11]*tmp[6];
-	tmp[16] = -P[36]*tmp[13] + P[42] - tmp[14]*tmp[3] - tmp[15]*tmp[9];
-	tmp[17] = -P[28]*tmp[2] + P[29];
-	tmp[18] = -P[28]*tmp[7] + P[30] - tmp[17]*tmp[8];
-	tmp[19] = -P[28]*tmp[13] + P[34] - tmp[14]*tmp[17] - tmp[15]*tmp[18];
-	tmp[20] = 1.0/(-powf(P[28], 2)*tmp[1] + P[35] + R_diag[4] - tmp[12]*powf(tmp[19], 2) - powf(tmp[17], 2)*tmp[4] - powf(tmp[18], 2)*tmp[6]);
-	tmp[21] = P[28]*tmp[1];
-	tmp[22] = tmp[17]*tmp[4];
-	tmp[23] = tmp[18]*tmp[6];
-	tmp[24] = tmp[12]*tmp[19];
-	tmp[25] = -P[36]*tmp[21] + P[43] - tmp[16]*tmp[24] - tmp[22]*tmp[3] - tmp[23]*tmp[9];
-	tmp[26] = tmp[20]*powf(tmp[25], 2);
-	tmp[27] = 1.0/(-powf(P[36], 2)*tmp[1] + P[44] + R_diag[5] - tmp[12]*powf(tmp[16], 2) - tmp[26] - powf(tmp[3], 2)*tmp[4] - tmp[6]*powf(tmp[9], 2));
-	tmp[28] = P[36]*tmp[27];
-	tmp[29] = tmp[20]*tmp[25];
-	tmp[30] = tmp[27]*tmp[29];
-	tmp[31] = tmp[16]*tmp[27];
-	tmp[32] = tmp[12]*(tmp[19]*tmp[30] - tmp[31]);
-	tmp[33] = tmp[27]*tmp[9];
-	tmp[34] = tmp[6]*(-tmp[11]*tmp[32] + tmp[18]*tmp[20]*tmp[25]*tmp[27] - tmp[33]);
-	tmp[35] = tmp[27]*tmp[3];
-	tmp[36] = -tmp[10]*tmp[32] + tmp[17]*tmp[20]*tmp[25]*tmp[27] - tmp[34]*tmp[5] - tmp[35];
-	tmp[37] = P[1]*tmp[4];
-	tmp[38] = P[21]*tmp[32] - P[28]*tmp[30] + P[3]*tmp[34] + tmp[28] + tmp[36]*tmp[37];
-	tmp[39] = -tmp[38];
-	tmp[40] = P[0]*tmp[1];
-	tmp[41] = tmp[38] + tmp[39]*tmp[40];
-	tmp[42] = -X[7] + Z[4];
-	tmp[43] = tmp[20]*(tmp[26]*tmp[27] + 1);
-	tmp[44] = tmp[12]*(tmp[16]*tmp[20]*tmp[25]*tmp[27] - tmp[19]*tmp[43]);
-	tmp[45] = tmp[6]*(-tmp[11]*tmp[44] - tmp[18]*tmp[43] + tmp[20]*tmp[25]*tmp[27]*tmp[9]);
-	tmp[46] = -tmp[10]*tmp[44] - tmp[17]*tmp[43] + tmp[20]*tmp[25]*tmp[27]*tmp[3] - tmp[45]*tmp[5];
-	tmp[47] = P[21]*tmp[44] + P[28]*tmp[43] + P[3]*tmp[45] - tmp[28]*tmp[29] + tmp[37]*tmp[46];
-	tmp[48] = -tmp[47];
-	tmp[49] = tmp[40]*tmp[48] + tmp[47];
-	tmp[50] = -X[6] + Z[3];
-	tmp[51] = tmp[12]*tmp[16];
-	tmp[52] = tmp[24]*tmp[29] - tmp[51];
-	tmp[53] = tmp[25]*tmp[27];
-	tmp[54] = tmp[20]*(-tmp[24] - tmp[52]*tmp[53]);
-	tmp[55] = tmp[12]*(-tmp[19]*tmp[54] - tmp[31]*tmp[52] + 1);
-	tmp[56] = tmp[6]*(-tmp[11]*tmp[55] - tmp[18]*tmp[54] - tmp[33]*tmp[52]);
-	tmp[57] = -tmp[10]*tmp[55] - tmp[17]*tmp[54] - tmp[35]*tmp[52] - tmp[56]*tmp[5];
-	tmp[58] = P[21]*tmp[55] + P[28]*tmp[54] + P[3]*tmp[56] + tmp[28]*tmp[52] + tmp[37]*tmp[57];
-	tmp[59] = -tmp[58];
-	tmp[60] = tmp[40]*tmp[59] + tmp[58];
-	tmp[61] = -X[2] + Z[2];
-	tmp[62] = tmp[6]*tmp[9];
-	tmp[63] = tmp[11]*tmp[12]*tmp[16]*tmp[6] - tmp[29]*(tmp[15]*tmp[24] - tmp[23]) - tmp[62];
-	tmp[64] = tmp[20]*(tmp[11]*tmp[12]*tmp[19]*tmp[6] - tmp[23] - tmp[53]*tmp[63]);
-	tmp[65] = tmp[12]*(-tmp[15] - tmp[19]*tmp[64] - tmp[31]*tmp[63]);
-	tmp[66] = tmp[6]*(-tmp[11]*tmp[65] - tmp[18]*tmp[64] - tmp[33]*tmp[63] + 1);
-	tmp[67] = -tmp[10]*tmp[65] - tmp[17]*tmp[64] - tmp[35]*tmp[63] - tmp[5]*tmp[66];
-	tmp[68] = P[21]*tmp[65] + P[28]*tmp[64] + P[3]*tmp[66] + tmp[28]*tmp[63] + tmp[37]*tmp[67];
-	tmp[69] = -tmp[68];
-	tmp[70] = tmp[40]*tmp[69] + tmp[68];
-	tmp[71] = -X[1] + Z[1];
-	tmp[72] = -tmp[11]*tmp[4]*tmp[5]*tmp[6] + tmp[14];
-	tmp[73] = -tmp[72];
-	tmp[74] = -tmp[18]*tmp[4]*tmp[5]*tmp[6] + tmp[22] + tmp[24]*tmp[73];
-	tmp[75] = tmp[29]*tmp[74] - tmp[3]*tmp[4] + tmp[4]*tmp[5]*tmp[6]*tmp[9] - tmp[51]*tmp[73];
-	tmp[76] = tmp[20]*(-tmp[53]*tmp[75] - tmp[74]);
-	tmp[77] = tmp[12]*(-tmp[19]*tmp[76] - tmp[31]*tmp[75] - tmp[72]);
-	tmp[78] = tmp[6]*(-tmp[11]*tmp[77] - tmp[18]*tmp[76] - tmp[33]*tmp[75] - tmp[8]);
-	tmp[79] = -tmp[10]*tmp[77] - tmp[17]*tmp[76] - tmp[35]*tmp[75] - tmp[5]*tmp[78] + 1;
-	tmp[80] = P[21]*tmp[77] + P[28]*tmp[76] + P[3]*tmp[78] + tmp[28]*tmp[75] + tmp[37]*tmp[79];
-	tmp[81] = -tmp[80];
-	tmp[82] = tmp[40]*tmp[81] + tmp[80];
-	tmp[83] = -X[0] + Z[0];
-	tmp[84] = P[36]*tmp[1];
-	tmp[85] = tmp[2]*tmp[8] - tmp[7];
-	tmp[86] = -P[1]*tmp[10]*tmp[1]*tmp[4] + tmp[13] + tmp[15]*tmp[85];
-	tmp[87] = -tmp[86];
-	tmp[88] = -P[1]*tmp[17]*tmp[1]*tmp[4] + tmp[21] + tmp[23]*tmp[85] + tmp[24]*tmp[87];
-	tmp[89] = P[1]*tmp[1]*tmp[3]*tmp[4] + tmp[29]*tmp[88] - tmp[51]*tmp[87] - tmp[62]*tmp[85] - tmp[84];
-	tmp[90] = tmp[20]*(-tmp[53]*tmp[89] - tmp[88]);
-	tmp[91] = tmp[12]*(-tmp[19]*tmp[90] - tmp[31]*tmp[89] - tmp[86]);
-	tmp[92] = tmp[6]*(P[1]*tmp[1]*tmp[4]*tmp[5] - tmp[11]*tmp[91] - tmp[18]*tmp[90] - tmp[33]*tmp[89] - tmp[7]);
-	tmp[93] = -tmp[10]*tmp[91] - tmp[17]*tmp[90] - tmp[2] - tmp[35]*tmp[89] - tmp[5]*tmp[92];
-	tmp[94] = P[21]*tmp[91] + P[28]*tmp[90] + P[3]*tmp[92] + tmp[28]*tmp[89] + tmp[37]*tmp[93];
-	tmp[95] = tmp[94] - 1;
-	tmp[96] = -tmp[95];
-	tmp[97] = tmp[40]*tmp[96];
-	tmp[98] = P[37]*tmp[27];
-	tmp[99] = P[2]*tmp[4];
-	tmp[100] = P[22]*tmp[32] - P[29]*tmp[30] + P[4]*tmp[34] + tmp[2]*tmp[39] + tmp[36]*tmp[99] + tmp[98];
-	tmp[101] = P[22]*tmp[44] + P[29]*tmp[43] + P[4]*tmp[45] - tmp[29]*tmp[98] + tmp[2]*tmp[48] + tmp[46]*tmp[99];
-	tmp[102] = P[22]*tmp[55] + P[29]*tmp[54] + P[4]*tmp[56] + tmp[2]*tmp[59] + tmp[52]*tmp[98] + tmp[57]*tmp[99];
-	tmp[103] = P[22]*tmp[65] + P[29]*tmp[64] + P[4]*tmp[66] + tmp[2]*tmp[69] + tmp[63]*tmp[98] + tmp[67]*tmp[99];
-	tmp[104] = P[22]*tmp[77] + P[29]*tmp[76] + P[4]*tmp[78] + tmp[2]*tmp[81] + tmp[75]*tmp[98] + tmp[79]*tmp[99];
-	tmp[105] = P[22]*tmp[91] + P[29]*tmp[90] + P[4]*tmp[92] + tmp[2]*tmp[96] + tmp[89]*tmp[98] + tmp[93]*tmp[99];
-	tmp[106] = P[38]*tmp[27];
-	tmp[107] = P[4]*tmp[4];
-	tmp[108] = P[23]*tmp[32] - P[30]*tmp[30] + P[5]*tmp[34] + tmp[106] + tmp[107]*tmp[36] + tmp[39]*tmp[7];
-	tmp[109] = P[23]*tmp[44] + P[30]*tmp[43] + P[5]*tmp[45] - tmp[106]*tmp[29] + tmp[107]*tmp[46] + tmp[48]*tmp[7];
-	tmp[110] = P[23]*tmp[55] + P[30]*tmp[54] + P[5]*tmp[56] + tmp[106]*tmp[52] + tmp[107]*tmp[57] + tmp[59]*tmp[7];
-	tmp[111] = P[23]*tmp[65] + P[30]*tmp[64] + P[5]*tmp[66] + tmp[106]*tmp[63] + tmp[107]*tmp[67] + tmp[69]*tmp[7];
-	tmp[112] = P[23]*tmp[77] + P[30]*tmp[76] + P[5]*tmp[78] + tmp[106]*tmp[75] + tmp[107]*tmp[79] + tmp[7]*tmp[81];
-	tmp[113] = P[23]*tmp[91] + P[30]*tmp[90] + P[5]*tmp[92] + tmp[106]*tmp[89] + tmp[107]*tmp[93] + tmp[7]*tmp[96];
-	tmp[114] = P[39]*tmp[27];
-	tmp[115] = P[7]*tmp[4];
-	tmp[116] = P[6]*tmp[1];
-	tmp[117] = P[24]*tmp[32] - P[31]*tmp[30] + P[8]*tmp[34] + tmp[114] + tmp[115]*tmp[36] + tmp[116]*tmp[39];
-	tmp[118] = P[24]*tmp[44] + P[31]*tmp[43] + P[8]*tmp[45] - tmp[114]*tmp[29] + tmp[115]*tmp[46] + tmp[116]*tmp[48];
-	tmp[119] = P[24]*tmp[55] + P[31]*tmp[54] + P[8]*tmp[56] + tmp[114]*tmp[52] + tmp[115]*tmp[57] + tmp[116]*tmp[59];
-	tmp[120] = P[24]*tmp[65] + P[31]*tmp[64] + P[8]*tmp[66] + tmp[114]*tmp[63] + tmp[115]*tmp[67] + tmp[116]*tmp[69];
-	tmp[121] = P[24]*tmp[77] + P[31]*tmp[76] + P[8]*tmp[78] + tmp[114]*tmp[75] + tmp[115]*tmp[79] + tmp[116]*tmp[81];
-	tmp[122] = P[24]*tmp[91] + P[31]*tmp[90] + P[8]*tmp[92] + tmp[114]*tmp[89] + tmp[115]*tmp[93] + tmp[116]*tmp[96];
-	tmp[123] = P[40]*tmp[27];
-	tmp[124] = P[11]*tmp[4];
-	tmp[125] = P[10]*tmp[1];
-	tmp[126] = P[12]*tmp[34] + P[25]*tmp[32] - P[32]*tmp[30] + tmp[123] + tmp[124]*tmp[36] + tmp[125]*tmp[39];
-	tmp[127] = P[12]*tmp[45] + P[25]*tmp[44] + P[32]*tmp[43] - tmp[123]*tmp[29] + tmp[124]*tmp[46] + tmp[125]*tmp[48];
-	tmp[128] = P[12]*tmp[56] + P[25]*tmp[55] + P[32]*tmp[54] + tmp[123]*tmp[52] + tmp[124]*tmp[57] + tmp[125]*tmp[59];
-	tmp[129] = P[12]*tmp[66] + P[25]*tmp[65] + P[32]*tmp[64] + tmp[123]*tmp[63] + tmp[124]*tmp[67] + tmp[125]*tmp[69];
-	tmp[130] = P[12]*tmp[78] + P[25]*tmp[77] + P[32]*tmp[76] + tmp[123]*tmp[75] + tmp[124]*tmp[79] + tmp[125]*tmp[81];
-	tmp[131] = P[12]*tmp[92] + P[25]*tmp[91] + P[32]*tmp[90] + tmp[123]*tmp[89] + tmp[124]*tmp[93] + tmp[125]*tmp[96];
-	tmp[132] = P[41]*tmp[27];
-	tmp[133] = P[16]*tmp[4];
-	tmp[134] = P[15]*tmp[1];
-	tmp[135] = P[17]*tmp[34] + P[26]*tmp[32] - P[33]*tmp[30] + tmp[132] + tmp[133]*tmp[36] + tmp[134]*tmp[39];
-	tmp[136] = P[17]*tmp[45] + P[26]*tmp[44] + P[33]*tmp[43] - tmp[132]*tmp[29] + tmp[133]*tmp[46] + tmp[134]*tmp[48];
-	tmp[137] = P[17]*tmp[56] + P[26]*tmp[55] + P[33]*tmp[54] + tmp[132]*tmp[52] + tmp[133]*tmp[57] + tmp[134]*tmp[59];
-	tmp[138] = P[17]*tmp[66] + P[26]*tmp[65] + P[33]*tmp[64] + tmp[132]*tmp[63] + tmp[133]*tmp[67] + tmp[134]*tmp[69];
-	tmp[139] = P[17]*tmp[78] + P[26]*tmp[77] + P[33]*tmp[76] + tmp[132]*tmp[75] + tmp[133]*tmp[79] + tmp[134]*tmp[81];
-	tmp[140] = P[17]*tmp[92] + P[26]*tmp[91] + P[33]*tmp[90] + tmp[132]*tmp[89] + tmp[133]*tmp[93] + tmp[134]*tmp[96];
-	tmp[141] = P[42]*tmp[27];
-	tmp[142] = P[22]*tmp[4];
-	tmp[143] = P[23]*tmp[34] + P[27]*tmp[32] - P[34]*tmp[30] + tmp[13]*tmp[39] + tmp[141] + tmp[142]*tmp[36];
-	tmp[144] = P[23]*tmp[45] + P[27]*tmp[44] + P[34]*tmp[43] + tmp[13]*tmp[48] - tmp[141]*tmp[29] + tmp[142]*tmp[46];
-	tmp[145] = P[23]*tmp[56] + P[27]*tmp[55] + P[34]*tmp[54] + tmp[13]*tmp[59] + tmp[141]*tmp[52] + tmp[142]*tmp[57];
-	tmp[146] = P[23]*tmp[66] + P[27]*tmp[65] + P[34]*tmp[64] + tmp[13]*tmp[69] + tmp[141]*tmp[63] + tmp[142]*tmp[67];
-	tmp[147] = P[23]*tmp[78] + P[27]*tmp[77] + P[34]*tmp[76] + tmp[13]*tmp[81] + tmp[141]*tmp[75] + tmp[142]*tmp[79];
-	tmp[148] = P[23]*tmp[92] + P[27]*tmp[91] + P[34]*tmp[90] + tmp[13]*tmp[96] + tmp[141]*tmp[89] + tmp[142]*tmp[93];
-	tmp[149] = P[43]*tmp[27];
-	tmp[150] = P[29]*tmp[4];
-	tmp[151] = P[30]*tmp[34] + P[34]*tmp[32] - P[35]*tmp[30] + tmp[149] + tmp[150]*tmp[36] + tmp[21]*tmp[39];
-	tmp[152] = -tmp[149]*tmp[29];
-	tmp[153] = P[30]*tmp[45] + P[34]*tmp[44] + P[35]*tmp[43] + tmp[150]*tmp[46] + tmp[152] + tmp[21]*tmp[48];
-	tmp[154] = P[30]*tmp[56] + P[34]*tmp[55] + P[35]*tmp[54] + tmp[149]*tmp[52] + tmp[150]*tmp[57] + tmp[21]*tmp[59];
-	tmp[155] = P[30]*tmp[66] + P[34]*tmp[65] + P[35]*tmp[64] + tmp[149]*tmp[63] + tmp[150]*tmp[67] + tmp[21]*tmp[69];
-	tmp[156] = P[30]*tmp[78] + P[34]*tmp[77] + P[35]*tmp[76] + tmp[149]*tmp[75] + tmp[150]*tmp[79] + tmp[21]*tmp[81];
-	tmp[157] = P[30]*tmp[92] + P[34]*tmp[91] + P[35]*tmp[90] + tmp[149]*tmp[89] + tmp[150]*tmp[93] + tmp[21]*tmp[96];
-	tmp[158] = P[44]*tmp[27];
-	tmp[159] = P[37]*tmp[4];
-	tmp[160] = P[38]*tmp[34] + P[42]*tmp[32] + tmp[152] + tmp[158] + tmp[159]*tmp[36] + tmp[39]*tmp[84];
-	tmp[161] = P[38]*tmp[45] + P[42]*tmp[44] + P[43]*tmp[43] - tmp[158]*tmp[29] + tmp[159]*tmp[46] + tmp[48]*tmp[84];
-	tmp[162] = P[38]*tmp[56] + P[42]*tmp[55] + P[43]*tmp[54] + tmp[158]*tmp[52] + tmp[159]*tmp[57] + tmp[59]*tmp[84];
-	tmp[163] = P[38]*tmp[66] + P[42]*tmp[65] + P[43]*tmp[64] + tmp[158]*tmp[63] + tmp[159]*tmp[67] + tmp[69]*tmp[84];
-	tmp[164] = P[38]*tmp[78] + P[42]*tmp[77] + P[43]*tmp[76] + tmp[158]*tmp[75] + tmp[159]*tmp[79] + tmp[81]*tmp[84];
-	tmp[165] = P[38]*tmp[92] + P[42]*tmp[91] + P[43]*tmp[90] + tmp[158]*tmp[89] + tmp[159]*tmp[93] + tmp[84]*tmp[96];
-	tmp[166] = P[53]*tmp[27];
-	tmp[167] = P[46]*tmp[4];
-	tmp[168] = P[45]*tmp[1];
-	tmp[169] = P[47]*tmp[34] + P[51]*tmp[32] - P[52]*tmp[30] + tmp[166] + tmp[167]*tmp[36] + tmp[168]*tmp[39];
-	tmp[170] = P[47]*tmp[45] + P[51]*tmp[44] + P[52]*tmp[43] - tmp[166]*tmp[29] + tmp[167]*tmp[46] + tmp[168]*tmp[48];
-	tmp[171] = P[47]*tmp[56] + P[51]*tmp[55] + P[52]*tmp[54] + tmp[166]*tmp[52] + tmp[167]*tmp[57] + tmp[168]*tmp[59];
-	tmp[172] = P[47]*tmp[66] + P[51]*tmp[65] + P[52]*tmp[64] + tmp[166]*tmp[63] + tmp[167]*tmp[67] + tmp[168]*tmp[69];
-	tmp[173] = P[47]*tmp[78] + P[51]*tmp[77] + P[52]*tmp[76] + tmp[166]*tmp[75] + tmp[167]*tmp[79] + tmp[168]*tmp[81];
-	tmp[174] = P[47]*tmp[92] + P[51]*tmp[91] + P[52]*tmp[90] + tmp[166]*tmp[89] + tmp[167]*tmp[93] + tmp[168]*tmp[96];
-	tmp[175] = P[63]*tmp[27];
-	tmp[176] = P[56]*tmp[4];
-	tmp[177] = P[55]*tmp[1];
-	tmp[178] = P[57]*tmp[34] + P[61]*tmp[32] - P[62]*tmp[30] + tmp[175] + tmp[176]*tmp[36] + tmp[177]*tmp[39];
-	tmp[179] = P[57]*tmp[45] + P[61]*tmp[44] + P[62]*tmp[43] - tmp[175]*tmp[29] + tmp[176]*tmp[46] + tmp[177]*tmp[48];
-	tmp[180] = P[57]*tmp[56] + P[61]*tmp[55] + P[62]*tmp[54] + tmp[175]*tmp[52] + tmp[176]*tmp[57] + tmp[177]*tmp[59];
-	tmp[181] = P[57]*tmp[66] + P[61]*tmp[65] + P[62]*tmp[64] + tmp[175]*tmp[63] + tmp[176]*tmp[67] + tmp[177]*tmp[69];
-	tmp[182] = P[57]*tmp[78] + P[61]*tmp[77] + P[62]*tmp[76] + tmp[175]*tmp[75] + tmp[176]*tmp[79] + tmp[177]*tmp[81];
-	tmp[183] = P[57]*tmp[92] + P[61]*tmp[91] + P[62]*tmp[90] + tmp[175]*tmp[89] + tmp[176]*tmp[93] + tmp[177]*tmp[96];
-	tmp[184] = P[74]*tmp[27];
-	tmp[185] = P[67]*tmp[4];
-	tmp[186] = P[66]*tmp[1];
-	tmp[187] = P[68]*tmp[34] + P[72]*tmp[32] - P[73]*tmp[30] + tmp[184] + tmp[185]*tmp[36] + tmp[186]*tmp[39];
-	tmp[188] = P[68]*tmp[45] + P[72]*tmp[44] + P[73]*tmp[43] - tmp[184]*tmp[29] + tmp[185]*tmp[46] + tmp[186]*tmp[48];
-	tmp[189] = P[68]*tmp[56] + P[72]*tmp[55] + P[73]*tmp[54] + tmp[184]*tmp[52] + tmp[185]*tmp[57] + tmp[186]*tmp[59];
-	tmp[190] = P[68]*tmp[66] + P[72]*tmp[65] + P[73]*tmp[64] + tmp[184]*tmp[63] + tmp[185]*tmp[67] + tmp[186]*tmp[69];
-	tmp[191] = P[68]*tmp[78] + P[72]*tmp[77] + P[73]*tmp[76] + tmp[184]*tmp[75] + tmp[185]*tmp[79] + tmp[186]*tmp[81];
-	tmp[192] = P[68]*tmp[92] + P[72]*tmp[91] + P[73]*tmp[90] + tmp[184]*tmp[89] + tmp[185]*tmp[93] + tmp[186]*tmp[96];
-	tmp[193] = P[86]*tmp[27];
-	tmp[194] = P[79]*tmp[4];
-	tmp[195] = P[78]*tmp[1];
-	tmp[196] = P[80]*tmp[34] + P[84]*tmp[32] - P[85]*tmp[30] + tmp[193] + tmp[194]*tmp[36] + tmp[195]*tmp[39];
-	tmp[197] = P[80]*tmp[45] + P[84]*tmp[44] + P[85]*tmp[43] - tmp[193]*tmp[29] + tmp[194]*tmp[46] + tmp[195]*tmp[48];
-	tmp[198] = P[80]*tmp[56] + P[84]*tmp[55] + P[85]*tmp[54] + tmp[193]*tmp[52] + tmp[194]*tmp[57] + tmp[195]*tmp[59];
-	tmp[199] = P[80]*tmp[66] + P[84]*tmp[65] + P[85]*tmp[64] + tmp[193]*tmp[63] + tmp[194]*tmp[67] + tmp[195]*tmp[69];
-	tmp[200] = P[80]*tmp[78] + P[84]*tmp[77] + P[85]*tmp[76] + tmp[193]*tmp[75] + tmp[194]*tmp[79] + tmp[195]*tmp[81];
-	tmp[201] = P[80]*tmp[92] + P[84]*tmp[91] + P[85]*tmp[90] + tmp[193]*tmp[89] + tmp[194]*tmp[93] + tmp[195]*tmp[96];
-	tmp[202] = P[99]*tmp[27];
-	tmp[203] = P[92]*tmp[4];
-	tmp[204] = P[91]*tmp[1];
-	tmp[205] = P[93]*tmp[34] + P[97]*tmp[32] - P[98]*tmp[30] + tmp[202] + tmp[203]*tmp[36] + tmp[204]*tmp[39];
-	tmp[206] = P[93]*tmp[45] + P[97]*tmp[44] + P[98]*tmp[43] - tmp[202]*tmp[29] + tmp[203]*tmp[46] + tmp[204]*tmp[48];
-	tmp[207] = P[93]*tmp[56] + P[97]*tmp[55] + P[98]*tmp[54] + tmp[202]*tmp[52] + tmp[203]*tmp[57] + tmp[204]*tmp[59];
-	tmp[208] = P[93]*tmp[66] + P[97]*tmp[65] + P[98]*tmp[64] + tmp[202]*tmp[63] + tmp[203]*tmp[67] + tmp[204]*tmp[69];
-	tmp[209] = P[93]*tmp[78] + P[97]*tmp[77] + P[98]*tmp[76] + tmp[202]*tmp[75] + tmp[203]*tmp[79] + tmp[204]*tmp[81];
-	tmp[210] = P[93]*tmp[92] + P[97]*tmp[91] + P[98]*tmp[90] + tmp[202]*tmp[89] + tmp[203]*tmp[93] + tmp[204]*tmp[96];
-	tmp[211] = P[113]*tmp[27];
-	tmp[212] = P[106]*tmp[4];
-	tmp[213] = P[105]*tmp[1];
-	tmp[214] = P[107]*tmp[34] + P[111]*tmp[32] - P[112]*tmp[30] + tmp[211] + tmp[212]*tmp[36] + tmp[213]*tmp[39];
-	tmp[215] = P[107]*tmp[45] + P[111]*tmp[44] + P[112]*tmp[43] - tmp[211]*tmp[29] + tmp[212]*tmp[46] + tmp[213]*tmp[48];
-	tmp[216] = P[107]*tmp[56] + P[111]*tmp[55] + P[112]*tmp[54] + tmp[211]*tmp[52] + tmp[212]*tmp[57] + tmp[213]*tmp[59];
-	tmp[217] = P[107]*tmp[66] + P[111]*tmp[65] + P[112]*tmp[64] + tmp[211]*tmp[63] + tmp[212]*tmp[67] + tmp[213]*tmp[69];
-	tmp[218] = P[107]*tmp[78] + P[111]*tmp[77] + P[112]*tmp[76] + tmp[211]*tmp[75] + tmp[212]*tmp[79] + tmp[213]*tmp[81];
-	tmp[219] = P[107]*tmp[92] + P[111]*tmp[91] + P[112]*tmp[90] + tmp[211]*tmp[89] + tmp[212]*tmp[93] + tmp[213]*tmp[96];
-	tmp[220] = -tmp[100];
-	tmp[221] = -tmp[101];
-	tmp[222] = -tmp[102];
-	tmp[223] = -tmp[103];
-	tmp[224] = 1 - tmp[104];
-	tmp[225] = -tmp[105];
-	tmp[226] = -tmp[108];
-	tmp[227] = -tmp[109];
-	tmp[228] = -tmp[110];
-	tmp[229] = 1 - tmp[111];
-	tmp[230] = -tmp[112];
-	tmp[231] = -tmp[113];
-	tmp[232] = -tmp[117];
-	tmp[233] = -tmp[118];
-	tmp[234] = -tmp[119];
-	tmp[235] = -tmp[120];
-	tmp[236] = -tmp[121];
-	tmp[237] = -tmp[122];
-	tmp[238] = -tmp[126];
-	tmp[239] = -tmp[127];
-	tmp[240] = -tmp[128];
-	tmp[241] = -tmp[129];
-	tmp[242] = -tmp[130];
-	tmp[243] = -tmp[131];
-	tmp[244] = -tmp[135];
-	tmp[245] = -tmp[136];
-	tmp[246] = -tmp[137];
-	tmp[247] = -tmp[138];
-	tmp[248] = -tmp[139];
-	tmp[249] = -tmp[140];
-	tmp[250] = -tmp[143];
-	tmp[251] = -tmp[144];
-	tmp[252] = 1 - tmp[145];
-	tmp[253] = -tmp[146];
-	tmp[254] = -tmp[147];
-	tmp[255] = -tmp[148];
-	tmp[256] = -tmp[151];
-	tmp[257] = 1 - tmp[153];
-	tmp[258] = -tmp[154];
-	tmp[259] = -tmp[155];
-	tmp[260] = -tmp[156];
-	tmp[261] = -tmp[157];
-	tmp[262] = 1 - tmp[160];
-	tmp[263] = -tmp[161];
-	tmp[264] = -tmp[162];
-	tmp[265] = -tmp[163];
-	tmp[266] = -tmp[164];
-	tmp[267] = -tmp[165];
-	tmp[268] = -tmp[169];
-	tmp[269] = -tmp[170];
-	tmp[270] = -tmp[171];
-	tmp[271] = -tmp[172];
-	tmp[272] = -tmp[173];
-	tmp[273] = -tmp[174];
-	tmp[274] = -tmp[178];
-	tmp[275] = -tmp[179];
-	tmp[276] = -tmp[180];
-	tmp[277] = -tmp[181];
-	tmp[278] = -tmp[182];
-	tmp[279] = -tmp[183];
-	tmp[280] = -tmp[187];
-	tmp[281] = -tmp[188];
-	tmp[282] = -tmp[189];
-	tmp[283] = -tmp[190];
-	tmp[284] = -tmp[191];
-	tmp[285] = -tmp[192];
-	tmp[286] = -tmp[196];
-	tmp[287] = -tmp[197];
-	tmp[288] = -tmp[198];
-	tmp[289] = -tmp[199];
-	tmp[290] = -tmp[200];
-	tmp[291] = -tmp[201];
-	tmp[292] = -tmp[205];
-	tmp[293] = -tmp[206];
-	tmp[294] = -tmp[207];
-	tmp[295] = -tmp[208];
-	tmp[296] = -tmp[209];
-	tmp[297] = -tmp[210];
-	tmp[298] = -tmp[214];
-	tmp[299] = -tmp[215];
-	tmp[300] = -tmp[216];
-	tmp[301] = -tmp[217];
-	tmp[302] = -tmp[218];
-	tmp[303] = -tmp[219];
-	X_new[0] = X[0] + tmp[0]*tmp[41] + tmp[42]*tmp[49] + tmp[50]*tmp[60] + tmp[61]*tmp[70] + tmp[71]*tmp[82] + tmp[83]*(tmp[94] + tmp[97]);
-	X_new[1] = X[1] + tmp[0]*tmp[100] + tmp[101]*tmp[42] + tmp[102]*tmp[50] + tmp[103]*tmp[61] + tmp[104]*tmp[71] + tmp[105]*tmp[83];
-	X_new[2] = X[2] + tmp[0]*tmp[108] + tmp[109]*tmp[42] + tmp[110]*tmp[50] + tmp[111]*tmp[61] + tmp[112]*tmp[71] + tmp[113]*tmp[83];
-	X_new[3] = X[3] + tmp[0]*tmp[117] + tmp[118]*tmp[42] + tmp[119]*tmp[50] + tmp[120]*tmp[61] + tmp[121]*tmp[71] + tmp[122]*tmp[83];
-	X_new[4] = X[4] + tmp[0]*tmp[126] + tmp[127]*tmp[42] + tmp[128]*tmp[50] + tmp[129]*tmp[61] + tmp[130]*tmp[71] + tmp[131]*tmp[83];
-	X_new[5] = X[5] + tmp[0]*tmp[135] + tmp[136]*tmp[42] + tmp[137]*tmp[50] + tmp[138]*tmp[61] + tmp[139]*tmp[71] + tmp[140]*tmp[83];
-	X_new[6] = X[6] + tmp[0]*tmp[143] + tmp[144]*tmp[42] + tmp[145]*tmp[50] + tmp[146]*tmp[61] + tmp[147]*tmp[71] + tmp[148]*tmp[83];
-	X_new[7] = X[7] + tmp[0]*tmp[151] + tmp[153]*tmp[42] + tmp[154]*tmp[50] + tmp[155]*tmp[61] + tmp[156]*tmp[71] + tmp[157]*tmp[83];
-	X_new[8] = X[8] + tmp[0]*tmp[160] + tmp[161]*tmp[42] + tmp[162]*tmp[50] + tmp[163]*tmp[61] + tmp[164]*tmp[71] + tmp[165]*tmp[83];
-	X_new[9] = X[9] + tmp[0]*tmp[169] + tmp[170]*tmp[42] + tmp[171]*tmp[50] + tmp[172]*tmp[61] + tmp[173]*tmp[71] + tmp[174]*tmp[83];
-	X_new[10] = X[10] + tmp[0]*tmp[178] + tmp[179]*tmp[42] + tmp[180]*tmp[50] + tmp[181]*tmp[61] + tmp[182]*tmp[71] + tmp[183]*tmp[83];
-	X_new[11] = X[11] + tmp[0]*tmp[187] + tmp[188]*tmp[42] + tmp[189]*tmp[50] + tmp[190]*tmp[61] + tmp[191]*tmp[71] + tmp[192]*tmp[83];
-	X_new[12] = X[12] + tmp[0]*tmp[196] + tmp[197]*tmp[42] + tmp[198]*tmp[50] + tmp[199]*tmp[61] + tmp[200]*tmp[71] + tmp[201]*tmp[83];
-	X_new[13] = X[13] + tmp[0]*tmp[205] + tmp[206]*tmp[42] + tmp[207]*tmp[50] + tmp[208]*tmp[61] + tmp[209]*tmp[71] + tmp[210]*tmp[83];
-	X_new[14] = X[14] + tmp[0]*tmp[214] + tmp[215]*tmp[42] + tmp[216]*tmp[50] + tmp[217]*tmp[61] + tmp[218]*tmp[71] + tmp[219]*tmp[83];
-	P_new[0] = P[0]*(-tmp[95] - tmp[97]) - P[1]*tmp[82] - P[21]*tmp[60] - P[28]*tmp[49] - P[36]*tmp[41] - P[3]*tmp[70];
-	P_new[1] = P[0]*tmp[225] + P[1]*tmp[224] + P[21]*tmp[222] + P[28]*tmp[221] + P[36]*tmp[220] + P[3]*tmp[223];
-	P_new[2] = P[1]*tmp[225] + P[22]*tmp[222] + P[29]*tmp[221] + P[2]*tmp[224] + P[37]*tmp[220] + P[4]*tmp[223];
-	P_new[3] = P[0]*tmp[231] + P[1]*tmp[230] + P[21]*tmp[228] + P[28]*tmp[227] + P[36]*tmp[226] + P[3]*tmp[229];
-	P_new[4] = P[1]*tmp[231] + P[22]*tmp[228] + P[29]*tmp[227] + P[2]*tmp[230] + P[37]*tmp[226] + P[4]*tmp[229];
-	P_new[5] = P[23]*tmp[228] + P[30]*tmp[227] + P[38]*tmp[226] + P[3]*tmp[231] + P[4]*tmp[230] + P[5]*tmp[229];
-	P_new[6] = P[0]*tmp[237] + P[1]*tmp[236] + P[21]*tmp[234] + P[28]*tmp[233] + P[36]*tmp[232] + P[3]*tmp[235] + P[6];
-	P_new[7] = P[1]*tmp[237] + P[22]*tmp[234] + P[29]*tmp[233] + P[2]*tmp[236] + P[37]*tmp[232] + P[4]*tmp[235] + P[7];
-	P_new[8] = P[23]*tmp[234] + P[30]*tmp[233] + P[38]*tmp[232] + P[3]*tmp[237] + P[4]*tmp[236] + P[5]*tmp[235] + P[8];
-	P_new[9] = P[24]*tmp[234] + P[31]*tmp[233] + P[39]*tmp[232] + P[6]*tmp[237] + P[7]*tmp[236] + P[8]*tmp[235] + P[9];
-	P_new[10] = P[0]*tmp[243] + P[10] + P[1]*tmp[242] + P[21]*tmp[240] + P[28]*tmp[239] + P[36]*tmp[238] + P[3]*tmp[241];
-	P_new[11] = P[11] + P[1]*tmp[243] + P[22]*tmp[240] + P[29]*tmp[239] + P[2]*tmp[242] + P[37]*tmp[238] + P[4]*tmp[241];
-	P_new[12] = P[12] + P[23]*tmp[240] + P[30]*tmp[239] + P[38]*tmp[238] + P[3]*tmp[243] + P[4]*tmp[242] + P[5]*tmp[241];
-	P_new[13] = P[13] + P[24]*tmp[240] + P[31]*tmp[239] + P[39]*tmp[238] + P[6]*tmp[243] + P[7]*tmp[242] + P[8]*tmp[241];
-	P_new[14] = P[10]*tmp[243] + P[11]*tmp[242] + P[12]*tmp[241] + P[14] + P[25]*tmp[240] + P[32]*tmp[239] + P[40]*tmp[238];
-	P_new[15] = P[0]*tmp[249] + P[15] + P[1]*tmp[248] + P[21]*tmp[246] + P[28]*tmp[245] + P[36]*tmp[244] + P[3]*tmp[247];
-	P_new[16] = P[16] + P[1]*tmp[249] + P[22]*tmp[246] + P[29]*tmp[245] + P[2]*tmp[248] + P[37]*tmp[244] + P[4]*tmp[247];
-	P_new[17] = P[17] + P[23]*tmp[246] + P[30]*tmp[245] + P[38]*tmp[244] + P[3]*tmp[249] + P[4]*tmp[248] + P[5]*tmp[247];
-	P_new[18] = P[18] + P[24]*tmp[246] + P[31]*tmp[245] + P[39]*tmp[244] + P[6]*tmp[249] + P[7]*tmp[248] + P[8]*tmp[247];
-	P_new[19] = P[10]*tmp[249] + P[11]*tmp[248] + P[12]*tmp[247] + P[19] + P[25]*tmp[246] + P[32]*tmp[245] + P[40]*tmp[244];
-	P_new[20] = P[15]*tmp[249] + P[16]*tmp[248] + P[17]*tmp[247] + P[20] + P[26]*tmp[246] + P[33]*tmp[245] + P[41]*tmp[244];
-	P_new[21] = P[0]*tmp[255] + P[1]*tmp[254] + P[21]*tmp[252] + P[28]*tmp[251] + P[36]*tmp[250] + P[3]*tmp[253];
-	P_new[22] = P[1]*tmp[255] + P[22]*tmp[252] + P[29]*tmp[251] + P[2]*tmp[254] + P[37]*tmp[250] + P[4]*tmp[253];
-	P_new[23] = P[23]*tmp[252] + P[30]*tmp[251] + P[38]*tmp[250] + P[3]*tmp[255] + P[4]*tmp[254] + P[5]*tmp[253];
-	P_new[24] = P[24]*tmp[252] + P[31]*tmp[251] + P[39]*tmp[250] + P[6]*tmp[255] + P[7]*tmp[254] + P[8]*tmp[253];
-	P_new[25] = P[10]*tmp[255] + P[11]*tmp[254] + P[12]*tmp[253] + P[25]*tmp[252] + P[32]*tmp[251] + P[40]*tmp[250];
-	P_new[26] = P[15]*tmp[255] + P[16]*tmp[254] + P[17]*tmp[253] + P[26]*tmp[252] + P[33]*tmp[251] + P[41]*tmp[250];
-	P_new[27] = P[21]*tmp[255] + P[22]*tmp[254] + P[23]*tmp[253] + P[27]*tmp[252] + P[34]*tmp[251] + P[42]*tmp[250];
-	P_new[28] = P[0]*tmp[261] + P[1]*tmp[260] + P[21]*tmp[258] + P[28]*tmp[257] + P[36]*tmp[256] + P[3]*tmp[259];
-	P_new[29] = P[1]*tmp[261] + P[22]*tmp[258] + P[29]*tmp[257] + P[2]*tmp[260] + P[37]*tmp[256] + P[4]*tmp[259];
-	P_new[30] = P[23]*tmp[258] + P[30]*tmp[257] + P[38]*tmp[256] + P[3]*tmp[261] + P[4]*tmp[260] + P[5]*tmp[259];
-	P_new[31] = P[24]*tmp[258] + P[31]*tmp[257] + P[39]*tmp[256] + P[6]*tmp[261] + P[7]*tmp[260] + P[8]*tmp[259];
-	P_new[32] = P[10]*tmp[261] + P[11]*tmp[260] + P[12]*tmp[259] + P[25]*tmp[258] + P[32]*tmp[257] + P[40]*tmp[256];
-	P_new[33] = P[15]*tmp[261] + P[16]*tmp[260] + P[17]*tmp[259] + P[26]*tmp[258] + P[33]*tmp[257] + P[41]*tmp[256];
-	P_new[34] = P[21]*tmp[261] + P[22]*tmp[260] + P[23]*tmp[259] + P[27]*tmp[258] + P[34]*tmp[257] + P[42]*tmp[256];
-	P_new[35] = P[28]*tmp[261] + P[29]*tmp[260] + P[30]*tmp[259] + P[34]*tmp[258] + P[35]*tmp[257] + P[43]*tmp[256];
-	P_new[36] = P[0]*tmp[267] + P[1]*tmp[266] + P[21]*tmp[264] + P[28]*tmp[263] + P[36]*tmp[262] + P[3]*tmp[265];
-	P_new[37] = P[1]*tmp[267] + P[22]*tmp[264] + P[29]*tmp[263] + P[2]*tmp[266] + P[37]*tmp[262] + P[4]*tmp[265];
-	P_new[38] = P[23]*tmp[264] + P[30]*tmp[263] + P[38]*tmp[262] + P[3]*tmp[267] + P[4]*tmp[266] + P[5]*tmp[265];
-	P_new[39] = P[24]*tmp[264] + P[31]*tmp[263] + P[39]*tmp[262] + P[6]*tmp[267] + P[7]*tmp[266] + P[8]*tmp[265];
-	P_new[40] = P[10]*tmp[267] + P[11]*tmp[266] + P[12]*tmp[265] + P[25]*tmp[264] + P[32]*tmp[263] + P[40]*tmp[262];
-	P_new[41] = P[15]*tmp[267] + P[16]*tmp[266] + P[17]*tmp[265] + P[26]*tmp[264] + P[33]*tmp[263] + P[41]*tmp[262];
-	P_new[42] = P[21]*tmp[267] + P[22]*tmp[266] + P[23]*tmp[265] + P[27]*tmp[264] + P[34]*tmp[263] + P[42]*tmp[262];
-	P_new[43] = P[28]*tmp[267] + P[29]*tmp[266] + P[30]*tmp[265] + P[34]*tmp[264] + P[35]*tmp[263] + P[43]*tmp[262];
-	P_new[44] = P[36]*tmp[267] + P[37]*tmp[266] + P[38]*tmp[265] + P[42]*tmp[264] + P[43]*tmp[263] + P[44]*tmp[262];
-	P_new[45] = P[0]*tmp[273] + P[1]*tmp[272] + P[21]*tmp[270] + P[28]*tmp[269] + P[36]*tmp[268] + P[3]*tmp[271] + P[45];
-	P_new[46] = P[1]*tmp[273] + P[22]*tmp[270] + P[29]*tmp[269] + P[2]*tmp[272] + P[37]*tmp[268] + P[46] + P[4]*tmp[271];
-	P_new[47] = P[23]*tmp[270] + P[30]*tmp[269] + P[38]*tmp[268] + P[3]*tmp[273] + P[47] + P[4]*tmp[272] + P[5]*tmp[271];
-	P_new[48] = P[24]*tmp[270] + P[31]*tmp[269] + P[39]*tmp[268] + P[48] + P[6]*tmp[273] + P[7]*tmp[272] + P[8]*tmp[271];
-	P_new[49] = P[10]*tmp[273] + P[11]*tmp[272] + P[12]*tmp[271] + P[25]*tmp[270] + P[32]*tmp[269] + P[40]*tmp[268] + P[49];
-	P_new[50] = P[15]*tmp[273] + P[16]*tmp[272] + P[17]*tmp[271] + P[26]*tmp[270] + P[33]*tmp[269] + P[41]*tmp[268] + P[50];
-	P_new[51] = P[21]*tmp[273] + P[22]*tmp[272] + P[23]*tmp[271] + P[27]*tmp[270] + P[34]*tmp[269] + P[42]*tmp[268] + P[51];
-	P_new[52] = P[28]*tmp[273] + P[29]*tmp[272] + P[30]*tmp[271] + P[34]*tmp[270] + P[35]*tmp[269] + P[43]*tmp[268] + P[52];
-	P_new[53] = P[36]*tmp[273] + P[37]*tmp[272] + P[38]*tmp[271] + P[42]*tmp[270] + P[43]*tmp[269] + P[44]*tmp[268] + P[53];
-	P_new[54] = P[45]*tmp[273] + P[46]*tmp[272] + P[47]*tmp[271] + P[51]*tmp[270] + P[52]*tmp[269] + P[53]*tmp[268] + P[54];
-	P_new[55] = P[0]*tmp[279] + P[1]*tmp[278] + P[21]*tmp[276] + P[28]*tmp[275] + P[36]*tmp[274] + P[3]*tmp[277] + P[55];
-	P_new[56] = P[1]*tmp[279] + P[22]*tmp[276] + P[29]*tmp[275] + P[2]*tmp[278] + P[37]*tmp[274] + P[4]*tmp[277] + P[56];
-	P_new[57] = P[23]*tmp[276] + P[30]*tmp[275] + P[38]*tmp[274] + P[3]*tmp[279] + P[4]*tmp[278] + P[57] + P[5]*tmp[277];
-	P_new[58] = P[24]*tmp[276] + P[31]*tmp[275] + P[39]*tmp[274] + P[58] + P[6]*tmp[279] + P[7]*tmp[278] + P[8]*tmp[277];
-	P_new[59] = P[10]*tmp[279] + P[11]*tmp[278] + P[12]*tmp[277] + P[25]*tmp[276] + P[32]*tmp[275] + P[40]*tmp[274] + P[59];
-	P_new[60] = P[15]*tmp[279] + P[16]*tmp[278] + P[17]*tmp[277] + P[26]*tmp[276] + P[33]*tmp[275] + P[41]*tmp[274] + P[60];
-	P_new[61] = P[21]*tmp[279] + P[22]*tmp[278] + P[23]*tmp[277] + P[27]*tmp[276] + P[34]*tmp[275] + P[42]*tmp[274] + P[61];
-	P_new[62] = P[28]*tmp[279] + P[29]*tmp[278] + P[30]*tmp[277] + P[34]*tmp[276] + P[35]*tmp[275] + P[43]*tmp[274] + P[62];
-	P_new[63] = P[36]*tmp[279] + P[37]*tmp[278] + P[38]*tmp[277] + P[42]*tmp[276] + P[43]*tmp[275] + P[44]*tmp[274] + P[63];
-	P_new[64] = P[45]*tmp[279] + P[46]*tmp[278] + P[47]*tmp[277] + P[51]*tmp[276] + P[52]*tmp[275] + P[53]*tmp[274] + P[64];
-	P_new[65] = P[55]*tmp[279] + P[56]*tmp[278] + P[57]*tmp[277] + P[61]*tmp[276] + P[62]*tmp[275] + P[63]*tmp[274] + P[65];
-	P_new[66] = P[0]*tmp[285] + P[1]*tmp[284] + P[21]*tmp[282] + P[28]*tmp[281] + P[36]*tmp[280] + P[3]*tmp[283] + P[66];
-	P_new[67] = P[1]*tmp[285] + P[22]*tmp[282] + P[29]*tmp[281] + P[2]*tmp[284] + P[37]*tmp[280] + P[4]*tmp[283] + P[67];
-	P_new[68] = P[23]*tmp[282] + P[30]*tmp[281] + P[38]*tmp[280] + P[3]*tmp[285] + P[4]*tmp[284] + P[5]*tmp[283] + P[68];
-	P_new[69] = P[24]*tmp[282] + P[31]*tmp[281] + P[39]*tmp[280] + P[69] + P[6]*tmp[285] + P[7]*tmp[284] + P[8]*tmp[283];
-	P_new[70] = P[10]*tmp[285] + P[11]*tmp[284] + P[12]*tmp[283] + P[25]*tmp[282] + P[32]*tmp[281] + P[40]*tmp[280] + P[70];
-	P_new[71] = P[15]*tmp[285] + P[16]*tmp[284] + P[17]*tmp[283] + P[26]*tmp[282] + P[33]*tmp[281] + P[41]*tmp[280] + P[71];
-	P_new[72] = P[21]*tmp[285] + P[22]*tmp[284] + P[23]*tmp[283] + P[27]*tmp[282] + P[34]*tmp[281] + P[42]*tmp[280] + P[72];
-	P_new[73] = P[28]*tmp[285] + P[29]*tmp[284] + P[30]*tmp[283] + P[34]*tmp[282] + P[35]*tmp[281] + P[43]*tmp[280] + P[73];
-	P_new[74] = P[36]*tmp[285] + P[37]*tmp[284] + P[38]*tmp[283] + P[42]*tmp[282] + P[43]*tmp[281] + P[44]*tmp[280] + P[74];
-	P_new[75] = P[45]*tmp[285] + P[46]*tmp[284] + P[47]*tmp[283] + P[51]*tmp[282] + P[52]*tmp[281] + P[53]*tmp[280] + P[75];
-	P_new[76] = P[55]*tmp[285] + P[56]*tmp[284] + P[57]*tmp[283] + P[61]*tmp[282] + P[62]*tmp[281] + P[63]*tmp[280] + P[76];
-	P_new[77] = P[66]*tmp[285] + P[67]*tmp[284] + P[68]*tmp[283] + P[72]*tmp[282] + P[73]*tmp[281] + P[74]*tmp[280] + P[77];
-	P_new[78] = P[0]*tmp[291] + P[1]*tmp[290] + P[21]*tmp[288] + P[28]*tmp[287] + P[36]*tmp[286] + P[3]*tmp[289] + P[78];
-	P_new[79] = P[1]*tmp[291] + P[22]*tmp[288] + P[29]*tmp[287] + P[2]*tmp[290] + P[37]*tmp[286] + P[4]*tmp[289] + P[79];
-	P_new[80] = P[23]*tmp[288] + P[30]*tmp[287] + P[38]*tmp[286] + P[3]*tmp[291] + P[4]*tmp[290] + P[5]*tmp[289] + P[80];
-	P_new[81] = P[24]*tmp[288] + P[31]*tmp[287] + P[39]*tmp[286] + P[6]*tmp[291] + P[7]*tmp[290] + P[81] + P[8]*tmp[289];
-	P_new[82] = P[10]*tmp[291] + P[11]*tmp[290] + P[12]*tmp[289] + P[25]*tmp[288] + P[32]*tmp[287] + P[40]*tmp[286] + P[82];
-	P_new[83] = P[15]*tmp[291] + P[16]*tmp[290] + P[17]*tmp[289] + P[26]*tmp[288] + P[33]*tmp[287] + P[41]*tmp[286] + P[83];
-	P_new[84] = P[21]*tmp[291] + P[22]*tmp[290] + P[23]*tmp[289] + P[27]*tmp[288] + P[34]*tmp[287] + P[42]*tmp[286] + P[84];
-	P_new[85] = P[28]*tmp[291] + P[29]*tmp[290] + P[30]*tmp[289] + P[34]*tmp[288] + P[35]*tmp[287] + P[43]*tmp[286] + P[85];
-	P_new[86] = P[36]*tmp[291] + P[37]*tmp[290] + P[38]*tmp[289] + P[42]*tmp[288] + P[43]*tmp[287] + P[44]*tmp[286] + P[86];
-	P_new[87] = P[45]*tmp[291] + P[46]*tmp[290] + P[47]*tmp[289] + P[51]*tmp[288] + P[52]*tmp[287] + P[53]*tmp[286] + P[87];
-	P_new[88] = P[55]*tmp[291] + P[56]*tmp[290] + P[57]*tmp[289] + P[61]*tmp[288] + P[62]*tmp[287] + P[63]*tmp[286] + P[88];
-	P_new[89] = P[66]*tmp[291] + P[67]*tmp[290] + P[68]*tmp[289] + P[72]*tmp[288] + P[73]*tmp[287] + P[74]*tmp[286] + P[89];
-	P_new[90] = P[78]*tmp[291] + P[79]*tmp[290] + P[80]*tmp[289] + P[84]*tmp[288] + P[85]*tmp[287] + P[86]*tmp[286] + P[90];
-	P_new[91] = P[0]*tmp[297] + P[1]*tmp[296] + P[21]*tmp[294] + P[28]*tmp[293] + P[36]*tmp[292] + P[3]*tmp[295] + P[91];
-	P_new[92] = P[1]*tmp[297] + P[22]*tmp[294] + P[29]*tmp[293] + P[2]*tmp[296] + P[37]*tmp[292] + P[4]*tmp[295] + P[92];
-	P_new[93] = P[23]*tmp[294] + P[30]*tmp[293] + P[38]*tmp[292] + P[3]*tmp[297] + P[4]*tmp[296] + P[5]*tmp[295] + P[93];
-	P_new[94] = P[24]*tmp[294] + P[31]*tmp[293] + P[39]*tmp[292] + P[6]*tmp[297] + P[7]*tmp[296] + P[8]*tmp[295] + P[94];
-	P_new[95] = P[10]*tmp[297] + P[11]*tmp[296] + P[12]*tmp[295] + P[25]*tmp[294] + P[32]*tmp[293] + P[40]*tmp[292] + P[95];
-	P_new[96] = P[15]*tmp[297] + P[16]*tmp[296] + P[17]*tmp[295] + P[26]*tmp[294] + P[33]*tmp[293] + P[41]*tmp[292] + P[96];
-	P_new[97] = P[21]*tmp[297] + P[22]*tmp[296] + P[23]*tmp[295] + P[27]*tmp[294] + P[34]*tmp[293] + P[42]*tmp[292] + P[97];
-	P_new[98] = P[28]*tmp[297] + P[29]*tmp[296] + P[30]*tmp[295] + P[34]*tmp[294] + P[35]*tmp[293] + P[43]*tmp[292] + P[98];
-	P_new[99] = P[36]*tmp[297] + P[37]*tmp[296] + P[38]*tmp[295] + P[42]*tmp[294] + P[43]*tmp[293] + P[44]*tmp[292] + P[99];
-	P_new[100] = P[100] + P[45]*tmp[297] + P[46]*tmp[296] + P[47]*tmp[295] + P[51]*tmp[294] + P[52]*tmp[293] + P[53]*tmp[292];
-	P_new[101] = P[101] + P[55]*tmp[297] + P[56]*tmp[296] + P[57]*tmp[295] + P[61]*tmp[294] + P[62]*tmp[293] + P[63]*tmp[292];
-	P_new[102] = P[102] + P[66]*tmp[297] + P[67]*tmp[296] + P[68]*tmp[295] + P[72]*tmp[294] + P[73]*tmp[293] + P[74]*tmp[292];
-	P_new[103] = P[103] + P[78]*tmp[297] + P[79]*tmp[296] + P[80]*tmp[295] + P[84]*tmp[294] + P[85]*tmp[293] + P[86]*tmp[292];
-	P_new[104] = P[104] + P[91]*tmp[297] + P[92]*tmp[296] + P[93]*tmp[295] + P[97]*tmp[294] + P[98]*tmp[293] + P[99]*tmp[292];
-	P_new[105] = P[0]*tmp[303] + P[105] + P[1]*tmp[302] + P[21]*tmp[300] + P[28]*tmp[299] + P[36]*tmp[298] + P[3]*tmp[301];
-	P_new[106] = P[106] + P[1]*tmp[303] + P[22]*tmp[300] + P[29]*tmp[299] + P[2]*tmp[302] + P[37]*tmp[298] + P[4]*tmp[301];
-	P_new[107] = P[107] + P[23]*tmp[300] + P[30]*tmp[299] + P[38]*tmp[298] + P[3]*tmp[303] + P[4]*tmp[302] + P[5]*tmp[301];
-	P_new[108] = P[108] + P[24]*tmp[300] + P[31]*tmp[299] + P[39]*tmp[298] + P[6]*tmp[303] + P[7]*tmp[302] + P[8]*tmp[301];
-	P_new[109] = P[109] + P[10]*tmp[303] + P[11]*tmp[302] + P[12]*tmp[301] + P[25]*tmp[300] + P[32]*tmp[299] + P[40]*tmp[298];
-	P_new[110] = P[110] + P[15]*tmp[303] + P[16]*tmp[302] + P[17]*tmp[301] + P[26]*tmp[300] + P[33]*tmp[299] + P[41]*tmp[298];
-	P_new[111] = P[111] + P[21]*tmp[303] + P[22]*tmp[302] + P[23]*tmp[301] + P[27]*tmp[300] + P[34]*tmp[299] + P[42]*tmp[298];
-	P_new[112] = P[112] + P[28]*tmp[303] + P[29]*tmp[302] + P[30]*tmp[301] + P[34]*tmp[300] + P[35]*tmp[299] + P[43]*tmp[298];
-	P_new[113] = P[113] + P[36]*tmp[303] + P[37]*tmp[302] + P[38]*tmp[301] + P[42]*tmp[300] + P[43]*tmp[299] + P[44]*tmp[298];
-	P_new[114] = P[114] + P[45]*tmp[303] + P[46]*tmp[302] + P[47]*tmp[301] + P[51]*tmp[300] + P[52]*tmp[299] + P[53]*tmp[298];
-	P_new[115] = P[115] + P[55]*tmp[303] + P[56]*tmp[302] + P[57]*tmp[301] + P[61]*tmp[300] + P[62]*tmp[299] + P[63]*tmp[298];
-	P_new[116] = P[116] + P[66]*tmp[303] + P[67]*tmp[302] + P[68]*tmp[301] + P[72]*tmp[300] + P[73]*tmp[299] + P[74]*tmp[298];
-	P_new[117] = P[117] + P[78]*tmp[303] + P[79]*tmp[302] + P[80]*tmp[301] + P[84]*tmp[300] + P[85]*tmp[299] + P[86]*tmp[298];
-	P_new[118] = P[118] + P[91]*tmp[303] + P[92]*tmp[302] + P[93]*tmp[301] + P[97]*tmp[300] + P[98]*tmp[299] + P[99]*tmp[298];
-	P_new[119] = P[105]*tmp[303] + P[106]*tmp[302] + P[107]*tmp[301] + P[111]*tmp[300] + P[112]*tmp[299] + P[113]*tmp[298] + P[119];
-
-    // swap X, X_new and P, P_new pointers
-    swap_ptr = X;
-    X = X_new;
-    X_new = swap_ptr;
-
-    swap_ptr = P;
-    P = P_new;
-    P_new = swap_ptr;
 }
 
 #endif // USE_EKF

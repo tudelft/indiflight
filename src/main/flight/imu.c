@@ -58,6 +58,7 @@
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_MULTITHREAD)
 #include <stdio.h>
 #include <pthread.h>
+#include "imu.h"
 
 static pthread_mutex_t imuUpdateLock;
 
@@ -175,6 +176,18 @@ void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correctio
     throttleAngleScale = calculateThrottleAngleScale(throttle_correction_angle);
 
     throttleAngleValue = throttle_correction_value;
+}
+
+void setAttitudeState(attitudeEulerAngles_t att_set)
+{
+    attitude = att_set;
+    imuComputeQuaternionFromRPY(&qP, attitude.values.roll, attitude.values.pitch, gpsSol.groundCourse);
+}
+
+void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
+{
+    posEstNed = posEstNed_set;
+    velEstNed = velEstNed_set;
 }
 
 void imuInit(void)
@@ -475,7 +488,7 @@ static float imuCalcKpGain(timeUs_t currentTimeUs, bool useAcc, float *gyroAvera
     return ret;
 }
 
-#if defined(USE_GPS)
+#if defined(USE_GPS) || defined(USE_EKF)
 static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t initialRoll, int16_t initialPitch, int16_t initialYaw)
 {
     if (initialRoll > 1800) {
