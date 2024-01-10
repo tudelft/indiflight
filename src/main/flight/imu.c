@@ -263,7 +263,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 #ifdef USE_GPS_PI
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = -extPosNed.psi;
+        float yawI = -extPosNed.att.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }
@@ -347,7 +347,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     attitudeIsEstablished = true;
 }
 
-#ifdef USE_GPS_PI
+#if defined(USE_GPS_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
 t_fp_vector posEstNed = {0};
 t_fp_vector velEstNed = {0};
 
@@ -530,7 +530,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     float cogYawGain = 0.0f; // IMU yaw gain to be applied in imuMahonyAHRSupdate from ground course, default to no correction from CoG
     float courseOverGround = 0; // To be used when cogYawGain is non-zero, in radians
 
-    const timeDelta_t deltaT = currentTimeUs - previousIMUUpdateTime;
+    timeDelta_t deltaT = currentTimeUs - previousIMUUpdateTime;
     previousIMUUpdateTime = currentTimeUs;
 
 #ifdef USE_MAG

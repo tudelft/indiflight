@@ -33,7 +33,7 @@
 
 // use simulatior's attitude directly
 // disable this if wants to test AHRS algorithm
-#undef USE_IMU_CALC
+//#undef USE_IMU_CALC
 
 //#define SIMULATOR_ACC_SYNC
 //#define SIMULATOR_GYRO_SYNC
@@ -114,7 +114,6 @@
 #undef USE_TELEMETRY_HOTT
 #undef USE_TELEMETRY_SMARTPORT
 #undef USE_TELEMETRY_MAVLINK
-#undef USE_TELEMETRY_PI
 #undef USE_RESOURCE_MGMT
 #undef USE_CMS
 #undef USE_TELEMETRY_CRSF
@@ -245,9 +244,11 @@ typedef struct {
     double imu_orientation_quat[4];     //w, x, y, z
     double velocity_xyz[3];             // m/s, earth frame
     double position_xyz[3];             // meters, NED from origin
+    double pressure;
+    //double actuator_state[8];           // current motor RPM
 } fdm_packet;
 typedef struct {
-    float motor_speed[4];   // normal: [0.0, 1.0], 3D: [-1.0, 1.0]
+    float actuator_set[8];   // normal: [0.0, 1.0], 3D: [-1.0, 1.0]
 } servo_packet;
 
 void FLASH_Unlock(void);
@@ -261,6 +262,7 @@ uint64_t millis64_real(void);
 void delayMicroseconds_real(uint32_t us);
 uint64_t micros64(void);
 uint64_t millis64(void);
+uint32_t micros(void);
 
 int lockMainPID(void);
 

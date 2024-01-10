@@ -125,6 +125,7 @@
 #include "io/vtx_rtc6705.h"
 #include "io/vtx_smartaudio.h"
 #include "io/vtx_tramp.h"
+#include "io/hil.h"
 
 #include "msc/emfat_file.h"
 #ifdef USE_PERSISTENT_MSC_RTC
@@ -1005,6 +1006,11 @@ void init(void)
     if (featureIsEnabled(FEATURE_TELEMETRY)) {
         telemetryInit();
     }
+#endif
+
+#ifdef HIL_BUILD
+    initHil();
+    checkHilState();
 #endif
 
     setArmingDisabled(ARMING_DISABLED_BOOT_GRACE_TIME);

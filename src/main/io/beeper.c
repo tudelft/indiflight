@@ -387,6 +387,10 @@ static void beeperGpsStatus(void)
  */
 void beeperUpdate(timeUs_t currentTimeUs)
 {
+#ifdef HIL_BUILD
+    beeperSilence();
+    return;
+#endif
     // If beeper option from AUX switch has been selected
     if (IS_RC_MODE_ACTIVE(BOXBEEPERON)) {
         beeper(BEEPER_RX_SET);

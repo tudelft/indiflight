@@ -94,7 +94,7 @@ typedef enum {
     POSITION_MODE    = (1 << 13)
 } flightModeFlags_e;
 
-extern uint16_t flightModeFlags;
+extern flightModeFlags_e flightModeFlags;
 
 #define DISABLE_FLIGHT_MODE(mask) disableFlightMode(mask)
 #define ENABLE_FLIGHT_MODE(mask) enableFlightMode(mask)

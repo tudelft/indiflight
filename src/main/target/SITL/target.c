@@ -496,10 +496,10 @@ static void pwmCompleteMotorUpdate(void)
         outScale = 500.0;
     }
 
-    pwmPkt.motor_speed[3] = motorsPwm[0] / outScale;
-    pwmPkt.motor_speed[0] = motorsPwm[1] / outScale;
-    pwmPkt.motor_speed[1] = motorsPwm[2] / outScale;
-    pwmPkt.motor_speed[2] = motorsPwm[3] / outScale;
+    pwmPkt.actuator_set[3] = motorsPwm[0] / outScale;
+    pwmPkt.actuator_set[0] = motorsPwm[1] / outScale;
+    pwmPkt.actuator_set[1] = motorsPwm[2] / outScale;
+    pwmPkt.actuator_set[2] = motorsPwm[3] / outScale;
 
     // get one "fdm_packet" can only send one "servo_packet"!!
     if (pthread_mutex_trylock(&updateLock) != 0) return;

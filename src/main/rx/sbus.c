@@ -113,7 +113,7 @@ static void sbusDataReceive(uint16_t c, void *data)
 {
     sbusFrameData_t *sbusFrameData = data;
 
-    const timeUs_t nowUs = microsISR();
+    const timeUs_t nowUs = micros();
 
     const timeDelta_t sbusFrameTime = cmpTimeUs(nowUs, sbusFrameData->startAtUs);
 

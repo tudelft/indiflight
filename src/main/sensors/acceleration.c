@@ -32,12 +32,15 @@
 #include "common/filter.h"
 #include "common/utils.h"
 
+#include "io/hil.h"
+
 #include "config/feature.h"
 
 #include "sensors/acceleration_init.h"
 #include "sensors/boardalignment.h"
 
 #include "acceleration.h"
+
 
 FAST_DATA_ZERO_INIT acc_t acc;                       // acc access functions
 
@@ -58,7 +61,11 @@ void accUpdate(timeUs_t currentTimeUs)
     acc.isAccelUpdatedAtLeastOnce = true;
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+#ifdef HIL_BUILD
+        const int16_t val = hilInput.acc[axis] * acc.dev.acc_1G;
+#else
         const int16_t val =  acc.dev.ADCRaw[axis];
+#endif
         acc.accADC[axis] = val;
     }
 
