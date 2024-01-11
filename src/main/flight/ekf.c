@@ -72,6 +72,8 @@ void initEkf(timeUs_t currentTimeUs) {
 		1., 1., 1., // att
 		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)
 	};
+
+    ekf_Z[5] = extPosNed.att.angles.yaw;
 	
 	// initialize ekf
 	ekf_set_Q(Q);
