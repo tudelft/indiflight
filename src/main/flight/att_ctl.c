@@ -790,7 +790,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
         + zDesNed.V.Z * rMat[2][2];
 
     *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
-    //*fz = fz_target;
+    *fz = fz_target;
 }
 
 t_fp_vector coordinatedYaw(float yaw) {

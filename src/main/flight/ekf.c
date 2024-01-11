@@ -108,15 +108,26 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_Z[2] = extPosNed.pos.V.Z;
 		ekf_Z[3] = extPosNed.att.angles.roll;
 		ekf_Z[4] = extPosNed.att.angles.pitch;
-		ekf_Z[5] = extPosNed.att.angles.yaw;
+
+		// fix yaw discontinuity (rad)
+		float delta_psi = extPosNed.att.angles.yaw - ekf_Z[5];
+		while (delta_psi > M_PI) {
+			delta_psi -= 2 * M_PI;
+		}
+		while (delta_psi < -M_PI) {
+			delta_psi += 2 * M_PI;
+		}
+
+		ekf_Z[5] += delta_psi;
+
 		ekf_update(ekf_Z);
 	}
 	lastTimeUs = currentTimeUs;
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
-	// reset ekf if not in position mode
-    if (!FLIGHT_MODE(POSITION_MODE)) {
+	// reset ekf EXT_POS_NO_SIGNAL
+    if (extPosState == EXT_POS_NO_SIGNAL) {
         ekf_initialized = false;
     } else if (!ekf_initialized) {
         // when ekf is not initialized, we need to wait for the first external position message
