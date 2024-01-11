@@ -524,18 +524,20 @@ static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t in
 }
 #endif
 
+#ifdef USE_EKF
+
 #if defined(USE_EKF_ATTITUDE)
 void setAttitudeState(float roll, float pitch, float yaw)
 {
-    // expecting roll pitch yaw in decidegrees
-    while (roll > M_PIf) roll -= 2*M_PI;
-    while (roll < -M_PIf) roll += 2*M_PI;
+    // expecting roll pitch yaw in radians
+    while (roll > M_PIf) roll -= 2*M_PIf;
+    while (roll < -M_PIf) roll += 2*M_PIf;
 
-    while (pitch > M_PIf) pitch -= 2*M_PI;
-    while (pitch < -M_PIf) pitch += 2*M_PI;
+    while (pitch > M_PIf) pitch -= 2*M_PIf;
+    while (pitch < -M_PIf) pitch += 2*M_PIf;
 
-    while (yaw > M_PIf) yaw -= 2*M_PI;
-    while (yaw < -M_PIf) yaw += 2*M_PI;
+    while (yaw > M_PIf) yaw -= 2*M_PIf;
+    while (yaw < -M_PIf) yaw += 2*M_PIf;
 
     attitude.values.roll = (int16_t) RADIANS_TO_DECIDEGREES(roll);
     attitude.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES(pitch);
@@ -575,6 +577,7 @@ void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
 }
 #endif
 
+#endif // USE_EKF
 
 static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 {

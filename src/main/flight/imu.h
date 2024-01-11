@@ -70,9 +70,15 @@ typedef struct imuRuntimeConfig_s {
 void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
 
 #ifdef USE_EKF
-void setAttitudeState(attitudeEulerAngles_t att_set);  
+
+#ifdef USE_EKF_ATTITUDE
+void setAttitudeState(float roll, float pitch, float yaw);
+#endif
+#ifdef USE_EKF_POSITION
 void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set);
 #endif
+
+#endif //USE_EKF
 
 float getCosTiltAngle(void);
 void getQuaternion(quaternion * q);
