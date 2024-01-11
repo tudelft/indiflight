@@ -152,12 +152,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         float *ekf_X = ekf_get_X();
 
 #ifdef USE_EKF_ATTITUDE
-        attitudeEulerAngles_t att_set;
-        att_set.values.roll  = (int16_t) RADIANS_TO_DECIDEGREES( ekf_X[6] );
-        att_set.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES( -ekf_X[7] );
-        att_set.values.yaw   = (int16_t) RADIANS_TO_DECIDEGREES( ekf_X[8] );
-
-        setAttitudeState(att_set);
+        setAttitudeState(ekf_X[6], -ekf_X[7], ekf_X[8]); // roll pitch yaw in rad
 #endif
 #ifdef USE_EKF_POSITION
         t_fp_vector posNed_set;

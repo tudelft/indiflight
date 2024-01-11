@@ -525,28 +525,30 @@ static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t in
 #endif
 
 #if defined(USE_EKF_ATTITUDE)
-void setAttitudeState(attitudeEulerAngles_t att_set)
+void setAttitudeState(float roll, float pitch, float yaw)
 {
     // expecting roll pitch yaw in decidegrees
-    while (att_set.values.roll > 1800) att_set.values.roll -= 3600;
-    while (att_set.values.roll < -1800) att_set.values.roll += 3600;
+    while (roll > M_PIf) roll -= 2*M_PI;
+    while (roll < -M_PIf) roll += 2*M_PI;
 
-    while (att_set.values.pitch > 1800) att_set.values.pitch -= 3600;
-    while (att_set.values.pitch < -1800) att_set.values.pitch += 3600;
+    while (pitch > M_PIf) pitch -= 2*M_PI;
+    while (pitch < -M_PIf) pitch += 2*M_PI;
 
-    while (att_set.values.yaw > 1800) att_set.values.yaw -= 3600;
-    while (att_set.values.yaw < -1800) att_set.values.yaw += 3600;
+    while (yaw > M_PIf) yaw -= 2*M_PI;
+    while (yaw < -M_PIf) yaw += 2*M_PI;
 
-    attitude = att_set;
+    attitude.values.roll = (int16_t) RADIANS_TO_DECIDEGREES(roll);
+    attitude.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES(pitch);
+    attitude.values.yaw = (int16_t) RADIANS_TO_DECIDEGREES(yaw);
 
-    const float cosRoll = cos_approx(DECIDEGREES_TO_RADIANS(att_set.values.roll) * 0.5f);
-    const float sinRoll = sin_approx(DECIDEGREES_TO_RADIANS(att_set.values.roll) * 0.5f);
+    const float cosRoll = cos_approx(roll * 0.5f);
+    const float sinRoll = sin_approx(roll * 0.5f);
 
-    const float cosPitch = cos_approx(DECIDEGREES_TO_RADIANS(att_set.values.pitch) * 0.5f);
-    const float sinPitch = sin_approx(DECIDEGREES_TO_RADIANS(att_set.values.pitch) * 0.5f);
+    const float cosPitch = cos_approx(pitch * 0.5f);
+    const float sinPitch = sin_approx(pitch * 0.5f);
 
-    const float cosYaw = cos_approx(DECIDEGREES_TO_RADIANS(-att_set.values.yaw) * 0.5f);
-    const float sinYaw = sin_approx(DECIDEGREES_TO_RADIANS(-att_set.values.yaw) * 0.5f);
+    const float cosYaw = cos_approx(yaw * 0.5f);
+    const float sinYaw = sin_approx(yaw * 0.5f);
 
     const float q0 = cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw;
     const float q1 = sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw;
