@@ -549,8 +549,8 @@ void setAttitudeState(float roll, float pitch, float yaw)
     const float cosPitch = cos_approx(pitch * 0.5f);
     const float sinPitch = sin_approx(pitch * 0.5f);
 
-    const float cosYaw = cos_approx(yaw * 0.5f);
-    const float sinYaw = sin_approx(yaw * 0.5f);
+    const float cosYaw = cos_approx(-yaw * 0.5f);
+    const float sinYaw = sin_approx(-yaw * 0.5f);
 
     const float q0 = cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw;
     const float q1 = sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw;
