@@ -39,7 +39,8 @@ typedef enum {
     BOXGPSRESCUE,
     BOXVELCTL,
     BOXPOSCTL,
-    BOXID_FLIGHTMODE_LAST = BOXPOSCTL,
+    BOXCATAPULT,
+    BOXID_FLIGHTMODE_LAST = BOXCATAPULT,
 
 // When new flight modes are added, the parameter group version for 'modeActivationConditions' in src/main/fc/rc_modes.c has to be incremented to ensure that the RC modes configuration is reset.
 

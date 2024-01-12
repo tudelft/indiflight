@@ -593,14 +593,18 @@ void updateArmingStatus(void)
 #ifdef USE_ACC
         if ( (throwState == THROW_STATE_THROWN)
 #ifdef THROW_TO_ARM_USE_FALL_LOGIC
-                || (fallState == FALL_STATE_FALLING) ) {
-#else
-        ) {
+                || (fallState == FALL_STATE_FALLING)
 #endif
+        ) {
             // unset all but doNotTolerate.
             unsetArmingDisabled(~doNotTolerateDuringThrow);
         }
-            // yeet
+#endif
+
+#ifdef USE_CATAPULT
+        if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_WAITING_FOR_ARM)) {
+            setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
+        }
 #endif
 
         if (isArmingDisabled()) {
@@ -1204,6 +1208,15 @@ void processRxModes(timeUs_t currentTimeUs)
             ENABLE_FLIGHT_MODE(VELOCITY_MODE);
     } else {
         DISABLE_FLIGHT_MODE(VELOCITY_MODE);
+    }
+#endif
+
+#ifdef USE_CATAPULT
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) {
+        ENABLE_FLIGHT_MODE(CATAPULT_MODE);
+    } else {
+        disableCatapult();
+        DISABLE_FLIGHT_MODE(CATAPULT_MODE);
     }
 #endif
 

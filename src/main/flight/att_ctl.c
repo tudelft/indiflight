@@ -21,6 +21,9 @@
 #include "setupWLS.h"
 #include "solveActiveSet.h"
 
+#include "io/external_pos.h"
+#include "io/beeper.h"
+
 #include "pg/pg.h"
 
 #include <stdbool.h>
@@ -283,6 +286,87 @@ void indiController(void) {
     getMotor();
 }
 
+catapult_state_t catapultState = CATAPULT_DISABLED;
+
+void disableCatapult(void) {
+    beeper(BEEPER_SILENCE);
+    catapultState = CATAPULT_DISABLED;
+}
+
+void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
+#define CATAPULT_DELAY_TIME 2000000 // 2sec
+#define CATAPULT_ALTITUDE 5.f
+#define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
+#define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
+#define CATAPULT_ROTATION_TIME 150000 // 150ms
+#define GRAVITY 9.80665f
+    static timeUs_t launchTime = 0;
+    static timeUs_t cutoffTime = 0;
+
+    *spfSpBodyZ = 0.;
+    rateSpBody->V.X = 0.;
+    rateSpBody->V.Y = 0.;
+    rateSpBody->V.Z = 0.;
+
+    bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
+                || (extPosState == EXT_POS_NO_SIGNAL)
+#if defined(USE_EKF) && false
+                || !ekf_is_healthy() // implement this!
+#endif
+                ;
+    bool enableConditions = !disableConditions
+                && !ARMING_FLAG(ARMED);
+
+doMore:
+    switch (catapultState) {
+        case CATAPULT_DISABLED:
+            if (enableConditions)
+                catapultState = CATAPULT_WAITING_FOR_ARM;
+
+            break;
+        case CATAPULT_WAITING_FOR_ARM:
+            beeper(BEEPER_THROW_TO_ARM);
+            if (ARMING_FLAG(ARMED)) {
+                launchTime = micros() + CATAPULT_DELAY_TIME;
+                catapultState = CATAPULT_DELAY; goto doMore;
+            }
+            if (disableConditions)
+                catapultState = CATAPULT_DISABLED;
+            break;
+        case CATAPULT_DELAY:
+            if (cmpTimeUs(micros(), launchTime) > 0) {
+                float a = CATAPULT_ACCELERATION;
+                float h = CATAPULT_ALTITUDE;
+                float g = GRAVITY;
+                float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
+                timeDelta_t fireTimeUs = 1e6 * fireTimeSec;
+                cutoffTime = micros() + ( fireTimeUs > CATAPULT_MAX_LAUNCH_TIME ? CATAPULT_MAX_LAUNCH_TIME : fireTimeUs );
+                catapultState = CATAPULT_LAUNCHING; goto doMore;
+            }
+            break;
+        case CATAPULT_LAUNCHING:
+            if (cmpTimeUs(micros(), cutoffTime) <= 0) {
+                *spfSpBodyZ = -(CATAPULT_ACCELERATION + GRAVITY);
+            } else { 
+                catapultState = CATAPULT_ROTATING; goto doMore;
+            }
+            break;
+        case CATAPULT_ROTATING:
+            if ( cmpTimeUs(micros(), cutoffTime) <= CATAPULT_ROTATION_TIME ) {
+                rateSpBody->V.X = DEGREES_TO_RADIANS(400.f);
+                rateSpBody->V.Y = DEGREES_TO_RADIANS(400.f);
+                rateSpBody->V.Z = DEGREES_TO_RADIANS(400.f);
+            } else {
+                beeper(BEEPER_SILENCE);
+                catapultState = CATAPULT_DONE;
+            }
+            break;
+        case CATAPULT_DONE:
+            break;
+    }
+
+}
+
 void getSetpoints(void) {
     // sets:
     // 1. at least one of attSpNed and/or rateSpBody
@@ -300,8 +384,13 @@ void getSetpoints(void) {
 
     controlAttitude = true;
     trackAttitudeYaw = false;
-    // stavrow different flight modes are here
-    if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
+
+    // flight mode handling for setpoints
+    if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_DONE)) {
+        controlAttitude = false;
+        runCatapultStateMachine(&(spfSpBody.V.Z), &rateSpBody);
+
+    } else if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
         // convert acc setpoint from position mode

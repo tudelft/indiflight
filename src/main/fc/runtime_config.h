@@ -91,7 +91,8 @@ typedef enum {
     FAILSAFE_MODE   = (1 << 10),
     GPS_RESCUE_MODE = (1 << 11),
     VELOCITY_MODE    = (1 << 12),
-    POSITION_MODE    = (1 << 13)
+    POSITION_MODE    = (1 << 13),
+    CATAPULT_MODE    = (1 << 14)
 } flightModeFlags_e;
 
 extern flightModeFlags_e flightModeFlags;
@@ -112,6 +113,7 @@ extern flightModeFlags_e flightModeFlags;
    [BOXGPSRESCUE]   = LOG2(GPS_RESCUE_MODE),             \
    [BOXVELCTL]      = LOG2(VELOCITY_MODE),               \
    [BOXPOSCTL]      = LOG2(POSITION_MODE),               \
+   [BOXCATAPULT]    = LOG2(CATAPULT_MODE),               \
 }                                                        \
 /**/
 

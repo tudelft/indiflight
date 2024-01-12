@@ -93,3 +93,17 @@ t_fp_vector coordinatedYaw(float yaw);
 void getSetpoints(void);
 void getAlphaSpBody(void);
 void getMotor(void);
+
+typedef enum catapult_state_s {
+    CATAPULT_DISABLED = -1,
+    CATAPULT_WAITING_FOR_ARM = 0,
+    CATAPULT_DELAY,
+    CATAPULT_LAUNCHING,
+    CATAPULT_ROTATING,
+    CATAPULT_DONE,
+} catapult_state_t;
+
+extern catapult_state_t catapultState;
+
+void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody);
+void disableCatapult();
