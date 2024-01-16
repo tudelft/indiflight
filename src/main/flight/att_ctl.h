@@ -105,5 +105,32 @@ typedef enum catapult_state_s {
 
 extern catapult_state_t catapultState;
 
+#ifdef USE_CATAPULT
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody);
 void disableCatapult();
+#endif
+
+typedef enum learning_state_e {
+    LEARNING_DISABLED = -1,
+    LEARNING_DELAY = 0,
+    LEARNING_QUERY,
+    LEARNING_IDENTIFY,
+    LEARNING_DONE
+} learning_state_t;
+
+typedef struct motor_stats_s {
+    float maxOmega;
+    int maxOmegaIdx;
+} motor_stats_t;
+
+extern learning_state_t learningState;
+
+#ifdef USE_LEARN_AFTER_CATAPULT
+typedef enum query_state_e {
+    QUERY_ZERO = 0,
+    QUERY_POSITIVE,
+    QUERY_POSITIVE,
+} query_state_t;
+
+void runLearningStateMachine(void);
+#endif

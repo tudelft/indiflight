@@ -335,7 +335,8 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     lastCall = currentTimeUs;
 
     // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED) 
+    bool disableConditions = ARMING_FLAG(ARMED)
+        || !FLIGHT_MODE(POSITION_MODE)
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
@@ -355,6 +356,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 && acc.isAccelUpdatedAtLeastOnce
                 #ifdef USE_GPS_PI
                     && (extPosState >= EXT_POS_STILL_VALID)
+                    && (posSetpointState >= EXT_POS_STILL_VALID)
                 #endif
                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
@@ -1217,6 +1219,14 @@ void processRxModes(timeUs_t currentTimeUs)
     } else {
         disableCatapult();
         DISABLE_FLIGHT_MODE(CATAPULT_MODE);
+    }
+#endif
+
+#ifdef USE_LEARN_AFTER_CATAPULT
+    if (IS_RC_MODE_ACTIVE(BOXLEARNAFTERCATAPULT)) {
+        ENABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
     }
 #endif
 

@@ -211,7 +211,7 @@ Iprop_bak += inertiaBellFromMotorNumber(1407)
 # 
 # this can later be inverted to compute DeltaU by solving:
 #
-#   DeltaA + G2n / w0 DeltaU_prev = ( G1 + G2 / w0 )  DeltaU
+#   DeltaA + G2n / w0 DeltaU_prev = ( G1 + G2n / w0 )  DeltaU
 #      where G2n = G2 / (2*tau*k)
 #
 # or, assuming wdot feedback is available

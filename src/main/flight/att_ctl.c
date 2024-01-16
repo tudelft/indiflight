@@ -42,6 +42,7 @@
 fp_quaternion_t attSpNed = {.qi=1.f};
 float zAccSpNed;
 float yawRateSpNed;
+bool bypassControl = false;
 bool controlAttitude = false;
 bool trackAttitudeYaw = false;
 
@@ -265,7 +266,9 @@ void indiInit(const pidProfile_t * pidProfile) {
 }
 
 void indiController(void) {
-    if (flightModeFlags) {
+    if (flightModeFlags
+        && (!FLIGHT_MODE(CATAPULT_MODE) || catapultState == CATAPULT_DONE) 
+        && (!FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) || learningState == LEARNING_DONE)) {
         // any flight mode but ACRO --> get attitude setpoint
         if ( !((++attExecCounter)%attRateDenom) ) {
             // rate limit attitude control
@@ -288,6 +291,7 @@ void indiController(void) {
 
 catapult_state_t catapultState = CATAPULT_DISABLED;
 
+#ifdef USE_CATAPULT
 void disableCatapult(void) {
     beeper(BEEPER_SILENCE);
     catapultState = CATAPULT_DISABLED;
@@ -303,23 +307,25 @@ void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
     static timeUs_t launchTime = 0;
     static timeUs_t cutoffTime = 0;
 
-    *spfSpBodyZ = 0.;
-    rateSpBody->V.X = 0.;
-    rateSpBody->V.Y = 0.;
-    rateSpBody->V.Z = 0.;
-
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
                 || (extPosState == EXT_POS_NO_SIGNAL)
 #if defined(USE_EKF) && false
                 || !ekf_is_healthy() // implement this!
 #endif
                 ;
-    bool enableConditions = !disableConditions
-                && !ARMING_FLAG(ARMED);
+    bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);
+
+    *spfSpBodyZ = 0.;
+    rateSpBody->V.X = 0.;
+    rateSpBody->V.Y = 0.;
+    rateSpBody->V.Z = 0.;
 
 doMore:
     switch (catapultState) {
         case CATAPULT_DISABLED:
+            launchTime = 0;
+            cutoffTime = 0;
+
             if (enableConditions)
                 catapultState = CATAPULT_WAITING_FOR_ARM;
 
@@ -366,6 +372,113 @@ doMore:
     }
 
 }
+#endif
+
+learning_state_t learningState = LEARNING_DISABLED;
+
+#ifdef USE_LEARN_AFTER_CATAPULT
+
+#define LEARNING_ACT 4
+#define LEARNING_NUM_GROUPS 3
+#define LEARNING_DELAY_TIME 50000 // 50ms
+#define LEARNING_MAX_GROUP_TIME 75000 // 75ms
+#define LEARNING_THRUST 0.5f
+#define LEARNING_THRUST_VAR 0.2f
+STATIC_ASSERT(LEARNING_MAX_GROUP_TIME < 200000, "Dangerously high group time");
+STATIC_ASSERT(LEARNING_DELAY_TIME > 10000, "not enough time for bisection");
+
+#define LEARNING_NUM ((uint16_t)(LEARNING_MAX_GROUP_TIME/1000*8))
+#define LEARNING_GYRO_MAX 1800 // deg/s
+
+void runLearningStateMachine(void) {
+    static timeUs_t startAt = 0;
+    static float motorHistory[LEARNING_ACT][LEARNING_NUM];
+
+    const bool groups[LEARNING_NUM_GROUPS][LEARNING_ACT] = {
+        {true, true, false, false},
+        {true, false, true, false},
+        {true, false, false, true},
+    };
+
+    const bool groups[LEARNING_NUM_GROUPS][LEARNING_ACT] = {
+        {1, 1, 0, 0},
+        {1, 0, 1, 0},
+        {1, 0, 0, 1},
+    };
+        {2, 1, 0, 0},
+        {1, 0, 2, 1},
+        {0, 0, 0, 2},
+        {0, 2, 1, 0},
+
+    static uint8_t groupIndex = 0;
+    static float gyroState[3];
+    static float minGyroMargin = 2000.f;
+    static timeUs_t currentGroupAt = 0;
+    static uint16_t j = 0;
+    static motor_stats_t motorStats[LEARNING_ACT];
+
+    for (int i=0; i < LEARNING_ACT; i++)  u[i] = 0.f;
+
+doMore:
+    switch (learningState) {
+        case LEARNING_DISABLED:
+            startAt = micros() + LEARNING_DELAY_TIME;
+            learningState = LEARNING_DELAY; goto doMore;
+        case LEARNING_DELAY:
+            if (cmpTimeUs(micros(), startAt) > 0) {
+                for (int i = FD_ROLL; i <= FD_YAW; i++) {
+                    gyroState[i] = gyro.gyroADCf[i];
+                    minGyroMargin = MIN( LEARNING_GYRO_MAX - absf(gyroState[i]), minGyroMargin );
+                }
+                groupIndex = 0;
+                j = 0;
+                currentGroupAt = micros();
+                for (int i=0; i < LEARNING_ACT; i++) { motorStats[i] = (const motor_stats_t){ 0 }; }
+                learningState = LEARNING_QUERY; goto doMore;
+            }
+            break;
+        case LEARNING_QUERY: {
+            timeDelta_t queryTime = cmpTimeUs(micros(), currentGroupAt);
+            bool gyroExceeded = false; // todo: write this logic
+
+            if ( (queryTime <= LEARNING_MAX_GROUP_TIME) && !gyroExceeded ) queryState = QUERY_EXCITE;
+            else if ( queryTime <= (LEARNING_MAX_GROUP_TIME + LEARNING_DELAY_TIME) ) queryState = QUERY_ZERO;
+            else {
+                if (++groupIndex >= LEARNING_NUM_GROUPS) { learningState = LEARNING_IDENTIFY; goto doMore; }
+                else { currentGroupAt = micros(); break; }
+            }
+
+            // issue commands
+            switch (queryState) {
+                case QUERY_ZERO: // u remains zero
+                    // todo:
+                    // calculate 61% rpm,
+                    // bisect once every iteration for each motor starting at [0, maxOmegaIdx]
+                    // result is (idx * loopTimeUs).
+                    // subtract omega filter time const?
+                    // result is valid if between 0.01 and 0.1??
+                    break;
+                case QUERY_EXCITE:
+                    for (int i=0; i < LEARNING_ACT; i++) {
+                        u[i] = groups[groupIndex][i] ? LEARNING_THRUST : 0.f;
+                        motorHistory[i][j++] = omega[i];
+                        if (omega[i] > motorStats[i].maxOmega) {
+                            motorStats[i].maxOmega = omega[i];
+                            motorStats[i].maxOmegaIdx = j-1;
+                        }
+                    }
+                    break;
+            }
+
+            break;
+        }
+        case LEARNING_IDENTIFY:
+            break;
+        case LEARNING_DONE:
+            break;
+    }
+}
+#endif
 
 void getSetpoints(void) {
     // sets:
@@ -382,14 +495,22 @@ void getSetpoints(void) {
     rateSpBody.V.Y = 0.f;
     rateSpBody.V.Z = 0.f;
 
+    bypassControl = false;
     controlAttitude = true;
     trackAttitudeYaw = false;
 
     // flight mode handling for setpoints
     if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_DONE)) {
+#ifdef USE_CATAPULT
+        // this part is never reached anyway ifndef USE_CATAPULT because the flight mode is disabled
         controlAttitude = false;
         runCatapultStateMachine(&(spfSpBody.V.Z), &rateSpBody);
-
+#endif
+    } else if (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE)) {
+#ifdef USE_LEARN_AFTER_CATAPULT
+        bypassControl = true;
+        runLearningStateMachine();
+#endif
     } else if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
@@ -590,7 +711,7 @@ void getMotor(void) {
     float omega_inv[MAXU];
     for (int i = 0; i < nu; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive() || false) {
+        if (isDshotTelemetryActive()){ // || false) {
 #ifdef USE_OMEGA_DOT_FEEDBACK
             omega_prev[i] = omega[i];
 #endif
@@ -613,7 +734,7 @@ void getMotor(void) {
     // get motor acceleration
     for (int i = 0; i < nu; i++) {
 #if defined(USE_OMEGA_DOT_FEEDBACK) && defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive() || false ) {
+        if (isDshotTelemetryActive()){ // || false) {
             omega_dot[i] = (omega[i] - omega_prev[i]) * pidRuntime.pidFrequency;
             // probably do some limiting here
         } else
@@ -879,7 +1000,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
         + zDesNed.V.Z * rMat[2][2];
 
     *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
-    *fz = fz_target;
+    //*fz = fz_target;
 }
 
 t_fp_vector coordinatedYaw(float yaw) {

@@ -104,7 +104,8 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXVELCTL, .boxName = "VELOCITY CONTROL", .permanentId = 54},
     { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55},
     { .boxId = BOXTHROWTOARM, .boxName = "THROWTOARM", .permanentId = 56 },
-    { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 }
+    { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 },
+    { .boxId = BOXLEARNAFTERCATAPULT, .boxName = "LEARN AFTER CATAPULT", .permanentId = 58 }
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -196,6 +197,9 @@ void initActiveBoxIds(void)
 #endif
 #ifdef USE_CATAPULT
     BME(BOXCATAPULT);
+#endif
+#ifdef USE_LEARN_AFTER_CATAPULT
+    BME(BOXLEARNAFTERCATAPULT);
 #endif
     if (!featureIsEnabled(FEATURE_AIRMODE)) {
         BME(BOXAIRMODE);
