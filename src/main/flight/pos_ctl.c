@@ -28,6 +28,18 @@ float yawRateSpFromOuter = {0};
 
 // position controller configuration
 // todo DONE: split in horizontal/vertical, not XYZ.. thats kinda meaningless with yaw
+#ifdef USE_POS_YEET_GAINS
+float posHGainP = 6.;
+float posHGainD = 10.;
+float velHGainI = 0.4;
+float posVGainP = 12.0;
+float posVGainD = 6.;
+float velVGainI = 0.4;
+float velSpLimitXY = 5.;
+float velSpLimitZ  = 4.;
+float yawGainP = 8.;
+float weathervaneP = 0.;
+#else
 float posHGainP = 3.;
 float posHGainD = 5.;
 float velHGainI = 0.2;
@@ -38,6 +50,7 @@ float velSpLimitXY = 5.;
 float velSpLimitZ  = 2.;
 float yawGainP = 8.;
 float weathervaneP = 0.;
+#endif
 
 t_fp_vector velIError = {0};
 
