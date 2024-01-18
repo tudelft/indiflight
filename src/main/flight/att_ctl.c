@@ -299,7 +299,7 @@ void disableCatapult(void) {
 
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
 #define CATAPULT_DELAY_TIME 2000000 // 2sec
-#define CATAPULT_ALTITUDE 5.f
+#define CATAPULT_ALTITUDE 3.f
 #define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
 #define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
 #define CATAPULT_ROTATION_TIME 150000 // 150ms
@@ -309,6 +309,7 @@ void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
 
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
                 || (extPosState == EXT_POS_NO_SIGNAL)
+                || (posSetpointState == EXT_POS_NO_SIGNAL)
 #if defined(USE_EKF) && false
                 || !ekf_is_healthy() // implement this!
 #endif
@@ -388,7 +389,7 @@ STATIC_ASSERT(LEARNING_MAX_GROUP_TIME < 200000, "Dangerously high group time");
 STATIC_ASSERT(LEARNING_DELAY_TIME > 10000, "not enough time for bisection");
 
 #define LEARNING_NUM ((uint16_t)(LEARNING_MAX_GROUP_TIME/1000*8))
-#define LEARNING_GYRO_MAX 1800 // deg/s
+#define LEARNING_GYRO_MAX 1800.f // deg/s
 
 void runLearningStateMachine(void) {
     static timeUs_t startAt = 0;
@@ -399,16 +400,6 @@ void runLearningStateMachine(void) {
         {true, false, true, false},
         {true, false, false, true},
     };
-
-    const bool groups[LEARNING_NUM_GROUPS][LEARNING_ACT] = {
-        {1, 1, 0, 0},
-        {1, 0, 1, 0},
-        {1, 0, 0, 1},
-    };
-        {2, 1, 0, 0},
-        {1, 0, 2, 1},
-        {0, 0, 0, 2},
-        {0, 2, 1, 0},
 
     static uint8_t groupIndex = 0;
     static float gyroState[3];
@@ -428,7 +419,7 @@ doMore:
             if (cmpTimeUs(micros(), startAt) > 0) {
                 for (int i = FD_ROLL; i <= FD_YAW; i++) {
                     gyroState[i] = gyro.gyroADCf[i];
-                    minGyroMargin = MIN( LEARNING_GYRO_MAX - absf(gyroState[i]), minGyroMargin );
+                    minGyroMargin = MIN( LEARNING_GYRO_MAX - fabsf(gyroState[i]), minGyroMargin );
                 }
                 groupIndex = 0;
                 j = 0;

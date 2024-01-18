@@ -118,19 +118,22 @@ typedef enum learning_state_e {
     LEARNING_DONE
 } learning_state_t;
 
-typedef struct motor_stats_s {
-    float maxOmega;
-    int maxOmegaIdx;
-} motor_stats_t;
-
 extern learning_state_t learningState;
 
 #ifdef USE_LEARN_AFTER_CATAPULT
 typedef enum query_state_e {
     QUERY_ZERO = 0,
-    QUERY_POSITIVE,
-    QUERY_POSITIVE,
+    QUERY_RAMP,
+    QUERY_STEP,
+    QUERY_DONE
 } query_state_t;
+
+typedef struct motor_stats_s {
+    float maxOmega;
+    int maxOmegaIdx;
+    query_state_t queryState;
+} motor_stats_t;
+
 
 void runLearningStateMachine(void);
 #endif
