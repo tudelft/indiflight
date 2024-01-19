@@ -83,6 +83,7 @@
 #include "sensors/gyro.h"
 #include "sensors/gyro_init.h"
 #include "sensors/sensors.h"
+#include "flight/mixer.h"
 
 #include "acceleration_init.h"
 
@@ -92,6 +93,10 @@
     !defined(USE_ACC_ADXL345) && !defined(USE_ACC_BMA280) && !defined(USE_ACC_LSM303DLHC) && \
     !defined(USE_ACC_MMA8452) && !defined(USE_FAKE_ACC)
 #error At least one USE_ACC device definition required
+#endif
+
+#if defined(USE_ACC_RPM_FILTER) && !defined(USE_RPM_FILTER)
+#error Cannot USE_ACC_RPM_FILTER without USE_RPM_FILTER
 #endif
 
 #define CALIBRATING_ACC_CYCLES              400
@@ -355,6 +360,11 @@ retry:
     return true;
 }
 
+#if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
+    static int notchUpdatesPerIteration;
+#endif
+
+
 void accInitFilters(void)
 {
     // Only set the lowpass cutoff if the ACC sample rate is detected otherwise
@@ -366,6 +376,26 @@ void accInitFilters(void)
             pt2FilterInit(&accelerationRuntime.accFilter[axis], k);
         }
     }
+
+#if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
+    rpmFilterAcc.numHarmonics = MIN(rpmFilter.numHarmonics, 1); // disable (ie 0), if gyro also disabled
+    rpmFilterAcc.minHz = rpmFilter.minHz;
+    rpmFilterAcc.maxHz = MIN(rpmFilter.maxHz, 0.48*acc.sampleRateHz); // avoid nyquist
+    rpmFilterAcc.fadeRangeHz = rpmFilter.fadeRangeHz;
+    rpmFilterAcc.q = rpmFilter.q;
+    rpmFilterAcc.looptimeUs = 1.f / acc.sampleRateHz;
+
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        for (int motor = 0; motor < getMotorCount(); motor++) {
+            for (int i = 0; i < rpmFilterAcc.numHarmonics; i++) {
+                biquadFilterInit(&rpmFilterAcc.notch[axis][motor][i], rpmFilterAcc.minHz * i, rpmFilterAcc.looptimeUs, rpmFilterAcc.q, FILTER_NOTCH, 0.0f);
+            }
+        }
+    }
+    const float loopIterationsPerUpdate = RPM_FILTER_DURATION_S / (rpmFilterAcc.looptimeUs * 1e-6f);
+    const float numNotchesPerAxis = getMotorCount() * rpmFilter.numHarmonics;
+    notchUpdatesPerIteration = ceilf(numNotchesPerAxis / loopIterationsPerUpdate); // round to ceiling
+#endif
 }
 
 bool accInit(uint16_t accSampleRateHz)
