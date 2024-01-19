@@ -40,10 +40,10 @@ float velSpLimitZ  = 4.;
 float yawGainP = 8.;
 float weathervaneP = 0.;
 #else
-float posHGainP = 3.;
-float posHGainD = 5.;
-float velHGainI = 0.2;
-float posVGainP = 3.0;
+float posHGainP = 5.;
+float posHGainD = 7.;
+float velHGainI = 0.5;
+float posVGainP = 4.0;
 float posVGainD = 5.;
 float velVGainI = 0.2;
 float velSpLimitXY = 5.;
@@ -76,7 +76,7 @@ void updatePosCtl(timeUs_t current) {
 
 void getAccSpNed(timeUs_t current) {
     // precalculations
-    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 40.f ) );
+    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 50.f ) ); // fixme. Why is this hardcoded?! is this bound even necessary?
     float posHGainPCasc = posHGainP / posHGainD; // emulate parallel PD with Casc system
     float posVGainPCasc = posVGainP / posVGainD;
 

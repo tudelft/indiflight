@@ -391,22 +391,26 @@ learning_state_t learningState = LEARNING_DISABLED;
 STATIC_ASSERT(LEARNING_OVERLAP_TIME <= LEARNING_STEP_TIME, "LEARNING_OVERLAP_TIME larger than LEARNING_STEP_TIME untested");
 STATIC_ASSERT(LEARNING_TOTAL_QUERY_TIME + LEARNING_DELAY_TIME < 750000, "Dangerously high total learning time");
 
-#define LEARNING_NUM ((uint16_t)(LEARNING_MAX_GROUP_TIME/1000*8))
 #define LEARNING_GYRO_MAX 1600.f // deg/s
 
-static void setMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
+void disableLearning(void) {
+    if (catapultState != CATAPULT_DONE)
+        learningState = LEARNING_DISABLED; // only reset if catapult is also reset
+}
+
+static void resetMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
     if ( motor >= LEARNING_ACT ) return;
 
     motor_state_t* p = motorStates + motor;
-    if (!enable) {
-        p->queryState = QUERY_ZERO;
-    } else if (p->queryState == QUERY_ZERO) {
+    if (enable) {
         p->startTime = micros();
         p->queryState = QUERY_STEP;
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
             p->minGyro[axis] = gyro.gyroADCf[axis] + (-LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
             p->maxGyro[axis] = gyro.gyroADCf[axis] + (+LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
         }
+    } else {
+        p->queryState = QUERY_ZERO;
     } // do nothing if enable, but already enabled
 }
 
@@ -424,9 +428,9 @@ doMore:
         case LEARNING_DELAY:
             if (cmpTimeUs(micros(), startAt) > 0) {
 
-                setMotorQueryState(motorStates, 0, true);
+                resetMotorQueryState(motorStates, 0, true);
                 for (int motor = 1; motor < LEARNING_ACT; motor++)
-                    setMotorQueryState(motorStates, motor, false);
+                    resetMotorQueryState(motorStates, motor, false);
 
                 learningState = LEARNING_ACTIVE; goto doMore;
             }
@@ -437,15 +441,14 @@ doMore:
             bool gyroExceeded = false; // todo: write this logic
             UNUSED(gyroExceeded);
 
-            bool allMotorsDone = true;
-
             for (int motor = 0; motor < LEARNING_ACT; motor++) {
                 if (motorStates[motor].queryState == QUERY_ZERO) { break; } // no more motors possible
 
                 // trigger next motor, if overlap time reached
                 timeDelta_t time_in_query = cmpTimeUs(micros(), motorStates[motor].startTime);
                 if ( (motor+1 < LEARNING_ACT) && ( (time_in_query + LEARNING_OVERLAP_TIME) > (LEARNING_STEP_TIME + LEARNING_RAMP_TIME) ) ) {
-                    setMotorQueryState(motorStates, motor + 1, true);
+                    if (motorStates[motor+1].queryState == QUERY_ZERO)
+                        resetMotorQueryState(motorStates, motor + 1, true);
                 }
 
                 // protect somewhat against gyro overrun, probably wont work because of filter delays
@@ -470,23 +473,31 @@ doMoreMotors:
                         if (time_in_ramp > LEARNING_RAMP_TIME) {
                             motorStates[motor].queryState = QUERY_DONE; goto doMoreMotors;
                         }
-                        u_output[motor] = LEARNING_RAMP_AMPLITUDE * ( 1.f - (time_in_ramp / LEARNING_RAMP_TIME) );
+                        u_output[motor] = LEARNING_RAMP_AMPLITUDE * ( 1.f - ( ((float) time_in_ramp) / ((float) LEARNING_RAMP_TIME) ) );
                         break;
                     }
                     case QUERY_DONE: { break; }
                 }
+            }
 
+            bool allMotorsDone = true;
+            for (int motor = 0; motor < LEARNING_ACT; motor++) {
                 allMotorsDone &= (motorStates[motor].queryState == QUERY_DONE);
             }
 
             // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
-            if (allMotorsDone || (cmpTimeUs(micros(), startAt) > LEARNING_TOTAL_QUERY_TIME + 10000) ) {
+            if (allMotorsDone || (cmpTimeUs(micros(), startAt) > (LEARNING_TOTAL_QUERY_TIME + 10000)) ) {
                 learningState = LEARNING_DONE; goto doMore;
             }
 
             break;
         }
         case LEARNING_DONE: { break; }
+    }
+
+    for (int motor = 0; motor < LEARNING_ACT; motor++) {
+        u_output[motor] = constrainf(u_output[motor], 0.f, 1.f);
+        u[motor] = u_output[motor]; // for logging purposes. TODO: also log du
     }
 }
 #endif
@@ -516,11 +527,11 @@ void getSetpoints(void) {
         // this part is never reached anyway ifndef USE_CATAPULT because the flight mode is disabled
         controlAttitude = false;
         runCatapultStateMachine(&(spfSpBody.V.Z), &rateSpBody);
-#endif
-    } else if (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE) && (learningState != LEARNING_DONE)) {
+    } else if (FLIGHT_MODE(CATAPULT_MODE) && FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE) && (learningState != LEARNING_DONE)) {
 #ifdef USE_LEARN_AFTER_CATAPULT
         bypassControl = true;
         runLearningStateMachine();
+#endif
 #endif
     } else if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);

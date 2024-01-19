@@ -1214,7 +1214,7 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) {
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (FLIGHT_MODE(CATAPULT_MODE) || !ARMING_FLAG(ARMED))) { // only transition if disarmed
         ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
         disableCatapult();
@@ -1223,9 +1223,10 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_LEARN_AFTER_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXLEARNAFTERCATAPULT)) {
+    if (IS_RC_MODE_ACTIVE(BOXLEARNAFTERCATAPULT) && (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) || !ARMING_FLAG(ARMED))) {
         ENABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
     } else {
+        disableLearning();
         DISABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
     }
 #endif

@@ -108,7 +108,7 @@ extern catapult_state_t catapultState;
 
 #ifdef USE_CATAPULT
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody);
-void disableCatapult();
+void disableCatapult(void);
 #endif
 
 typedef enum learning_state_e {
@@ -137,4 +137,5 @@ typedef struct motor_stats_s {
 
 
 void runLearningStateMachine(void);
+void disableLearning(void);
 #endif
