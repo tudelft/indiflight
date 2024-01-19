@@ -78,6 +78,7 @@ extern float u[MAXU];
 extern float u_state[MAXU];
 extern float u_state_sync[MAXU];
 extern float u_output[MAXU];
+extern float omegaUnfiltered[MAXU];
 extern float omega[MAXU];
 extern float omega_dot[MAXU];
 extern float alpha[XYZ_AXIS_COUNT];
@@ -113,8 +114,7 @@ void disableCatapult();
 typedef enum learning_state_e {
     LEARNING_DISABLED = -1,
     LEARNING_DELAY = 0,
-    LEARNING_QUERY,
-    LEARNING_IDENTIFY,
+    LEARNING_ACTIVE,
     LEARNING_DONE
 } learning_state_t;
 
@@ -123,16 +123,17 @@ extern learning_state_t learningState;
 #ifdef USE_LEARN_AFTER_CATAPULT
 typedef enum query_state_e {
     QUERY_ZERO = 0,
-    QUERY_RAMP,
     QUERY_STEP,
+    QUERY_RAMP,
     QUERY_DONE
 } query_state_t;
 
 typedef struct motor_stats_s {
-    float maxOmega;
-    int maxOmegaIdx;
+    timeUs_t startTime;
+    float minGyro[3];
+    float maxGyro[3];
     query_state_t queryState;
-} motor_stats_t;
+} motor_state_t;
 
 
 void runLearningStateMachine(void);

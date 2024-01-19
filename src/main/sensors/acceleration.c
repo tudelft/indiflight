@@ -87,6 +87,7 @@ void accUpdate(timeUs_t currentTimeUs)
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
         const int16_t val = acc.accADC[axis];
+        acc.accADCunfiltered[axis] = val;
         acc.accADC[axis] = accelerationRuntime.accLpfCutHz ? pt2FilterApply(&accelerationRuntime.accFilter[axis], val) : val;
     }
 }

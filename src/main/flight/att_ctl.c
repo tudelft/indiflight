@@ -59,6 +59,7 @@ t_fp_vector rateGains = {.V.X = 20.f, .V.Y = 20.f, .V.Z = 20.f};
 
 float u[MAXU] = {0.f};
 float u_output[MAXU] = {0.f};
+float omegaUnfiltered[MAXU] = {0.f};
 float omega[MAXU] = {0.f};
 float omega_dot[MAXU] = {0.f};
 float omega_hover = 500.f;
@@ -299,7 +300,7 @@ void disableCatapult(void) {
 
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
 #define CATAPULT_DELAY_TIME 2000000 // 2sec
-#define CATAPULT_ALTITUDE 3.f
+#define CATAPULT_ALTITUDE 4.f
 #define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
 #define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
 #define CATAPULT_ROTATION_TIME 150000 // 150ms
@@ -380,35 +381,40 @@ learning_state_t learningState = LEARNING_DISABLED;
 #ifdef USE_LEARN_AFTER_CATAPULT
 
 #define LEARNING_ACT 4
-#define LEARNING_NUM_GROUPS 3
 #define LEARNING_DELAY_TIME 50000 // 50ms
-#define LEARNING_MAX_GROUP_TIME 75000 // 75ms
-#define LEARNING_THRUST 0.5f
-#define LEARNING_THRUST_VAR 0.2f
-STATIC_ASSERT(LEARNING_MAX_GROUP_TIME < 200000, "Dangerously high group time");
-STATIC_ASSERT(LEARNING_DELAY_TIME > 10000, "not enough time for bisection");
+#define LEARNING_STEP_TIME 50000 // 50ms
+#define LEARNING_RAMP_TIME 100000 // 100ms
+#define LEARNING_OVERLAP_TIME 50000 // 50ms, suggested not more than STEP_TIME
+#define LEARNING_STEP_AMPLITUDE 0.3f
+#define LEARNING_RAMP_AMPLITUDE 0.6f
+#define LEARNING_TOTAL_QUERY_TIME ((LEARNING_STEP_TIME+LEARNING_RAMP_TIME)*LEARNING_ACT - LEARNING_OVERLAP_TIME*(LEARNING_ACT-1))
+STATIC_ASSERT(LEARNING_OVERLAP_TIME <= LEARNING_STEP_TIME, "LEARNING_OVERLAP_TIME larger than LEARNING_STEP_TIME untested");
+STATIC_ASSERT(LEARNING_TOTAL_QUERY_TIME + LEARNING_DELAY_TIME < 750000, "Dangerously high total learning time");
 
 #define LEARNING_NUM ((uint16_t)(LEARNING_MAX_GROUP_TIME/1000*8))
-#define LEARNING_GYRO_MAX 1800.f // deg/s
+#define LEARNING_GYRO_MAX 1600.f // deg/s
+
+static void setMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
+    if ( motor >= LEARNING_ACT ) return;
+
+    motor_state_t* p = motorStates + motor;
+    if (!enable) {
+        p->queryState = QUERY_ZERO;
+    } else if (p->queryState == QUERY_ZERO) {
+        p->startTime = micros();
+        p->queryState = QUERY_STEP;
+        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            p->minGyro[axis] = gyro.gyroADCf[axis] + (-LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
+            p->maxGyro[axis] = gyro.gyroADCf[axis] + (+LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
+        }
+    } // do nothing if enable, but already enabled
+}
 
 void runLearningStateMachine(void) {
-    static timeUs_t startAt = 0;
-    static float motorHistory[LEARNING_ACT][LEARNING_NUM];
+    static timeUs_t startAt;
+    static motor_state_t motorStates[LEARNING_ACT];
 
-    const bool groups[LEARNING_NUM_GROUPS][LEARNING_ACT] = {
-        {true, true, false, false},
-        {true, false, true, false},
-        {true, false, false, true},
-    };
-
-    static uint8_t groupIndex = 0;
-    static float gyroState[3];
-    static float minGyroMargin = 2000.f;
-    static timeUs_t currentGroupAt = 0;
-    static uint16_t j = 0;
-    static motor_stats_t motorStats[LEARNING_ACT];
-
-    for (int i=0; i < LEARNING_ACT; i++)  u[i] = 0.f;
+    for (int i=0; i < LEARNING_ACT; i++)  u_output[i] = 0.f;
 
 doMore:
     switch (learningState) {
@@ -417,56 +423,70 @@ doMore:
             learningState = LEARNING_DELAY; goto doMore;
         case LEARNING_DELAY:
             if (cmpTimeUs(micros(), startAt) > 0) {
-                for (int i = FD_ROLL; i <= FD_YAW; i++) {
-                    gyroState[i] = gyro.gyroADCf[i];
-                    minGyroMargin = MIN( LEARNING_GYRO_MAX - fabsf(gyroState[i]), minGyroMargin );
-                }
-                groupIndex = 0;
-                j = 0;
-                currentGroupAt = micros();
-                for (int i=0; i < LEARNING_ACT; i++) { motorStats[i] = (const motor_stats_t){ 0 }; }
-                learningState = LEARNING_QUERY; goto doMore;
+
+                setMotorQueryState(motorStates, 0, true);
+                for (int motor = 1; motor < LEARNING_ACT; motor++)
+                    setMotorQueryState(motorStates, motor, false);
+
+                learningState = LEARNING_ACTIVE; goto doMore;
             }
             break;
-        case LEARNING_QUERY: {
-            timeDelta_t queryTime = cmpTimeUs(micros(), currentGroupAt);
-            bool gyroExceeded = false; // todo: write this logic
+        case LEARNING_ACTIVE: {
+            // invoke learning here!
 
-            if ( (queryTime <= LEARNING_MAX_GROUP_TIME) && !gyroExceeded ) queryState = QUERY_EXCITE;
-            else if ( queryTime <= (LEARNING_MAX_GROUP_TIME + LEARNING_DELAY_TIME) ) queryState = QUERY_ZERO;
-            else {
-                if (++groupIndex >= LEARNING_NUM_GROUPS) { learningState = LEARNING_IDENTIFY; goto doMore; }
-                else { currentGroupAt = micros(); break; }
+            bool gyroExceeded = false; // todo: write this logic
+            UNUSED(gyroExceeded);
+
+            bool allMotorsDone = true;
+
+            for (int motor = 0; motor < LEARNING_ACT; motor++) {
+                if (motorStates[motor].queryState == QUERY_ZERO) { break; } // no more motors possible
+
+                // trigger next motor, if overlap time reached
+                timeDelta_t time_in_query = cmpTimeUs(micros(), motorStates[motor].startTime);
+                if ( (motor+1 < LEARNING_ACT) && ( (time_in_query + LEARNING_OVERLAP_TIME) > (LEARNING_STEP_TIME + LEARNING_RAMP_TIME) ) ) {
+                    setMotorQueryState(motorStates, motor + 1, true);
+                }
+
+                // protect somewhat against gyro overrun, probably wont work because of filter delays
+                for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+                    float val = gyro.gyroADCf[axis];
+                    if ( (val > motorStates[motor].maxGyro[axis]) || (val < motorStates[motor].minGyro[axis]) ) {
+                        motorStates[motor].queryState = QUERY_DONE;
+                    }
+                }
+
+doMoreMotors:
+                switch (motorStates[motor].queryState) {
+                    case QUERY_ZERO: { break; } // should never happen
+                    case QUERY_STEP:
+                        if (cmpTimeUs(micros(), motorStates[motor].startTime + LEARNING_STEP_TIME) > 0) {
+                            motorStates[motor].queryState = QUERY_RAMP; goto doMoreMotors;
+                        }
+                        u_output[motor] = LEARNING_STEP_AMPLITUDE;
+                        break;
+                    case QUERY_RAMP: {
+                        timeDelta_t time_in_ramp = cmpTimeUs(micros(), motorStates[motor].startTime + LEARNING_STEP_TIME);
+                        if (time_in_ramp > LEARNING_RAMP_TIME) {
+                            motorStates[motor].queryState = QUERY_DONE; goto doMoreMotors;
+                        }
+                        u_output[motor] = LEARNING_RAMP_AMPLITUDE * ( 1.f - (time_in_ramp / LEARNING_RAMP_TIME) );
+                        break;
+                    }
+                    case QUERY_DONE: { break; }
+                }
+
+                allMotorsDone &= (motorStates[motor].queryState == QUERY_DONE);
             }
 
-            // issue commands
-            switch (queryState) {
-                case QUERY_ZERO: // u remains zero
-                    // todo:
-                    // calculate 61% rpm,
-                    // bisect once every iteration for each motor starting at [0, maxOmegaIdx]
-                    // result is (idx * loopTimeUs).
-                    // subtract omega filter time const?
-                    // result is valid if between 0.01 and 0.1??
-                    break;
-                case QUERY_EXCITE:
-                    for (int i=0; i < LEARNING_ACT; i++) {
-                        u[i] = groups[groupIndex][i] ? LEARNING_THRUST : 0.f;
-                        motorHistory[i][j++] = omega[i];
-                        if (omega[i] > motorStats[i].maxOmega) {
-                            motorStats[i].maxOmega = omega[i];
-                            motorStats[i].maxOmegaIdx = j-1;
-                        }
-                    }
-                    break;
+            // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
+            if (allMotorsDone || (cmpTimeUs(micros(), startAt) > LEARNING_TOTAL_QUERY_TIME + 10000) ) {
+                learningState = LEARNING_DONE; goto doMore;
             }
 
             break;
         }
-        case LEARNING_IDENTIFY:
-            break;
-        case LEARNING_DONE:
-            break;
+        case LEARNING_DONE: { break; }
     }
 }
 #endif
@@ -497,7 +517,7 @@ void getSetpoints(void) {
         controlAttitude = false;
         runCatapultStateMachine(&(spfSpBody.V.Z), &rateSpBody);
 #endif
-    } else if (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE)) {
+    } else if (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE) && (learningState != LEARNING_DONE)) {
 #ifdef USE_LEARN_AFTER_CATAPULT
         bypassControl = true;
         runLearningStateMachine();
@@ -708,7 +728,8 @@ void getMotor(void) {
 #endif
 
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
-            omega[i] = pidRuntime.dtermLowpassApplyFn((filter_t *) &erpmLowpass[i], erpmToRad * getDshotTelemetry(i));
+            omegaUnfiltered[i] = erpmToRad * getDshotTelemetry(i);
+            omega[i] = pidRuntime.dtermLowpassApplyFn((filter_t *) &erpmLowpass[i], omegaUnfiltered[i]);
         } else
 #endif
         {
@@ -734,6 +755,10 @@ void getMotor(void) {
             omega_dot[i] = (Tmax * du[i]) * omega_inv[i] * G2_normalizer;
         }
     }
+
+    // horrible code! Fixme todo
+    if (bypassControl) { return; }
+
 
     // use INDI only when in the air, solve linearized global problem otherwise
     bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
