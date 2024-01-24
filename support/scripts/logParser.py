@@ -47,29 +47,6 @@ class LogData(object):
         # apply scaling and get into numpy variables
         self.data = self._processData()
 
-    def _parseDataFile(self):
-        # - parse parameters
-        # - check if this is actually a logfile
-        # - get start of data
-        nskip = None
-        header = None
-        self.parameters = {}
-        with open(self.filename, 'r', newline='') as csvfile:
-            csv_reader = csv.reader(csvfile)
-            for i,row in enumerate(csv_reader):
-                if row and ("loopIteration" in row):
-                    nskip = i
-                    header = row
-                    break
-                else:
-                    self.parameters[row[0]] = row[1]
-
-        if (nskip == None) or (header == None):
-            raise ValueError(f'{self.filename} is not a betaflight logfile')
-
-        # import rows
-        return pd.read_csv(self.filename, skiprows=nskip, usecols=header, index_col="time").astype(float)
-
     def _selectLogRange(self, timeRange):
         # select plotRange
         t0 = self.raw['time'].iloc[0]
@@ -147,78 +124,6 @@ class LogData(object):
                 data[col] = data[col].astype(int)
 
         return data
-
-        # todo: compute dgyro and omega_dot unfiltered fields
-
-        # self.data[['rcCommand[0]', 'rcCommand[1]', 'rcCommand[2]']] \
-        #     /= 500.
-        # self.data['rcCommand[3]'] -= 1000.
-        # self.data['rcCommand[3]'] /= 1000.
-
-        # gyroFields = [f'gyroADC[{i}]' for i in range(3)] \
-        #                 + [f'gyroADCafterRpm[{i}]' for i in range(3)] \
-        #                 + [f'gyroSp[{i}]' for i in range(3)]
-        # self.data[gyroFields] /= self.RADIANS_TO_DEGREES
-        # self.data[['gyroADC[1]', 'gyroADC[2]', 'gyroADCafterRpm[1]', 'gyroADCafterRpm[2]']]\
-        #     *= -1.
-
-        # accFields = [f'accSmooth[{i}]' for i in range(3)] \
-        #                 + [f'accUnfiltered[{i}]' for i in range(3)]
-        # self.data[accFields] *= self.ACC_TO_MSS
-        # self.data[['accSmooth[1]', 'accSmooth[2]', 'accUnfilterd[1]', 'accUnfiltered[2]']] \
-        #     *= -1.
-
-        # motorFields = [f'motor[{i}]' for i in range(4)]
-        # self.data[motorFields] -= self.DSHOT_MIN
-        # self.data[motorFields] /= (self.DSHOT_MAX - self.DSHOT_MIN)
-
-        # quatFields = [f'quat[{i}]' for i in range(4)] \
-        #                 + [f'quatSp[{i}]' for i in range(4)]
-        # self.data[quatFields] /= self.UNIT_FLOAT_TO_SIGNED16VB
-
-        # alphaFields = [f'alpha[{i}]' for i in range(3)] \
-        #                 + [f'alphaSp[{i}]' for i in range(3)]
-        # self.data[alphaFields] /= self.RADIANS_TO_DECADEGREES
-
-        # spfFields = [f'spfSp[{i}]' for i in range(3)]
-        # self.data[spfFields] /= self.METER_TO_CM
-
-        # dvFields = [f'dv[{i}]' for i in range(6)]
-        # self.data[dvFields] /= 10.
-
-        # uFields = [f'u[{i}]' for i in range(8)] \
-        #             + [f'u_state[{i}]' for i in range(8)]
-        # self.data[uFields] /= self.UNIT_FLOAT_TO_SIGNED16VB
-
-        # omegaFields = [f'omega[{i}]' for i in range(8)] \
-        #             + [f'omegaUnfiltered[{i}]' for i in range(8)]
-        # self.data[omegaFields] /= 1.
-
-        # omegaDotFields = [f'omega_dot[{i}]' for i in range(8)]
-        # self.data[omegaDotFields] *= 100.
-
-        # posFields = [f'pos[{i}]' for i in range(3)] \
-        #             + [f'extPos[{i}]' for i in range(3)] \
-        #             + [f'posSp[{i}]' for i in range(3)] \
-        #             + [f'ekf_pos[{i}]' for i in range(3)]
-        # self.data[posFields] /= self.METER_TO_MM
-
-        # velFields = [f'vel[{i}]' for i in range(3)] \
-        #             + [f'extVel[{i}]' for i in range(3)] \
-        #             + [f'velSp[{i}]' for i in range(3)] \
-        #             + [f'ekf_vel[{i}]' for i in range(3)]
-        # self.data[velFields] /= self.METER_TO_CM
-
-        # accFields = [f'accSp[{i}]' for i in range(3)]
-        # self.data[accFields] /= self.METER_TO_CM
-
-        # extAttFields = [f'[extAtt{i}]' for i in range(3)] \
-        #                 + [f'[ekf_att{i}]' for i in range(3)]
-        # self.data[extAttFields] /= self.METER_TO_CM
-
-        # ekfAccGyroFields = [f'[ekf_acc_b{i}]' for i in range(3)] \
-        #                     + [f'[ekf_gyro_b{i}]' for i in range(3)]
-        # self.data[ekfAccGyroFields] /= self.METER_TO_MM
 
     @staticmethod
     def _getModeChanges(new, old=0):
