@@ -5,11 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: bb2csv",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/tmblaha/.local/bin/bb2csv",
+            "args": [
+                "/mnt/data/WorkData/BlackboxLogs/2024-01-19/CyberzooTests/LOG00521_catapultAndSequence.BFL",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "INDIflight SITL",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/obj/main/indiflight_SITL.elf",
-            "args": ["127.0.0.1"],
+            "args": [
+                "127.0.0.1"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -33,7 +46,7 @@
             "executable": "obj/main/indiflight_STM32H743.elf",
             "name": "Cortex OpenOCD",
             "request": "launch",
-            "preLaunchTask": "start-openocd", 
+            "preLaunchTask": "start-openocd",
             "type": "cortex-debug",
             "liveWatch": {
                 "enabled": true,

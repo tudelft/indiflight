@@ -2280,7 +2280,7 @@ static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDesc, int16_
             serializeBoxReply(dst, page, &serializeBoxPermanentIdFn);
         }
         break;
-    case MSP_REBOOT:
+    case MSP_REBOOT: // stuff happening here
         if (sbufBytesRemaining(src)) {
             rebootMode = sbufReadU8(src);
 

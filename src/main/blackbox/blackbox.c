@@ -1495,9 +1495,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quatSp[1] = lrintf(attSpNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[2] = lrintf(attSpNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[3] = lrintf(attSpNed.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
-    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.X));
-    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Y));
-    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Z));
+    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.X) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Y) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Z) * blackboxHighResolutionScale);
     blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.X) * 0.1f);
     blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Y) * 0.1f);
     blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Z) * 0.1f);
