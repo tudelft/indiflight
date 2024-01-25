@@ -18,7 +18,7 @@ if __name__=="__main__":
     log = LogData(args.datafile, args.range)
 
     fs = 1000.
-    fc = 40.
+    fc = 35.
     order = 1
     b, a = butter(order, fc, fs=fs)
 
@@ -41,10 +41,15 @@ if __name__=="__main__":
     motor = 0
     delay = 0
     for i in range(len(log.data)-delay):
-        a = np.array([[ uFilt[motor,i], np.sqrt(uFilt[motor,i]), 1., -omegaDotFilt[motor,i+delay] ]]).T
+        a = np.array([[
+            uFilt[motor,i],
+            np.sqrt(uFilt[motor,i]), 
+            1.,
+            -omegaDotFilt[motor,i+delay],
+        ]]).T
         y = omegaFilt[motor,i]
 
-        est.newData(a, y)
+        est.newSample(a, y)
 
     # recover data
     wm = est.x[0] + est.x[1]
@@ -69,5 +74,13 @@ if __name__=="__main__":
     axs[3].plot(log.data['timeMs'], wm*(lam*uFilt[motor] + (1-lam)*np.sqrt(uFilt[motor])) + w0 - tau*omegaDotFilt[motor])
 
     f.show()
+
+    f, axs = plt.subplots(4, 1, figsize=(10,12), sharex='all', sharey='row')
+    x_hist_np = np.array(est.x_hist)
+    axs[0].plot(log.data['timeMs'], x_hist_np[:, 0])
+    axs[1].plot(log.data['timeMs'], x_hist_np[:, 1])
+    axs[2].plot(log.data['timeMs'], x_hist_np[:, 2])
+    axs[3].plot(log.data['timeMs'], x_hist_np[:, 3])
+
     plt.show()
 
