@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-
 from argparse import ArgumentParser
-from logParser import LogData
-from estimators import RLS
 from matplotlib import pyplot as plt
 import numpy as np
-
 from scipy.signal import butter, lfilter, lfilter_zi
+
+from estimators import RLS
+from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
     parser = ArgumentParser()
@@ -15,7 +14,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-    log = LogData(args.datafile, args.range)
+    log = IndiflightLog(args.datafile, args.range)
 
     fs = 1000.
     fc = 35.

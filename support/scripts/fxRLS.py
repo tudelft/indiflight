@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-
 from argparse import ArgumentParser
-from logParser import LogData
-from estimators import RLS
 from matplotlib import pyplot as plt
 import numpy as np
-
 from scipy.signal import butter, lfilter, lfilter_zi
+
+from estimators import RLS
+from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
     parser = ArgumentParser()
@@ -17,7 +16,7 @@ if __name__=="__main__":
     N_ACT = 4
 
     # load data into numpy
-    log = LogData(args.datafile, args.range)
+    log = IndiflightLog(args.datafile, args.range)
     u = log.data[[f'u[{i}]' for i in range(N_ACT)]].to_numpy().T
     omega = log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]].to_numpy().T
     alphaFilt = log.data[[f'alpha[{i}]' for i in range(3)]].to_numpy().T
