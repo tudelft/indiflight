@@ -2,9 +2,8 @@
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import numpy as np
-from scipy.signal import butter, lfilter, lfilter_zi
 
-from estimators import RLS
+from estimators import RLS, Signal
 from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
@@ -15,27 +14,37 @@ if __name__=="__main__":
 
     N_ACT = 4
 
-    # load data into numpy
+    # load unfiltered data into numpy
     log = IndiflightLog(args.datafile, args.range)
-    u = log.data[[f'u[{i}]' for i in range(N_ACT)]].to_numpy().T
-    omega = log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]].to_numpy().T
-    alphaFilt = log.data[[f'alpha[{i}]' for i in range(3)]].to_numpy().T
-    alphaDiffFilt = np.diff(alphaFilt, axis=1, prepend=alphaFilt[:, 0][:, np.newaxis])
+    u     = Signal(log.data['timeS'], log.data[[f'u[{i}]' for i in range(N_ACT)]])
+    omega = Signal(log.data['timeS'], log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]])
+    gyro  = Signal(log.data['timeS'], log.data[[f'gyroADCafterRpm[{i}]' for i in range(3)]])
+    acc   = Signal(log.data['timeS'], log.data[[f'accUnfiltered[{i}]' for i in range(3)]])
+
+    omegaOnboard = log.data[[f'omega[{i}]' for i in range(3)]]
+    gyroOnboard = log.data[[f'gyroADC[{i}]' for i in range(3)]]
+    alphaOnboard = log.data[[f'alpha[{i}]' for i in range(3)]]
+    accOnboard = log.data[[f'accSmooth[{i}]' for i in range(3)]]
 
     # filter unfiltered data
-    fs = 1000.
-    fc = 35.
+    fc = 1. # Hz
     order = 1
-    b, a = butter(order, fc, fs=fs)
 
-    uFilt,_ = lfilter(b, a, u, zi=u[:, 0][:,np.newaxis]*lfilter_zi(b, a))
-    uFilt = np.clip(uFilt, 0., 1.) # can happen on order > 1
-    uDiffFilt = np.diff(uFilt, axis=1, prepend=uFilt[:, 0][:, np.newaxis])
+    uFilt = u.filter('lowpass', order, fc)
+    uFilt.setSignal(np.clip(uFilt.y, 0., 1.)) # can happen on order > 1
+    uDiffFilt = uFilt.diff()
 
-    omegaFilt,_ = lfilter(b, a, omega, zi=omega[:, 0][:,np.newaxis]*lfilter_zi(b, a))
-    omegaDiffFilt = np.diff(omegaFilt, axis=1, prepend=omegaFilt[:, 0][:, np.newaxis])
-    omegaDotFilt = omegaDiffFilt / log.data['dtimeS'].to_numpy()
-    omegaDotDiffFilt = np.diff(omegaDotFilt, axis=1, prepend=omegaDotFilt[:, 0][:, np.newaxis])
+    omegaFilt = omega.filter('lowpass', order, fc)
+    omegaDiffFilt = omegaFilt.diff()
+    omegaDotFilt = omegaFilt.dot()
+    omegaDotDiffFilt = omegaDotFilt.diff()
+
+    alpha = gyro.dot()
+    alphaFilt = alpha.filter('lowpass', order, fc)
+    alphaDiffFilt = alphaFilt.diff()
+
+    accFilt = acc.filter('lowpass', order, fc)
+    accDiff = acc.diff()
 
     # do estimation
     gamma = 1e7
@@ -45,29 +54,17 @@ if __name__=="__main__":
     axis = 0
     #for index, row in log.data.iterrows():
     for i in range(len(log.data)):
-        #a = np.array([[ # todo: for loop somehow
-        #    2 * omegaFilt[0, i] * omegaDiffFilt[0, i],
-        #    2 * omegaFilt[1, i] * omegaDiffFilt[1, i],
-        #    2 * omegaFilt[2, i] * omegaDiffFilt[2, i],
-        #    2 * omegaFilt[3, i] * omegaDiffFilt[3, i],
-        #    omegaDotDiffFilt[0, i],
-        #    omegaDotDiffFilt[1, i],
-        #    omegaDotDiffFilt[2, i],
-        #    omegaDotDiffFilt[3, i],
-        #]]).T
-        #y = alphaDiffFilt[axis, i]
-
         a = np.array([[ # todo: for loop somehow
-            omegaFilt[0, i] * omegaFilt[0, i],
-            omegaFilt[1, i] * omegaFilt[1, i],
-            omegaFilt[2, i] * omegaFilt[2, i],
-            omegaFilt[3, i] * omegaFilt[3, i],
-            omegaDotFilt[0, i],
-            omegaDotFilt[1, i],
-            omegaDotFilt[2, i],
-            omegaDotFilt[3, i],
+            2 * omegaFilt.y[i, 0] * omegaDiffFilt.y[i, 0],
+            2 * omegaFilt.y[i, 1] * omegaDiffFilt.y[i, 1],
+            2 * omegaFilt.y[i, 2] * omegaDiffFilt.y[i, 2],
+            2 * omegaFilt.y[i, 3] * omegaDiffFilt.y[i, 3],
+            omegaDotDiffFilt.y[i, 0],
+            omegaDotDiffFilt.y[i, 1],
+            omegaDotDiffFilt.y[i, 2],
+            omegaDotDiffFilt.y[i, 3],
         ]]).T
-        y = alphaFilt[axis, i]
+        y = alphaDiffFilt.y[i, axis]
 
         #a = np.array([[ # todo: for loop somehow
         #    uDiffFilt[0, i],
@@ -105,7 +102,7 @@ if __name__=="__main__":
     axs2[6].plot(log.data['timeMs'], a_hist_np[:, 6])
     axs2[7].plot(log.data['timeMs'], a_hist_np[:, 7])
 
-    axs2[8].plot(log.data['timeMs'], alphaFilt.T)
+    axs2[8].plot(log.data['timeMs'], alphaFilt.y)
     axs2[9].plot(log.data['timeMs'], est.y_hist)
 
     f.show()
