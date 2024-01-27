@@ -4,82 +4,68 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy.signal import butter, lfilter, lfilter_zi
 
-from estimators import RLS
+from estimators import RLS, Signal
 from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
     parser = ArgumentParser()
     parser.add_argument("datafile", help="single indiflight bfl logfile")
     parser.add_argument("--range","-r", required=False, nargs=2, default=(2215, 2670), type=float, help="time range to consider in ms since start of datafile")
-
     args = parser.parse_args()
 
-    log = IndiflightLog(args.datafile, args.range)
-
-    fs = 1000.
-    fc = 35.
-    order = 1
-    b, a = butter(order, fc, fs=fs)
-
     N_ACT = 4
-    u = log.data[[f'u[{i}]' for i in range(N_ACT)]].to_numpy().T
-    omega = log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]].to_numpy().T
-    omegaDot = np.diff(omega, axis=1, prepend=omega[:, 0][:, np.newaxis])
-    omegaDot /= log.data['dtimeS'].to_numpy()
 
-    uFilt,_ = lfilter(b, a, u, zi=u[:, 0][:,np.newaxis]*lfilter_zi(b, a))
-    uFilt = np.clip(uFilt, 0., 1.) # can happen on order > 1
-
-    omegaFilt,_ = lfilter(b, a, omega, zi=omega[:, 0][:,np.newaxis]*lfilter_zi(b, a))
-    omegaDotFilt,_ = lfilter(b, a, omegaDot, zi=omegaDot[:, 0][:,np.newaxis]*lfilter_zi(b, a))
-
+    # fitting parameters
+    fc = 40. # Hz. tau = 1/(2*pi*fc) if first order
+    order = 2 # 1 --> simple first order. 2 and up --> butterworth
     gamma = 1e7
-    forgetting = 0.999
-    est = RLS(N_ACT, gamma, forgetting)
+    forgetting = 0.995 # todo: dependent on sampling rate?
 
-    motor = 0
-    delay = 0
-    for i in range(len(log.data)-delay):
-        a = np.array([[
-            uFilt[motor,i],
-            np.sqrt(uFilt[motor,i]), 
-            1.,
-            -omegaDotFilt[motor,i+delay],
-        ]]).T
-        y = omegaFilt[motor,i]
+    # load unfiltered data into numpy
+    log = IndiflightLog(args.datafile, args.range)
+    u     = Signal(log.data['timeS'], log.data[[f'u[{i}]' for i in range(N_ACT)]])
+    omega = Signal(log.data['timeS'], log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]])
 
-        est.newSample(a, y)
+    # filter unfiltered data
+    uFilt = u.filter('lowpass', order, fc)
+    uFilt.setSignal(np.clip(uFilt.y, 0., 1.)) # can happen on order > 1
 
-    # recover data
-    wm = est.x[0] + est.x[1]
-    lam = est.x[0] / (est.x[0] + est.x[1])
-    k = lam + 0.07*np.sin(lam * np.pi)
-    w0 = est.x[2]
-    tau = est.x[3]
+    omegaFilt = omega.filter('lowpass', order, fc)
+    omegaDotFilt = omegaFilt.dot()
 
-    # plot
-    usample = np.linspace(0, 1, 101)
-    fk, axk = plt.subplots(1,1, figsize=(6, 4))
-    axk.plot(usample, usample*(k*usample + (1-k)))
+    motors = []
+    for motor in range(N_ACT):
+        est = RLS(N_ACT, gamma, forgetting)
+        for i in range(len(log.data)):
+            a = np.array([[
+                uFilt.y[i, motor],
+                np.sqrt(uFilt.y[i, motor]), 
+                1.,
+                -omegaDotFilt.y[i, motor],
+            ]]).T
+            y = omegaFilt.y[i, motor]
+            est.newSample(a, y)
 
-    f, axs = plt.subplots(4, 1, figsize=(10,12), sharex='all', sharey='row')
-    axs[0].plot(log.data['timeMs'], omegaDot.T)
-    axs[0].plot(log.data['timeMs'], omegaDotFilt.T)
-    axs[1].plot(log.data['timeMs'], u.T)
-    axs[1].plot(log.data['timeMs'], uFilt.T)
-    axs[2].plot(log.data['timeMs'], omega.T)
-    axs[2].plot(log.data['timeMs'], wm*(lam*u[motor] + (1-lam)*np.sqrt(u[motor])) + w0 - tau*omegaDot[motor])
-    axs[3].plot(log.data['timeMs'], omegaFilt.T)
-    axs[3].plot(log.data['timeMs'], wm*(lam*uFilt[motor] + (1-lam)*np.sqrt(uFilt[motor])) + w0 - tau*omegaDotFilt[motor])
+        motorDict = {}
+        motorDict['est'] = est
 
-    f.show()
+        # recover data
+        motorDict['wm'] = est.x[0] + est.x[1]
+        motorDict['lam'] = est.x[0] / (est.x[0] + est.x[1])
+        motorDict['k'] = motorDict['lam'] + 0.07*np.sin(motorDict['lam'] * np.pi)
+        motorDict['w0'] = est.x[2]
+        motorDict['tau'] = est.x[3]
 
-    f, axs = plt.subplots(4, 1, figsize=(10,12), sharex='all', sharey='row')
-    x_hist_np = np.array(est.x_hist)
-    axs[0].plot(log.data['timeMs'], x_hist_np[:, 0])
-    axs[1].plot(log.data['timeMs'], x_hist_np[:, 1])
-    axs[2].plot(log.data['timeMs'], x_hist_np[:, 2])
-    axs[3].plot(log.data['timeMs'], x_hist_np[:, 3])
+        motors.append(motorDict)
 
-    plt.show()
-
+        f = est.plotParameters(
+            configs=[
+                {'indices': [0, 1], 'regNames': ["$u$", '$\sqrt{u}$']},
+                {'indices': [2],    'regNames': ["unity"]},
+                {'indices': [3],    'regNames': ["$-\dot\omega$"]}],
+            time=log.data['timeMs'],
+            title=f"Motor {motor}",
+            yLabel=f"$\omega_{motor}$",
+            sharey=False,
+            )
+        f.show()

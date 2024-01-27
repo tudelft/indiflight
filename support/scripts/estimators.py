@@ -1,6 +1,14 @@
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfilt_zi, lfilter, lfilter_zi
+from matplotlib import pyplot as plt
 import logging
+
+plt.rcParams.update({
+    "text.usetex": True,
+#    "font.family": "Helvetica",
+    "font.family": "sans-serif",
+    "font.size": 12,
+})
 
 class Signal(object):
     def __init__(self, time, signal):
@@ -117,12 +125,14 @@ class Signal(object):
         return self.sig[key]
 
 
-
 class RLS(object):
     def __init__(self, n, gamma=1e8, forgetting=0.995):
+        self.n = n
         self.x = np.zeros((n,1))
-        self.P = gamma * np.eye(len(self.x))
+        self.P = gamma * np.eye(n)
         self.forgetting = forgetting
+
+        self.N = 0
         self.a_hist = []
         self.y_hist = []
         self.k_hist = []
@@ -141,6 +151,7 @@ class RLS(object):
         else:
             self.x[~disable] += k[~disable] * e
 
+        self.N += 1
         self.a_hist.append(a.squeeze().copy())
         self.y_hist.append(y.squeeze().copy())
         self.k_hist.append(k.squeeze().copy())
@@ -148,13 +159,78 @@ class RLS(object):
         self.x_hist.append(self.x.squeeze().copy())
         self.P_hist.append(self.P.copy())
 
-    def plotParameters(self):
-        # parameters and variances
-        raise NotImplementedError()
+    def predictNew(self, a):
+        return self.x.T @ a
 
-    def plotRegressors(self):
-        # regressors and target
-        raise NotImplementedError()
+    def predictRealTime(self):
+        x = np.array(self.a_hist)
+        a = np.array(self.x_hist)
+        return np.array([x[i] @ a[i] for i in range(self.N)])
+
+    def plotParameters(self, configs=None, time=None, title=None, yLabel=None, sharey=True):
+        # parameters and variances
+        if configs is None:
+            configs = [{'indices': [i], 'regNames': [f'$reg_{i}$']} for i in range(self.n)]
+
+        if time is None:
+            time = list(range(self.N))
+
+        numP = len(configs)
+        f, ax = plt.subplots(numP+1, 3, figsize=(16,9), sharex='all', sharey='none')
+        f.subplots_adjust(bottom=0.075, left=0.075, right=0.925, top=0.925)
+        ax[-1, 1].axis('off')
+        ax[-1, 2].axis('off')
+
+        f.suptitle(f"Regressors, Parameters and Variance -- {title}", fontsize=18)
+
+        if sharey:
+            for i in range(1,numP):
+                ax[i, 1].sharey(ax[0, 1])
+                ax[i, 2].sharey(ax[0, 2])
+            par_y_max = max(0., self.x.max())
+            par_y_min = min(0., self.x.min())
+            diff = par_y_max - par_y_min
+            par_y_max += diff*0.1
+            par_y_min -= diff*0.1
+
+        x = np.array(self.x_hist)
+        P = np.array(self.P_hist)
+        a = np.array(self.a_hist)
+        y = np.array(self.y_hist)
+
+        ax[0, 0].set_title("Regressors")
+        ax[0, 1].set_title("Parameters")
+        ax[0, 2].set_title("Parameter Variance")
+        for i, config in enumerate(configs):
+            for j, reg in zip(config['indices'], config['regNames']):
+                ax[i, 0].plot(time, a[:, j], label=reg)
+                ax[i, 0].grid(True)
+                ax[i, 0].legend(loc='lower right')
+
+                ax[i, 1].plot(time, x[:, j], label=f'$\\theta_{j}$')
+                if sharey:
+                    ax[i, 1].set_ylim(bottom=par_y_min, top=par_y_max)
+                ax[i, 1].grid(True)
+                ax[i, 1].legend(loc='lower left')
+
+                ax[i, 2].plot(time, P[:, j, j], label=r'$\\P_{'+str(j)+','+str(j)+'}$')
+                ax[i, 2].set_yscale('log')
+                ax[i, 2].grid(True)
+                ax[i, 2].legend(loc='upper right')
+
+        ax[-1, 0].plot(time, y, label=f'measured')
+        ax[-1, 0].plot(time, self.predictNew(a.T).squeeze(), label=f'using latest $\\theta$')
+        ax[-1, 0].plot(time, self.predictRealTime().squeeze(), label=f'using real-time $\\theta$')
+        ax[-1, 0].grid(True)
+        ax[-1, 0].set_title("Prediction vs Measurement")
+        ax[-1, 0].set_ylabel(yLabel)
+        ax[-1, 0].legend(loc='lower right')
+
+        ax[-1, 0].set_xlabel("Time [ms]")
+        ax[-2, 1].set_xlabel("Time [ms]")
+        ax[-2, 2].set_xlabel("Time [ms]")
+
+        return f
 
     def plotGains(self):
         # k and e
