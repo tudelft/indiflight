@@ -1,9 +1,13 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
-R = Rotation.random().as_matrix()
 
 N_ACT = 4
-W = np.eye(N_ACT)
+G = 1 # can be set to 9.81 to get correct hover thrust settings
+W = np.eye(N_ACT) # actuator weighing matrix in hover
+
+#%% do stuff
+
+# standard effectiveness matrix of a quadrotor
 Bf = np.zeros((3, N_ACT))
 Bf[2, :] = -1
 
@@ -12,20 +16,17 @@ Br[0, :] = [-1, -1, 1, 1]
 Br[1, :] = [-1, 1, -1, 1]
 Br[2, :] = [1, -1, -1, 1]
 
-G = 9.81
-
+# rotate randomly
+R = Rotation.random().as_matrix()
 Bf = R @ Bf
 Br = R @ Br
 
 # get rotation nullspace
 Nr = np.linalg.qr(Br.T, 'complete')[0][:, 3:]
-Nr /= np.linalg.norm(Nr)
-
-# reformulate
-Q = Nr.T @ W @ Nr
-A = Nr.T @ Bf.T @ Bf @ Nr
 
 # get eigenpairs
+Q = Nr.T @ W @ Nr
+A = Nr.T @ Bf.T @ Bf @ Nr
 L, V = np.linalg.eig(-np.linalg.inv(A) @ Q)
 
 # adjust eigenpairs for solutions
@@ -35,7 +36,7 @@ for i, v in enumerate(V.T):
 
     u = Nr @ eta
     print()
-    print(f"Solution {i}")
+    print(f"--- Solution {i} ---")
     print(f"Hover distribution: {u}")
     print(f"Hover rotation {Br @ u}")
     print(f"Hover thrust direction {Bf @ u}")
