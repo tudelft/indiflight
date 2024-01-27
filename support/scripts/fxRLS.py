@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
-from matplotlib import pyplot as plt
 import numpy as np
 
 from estimators import RLS, Signal
@@ -27,56 +26,49 @@ if __name__=="__main__":
     gyro  = Signal(log.data['timeS'], log.data[[f'gyroADCafterRpm[{i}]' for i in range(3)]])
     acc   = Signal(log.data['timeS'], log.data[[f'accUnfiltered[{i}]' for i in range(3)]])
 
-    #omegaOnboard = log.data[[f'omega[{i}]' for i in range(3)]]
-    #gyroOnboard = log.data[[f'gyroADC[{i}]' for i in range(3)]]
-    #alphaOnboard = log.data[[f'alpha[{i}]' for i in range(3)]]
-    #accOnboard = log.data[[f'accSmooth[{i}]' for i in range(3)]]
-
     # filter unfiltered data
     uFilt = u.filter('lowpass', order, fc)
     uFilt.setSignal(np.clip(uFilt.y, 0., 1.)) # can happen on order > 1
-    uDiffFilt = uFilt.diff()
 
     omegaFilt = omega.filter('lowpass', order, fc)
-    omegaDiffFilt = omegaFilt.diff()
-    omegaDotFilt = omegaFilt.dot()
-    omegaDotDiffFilt = omegaDotFilt.diff()
-
-    alpha = gyro.dot()
-    alphaFilt = alpha.filter('lowpass', order, fc)
-    alphaDiffFilt = alphaFilt.diff()
-
+    gyroFilt = gyro.filter('lowpass', order, fc)
     accFilt = acc.filter('lowpass', order, fc)
-    accDiffFilt = accFilt.diff()
 
     # axes
-    axisNames = ['Roll', 'Pitch', 'Yaw',
-                 'f_x', 'f_y', 'f_z']
-    axisSymbols = [ '$\Delta\dot p$', '$\Delta\dot q$', '$\Delta\dot r$',
-                    '$\Delta f_x$', '$\Delta f_y$', '$\Delta f_z$']
+    axisNames = ['$f_x$', '$f_y$', '$f_z$',
+                 'Roll', 'Pitch', 'Yaw']
+    axisSymbols = ['$\Delta f_x$', '$\Delta f_y$', '$\Delta f_z$',
+                   '$\Delta\dot p$', '$\Delta\dot q$', '$\Delta\dot r$']
     axisEstimators = []
-    for axis in range(6):
-        est = RLS(2*N_ACT, gamma, forgetting)
-        for i in range(len(log.data)):
-            a = np.array([[ # todo: for loop somehow
-                2 * omegaFilt.y[i, 0] * omegaDiffFilt.y[i, 0],
-                2 * omegaFilt.y[i, 1] * omegaDiffFilt.y[i, 1],
-                2 * omegaFilt.y[i, 2] * omegaDiffFilt.y[i, 2],
-                2 * omegaFilt.y[i, 3] * omegaDiffFilt.y[i, 3],
-                omegaDotDiffFilt.y[i, 0],
-                omegaDotDiffFilt.y[i, 1],
-                omegaDotDiffFilt.y[i, 2],
-                omegaDotDiffFilt.y[i, 3],
-            ]]).T
-            y = alphaDiffFilt.y[i, axis] if axis < 3 else accDiffFilt.y[i, axis-3]
-            est.newSample(a, y)
+    axisSelect = [2]
+    for axis in axisSelect:
+        if axis < 3:
+            # specific force
+            est = RLS(N_ACT, gamma, forgetting)
+
+            regressors = 2 * omegaFilt.y * omegaFilt.diff().y
+            ys = accFilt.diff().y[:, axis]
+        else:
+            # dgyro, we also need rotor rate
+            est = RLS(2*N_ACT, gamma, forgetting)
+
+            regressorsForce = 2 * omegaFilt.y * omegaFilt.diff().y
+            regressorsGyro  = omegaFilt.dot().diff().y
+            regressors = np.stack((regressorsForce, regressorsGyro), axis=1)
+            ys = gyroFilt.dot().diff().y[:, axis-3]
+
+        for r, y in zip(regressors, ys):
+            est.newSample(r[:, np.newaxis], y)
 
         axisEstimators.append(est)
 
+        configs = [
+            {'indices':[0, 1, 2, 3], 'regNames': [f"$2\omega_{i}\Delta\omega_{i}$" for i in range(4)]}, 
+            {'indices':[4, 5, 6, 7], 'regNames': [f"$\Delta\dot\omega_{i}$" for i in range(4)]}
+        ]
+
         f = est.plotParameters(
-            configs=[
-                {'indices':[0, 1, 2, 3], 'regNames': [f"$2\omega_{i}\Delta\omega_{i}$" for i in range(4)]}, 
-                {'indices':[4, 5, 6, 7], 'regNames': [f"$\Delta\dot\omega_{i}$" for i in range(4)]}],
+            configs=configs[0:(1 + (axis>2))],
             time=log.data['timeMs'],
             title=f"{axisNames[axis]} Axis",
             yLabel=f"{axisSymbols[axis]}",

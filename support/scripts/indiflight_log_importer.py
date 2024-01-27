@@ -250,14 +250,14 @@ if __name__=="__main__":
             axs[0, i].set_ylabel("Motor command/output")
 
     for i in range(4):
-        axs[1, i].plot(log.data['timeMs'], log.data[f'omega_dot[{i}]'], label=f'filtered drpm omega_dot[{i}]')
+        axs[1, i].plot(log.data['timeMs'], log.data[f'omega_dot[{i}]'], label=f'onboard drpm omega_dot[{i}]')
         axs[1, i].legend()
         axs[1, i].grid()
         if (i==0):
             axs[1, i].set_ylabel("Motor acceleration")
 
     for i in range(3):
-        axs[2, i].plot(log.data['timeMs'], log.data[f'alpha[{i}]'], label=f'unfiltered angular accel alpha[{i}]')
+        axs[2, i].plot(log.data['timeMs'], log.data[f'alpha[{i}]'], label=f'onboard angular accel alpha[{i}]')
         axs[2, i].legend()
         axs[2, i].grid()
         axs[2, i].set_xlabel("Time [ms]")

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
-from matplotlib import pyplot as plt
 import numpy as np
-from scipy.signal import butter, lfilter, lfilter_zi
 
 from estimators import RLS, Signal
 from indiflight_log_importer import IndiflightLog
@@ -31,7 +29,6 @@ if __name__=="__main__":
     uFilt.setSignal(np.clip(uFilt.y, 0., 1.)) # can happen on order > 1
 
     omegaFilt = omega.filter('lowpass', order, fc)
-    omegaDotFilt = omegaFilt.dot()
 
     motors = []
     for motor in range(N_ACT):
@@ -41,7 +38,7 @@ if __name__=="__main__":
                 uFilt.y[i, motor],
                 np.sqrt(uFilt.y[i, motor]), 
                 1.,
-                -omegaDotFilt.y[i, motor],
+                -omegaFilt.dot().y[i, motor],
             ]]).T
             y = omegaFilt.y[i, motor]
             est.newSample(a, y)
