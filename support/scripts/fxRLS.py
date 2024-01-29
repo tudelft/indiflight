@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 import numpy as np
 
-from estimators import RLS, Signal
+from estimators import RLS, Signal, imuOffsetCorrection
 from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
@@ -14,7 +14,7 @@ if __name__=="__main__":
     N_ACT = 4
 
     # fitting parameters
-    fc = 15. # Hz. tau = 1/(2*pi*fc) if first order
+    fc = 10. # Hz. tau = 1/(2*pi*fc) if first order
     order = 2 # 1 --> simple first order. 2 and up --> butterworth
     gamma = 1e0
     forgetting = 0.995 # todo: dependent on sampling rate?
@@ -25,6 +25,10 @@ if __name__=="__main__":
     omega = Signal(log.data['timeS'], log.data[[f'omegaUnfiltered[{i}]' for i in range(N_ACT)]])
     gyro  = Signal(log.data['timeS'], log.data[[f'gyroADCafterRpm[{i}]' for i in range(3)]])
     acc   = Signal(log.data['timeS'], log.data[[f'accUnfiltered[{i}]' for i in range(3)]])
+    r = np.array([-0.01275887, -0.01445745, 0.01290286]) # TODO: get this automatically from imuLocationRLS
+    #r = np.zeros((3,))
+    accCorrected = Signal(log.data['timeS'],
+                          imuOffsetCorrection(acc.y, gyro.y, gyro.dot().y, r))
 
     # filter unfiltered data
     uFilt = u.filter('lowpass', order, fc)
@@ -33,6 +37,7 @@ if __name__=="__main__":
     omegaFilt = omega.filter('lowpass', order, fc)
     gyroFilt = gyro.filter('lowpass', order, fc)
     accFilt = acc.filter('lowpass', order, fc)
+    accCorrectedFilt = accCorrected.filter('lowpass', order, fc)
 
     # axes
     axisNames = ['$f_x$', '$f_y$', '$f_z$',

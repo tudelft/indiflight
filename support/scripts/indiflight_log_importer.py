@@ -119,6 +119,8 @@ class IndiflightLog(object):
         else:
             data = self.raw.copy(deep=True)
 
+        self.N = len(data)
+
         # manage time in s, ms and us
         data['time'] -= t0
         data.rename(columns={'time':'timeUs'}, inplace=True)
@@ -178,6 +180,7 @@ class IndiflightLog(object):
             elif (col == "flightModeFlags") or (col == "stateFlags")\
                     or (col == "failsafePhase") or (col == "rxSignalReceived")\
                     or (col == "rxFlightChannelValid"):
+                data[col].replace("", 0, inplace=True)
                 data[col] = data[col].astype(int)
 
         return data
@@ -218,6 +221,11 @@ class IndiflightLog(object):
 
         return enabled, disabled
 
+    def resetTime(self):
+        self.data['timeS'] -= self.data['timeS'].iloc[0]
+        self.data['timeMs'] -= self.data['timeMs'].iloc[0]
+        self.data['timeUs'] -= self.data['timeUs'].iloc[0]
+
     def plot(self):
         # plot some overview stuff
         f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
@@ -229,13 +237,13 @@ class IndiflightLog(object):
             yyax = axs[0, i].twinx()
             line2, = yyax.plot(self.data['timeMs'], self.data[f'u[{i}]'], label=f'command u[{i}]', color='orange')
             yyax.tick_params('y', colors='orange')
-            yyax.set_ylim(bottom=0)
+            yyax.set_ylim(bottom=-0.1, top=1.1)
 
             lines = [line1, line2]
             labels = [line.get_label() for line in lines]
 
             axs[0, i].legend(lines, labels)
-            axs[0, i].set_ylim(bottom=0)
+            axs[0, i].set_ylim(bottom=-0.1, top=1.1)
             axs[0, i].grid()
             if (i==0):
                 axs[0, i].set_ylabel("Motor command/output")
@@ -331,7 +339,7 @@ if __name__=="__main__":
     # script to demonstrate how to use it
     parser = ArgumentParser()
     parser.add_argument("datafile", help="single indiflight bfl logfile")
-    parser.add_argument("--range","-r", required=False, nargs=2, default=(0, 3_500), type=int, help="integer time range to consider in ms since start of datafile")
+    parser.add_argument("--range","-r", required=False, nargs=2, type=int, help="integer time range to consider in ms since start of datafile")
     parser.add_argument("-v", required=False, action='count', default=0, help="verbosity (can be given up to 3 times)")
 
     args = parser.parse_args()

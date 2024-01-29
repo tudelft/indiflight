@@ -11,21 +11,25 @@ if __name__=="__main__":
     parser.add_argument("--range","-r", required=False, nargs=2, default=(2215, 2670), type=float, help="time range to consider in ms since start of datafile")
     args = parser.parse_args()
 
-    N_ACT = 4
-
     # fitting parameters
-    fc = 40. # Hz. tau = 1/(2*pi*fc) if first order
+    fc = 30. # Hz. tau = 1/(2*pi*fc) if first order
     order = 2 # 1 --> simple first order. 2 and up --> butterworth
-    gamma = 1e2
+    gamma = 1e0
     forgetting = 1.0 # todo: dependent on sampling rate?
 
     # load unfiltered data into numpy
     log = IndiflightLog(args.datafile, args.range)
-    gyro = Signal(log.data["timeS"], log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]] )
-    acc  = Signal(log.data["timeS"], log.data[[f"accUnfiltered[{i}]" for i in range(3)]] )
+    log.resetTime()
+
+    #gyro = Signal(log.data["timeS"], log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]] )
+    #acc  = Signal(log.data["timeS"], log.data[[f"accUnfiltered[{i}]" for i in range(3)]] )
+    gyro = Signal(log.data["timeS"], log.data[[f"gyroADC[{i}]" for i in range(3)]] )
+    acc  = Signal(log.data["timeS"], log.data[[f"accSmooth[{i}]" for i in range(3)]] )
 
     gyroFilt = gyro.filter('lowpass', order, fc)
     accFilt  = acc.filter('lowpass', order, fc)
+    gyroFilt = gyro
+    accFilt  = acc
 
     est = RLS(3, 3, gamma=gamma, forgetting=forgetting)
     for i in range(len(log.data)):

@@ -350,7 +350,7 @@ class RLS(object):
                 yAx.plot(timeMs, yRealTime[:, i], label="Real Time")
             yAx.set_ylabel("Output "+self.yNames[i])
             if printLegend:
-                legend_ypos = 0.38 / yAx.get_position().height
+                legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
                 yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
                 printLegend = False
 
@@ -372,6 +372,18 @@ class RLS(object):
     def plotGains(self):
         # k and e
         raise NotImplementedError()
+
+
+def imuOffsetCorrection(a, w, dw, r):
+    # r is vector from CoG to IMU location, in FRD body coordintaes
+    # f = a - ( dw x r ) - ( w x (w x r) ) 
+    N = len(a)
+    f = a
+    f -= np.array([np.cross(dw[i], r) for i in range(N)])
+    wxr = np.array([np.cross(w[i], r) for i in range(N)])
+    f -= np.array([np.cross(w[i], wxr[i]) for i in range(N)])
+    return f
+
 
 
 if __name__=="__main__":
