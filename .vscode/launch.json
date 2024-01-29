@@ -5,6 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: imuLocationRLS",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/support/scripts/imuLocationRLS.py",
+            "args": [
+                "/mnt/data/WorkData/BlackboxLogs/2024-01-19/LOG00503_CineRate_HIL_CorrectSequence.BFL",
+                "--range", "2179", "2677",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "INDIflight SITL",
             "type": "cppdbg",
             "request": "launch",

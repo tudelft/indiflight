@@ -60,7 +60,7 @@ if __name__=="__main__":
                 {'indices': [0, 1], 'regNames': ["$u$", '$\sqrt{u}$']},
                 {'indices': [2],    'regNames': ["unity"]},
                 {'indices': [3],    'regNames': ["$-\dot\omega$"]}],
-            time=log.data['timeMs'],
+            timeMs=log.data['timeMs'],
             title=f"Motor {motor}",
             yLabel=f"$\omega_{motor}$",
             sharey=False,

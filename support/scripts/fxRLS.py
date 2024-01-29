@@ -69,7 +69,7 @@ if __name__=="__main__":
 
         f = est.plotParameters(
             configs=configs[0:(1 + (axis>2))],
-            time=log.data['timeMs'],
+            timeMs=log.data['timeMs'],
             title=f"{axisNames[axis]} Axis",
             yLabel=f"{axisSymbols[axis]}",
             )

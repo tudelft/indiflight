@@ -16,7 +16,7 @@ class IndiflightLog(object):
     METER_TO_MM = 1000.
     METER_TO_CM = 100.
     RAD_TO_MRAD = 1000.
-    ACC_TO_MSS = 9.81 / 2048.
+    ONE_G = 9.80665
     PERCENT = 100.
     DSHOT_MIN = 158.
     DSHOT_MAX = 2048.
@@ -126,31 +126,24 @@ class IndiflightLog(object):
         data['timeMs'] = 1e-3 * timeUs
         data['timeS'] = 1e-6 * timeUs
 
-        # get time differences
-        dtime = np.zeros_like(timeUs, dtype=float)
-        dtime[:-1] = np.diff(timeUs) # todo: protect against small values?
-        dtime[-1] = dtime[-2] # estimate last element...
-        data['dtimeUs'] = dtime.astype(int);
-        data['dtimeMs'] = 1e-3 * dtime;
-        data['dtimeS'] = 1e-6 * dtime;
-
         # adjust column units
+        highRes = 10. if self.parameters['blackbox_high_resolution'] else 1.
         for col in data.columns:
             if col == 'loopIteration':
                 data[col] = data[col].astype(int)
             elif col == 'rcCommand[3]':
-                data[col] -= 1000.
-                data[col] /= 1000.
+                data[col] -= 1000. * highRes
+                data[col] /= 1000. * highRes
             elif col.startswith('rcCommand'):
-                data[col] /= 500.
+                data[col] /= 500. * highRes
             elif col.startswith('gyro'):
-                data[col] /= self.RADIANS_TO_DEGREES
+                data[col] /= self.RADIANS_TO_DEGREES * highRes
                 if col.startswith('gyroADC') and ( ("[1]" in col) or ("[2]" in col) ):
                     data[col] *= -1.
             elif col.startswith('accSp'):
                 data[col] /= self.METER_TO_CM
             elif col.startswith('acc'):
-                data[col] *= self.ACC_TO_MSS
+                data[col] *= self.ONE_G / self.parameters['acc_1G']
                 if ("[1]" in col) or ("[2]" in col):
                     data[col] *= -1.
             elif col.startswith('motor'):

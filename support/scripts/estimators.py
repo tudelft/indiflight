@@ -1,13 +1,30 @@
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfilt_zi, lfilter, lfilter_zi
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 import logging
+from copy import deepcopy
 
 plt.rcParams.update({
     "text.usetex": True,
 #    "font.family": "Helvetica",
     "font.family": "sans-serif",
     "font.size": 12,
+    "axes.grid": True,
+    "axes.grid.which": 'both',
+    "grid.linestyle": '--',
+    "grid.alpha": 0.7,
+    "axes.labelsize": 12,
+    "axes.titlesize": 16,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.loc": 'upper right',
+    'figure.subplot.bottom': 0.025,
+    'figure.subplot.left': 0.025,
+    'figure.subplot.right': 0.95,
+    'figure.subplot.top': 0.925,
+    'figure.subplot.hspace': 0.2,
+    'figure.subplot.wspace': 0.25,
 })
 
 class Signal(object):
@@ -124,111 +141,221 @@ class Signal(object):
 
         return self.sig[key]
 
-
 class RLS(object):
-    def __init__(self, n, gamma=1e8, forgetting=0.995):
+    def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
         self.n = n
-        self.x = np.zeros((n,1))
+        self.d = d
+        self.x = np.zeros((n, 1))
         self.P = gamma * np.eye(n)
         self.forgetting = forgetting
 
+        self.name = "Recursive Least Squares"
+        self.parNames = ["$\\theta$"] if n == 1 else [f"$\\theta_{{{i}}}$" for i in range(n)]
+        self.yNames = ["$y$"] if d == 1 else [f"$y_{{{i}}}$" for i in range(n)]
+        self.regNames = [[f"$A_{{{i},{j}}}$" for j in range(n)] for i in range(d)]
+
         self.N = 0
-        self.a_hist = []
+        self.A_hist = []
         self.y_hist = []
-        self.k_hist = []
+        self.K_hist = []
         self.e_hist = []
         self.x_hist = []
         self.P_hist = []
 
-    def newSample(self, a, y, disable=None):
-        # regressors a and observation y
-        k = ( self.P @ a ) / ( self.forgetting + a.T @ self.P @ a )
-        self.P = (1/self.forgetting) * (self.P - k @ a.T @ self.P)
+    def setName(self, name):
+        self.name = name
 
-        e = y - self.x.T @ a
-        if (disable==None):
-            self.x += k * e
+    def setRegressorNames(self, regNames):
+        if len(regNames) != self.d:
+            raise ValueError(f"regNames has to be length {self.d}, got {len(regNames)}")
+        for i, row in enumerate(regNames):
+            if len(row) != self.d:
+                raise ValueError(f"All rows in regNames have to be length {self.n}, got {len(row)} in row {i}")
+        self.regNames = regNames
+
+    def setParameterNames(self, parNames):
+        if len(parNames) != self.n:
+            raise ValueError(f"parNames has to be length {self.n}, got {len(parNames)}")
+        self.parNames = parNames
+
+    def setOutputNames(self, yNames):
+        if len(yNames) != self.d:
+            raise ValueError(f"yNames has to be length {self.d}, got {len(yNames)}")
+        self.yNames = yNames
+
+    def newSample(self, A, y, disable=None):
+        # accept one-dimensional only if either n or d are 1
+        if (A.ndim == 1) and (self.d == 1):
+            if len(A) != self.n:
+                raise ValueError(f"Regressors A have be length-n ({self.n}), got {len(A)}")
+            A = A[np.newaxis]
+        elif (A.ndim == 1) and (self.n == 1):
+            if len(A) != self.d:
+                raise ValueError(f"Regressors A have be length-d ({self.d}), got {len(A)}")
+            A = A[:, np.newaxis]
+        elif (A.ndim == 1) or (A.shape[0] != self.d) or (A.shape[1] != self.n):
+            raise ValueError(f"Regressors A must have shape (d, n), ie ({self.d}, {self.n}), got {A.shape}")
+
+        # accept output as singleton, one-dim array or shape(d,1)
+        y = np.array(y)
+        if y.ndim == 0:
+            if self.d == 1:
+                y = y[np.newaxis, np.newaxis]
+            else:
+                raise ValueError(f"Output y is singleton, but has to be length {self.d}")
+        elif (y.ndim == 1):
+            if len(y) == self.d:
+                y = y[:, np.newaxis]
+            else:
+                raise ValueError(f"If output y is ndim=1, it has to be length {self.d}, got {len(y)}")
         else:
-            self.x[~disable] += k[~disable] * e
+            if (y.shape != (self.d, 1)):
+                raise ValueError(f"If output y is ndim=2, it has to be shape {(self.d, 1)}, got {y.shape}")
+
+        # regressors a and observation y
+        lam = self.forgetting
+        K = ( self.P @ A.T ) @ np.linalg.inv( lam * np.eye(self.n) + A @ self.P @ A.T )
+        self.P = (1. / lam) * (self.P - K @ A @ self.P)
+
+        e = y - A @ self.x
+        if (disable==None):
+            self.x += K @ e
+        else:
+            self.x[~disable] += K[~disable, ~disable] @ e[~disable]
 
         self.N += 1
-        self.a_hist.append(a.squeeze().copy())
+        self.A_hist.append(A.squeeze().copy())
         self.y_hist.append(y.squeeze().copy())
-        self.k_hist.append(k.squeeze().copy())
+        self.K_hist.append(K.squeeze().copy())
         self.e_hist.append(e.squeeze().copy())
         self.x_hist.append(self.x.squeeze().copy())
         self.P_hist.append(self.P.copy())
 
-    def predictNew(self, a):
-        return self.x.T @ a
+    def predictNew(self, A):
+        return A @ self.x
 
     def predictRealTime(self):
-        x = np.array(self.a_hist)
-        a = np.array(self.x_hist)
-        return np.array([x[i] @ a[i] for i in range(self.N)])
+        A = np.array(self.A_hist)
+        x = np.array(self.x_hist)
+        return np.array([A[i] @ x[i] for i in range(self.N)])
 
-    def plotParameters(self, configs=None, time=None, title=None, yLabel=None, sharey=True):
+    def plotParameters(self, parGroups=None, yGroups=None, timeMs=None, sharey=True):
         # parameters and variances
-        if configs is None:
-            configs = [{'indices': [i], 'regNames': [f'$reg_{i}$']} for i in range(self.n)]
+        if parGroups is None:
+            parGroups = [[i] for i in range(self.n)]
 
-        if time is None:
-            time = list(range(self.N))
+        if yGroups is None:
+            yGroups = [[i] for i in range(self.d)]
 
-        numP = len(configs)
-        f, ax = plt.subplots(numP+1, 3, figsize=(16,9), sharex='all', sharey='none')
-        f.subplots_adjust(bottom=0.075, left=0.075, right=0.925, top=0.925)
-        ax[-1, 1].axis('off')
-        ax[-1, 2].axis('off')
+        if timeMs is None:
+            timeMs = list(range(self.N))
+            timeLabel = "iterations"
+        else:
+            timeLabel = "Time [ms]"
 
-        f.suptitle(f"Regressors, Parameters and Variance -- {title}", fontsize=18)
+        f = plt.figure()
 
-        if sharey:
-            for i in range(1,numP):
-                ax[i, 1].sharey(ax[0, 1])
-                ax[i, 2].sharey(ax[0, 2])
-            par_y_max = max(0., self.x.max())
-            par_y_min = min(0., self.x.min())
-            diff = par_y_max - par_y_min
-            par_y_max += diff*0.1
-            par_y_min -= diff*0.1
+        left=0.04
+        bottom=0.06
+        right=0.975
+        top=0.925
+        hspace=0.15
+        wspace=0.25
+        rWidth = (right - left + 0.3*wspace) * 1 / (1 + len(parGroups)) + left
+        rHeight = (top - bottom) * 2 / (2 + len(yGroups)) + bottom
+
+        faceGs = GridSpec(2, 2,
+                           width_ratios=(rWidth, 1 - rWidth),
+                           height_ratios=(rHeight, 1 - rHeight),
+                           )
+        faceGs.update(left=0., bottom=0., right=1.0, top=0.95, hspace=0, wspace=0)
+
+        outerGs = GridSpec(2, 2,
+                           width_ratios=(1, len(parGroups)),
+                           height_ratios=(2, len(yGroups)),
+                           )
+        outerGs.update(left=left, bottom=bottom, right=right, top=top, hspace=hspace, wspace=wspace)
+
+        colors = ['white', 'gray', 'blue', 'green']
+        for i, col in enumerate(colors):
+            grayAx = f.add_subplot(faceGs[i])
+            grayAx.grid(False)
+            grayAx.set_facecolor(col)
+            grayAx.patch.set_alpha(0.3)
+            grayAx.tick_params(axis='both',which='both',bottom=0,left=0,
+                              labelbottom=0, labelleft=0)
+
+        parGs = outerGs[0, 1].subgridspec(2, len(parGroups))
+        regGs = outerGs[1, 1].subgridspec(len(yGroups), len(parGroups))
+        yGs   = outerGs[1, 0].subgridspec(len(yGroups), 1)
+
+        parAxs = []
+        varAxs = []
+        yAxs = []
+        regAxs = []
+        for i in range(len(parGroups)):
+            parAx = f.add_subplot(parGs[0, i]); parAxs.append(parAx)
+            parAx.set_ylabel("Parameter(s)")
+
+            varAx = f.add_subplot(parGs[1, i]); varAxs.append(varAx)
+            varAx.set_ylabel("Variance(s)")
+            varAx.sharex(parAxs[0])
+            varAx.set_yscale('log')
+
+            if i > 0:
+                varAx.sharey(varAxs[0])
+                parAx.sharex(parAxs[0])
+
+        for i in range(len(yGroups)):
+            yAx = f.add_subplot(yGs[i, 0]); yAxs.append(yAx)
+            yAx.sharex(parAxs[0])
+
+            regAxsRow = []
+            for j in range(len(parGroups)):
+                regAx = f.add_subplot(regGs[i, j]); regAxsRow.append(regAx)
+                regAx.set_ylabel("Regressor(s)")
+                regAx.sharex(parAxs[0])
+                if i > 0:
+                    regAx.sharey(regAxs[0][j])
+            regAxs.append(regAxsRow)
 
         x = np.array(self.x_hist)
         P = np.array(self.P_hist)
-        a = np.array(self.a_hist)
+        A = np.array(self.A_hist)
         y = np.array(self.y_hist)
 
-        ax[0, 0].set_title("Regressors")
-        ax[0, 1].set_title("Parameters")
-        ax[0, 2].set_title("Parameter Variance")
-        for i, config in enumerate(configs):
-            for j, reg in zip(config['indices'], config['regNames']):
-                ax[i, 0].plot(time, a[:, j], label=reg)
-                ax[i, 0].grid(True)
-                ax[i, 0].legend(loc='lower right')
+        for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
+            for i in parIdxs:
+                parAx.plot(timeMs, x[:, i], label=self.parNames[i])
+                varAx.plot(timeMs, P[:, i, i], label=f"var({self.parNames[i]})")
+            parAx.legend()
+            varAx.legend()
 
-                ax[i, 1].plot(time, x[:, j], label=f'$\\theta_{j}$')
-                if sharey:
-                    ax[i, 1].set_ylim(bottom=par_y_min, top=par_y_max)
-                ax[i, 1].grid(True)
-                ax[i, 1].legend(loc='lower left')
+        yLastTheta = self.predictNew(A)
+        yRealTime = self.predictRealTime()
+        printLegend = True
+        for yIdxs, yAx in zip(yGroups, yAxs):
+            for i in yIdxs:
+                yAx.plot(timeMs, y[:, i], label="Target")
+                yAx.plot(timeMs, yLastTheta[:, i], label="A posteriori")
+                yAx.plot(timeMs, yRealTime[:, i], label="Real Time")
+            yAx.set_ylabel("Output "+self.yNames[i])
+            if printLegend:
+                yAx.legend(loc='upper center', bbox_to_anchor=(0.5, 1.8))
+                printLegend = False
 
-                ax[i, 2].plot(time, P[:, j, j], label=r'$\\P_{'+str(j)+','+str(j)+'}$')
-                ax[i, 2].set_yscale('log')
-                ax[i, 2].grid(True)
-                ax[i, 2].legend(loc='upper right')
+        for yIdxs, regAxRow in zip(yGroups, regAxs):
+            for parIdxs, regAx in zip(parGroups, regAxRow):
+                for i in yIdxs:
+                    for j in parIdxs:
+                        regAx.plot(timeMs, A[:, i, j], label=self.regNames[i][j])
+                regAx.legend()
 
-        ax[-1, 0].plot(time, y, label=f'measured')
-        ax[-1, 0].plot(time, self.predictNew(a.T).squeeze(), label=f'using latest $\\theta$')
-        ax[-1, 0].plot(time, self.predictRealTime().squeeze(), label=f'using real-time $\\theta$')
-        ax[-1, 0].grid(True)
-        ax[-1, 0].set_title("Prediction vs Measurement")
-        ax[-1, 0].set_ylabel(yLabel)
-        ax[-1, 0].legend(loc='lower right')
+        f.suptitle(f"{self.name} -- Regressors, Parameters and Variance", fontsize=18)
 
-        ax[-1, 0].set_xlabel("Time [ms]")
-        ax[-2, 1].set_xlabel("Time [ms]")
-        ax[-2, 2].set_xlabel("Time [ms]")
+        yAxs[-1].set_xlabel(timeLabel)
+        for regAx in regAxs[-1]:
+            regAx.set_xlabel(timeLabel)
 
         return f
 
