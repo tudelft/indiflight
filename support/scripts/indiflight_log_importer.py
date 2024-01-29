@@ -4,6 +4,7 @@ import pandas as pd
 from orangebox import Parser as BFLParser
 
 from argparse import ArgumentParser
+import logging
 from matplotlib import pyplot as plt
 
 class IndiflightLog(object):
@@ -83,6 +84,7 @@ class IndiflightLog(object):
 
     def __init__(self, filename, timeRange=None):
         # import raw data using orangebox parser
+        logging.info("Parsing logfile")
         bfl = BFLParser.load(filename)
 
         if bfl.reader.log_count > 1:
@@ -90,7 +92,8 @@ class IndiflightLog(object):
                                        logs per BFL or BBL file. Use bbsplit\
                                        cmd line util")
 
-        # dump data rows into pandas frame
+        # dump data rows into pandas frame. # TODO: only import until range?
+        logging.info("Importing into dataframe")
         self.raw = pd.DataFrame([frame.data for frame in bfl.frames()],
                                columns=bfl.field_names )
         self.raw.set_index('loopIteration', inplace=True)
@@ -99,10 +102,13 @@ class IndiflightLog(object):
         self.parameters = bfl.headers
 
         # crop to time range and apply scaling
+        logging.info("Apply scaling and crop to range")
         self.data = self._processData(timeRange)
 
         # parse rc box mode change events (use LogData.modeToText to decode)
+        logging.info("Convert flight modes to events")
         self.flags = self._convertModeFlagsToEvents()
+        logging.info("Done")
 
     def _processData(self, timeRange):
         # crop relevant time range out of raw, and adjust time
@@ -219,65 +225,129 @@ class IndiflightLog(object):
 
         return enabled, disabled
 
+    def plot(self):
+        # plot some overview stuff
+        f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
+        axs[2, 3]._shared_axes['y'].remove(axs[2, 3])
+
+        for i in range(4):
+            line1, = axs[0, i].plot(self.data['timeMs'], self.data[f'omega[{i}]'], label=f'onboard rpm omega[{i}]')
+
+            yyax = axs[0, i].twinx()
+            line2, = yyax.plot(self.data['timeMs'], self.data[f'u[{i}]'], label=f'command u[{i}]', color='orange')
+            yyax.tick_params('y', colors='orange')
+            yyax.set_ylim(bottom=0)
+
+            lines = [line1, line2]
+            labels = [line.get_label() for line in lines]
+
+            axs[0, i].legend(lines, labels)
+            axs[0, i].set_ylim(bottom=0)
+            axs[0, i].grid()
+            if (i==0):
+                axs[0, i].set_ylabel("Motor command/output")
+
+        for i in range(4):
+            axs[1, i].plot(self.data['timeMs'], self.data[f'omega_dot[{i}]'], label=f'onboard drpm omega_dot[{i}]')
+            axs[1, i].legend()
+            axs[1, i].grid()
+            if (i==0):
+                axs[1, i].set_ylabel("Motor acceleration")
+
+        for i in range(3):
+            axs[2, i].plot(self.data['timeMs'], self.data[f'alpha[{i}]'], label=f'onboard angular accel alpha[{i}]')
+            axs[2, i].legend()
+            axs[2, i].grid()
+            axs[2, i].set_xlabel("Time [ms]")
+            if (i==0):
+                axs[2, i].set_ylabel("Angular acceleration")
+
+        axs[2, 3].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'onboard z accel acc[2]')
+        axs[2, 3].legend()
+        axs[2, 3].grid()
+        axs[2, 3].set_xlabel("Time [ms]")
+
+        f.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
+
+        # Maximize the window on Linux
+        mgr = plt.get_current_fig_manager()
+        mgr.resize(1920, 1080)
+
+        f.show()
+
+    def compare(self, other, other_offset=0, self_name='A', other_name='B'):
+        a = self_name
+        b = other_name
+
+        f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
+        axs[2, 3]._shared_axes['y'].remove(axs[2, 3])
+
+        otherTimeMs = other.data['timeMs'] - other_offset;
+
+        for i in range(4):
+            line1, = axs[0, i].plot(self.data['timeMs'], self.data[f'omega[{i}]'], label=f'{a}: onboard rpm omega[{i}]')
+            line1b, = axs[0, i].plot(otherTimeMs, other.data[f'omega[{i}]'], linestyle='--', label=f'{b}: onboard rpm omega[{i}]')
+
+            yyax = axs[0, i].twinx()
+            line2, = yyax.plot(self.data['timeMs'], self.data[f'u[{i}]'], label=f'{a}: command u[{i}]', color='green')
+            line2b, = yyax.plot(otherTimeMs, other.data[f'u[{i}]'], linestyle='--', label=f'{b}: command u[{i}]', color='black')
+            yyax.tick_params('y', colors='green')
+            yyax.set_ylim(bottom=0)
+
+            lines = [line1, line1b, line2, line2b]
+            labels = [line.get_label() for line in lines]
+
+            axs[0, i].legend(lines, labels)
+            axs[0, i].set_ylim(bottom=0)
+            axs[0, i].grid()
+            if (i==0):
+                axs[0, i].set_ylabel("Motor command/output")
+
+        for i in range(4):
+            axs[1, i].plot(self.data['timeMs'], self.data[f'omega_dot[{i}]'], label=f'{a}: onboard drpm omega_dot[{i}]')
+            axs[1, i].plot(otherTimeMs, other.data[f'omega_dot[{i}]'], linestyle='--', label=f'{b}: onboard drpm omega_dot[{i}]')
+            axs[1, i].legend()
+            axs[1, i].grid()
+            if (i==0):
+                axs[1, i].set_ylabel("Motor acceleration")
+
+        for i in range(3):
+            axs[2, i].plot(self.data['timeMs'], self.data[f'alpha[{i}]'], label=f'{a}: onboard angular accel alpha[{i}]')
+            axs[2, i].plot(otherTimeMs, other.data[f'alpha[{i}]'], linestyle='--', label=f'{b}: onboard angular accel alpha[{i}]')
+            axs[2, i].legend()
+            axs[2, i].grid()
+            axs[2, i].set_xlabel("Time [ms]")
+            if (i==0):
+                axs[2, i].set_ylabel("Angular acceleration")
+
+        axs[2, 3].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'{a}: onboard z accel acc[2]')
+        axs[2, 3].plot(otherTimeMs, other.data[f'accSmooth[{i}]'], linestyle='--', label=f'{b}: onboard z accel acc[2]')
+        axs[2, 3].legend()
+        axs[2, 3].grid()
+        axs[2, 3].set_xlabel("Time [ms]")
+
+        f.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
+
+        # Maximize the window on Linux
+        mgr = plt.get_current_fig_manager()
+        mgr.resize(1920, 1080)
+
+        f.show()
+
 if __name__=="__main__":
     # script to demonstrate how to use it
     parser = ArgumentParser()
     parser.add_argument("datafile", help="single indiflight bfl logfile")
     parser.add_argument("--range","-r", required=False, nargs=2, default=(0, 3_500), type=int, help="integer time range to consider in ms since start of datafile")
+    parser.add_argument("-v", required=False, action='count', default=0, help="verbosity (can be given up to 3 times)")
 
     args = parser.parse_args()
+    verbosity = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
+    logging.basicConfig(format='%(asctime)s -- %(name)s %(levelname)s: %(message)s', level=verbosity[min(args.v, 3)])
 
     # import data
     log = IndiflightLog(args.datafile, args.range)
 
-    # plot some overview stuff
-    f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
-    for i in range(4):
-        line1, = axs[0, i].plot(log.data['timeMs'], log.data[f'omega[{i}]'], label=f'filtered rpm omega[{i}]')
-
-        yyax = axs[0, i].twinx()
-        line2, = yyax.plot(log.data['timeMs'], log.data[f'u[{i}]'], label=f'command u[{i}]', color='orange')
-        yyax.tick_params('y', colors='orange')
-        yyax.set_ylim(bottom=0)
-
-        lines = [line1, line2]
-        labels = [line.get_label() for line in lines]
-
-        axs[0, i].legend(lines, labels)
-        axs[0, i].set_ylim(bottom=0)
-        axs[0, i].grid()
-        if (i==0):
-            axs[0, i].set_ylabel("Motor command/output")
-
-    for i in range(4):
-        axs[1, i].plot(log.data['timeMs'], log.data[f'omega_dot[{i}]'], label=f'onboard drpm omega_dot[{i}]')
-        axs[1, i].legend()
-        axs[1, i].grid()
-        if (i==0):
-            axs[1, i].set_ylabel("Motor acceleration")
-
-    for i in range(3):
-        axs[2, i].plot(log.data['timeMs'], log.data[f'alpha[{i}]'], label=f'onboard angular accel alpha[{i}]')
-        axs[2, i].legend()
-        axs[2, i].grid()
-        axs[2, i].set_xlabel("Time [ms]")
-        if (i==0):
-            axs[2, i].set_ylabel("Angular acceleration")
-
-    axs[2, 3].get_shared_y_axes().remove(axs[2, 3])
-    axs[2, 3].plot(log.data['timeMs'], log.data[f'accUnfiltered[{i}]'], label=f'unfiltered z accel acc[2]')
-    axs[2, 3].legend()
-    axs[2, 3].grid()
-    axs[2, 3].set_xlabel("Time [ms]")
-
-    f.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
-
-    # Maximize the window on Linux
-    mgr = plt.get_current_fig_manager()
-    mgr.resize(1920, 1080)
-
-    f.show()
-    plt.show()
-
-
-
+    # plot some stuff
+    #log.plot()
+    #plt.show()

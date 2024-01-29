@@ -40,7 +40,7 @@ if __name__=="__main__":
     axisSymbols = ['$\Delta f_x$', '$\Delta f_y$', '$\Delta f_z$',
                    '$\Delta\dot p$', '$\Delta\dot q$', '$\Delta\dot r$']
     axisEstimators = []
-    axisSelect = [2]
+    axisSelect = list(range(6)) # or [2] to get only accZ for instance 
     for axis in axisSelect:
         if axis < 3:
             # specific force
@@ -54,7 +54,7 @@ if __name__=="__main__":
 
             regressorsForce = 2 * omegaFilt.y * omegaFilt.diff().y
             regressorsGyro  = omegaFilt.dot().diff().y
-            regressors = np.stack((regressorsForce, regressorsGyro), axis=1)
+            regressors = np.concatenate((regressorsForce, regressorsGyro), axis=1)
             ys = gyroFilt.dot().diff().y[:, axis-3]
 
         for r, y in zip(regressors, ys):
