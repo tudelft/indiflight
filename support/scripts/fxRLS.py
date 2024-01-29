@@ -44,13 +44,13 @@ if __name__=="__main__":
     for axis in axisSelect:
         if axis < 3:
             # specific force
-            est = RLS(N_ACT, gamma, forgetting)
+            est = RLS(N_ACT, 1, gamma=gamma, forgetting=forgetting)
 
             regressors = 2 * omegaFilt.y * omegaFilt.diff().y
             ys = accFilt.diff().y[:, axis]
         else:
             # dgyro, we also need rotor rate
-            est = RLS(2*N_ACT, gamma, forgetting)
+            est = RLS(2*N_ACT, 1, gamma=gamma, forgetting=forgetting)
 
             regressorsForce = 2 * omegaFilt.y * omegaFilt.diff().y
             regressorsGyro  = omegaFilt.dot().diff().y
@@ -58,19 +58,26 @@ if __name__=="__main__":
             ys = gyroFilt.dot().diff().y[:, axis-3]
 
         for r, y in zip(regressors, ys):
-            est.newSample(r[:, np.newaxis], y)
+            est.newSample(r, y)
+
+        regressorNames = [f"$2\omega_{i}\Delta\omega_{i}$" for i in range(4)]
+        parGroups = [[0,1,2,3]]
+        if axis >= 3:
+            regressorNames += [f"$\Delta\dot\omega_{i}$" for i in range(4)]
+            parGroups.append([4,5,6,7])
+
+        est.setName(f"{axisNames[axis]} Effectiveness Estimation")
+        #est.setParameterNames( NOT SET )
+        est.setRegressorNames([regressorNames])
+        est.setOutputNames([f"{axisSymbols[axis]}"])
 
         axisEstimators.append(est)
 
-        configs = [
-            {'indices':[0, 1, 2, 3], 'regNames': [f"$2\omega_{i}\Delta\omega_{i}$" for i in range(4)]}, 
-            {'indices':[4, 5, 6, 7], 'regNames': [f"$\Delta\dot\omega_{i}$" for i in range(4)]}
-        ]
-
         f = est.plotParameters(
-            configs=configs[0:(1 + (axis>2))],
+            parGroups=parGroups,
+            #yGroup=None, # defualt is fine
             timeMs=log.data['timeMs'],
-            title=f"{axisNames[axis]} Axis",
-            yLabel=f"{axisSymbols[axis]}",
+            sharey=True,
+            zoomy=True,
             )
         f.show()

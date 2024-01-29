@@ -18,7 +18,7 @@ plt.rcParams.update({
     "axes.titlesize": 16,
     "xtick.labelsize": 12,
     "ytick.labelsize": 12,
-    "legend.loc": 'upper right',
+    "legend.loc": 'best',
     'figure.subplot.bottom': 0.025,
     'figure.subplot.left': 0.025,
     'figure.subplot.right': 0.95,
@@ -169,7 +169,7 @@ class RLS(object):
         if len(regNames) != self.d:
             raise ValueError(f"regNames has to be length {self.d}, got {len(regNames)}")
         for i, row in enumerate(regNames):
-            if len(row) != self.d:
+            if len(row) != self.n:
                 raise ValueError(f"All rows in regNames have to be length {self.n}, got {len(row)} in row {i}")
         self.regNames = regNames
 
@@ -214,7 +214,7 @@ class RLS(object):
 
         # regressors a and observation y
         lam = self.forgetting
-        K = ( self.P @ A.T ) @ np.linalg.inv( lam * np.eye(self.n) + A @ self.P @ A.T )
+        K = ( self.P @ A.T ) @ np.linalg.inv( lam * np.eye(self.d) + A @ self.P @ A.T )
         self.P = (1. / lam) * (self.P - K @ A @ self.P)
 
         e = y - A @ self.x
@@ -224,11 +224,11 @@ class RLS(object):
             self.x[~disable] += K[~disable, ~disable] @ e[~disable]
 
         self.N += 1
-        self.A_hist.append(A.squeeze().copy())
-        self.y_hist.append(y.squeeze().copy())
-        self.K_hist.append(K.squeeze().copy())
-        self.e_hist.append(e.squeeze().copy())
-        self.x_hist.append(self.x.squeeze().copy())
+        self.A_hist.append(A.copy())
+        self.y_hist.append(y.copy())
+        self.K_hist.append(K.copy())
+        self.e_hist.append(e.copy())
+        self.x_hist.append(self.x.copy())
         self.P_hist.append(self.P.copy())
 
     def predictNew(self, A):
@@ -239,7 +239,7 @@ class RLS(object):
         x = np.array(self.x_hist)
         return np.array([A[i] @ x[i] for i in range(self.N)])
 
-    def plotParameters(self, parGroups=None, yGroups=None, timeMs=None, sharey=True):
+    def plotParameters(self, parGroups=None, yGroups=None, timeMs=None, sharey=True, zoomy=False):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
@@ -261,7 +261,7 @@ class RLS(object):
         top=0.925
         hspace=0.15
         wspace=0.25
-        rWidth = (right - left + 0.3*wspace) * 1 / (1 + len(parGroups)) + left
+        rWidth = (right - left + 0*0.3*wspace) * 1 / (1 + len(parGroups)) + left
         rHeight = (top - bottom) * 2 / (2 + len(yGroups)) + bottom
 
         faceGs = GridSpec(2, 2,
@@ -315,7 +315,7 @@ class RLS(object):
                 regAx = f.add_subplot(regGs[i, j]); regAxsRow.append(regAx)
                 regAx.set_ylabel("Regressor(s)")
                 regAx.sharex(parAxs[0])
-                if i > 0:
+                if (i > 0) and sharey:
                     regAx.sharey(regAxs[0][j])
             regAxs.append(regAxsRow)
 
@@ -325,9 +325,18 @@ class RLS(object):
         y = np.array(self.y_hist)
 
         for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
+            maxy = 0.
+            miny = 0.
             for i in parIdxs:
+                maxy = max(maxy, x[-1, i])
+                miny = min(miny, x[-1, i])
                 parAx.plot(timeMs, x[:, i], label=self.parNames[i])
                 varAx.plot(timeMs, P[:, i, i], label=f"var({self.parNames[i]})")
+            if zoomy:
+                diffy = maxy - miny
+                maxy += diffy * 1.
+                miny -= diffy * 1.
+                parAx.set_ylim(bottom=miny, top=maxy)
             parAx.legend()
             varAx.legend()
 
@@ -341,7 +350,8 @@ class RLS(object):
                 yAx.plot(timeMs, yRealTime[:, i], label="Real Time")
             yAx.set_ylabel("Output "+self.yNames[i])
             if printLegend:
-                yAx.legend(loc='upper center', bbox_to_anchor=(0.5, 1.8))
+                legend_ypos = 0.38 / yAx.get_position().height
+                yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
                 printLegend = False
 
         for yIdxs, regAxRow in zip(yGroups, regAxs):

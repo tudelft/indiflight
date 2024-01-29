@@ -32,14 +32,14 @@ if __name__=="__main__":
 
     motors = []
     for motor in range(N_ACT):
-        est = RLS(N_ACT, gamma, forgetting)
+        est = RLS(N_ACT, 1, gamma=gamma, forgetting=forgetting)
         for i in range(len(log.data)):
             a = np.array([[
                 uFilt.y[i, motor],
                 np.sqrt(uFilt.y[i, motor]), 
                 1.,
                 -omegaFilt.dot().y[i, motor],
-            ]]).T
+            ]])
             y = omegaFilt.y[i, motor]
             est.newSample(a, y)
 
@@ -55,14 +55,16 @@ if __name__=="__main__":
 
         motors.append(motorDict)
 
+        est.setName(f"Motor {motor}")
+        est.setParameterNames(["$a$", "$b$", "$\omega_0$", "$\\tau$"])
+        est.setRegressorNames([["$u$", "$\sqrt{u}$", "unity", "$-\dot\omega$"]])
+        est.setOutputNames([f"$\omega_{motor}$"])
+
         f = est.plotParameters(
-            configs=[
-                {'indices': [0, 1], 'regNames': ["$u$", '$\sqrt{u}$']},
-                {'indices': [2],    'regNames': ["unity"]},
-                {'indices': [3],    'regNames': ["$-\dot\omega$"]}],
+            parGroups=[[0,1], [2], [3]],
+            #yGroup=None, #default is fine
             timeMs=log.data['timeMs'],
-            title=f"Motor {motor}",
-            yLabel=f"$\omega_{motor}$",
             sharey=False,
+            zoomy=False,
             )
         f.show()
