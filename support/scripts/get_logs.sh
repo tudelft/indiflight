@@ -19,9 +19,20 @@ reset () {
     sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 '/usr/bin/openocd -f /opt/openocd/openocd.cfg -c "init; reset; exit"'
 }
 
-# betaflight specific: attempt to set FC into MSC mode via MSP protocol over TCP (command 68, one Byte of value 0x03)
-./sendMSP.py --host 10.0.0.1 --port 5761 68 B 3
-sleep 5
+# betaflight specific: attempt to kill connection from configurator
+which tcpkill
+if [[ $? -gt 0 ]]; then
+    echo "NOTE: tcpkill not available (install dsniff package). Manually disconnect configurator if mounting fails"
+else
+    # try to kill existing tcp connections from configurator
+    sudo timeout 3 tcpkill -9 dst host 10.0.0.1 and dst port 5761
+fi
+
+SCRIPT_PATH=$(dirname "$0")
+
+# to set FC into MSC mode via MSP protocol over TCP (command 68, one Byte of value 0x03)
+$SCRIPT_PATH/sendMSP.py --host 10.0.0.1 --port 5761 68 B 3
+sleep 1
 
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo findmnt ${DEV}"
 if [[ $? -gt 0 ]]; then
