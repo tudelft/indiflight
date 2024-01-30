@@ -30,6 +30,33 @@ Q = Nr.T @ W @ Nr
 A = Nr.T @ Bf.T @ Bf @ Nr
 L, V = np.linalg.eig(-np.linalg.inv(A) @ Q)
 
+A = np.random.random((4,4))
+A = A.T @ A 
+
+M = np.random.random((4,4))
+M = M.T @ M
+
+# https://people.inf.ethz.ch/arbenz/ewp/Lnotes/2010/chapter12.pdf
+q = np.array([[0.5, 0.5, 0.5, 0.5]]).T
+v = A @ q
+u = M @ q
+rho = (v.T @ q) / (u.T @ q)
+g = (v - rho * u)
+for i in range(10):
+    if i == 0:
+        p = -g
+    else:
+        p = -g + (g.T @ M @ g) / (gkm1.T @ M @ gkm1) * p
+
+    gkm1 = g
+    d = (p.T @ g) / (p.T @ (rho * M @ p - A @ p))
+    q += d * p
+    v = A @ q
+    u = M @ q
+    rho = (v.T @ q) / (u.T @ q)
+    g = (v - rho * u)
+
+
 # adjust eigenpairs for solutions
 for i, v in enumerate(V.T):
     scale = np.sqrt( G**2 / ( v.T @ A @ v ) )
