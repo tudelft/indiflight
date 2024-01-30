@@ -5,7 +5,10 @@ from orangebox import Parser as BFLParser
 
 from argparse import ArgumentParser
 import logging
+import pickle
+import os
 from matplotlib import pyplot as plt
+from hashlib import md5
 
 class IndiflightLog(object):
     UNIT_FLOAT_TO_SIGNED16VB = ((127 << 6) - 1)
@@ -20,6 +23,7 @@ class IndiflightLog(object):
     PERCENT = 100.
     DSHOT_MIN = 158.
     DSHOT_MAX = 2048.
+    CACHE_NAME = "indiflight_logs"
 
     @staticmethod
     def modeToText(bits):
@@ -82,24 +86,35 @@ class IndiflightLog(object):
         except TypeError:
             return single(bits)
 
-    def __init__(self, filename, timeRange=None):
-        # import raw data using orangebox parser
-        logging.info("Parsing logfile")
-        bfl = BFLParser.load(filename)
+    def __init__(self, filename, timeRange=None, useCache=False, clearCache=False):
+        if clearCache:
+            self._clearCache()
 
-        if bfl.reader.log_count > 1:
-            raise NotImplementedError("logParser not implemented for multiple\
-                                       logs per BFL or BBL file. Use bbsplit\
-                                       cmd line util")
+        if useCache:
+            self.raw, self.parameters = self._tryCacheLoad(filename)
 
-        # dump data rows into pandas frame. # TODO: only import until range?
-        logging.info("Importing into dataframe")
-        self.raw = pd.DataFrame([frame.data for frame in bfl.frames()],
-                               columns=bfl.field_names )
-        self.raw.set_index('loopIteration', inplace=True)
+        if not useCache or self.raw is None or self.parameters is None:
+            # import raw data using orangebox parser
+            logging.info("Parsing logfile")
+            bfl = BFLParser.load(filename)
 
-        # get parameters
-        self.parameters = bfl.headers
+            if bfl.reader.log_count > 1:
+                raise NotImplementedError("logParser not implemented for multiple\
+                                           logs per BFL or BBL file. Use bbsplit\
+                                           cmd line util")
+
+            # dump data rows into pandas frame. # TODO: only import until range?
+            logging.info("Importing into dataframe")
+            self.raw = pd.DataFrame([frame.data for frame in bfl.frames()],
+                                   columns=bfl.field_names )
+            self.raw.set_index('loopIteration', inplace=True)
+
+            # get parameters
+            self.parameters = bfl.headers
+
+            # pickle, if requested
+            if useCache:
+                self._storeCache()
 
         # crop to time range and apply scaling
         logging.info("Apply scaling and crop to range")
@@ -109,6 +124,64 @@ class IndiflightLog(object):
         logging.info("Convert flight modes to events")
         self.flags = self._convertModeFlagsToEvents()
         logging.info("Done")
+
+    def _clearCache(self):
+        from platformdirs import user_cache_dir
+
+        cachedir = user_cache_dir(self.CACHE_NAME, self.CACHE_NAME)
+
+        logging.info(f"Clearing cache at {cachedir}")
+        try:
+            for file_name in os.listdir(cachedir):
+                os.remove(os.path.join(cachedir, file_name))
+        except FileNotFoundError:
+            pass
+
+    def _tryCacheLoad(self, filename):
+        from platformdirs import user_cache_dir
+
+        cachedir = user_cache_dir(self.CACHE_NAME, self.CACHE_NAME)
+        if not os.path.exists(cachedir):
+            os.makedirs(cachedir)
+
+        BUF_SIZE = 65536 # chunksize
+
+        # idea: filename is md5 digest of both the log and this file. That 
+        #       should prevent reading any stale/corrupt cache
+        hash = md5()
+        with open(filename, 'rb') as f:
+            while True:
+                data = f.read(BUF_SIZE)
+                if not data:
+                    break
+                hash.update(data)
+        with open(__file__, 'rb') as f:
+            while True:
+                data = f.read(BUF_SIZE)
+                if not data:
+                    break
+                hash.update(data)
+
+        cacheFileStem=hash.hexdigest()
+
+        # Join the folder path with the filename to get the complete file path
+        self.cacheFilePath = os.path.join(cachedir, cacheFileStem+'.pkl')
+        if os.path.exists(self.cacheFilePath):
+            logging.info("Using cached pickle instead of reading BFL log")
+            logging.debug(f"Cache pickle location: {self.cacheFilePath}")
+            with open(self.cacheFilePath, 'rb') as f:
+                raw, parameters = pickle.load(f)
+            return raw, parameters
+        else:
+            logging.info("No cached pickle found")
+            return None, None
+
+    def _storeCache(self):
+        # to get here, tryCacheLoad has to have been called
+        logging.info("Caching raw logs to pickle")
+        logging.debug(f"Cache pickle location: {self.cacheFilePath}")
+        with open(self.cacheFilePath, 'wb') as f:
+            pickle.dump((self.raw, self.parameters), f)
 
     def _processData(self, timeRange):
         # crop relevant time range out of raw, and adjust time
@@ -339,15 +412,17 @@ if __name__=="__main__":
     # script to demonstrate how to use it
     parser = ArgumentParser()
     parser.add_argument("datafile", help="single indiflight bfl logfile")
-    parser.add_argument("--range","-r", required=False, nargs=2, type=int, help="integer time range to consider in ms since start of datafile")
     parser.add_argument("-v", required=False, action='count', default=0, help="verbosity (can be given up to 3 times)")
+    parser.add_argument("--range","-r", required=False, nargs=2, type=int, help="integer time range to consider in ms since start of datafile")
+    parser.add_argument("--no-cache","-n", required=False, action='store_true', default=False, help="Do not load from or store to raw data cache")
+    parser.add_argument("--clear-cache","-c", required=False, action='store_true', default=False, help="Clear raw data cache")
 
     args = parser.parse_args()
     verbosity = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
     logging.basicConfig(format='%(asctime)s -- %(name)s %(levelname)s: %(message)s', level=verbosity[min(args.v, 3)])
 
     # import data
-    log = IndiflightLog(args.datafile, args.range)
+    log = IndiflightLog(args.datafile, args.range, not args.no_cache, args.clear_cache)
 
     # plot some stuff
     #log.plot()
