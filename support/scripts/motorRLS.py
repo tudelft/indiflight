@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
+import logging
 import numpy as np
 
 from estimators import RLS, Signal
 from indiflight_log_importer import IndiflightLog
 
 if __name__=="__main__":
+    logging.basicConfig(
+        format='%(asctime)s -- %(name)s %(levelname)s: %(message)s',
+        level=logging.INFO,
+        )
+
     parser = ArgumentParser()
     parser.add_argument("datafile", help="single indiflight bfl logfile")
     parser.add_argument("--range","-r", required=False, nargs=2, default=(2215, 2670), type=float, help="time range to consider in ms since start of datafile")

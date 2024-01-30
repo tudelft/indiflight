@@ -6,9 +6,12 @@ from orangebox import Parser as BFLParser
 from argparse import ArgumentParser
 import logging
 import pickle
+import sys
 import os
 from matplotlib import pyplot as plt
 from hashlib import md5
+
+logger = logging.getLogger(__name__)
 
 class IndiflightLog(object):
     UNIT_FLOAT_TO_SIGNED16VB = ((127 << 6) - 1)
@@ -86,16 +89,13 @@ class IndiflightLog(object):
         except TypeError:
             return single(bits)
 
-    def __init__(self, filename, timeRange=None, useCache=False, clearCache=False):
-        if clearCache:
-            self._clearCache()
-
+    def __init__(self, filename, timeRange=None, useCache=True):
         if useCache:
             self.raw, self.parameters = self._tryCacheLoad(filename)
 
         if not useCache or self.raw is None or self.parameters is None:
             # import raw data using orangebox parser
-            logging.info("Parsing logfile")
+            logger.info("Parsing logfile")
             bfl = BFLParser.load(filename)
 
             if bfl.reader.log_count > 1:
@@ -104,7 +104,7 @@ class IndiflightLog(object):
                                            cmd line util")
 
             # dump data rows into pandas frame. # TODO: only import until range?
-            logging.info("Importing into dataframe")
+            logger.info("Importing into dataframe")
             self.raw = pd.DataFrame([frame.data for frame in bfl.frames()],
                                    columns=bfl.field_names )
             self.raw.set_index('loopIteration', inplace=True)
@@ -117,20 +117,21 @@ class IndiflightLog(object):
                 self._storeCache()
 
         # crop to time range and apply scaling
-        logging.info("Apply scaling and crop to range")
+        logger.info("Apply scaling and crop to range")
         self.data = self._processData(timeRange)
 
         # parse rc box mode change events (use LogData.modeToText to decode)
-        logging.info("Convert flight modes to events")
+        logger.info("Convert flight modes to events")
         self.flags = self._convertModeFlagsToEvents()
-        logging.info("Done")
+        logger.info("Done")
 
-    def _clearCache(self):
+    @staticmethod
+    def clearCache():
         from platformdirs import user_cache_dir
 
-        cachedir = user_cache_dir(self.CACHE_NAME, self.CACHE_NAME)
+        cachedir = user_cache_dir(IndiflightLog.CACHE_NAME, IndiflightLog.CACHE_NAME)
 
-        logging.info(f"Clearing cache at {cachedir}")
+        logger.info(f"Clearing cache at {cachedir}")
         try:
             for file_name in os.listdir(cachedir):
                 os.remove(os.path.join(cachedir, file_name))
@@ -167,19 +168,19 @@ class IndiflightLog(object):
         # Join the folder path with the filename to get the complete file path
         self.cacheFilePath = os.path.join(cachedir, cacheFileStem+'.pkl')
         if os.path.exists(self.cacheFilePath):
-            logging.info("Using cached pickle instead of reading BFL log")
-            logging.debug(f"Cache pickle location: {self.cacheFilePath}")
+            logger.info(f"Using cached pickle instead of reading BFL log for {filename}")
+            logger.debug(f"Cache pickle location: {self.cacheFilePath}")
             with open(self.cacheFilePath, 'rb') as f:
                 raw, parameters = pickle.load(f)
             return raw, parameters
         else:
-            logging.info("No cached pickle found")
+            logger.info(f"No cached pickle found for {filename}")
             return None, None
 
     def _storeCache(self):
         # to get here, tryCacheLoad has to have been called
-        logging.info("Caching raw logs to pickle")
-        logging.debug(f"Cache pickle location: {self.cacheFilePath}")
+        logger.info("Caching raw logs to pickle")
+        logger.debug(f"Cache pickle location: {self.cacheFilePath}")
         with open(self.cacheFilePath, 'wb') as f:
             pickle.dump((self.raw, self.parameters), f)
 
@@ -415,14 +416,24 @@ if __name__=="__main__":
     parser.add_argument("-v", required=False, action='count', default=0, help="verbosity (can be given up to 3 times)")
     parser.add_argument("--range","-r", required=False, nargs=2, type=int, help="integer time range to consider in ms since start of datafile")
     parser.add_argument("--no-cache","-n", required=False, action='store_true', default=False, help="Do not load from or store to raw data cache")
-    parser.add_argument("--clear-cache","-c", required=False, action='store_true', default=False, help="Clear raw data cache")
+    parser.add_argument("--clear-cache", required=False, action='store_true', default=False, help="Clear raw data cache")
+
+    # clear cache, even if no other arguments are given
+    if "--clear-cache" in sys.argv[1:]:
+        IndiflightLog.clearCache()
+        if len(sys.argv) == 2:
+            exit(0)
 
     args = parser.parse_args()
+
     verbosity = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
-    logging.basicConfig(format='%(asctime)s -- %(name)s %(levelname)s: %(message)s', level=verbosity[min(args.v, 3)])
+    logging.basicConfig(
+        format='%(asctime)s -- %(name)s %(levelname)s: %(message)s',
+        level=verbosity[min(args.v, 3)],
+        )
 
     # import data
-    log = IndiflightLog(args.datafile, args.range, not args.no_cache, args.clear_cache)
+    log = IndiflightLog(args.datafile, args.range, not args.no_cache)
 
     # plot some stuff
     #log.plot()
