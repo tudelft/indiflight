@@ -299,7 +299,7 @@ void disableCatapult(void) {
 }
 
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
-#define CATAPULT_DELAY_TIME 2000000 // 2sec
+#define CATAPULT_DELAY_TIME 1000000 // 1sec
 #define CATAPULT_ALTITUDE 4.f
 #define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
 #define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
@@ -381,15 +381,15 @@ learning_state_t learningState = LEARNING_DISABLED;
 #ifdef USE_LEARN_AFTER_CATAPULT
 
 #define LEARNING_ACT 4
-#define LEARNING_DELAY_TIME 50000 // 50ms
+#define LEARNING_DELAY_TIME 250000 // 250ms
 #define LEARNING_STEP_TIME 50000 // 50ms
 #define LEARNING_RAMP_TIME 100000 // 100ms
 #define LEARNING_OVERLAP_TIME 50000 // 50ms, suggested not more than STEP_TIME
-#define LEARNING_STEP_AMPLITUDE 0.3f
-#define LEARNING_RAMP_AMPLITUDE 0.6f
+#define LEARNING_STEP_AMPLITUDE 0.35f
+#define LEARNING_RAMP_AMPLITUDE 0.70f
 #define LEARNING_TOTAL_QUERY_TIME ((LEARNING_STEP_TIME+LEARNING_RAMP_TIME)*LEARNING_ACT - LEARNING_OVERLAP_TIME*(LEARNING_ACT-1))
 STATIC_ASSERT(LEARNING_OVERLAP_TIME <= LEARNING_STEP_TIME, "LEARNING_OVERLAP_TIME larger than LEARNING_STEP_TIME untested");
-STATIC_ASSERT(LEARNING_TOTAL_QUERY_TIME + LEARNING_DELAY_TIME < 750000, "Dangerously high total learning time");
+STATIC_ASSERT(LEARNING_TOTAL_QUERY_TIME + LEARNING_DELAY_TIME < 1000000, "Dangerously high total learning time"); // 1 sec
 
 #define LEARNING_GYRO_MAX 1600.f // deg/s
 
@@ -435,21 +435,17 @@ doMore:
                 learningState = LEARNING_ACTIVE; goto doMore;
             }
             break;
-        case LEARNING_ACTIVE: {
+        case LEARNING_ACTIVE:
             // invoke learning here!
-
-            bool gyroExceeded = false; // todo: write this logic
-            UNUSED(gyroExceeded);
-
             for (int motor = 0; motor < LEARNING_ACT; motor++) {
                 if (motorStates[motor].queryState == QUERY_ZERO) { break; } // no more motors possible
 
                 // trigger next motor, if overlap time reached
                 timeDelta_t time_in_query = cmpTimeUs(micros(), motorStates[motor].startTime);
-                if ( (motor+1 < LEARNING_ACT) && ( (time_in_query + LEARNING_OVERLAP_TIME) > (LEARNING_STEP_TIME + LEARNING_RAMP_TIME) ) ) {
+                if ( (motor+1 < LEARNING_ACT)
+                        && ( (time_in_query + LEARNING_OVERLAP_TIME) > (LEARNING_STEP_TIME + LEARNING_RAMP_TIME) ) )
                     if (motorStates[motor+1].queryState == QUERY_ZERO)
                         resetMotorQueryState(motorStates, motor + 1, true);
-                }
 
                 // protect somewhat against gyro overrun, probably wont work because of filter delays
                 for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -481,9 +477,8 @@ doMoreMotors:
             }
 
             bool allMotorsDone = true;
-            for (int motor = 0; motor < LEARNING_ACT; motor++) {
+            for (int motor = 0; motor < LEARNING_ACT; motor++)
                 allMotorsDone &= (motorStates[motor].queryState == QUERY_DONE);
-            }
 
             // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
             if (allMotorsDone || (cmpTimeUs(micros(), startAt) > (LEARNING_TOTAL_QUERY_TIME + 10000)) ) {
@@ -491,7 +486,6 @@ doMoreMotors:
             }
 
             break;
-        }
         case LEARNING_DONE: { break; }
     }
 

@@ -27,10 +27,8 @@ if __name__=="__main__":
     log = IndiflightLog(args.datafile, args.range)
     log.resetTime()
 
-    #gyro = Signal(log.data["timeS"], log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]] )
-    #acc  = Signal(log.data["timeS"], log.data[[f"accUnfiltered[{i}]" for i in range(3)]] )
-    gyro = Signal(log.data["timeS"], log.data[[f"gyroADC[{i}]" for i in range(3)]] )
-    acc  = Signal(log.data["timeS"], log.data[[f"accSmooth[{i}]" for i in range(3)]] )
+    gyro = Signal(log.data["timeS"], log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]] )
+    acc  = Signal(log.data["timeS"], log.data[[f"accUnfiltered[{i}]" for i in range(3)]] )
 
     gyroFilt = gyro.filter('lowpass', order, fc)
     accFilt  = acc.filter('lowpass', order, fc)
