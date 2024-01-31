@@ -584,16 +584,16 @@ void getSetpoints(void) {
         //DONE todo: replace call to getAttSpNed by logic more suited to manual flying
         //      ie. just yaw * tilt?
 
-    } else if (flightModeFlags) {
-        trackAttitudeYaw = true;
+    //} else if (flightModeFlags) {
+    //    trackAttitudeYaw = true;
 
-        // unknown, but not acro flight mode, just command upright
-        attSpNed.qi = 1.0f;
-        attSpNed.qx = 0.f;
-        attSpNed.qy = 0.f;
-        attSpNed.qz = 0.f;
+    //    // unknown, but not acro flight mode, just command upright
+    //    attSpNed.qi = 1.0f;
+    //    attSpNed.qx = 0.f;
+    //    attSpNed.qy = 0.f;
+    //    attSpNed.qz = 0.f;
 
-        spfSpBody.V.Z = 2.f; // low but downwards
+    //    spfSpBody.V.Z = 2.f; // low but downwards
     } else {
         controlAttitude = false;
         // acro
@@ -1013,12 +1013,12 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
     *attSpNed = quatMult(yawNed, attSpYaw);
 
-    // discount thrust of we have not yet reached our attitude
+    // discount thrust if we have not yet reached our attitude
     t_fp_vector zDesNed = quatRotMatCol(*attSpNed, 2);
     float zDotProd = 
-        zDesNed.V.X * rMat[0][2]
-        + zDesNed.V.Y * rMat[1][2] 
-        + zDesNed.V.Z * rMat[2][2];
+        - zDesNed.V.X * (+rMat[0][2])
+        - zDesNed.V.Y * (-rMat[1][2])
+        - zDesNed.V.Z * (-rMat[2][2]);
 
     *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
     //*fz = fz_target;

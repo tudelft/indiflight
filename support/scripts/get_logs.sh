@@ -23,42 +23,25 @@ reset () {
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo lsblk -p | grep ${DEV}"
 if [[ $? -gt 0 ]]; then
     # not yet available
-    echo "Device not available on remote."
+    echo "MSC Device not (yet) available on remote."
 
-    # check if configurator is connected to USB port
-    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo netstat -tn | grep 5761"
-    if [[ $? -eq 0 ]]; then
-        which tcpkill
-        if [[ $? -gt 0 ]]; then
-            echo "PI still connected to a configurator, but tcpkill (dsniff package) not installed. Disconnect configurator and re-run."
-            exit 1
-        else
-            # try to kill existing tcp connections from configurator
-            echo -n "PI still connected to a configurator. Attempting to kill the connection... "
-            sudo timeout 3 tcpkill -9 dst host 10.0.0.1 and dst port 5761 > /dev/null
-        fi
-    fi
 
-    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo netstat -tn | grep 5761"
-    if [[ $? -gt 0 ]]; then
-        echo "failed! Disconnect configurator and re-run."
-        exit 1
-    fi
+    echo -n "Sending reboot-to-MSC signal to FC... "
 
-    echo "succesful"
-    echo -n "Send reboot-to-MSC signal to FC... "
+    # restart ser2net to terminate any existing connections, then hope we are faster with sending the reboot signal than auto reconnect of the configurator
+    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo systemctl restart ser2net"
 
     # use MSP protocol over TCP (command 68, one Byte of value 0x03)
-    timeout 1 $(dirname "$0")/sendMSPoverTCP.py --host 10.0.0.1 --port 5761 68 B 3
+    timeout 3 $(dirname "$0")/sendMSPoverTCP.py --host 10.0.0.1 --port 5761 68 B 3
     if [[ $? -gt 0 ]]; then
-        echo "Failed. exiting"
+        echo "Failed. exiting. restart into MSC manually through the configurator"
         exit 1
     fi
-    echo "Succesful."
 fi
 
 sleep 3
 
+echo
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo findmnt ${DEV}"
 if [[ $? -gt 0 ]]; then
     # try to find blk device
@@ -76,13 +59,14 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Failed to bring up MSC device. Resetting FC..."
+        echo
         reset
         exit 1
     fi
 
     echo "MSC device available! Attempting checking/fixing of FAT filesystem on ${DEV}:"
     echo ""
-    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V /dev/mmcblk0p1"
+    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V ${DEV}"
 
     echo ""
     echo "Attempting mounting ${DEV} on remote:/mnt..."
@@ -98,11 +82,11 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Mounting failed! Resetting FC..."
+        echo
         reset
         exit 1
     fi
 fi
-
 
 exit_code=0
 
@@ -120,6 +104,7 @@ sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "s
 
 # always reset
 echo "Resetting FC..."
+echo
 reset
 exit ${exit_code}
 
