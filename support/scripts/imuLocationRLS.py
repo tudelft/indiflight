@@ -18,9 +18,9 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     # fitting parameters
-    fc = 30. # Hz. tau = 1/(2*pi*fc) if first order
+    fc = 10. # Hz. tau = 1/(2*pi*fc) if first order
     order = 2 # 1 --> simple first order. 2 and up --> butterworth
-    gamma = 1e0
+    gamma = 1e5
     forgetting = 1.0 # todo: dependent on sampling rate?
 
     # load unfiltered data into numpy

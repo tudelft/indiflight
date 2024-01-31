@@ -3,7 +3,6 @@ from scipy.signal import butter, sosfilt, sosfilt_zi, lfilter, lfilter_zi
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 import logging
-from copy import deepcopy
 
 plt.rcParams.update({
     "text.usetex": True,
@@ -295,16 +294,17 @@ class RLS(object):
         regAxs = []
         for i in range(len(parGroups)):
             parAx = f.add_subplot(parGs[0, i]); parAxs.append(parAx)
-            parAx.set_ylabel("Parameter(s)")
 
             varAx = f.add_subplot(parGs[1, i]); varAxs.append(varAx)
-            varAx.set_ylabel("Variance(s)")
             varAx.sharex(parAxs[0])
             varAx.set_yscale('log')
 
             if i > 0:
                 varAx.sharey(varAxs[0])
                 parAx.sharex(parAxs[0])
+            else:
+                parAx.set_ylabel("Parameter(s)")
+                varAx.set_ylabel("Variance(s)")
 
         for i in range(len(yGroups)):
             yAx = f.add_subplot(yGs[i, 0]); yAxs.append(yAx)
@@ -313,7 +313,8 @@ class RLS(object):
             regAxsRow = []
             for j in range(len(parGroups)):
                 regAx = f.add_subplot(regGs[i, j]); regAxsRow.append(regAx)
-                regAx.set_ylabel("Regressor(s)")
+                if j == 0:
+                    regAx.set_ylabel("Regressor(s)")
                 regAx.sharex(parAxs[0])
                 if (i > 0) and sharey:
                     regAx.sharey(regAxs[0][j])

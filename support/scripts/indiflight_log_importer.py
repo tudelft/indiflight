@@ -13,6 +13,30 @@ from hashlib import md5
 
 logger = logging.getLogger(__name__)
 
+plt.rcParams.update({
+    "text.usetex": True,
+#    "font.family": "Helvetica",
+    "font.family": "sans-serif",
+    "font.size": 12,
+    "axes.grid": True,
+    "axes.grid.which": 'both',
+    "grid.linestyle": '--',
+    "grid.alpha": 0.7,
+    "axes.labelsize": 12,
+    "axes.titlesize": 16,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.loc": 'best',
+    "legend.fontsize": 9,
+    'figure.subplot.bottom': 0.05,
+    'figure.subplot.left': 0.075,
+    'figure.subplot.right': 0.95,
+    'figure.subplot.top': 0.925,
+    'figure.subplot.hspace': 0.2,
+    'figure.subplot.wspace': 0.15,
+    'figure.titlesize': 'large',
+})
+
 class IndiflightLog(object):
     UNIT_FLOAT_TO_SIGNED16VB = ((127 << 6) - 1)
     RADIANS_TO_DEGREES = 57.2957796
@@ -302,8 +326,9 @@ class IndiflightLog(object):
 
     def plot(self):
         # plot some overview stuff
-        f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
-        axs[2, 3]._shared_axes['y'].remove(axs[2, 3])
+        f, axs = plt.subplots(4, 4, figsize=(12,9), sharex='all', sharey='row')
+        axs[2, 3].axis('off')
+        axs[3, 3].axis('off')
 
         for i in range(4):
             line1, = axs[0, i].plot(self.data['timeMs'], self.data[f'omega[{i}]'], label=f'onboard rpm omega[{i}]')
@@ -318,31 +343,30 @@ class IndiflightLog(object):
 
             axs[0, i].legend(lines, labels)
             axs[0, i].set_ylim(bottom=-0.1, top=1.1)
-            axs[0, i].grid()
             if (i==0):
-                axs[0, i].set_ylabel("Motor command/output")
+                axs[0, i].set_ylabel("Motor command/output [-], [rad/s]")
 
         for i in range(4):
             axs[1, i].plot(self.data['timeMs'], self.data[f'omega_dot[{i}]'], label=f'onboard drpm omega_dot[{i}]')
             axs[1, i].legend()
-            axs[1, i].grid()
             if (i==0):
-                axs[1, i].set_ylabel("Motor acceleration")
+                axs[1, i].set_ylabel("Motor acceleration [rad/s/s]")
+            if (i==3):
+                axs[1, i].set_xlabel("Time [ms]")
+
 
         for i in range(3):
             axs[2, i].plot(self.data['timeMs'], self.data[f'alpha[{i}]'], label=f'onboard angular accel alpha[{i}]')
             axs[2, i].legend()
-            axs[2, i].grid()
-            axs[2, i].set_xlabel("Time [ms]")
             if (i==0):
-                axs[2, i].set_ylabel("Angular acceleration")
+                axs[2, i].set_ylabel("Angular acceleration [rad/s/s]")
 
-        axs[2, 3].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'onboard z accel acc[2]')
-        axs[2, 3].legend()
-        axs[2, 3].grid()
-        axs[2, 3].set_xlabel("Time [ms]")
-
-        f.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
+        for i in range(3):
+            axs[3, i].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'onboard linear accSmooth[{i}]')
+            axs[3, i].legend()
+            axs[3, i].set_xlabel("Time [ms]")
+            if (i==0):
+                axs[3, i].set_ylabel("Specific force [N/kg]")
 
         # Maximize the window on Linux
         mgr = plt.get_current_fig_manager()
@@ -354,8 +378,10 @@ class IndiflightLog(object):
         a = self_name
         b = other_name
 
-        f, axs = plt.subplots(3, 4, figsize=(12,9), sharex='all', sharey='row')
-        axs[2, 3]._shared_axes['y'].remove(axs[2, 3])
+        f, axs = plt.subplots(4, 4, figsize=(12,9), sharex='all', sharey='row')
+        f.suptitle(f"Log comparison -- {a} vs {b}")
+        axs[2, 3].axis('off')
+        axs[3, 3].axis('off')
 
         otherTimeMs = other.data['timeMs'] - other_offset;
 
@@ -374,34 +400,32 @@ class IndiflightLog(object):
 
             axs[0, i].legend(lines, labels)
             axs[0, i].set_ylim(bottom=0)
-            axs[0, i].grid()
             if (i==0):
-                axs[0, i].set_ylabel("Motor command/output")
+                axs[0, i].set_ylabel("Motor command/output [-], [rad/s]")
 
         for i in range(4):
             axs[1, i].plot(self.data['timeMs'], self.data[f'omega_dot[{i}]'], label=f'{a}: onboard drpm omega_dot[{i}]')
             axs[1, i].plot(otherTimeMs, other.data[f'omega_dot[{i}]'], linestyle='--', label=f'{b}: onboard drpm omega_dot[{i}]')
             axs[1, i].legend()
-            axs[1, i].grid()
             if (i==0):
-                axs[1, i].set_ylabel("Motor acceleration")
+                axs[1, i].set_ylabel("Motor acceleration [rad/s/s]")
+            if (i==3):
+                axs[1, i].set_xlabel("Time [ms]")
 
         for i in range(3):
             axs[2, i].plot(self.data['timeMs'], self.data[f'alpha[{i}]'], label=f'{a}: onboard angular accel alpha[{i}]')
             axs[2, i].plot(otherTimeMs, other.data[f'alpha[{i}]'], linestyle='--', label=f'{b}: onboard angular accel alpha[{i}]')
             axs[2, i].legend()
-            axs[2, i].grid()
-            axs[2, i].set_xlabel("Time [ms]")
             if (i==0):
-                axs[2, i].set_ylabel("Angular acceleration")
+                axs[2, i].set_ylabel("Angular acceleration [rad/s/s]")
 
-        axs[2, 3].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'{a}: onboard z accel acc[2]')
-        axs[2, 3].plot(otherTimeMs, other.data[f'accSmooth[{i}]'], linestyle='--', label=f'{b}: onboard z accel acc[2]')
-        axs[2, 3].legend()
-        axs[2, 3].grid()
-        axs[2, 3].set_xlabel("Time [ms]")
-
-        f.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
+        for i in range(3):
+            axs[3, i].plot(self.data['timeMs'], self.data[f'accSmooth[{i}]'], label=f'{a}: onboard linear accSmooth[{i}]')
+            axs[3, i].plot(otherTimeMs, other.data[f'accSmooth[{i}]'], linestyle='--', label=f'{b}: onboard linear accSmooth[{i}]')
+            axs[3, i].legend()
+            axs[3, i].set_xlabel("Time [ms]")
+            if (i==0):
+                axs[3, i].set_ylabel("Specific force [N/kg]")
 
         # Maximize the window on Linux
         mgr = plt.get_current_fig_manager()
