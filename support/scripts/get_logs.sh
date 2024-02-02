@@ -30,6 +30,7 @@ if [[ $? -gt 0 ]]; then
 
     # restart ser2net to terminate any existing connections, then hope we are faster with sending the reboot signal than auto reconnect of the configurator
     sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo systemctl restart ser2net"
+    sleep 1
 
     # use MSP protocol over TCP (command 68, one Byte of value 0x03)
     timeout 3 $(dirname "$0")/sendMSPoverTCP.py --host 10.0.0.1 --port 5761 68 B 3

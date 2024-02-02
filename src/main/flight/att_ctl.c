@@ -1016,7 +1016,7 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
     // discount thrust if we have not yet reached our attitude
     t_fp_vector zDesNed = quatRotMatCol(*attSpNed, 2);
     float zDotProd = 
-        - zDesNed.V.X * (+rMat[0][2])
+        zDesNed.V.X * (+rMat[0][2])
         - zDesNed.V.Y * (-rMat[1][2])
         - zDesNed.V.Z * (-rMat[2][2]);
 
