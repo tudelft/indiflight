@@ -25,15 +25,25 @@
 #include "io/beeper.h"
 
 #include "pg/pg.h"
+#include "config/config.h"
+#include "config/config_reset.h"
+#include <string.h>
 
 #include <stdbool.h>
 
-//PG_REGISTER_WITH_RESET_FN(indiConfig_t, indiConfig, PG_INDI_CONFIG, 1);
-//void pgResetFn_indiConfig(indiConfig_t* indiConfig) {
-//    RESET_CONFIG_2(indiConfig_t, indiConfig,
-//        .attGains = {.V.X = 800.f, .V.Y = 800.f, .V.Z = 200.f}
-//    )
-//}
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+void resetIndiProfile(indiProfile_t *indiProfile) {
+    UNUSED(indiProfile);
+    //RESET_CONFIG(indiProfile_t, indiProfile,
+    //    .attGains = {.V.X = 200.f}
+    //)
+}
+
+void pgResetFn_indiProfiles(indiProfile_t *indiProfiles) {
+    for (int i = 0; i < INDI_PROFILE_COUNT; i++) {
+        resetIndiProfile(&indiProfiles[i]);
+    }
+}
 
 #define RC_SCALE_THROTTLE 0.001f
 #define RC_OFFSET_THROTTLE 1000.f
@@ -298,11 +308,44 @@ void disableCatapult(void) {
     catapultState = CATAPULT_DISABLED;
 }
 
+PG_REGISTER_WITH_RESET_TEMPLATE(catapultConfig_t, catapultConfig, PG_CATAPULT, 0);
+PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig, 
+    .altitude = 400,
+    .xNed = 0,
+    .yNed = 0,
+    .rotationRoll = 400,
+    .rotationPitch = 400,
+    .rotationYaw = 400,
+    .rotationTimeMs = 150,
+    .upwardsAccel = 20,
+);
+
+catapultRuntime_t catapultRuntime;
+void initCatapultRuntime(void) {
+    catapultRuntime.altitude = catapultConfig()->altitude * 0.01f;
+    catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
+    catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
+    catapultRuntime.rotationRate[0] = catapultConfig()->rotationRoll;
+    catapultRuntime.rotationRate[1] = catapultConfig()->rotationPitch;
+    catapultRuntime.rotationRate[2] = catapultConfig()->rotationYaw;
+    catapultRuntime.rotationTimeUs = catapultConfig()->rotationTimeMs * 1e3;
+    catapultRuntime.upwardsAccel = catapultConfig()->upwardsAccel;
+    fp_quaternion_t up = {1.f, 0.f, 0.f, 0.f};
+    catapultRuntime.attitude = up;
+    float h = catapultRuntime.altitude;
+    float a = catapultRuntime.upwardsAccel;
+    //float x = catapultRuntime.xyNed[0];
+    //float y = catapultRuntime.xyNed[1];
+    float g = 9.80665;
+    float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
+    catapultRuntime.fireTimeUs = 1e6 * fireTimeSec;
+}
+
 void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
 #define CATAPULT_DELAY_TIME 1000000 // 1sec
+#define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
 #define CATAPULT_ALTITUDE 4.f
 #define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
-#define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
 #define CATAPULT_ROTATION_TIME 150000 // 150ms
 #define GRAVITY 9.80665f
     static timeUs_t launchTime = 0;
@@ -692,20 +735,7 @@ void getAlphaSpBody(void) {
     #undef USE_OMEGA_DOT_FEEDBACK
 #endif
 
-// stavrow I think the real INDI is happening here
 void getMotor(void) {
-    // mix! And call writeMotors or whatever
-
-
-    /*
-    float Ginv[4][4] = {
-        {-0.0254842f,   0.00042246f,  0.0007886f,   0.00246437f},
-        {-0.0254842f,  -0.00042246f,  0.0007886f,  -0.00246437f},
-        {-0.0254842f,  -0.00042246f, -0.0007886f,   0.00246437f},
-        {-0.0254842f,   0.00042246f, -0.0007886f,  -0.00246437f},
-    };
-    */
-
     static float du[MAXU] = {0.f};
     static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
 #ifdef USE_OMEGA_DOT_FEEDBACK

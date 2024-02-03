@@ -5,6 +5,7 @@
 #include "flight/imu.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
+#include "pg/pg_ids.h"
 
 #ifdef USE_POS_CTL
 
@@ -15,6 +16,48 @@
 #ifndef USE_INDI
 #pragma message "USE_POS_CTL currently only has any effect with USE_INDI"
 #endif
+
+PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
+
+void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
+    for (int i = 0; i < POSITION_PROFILE_COUNT; i++) {
+        positionProfile_t *p = &positionProfiles[i];
+        p->horz_p = 50;
+        p->horz_i = 5;
+        p->horz_d = 70;
+        p->horz_max_v = 500;
+        p->horz_max_a = 500;
+        p->vert_p = 40;
+        p->vert_i = 2;
+        p->vert_d = 50;
+        p->vert_max_v_up = 200;
+        p->vert_max_v_down = 200;
+        p->vert_max_a_up = 2000;
+        p->vert_max_a_down = 950;
+        p->yaw_p = 80;
+        p->weathervane_p = 0;
+        p->weathervane_min_v = 20;
+    }
+}
+
+positionRuntime_t posRuntime;
+void initPositionRuntime(positionProfile_t *p) {
+    posRuntime.horz_p = p->horz_p * 0.1;
+    posRuntime.horz_i = p->horz_i * 0.1;
+    posRuntime.horz_d = p->horz_d * 0.1;
+    posRuntime.horz_max_v = p->horz_max_v * 0.01;
+    posRuntime.horz_max_a = p->horz_max_a * 0.01; 
+    posRuntime.vert_p = p->vert_p * 0.1; 
+    posRuntime.vert_i = p->vert_i * 0.1; 
+    posRuntime.vert_d = p->vert_d * 0.1; 
+    posRuntime.vert_max_v_up = p->vert_max_v_up * 0.01; 
+    posRuntime.vert_max_v_down = p->vert_max_v_down * 0.01; 
+    posRuntime.vert_max_a_up = p->vert_max_a_up * 0.01; 
+    posRuntime.vert_max_a_down = p->vert_max_a_down * 0.01; 
+    posRuntime.yaw_p = p->yaw_p * 0.1; 
+    posRuntime.weathervane_p = p->weathervane_p * 0.1; 
+    posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01; 
+}
 
 // --- control variables
 // externs
@@ -76,7 +119,6 @@ void updatePosCtl(timeUs_t current) {
 
 void getAccSpNed(timeUs_t current) {
     // precalculations
-    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 50.f ) ); // fixme. Why is this hardcoded?! is this bound even necessary?
     float posHGainPCasc = posHGainP / posHGainD; // emulate parallel PD with Casc system
     float posVGainPCasc = posVGainP / posVGainD;
 
@@ -124,10 +166,10 @@ void getAccSpNed(timeUs_t current) {
 
     // limit such that max acceleration likely results in bank angle below 40 deg
     // but log if acceleration saturated, so we can pause error integration
-    accSpXYSaturated = VEC3_XY_LENGTH(accSpNed) > accMax;
+    accSpXYSaturated = VEC3_XY_LENGTH(accSpNed) > MAX_ACC_XY;
     accSpZSaturated = (accSpNed.V.Z < MAX_ACC_Z_NEG) || (accSpNed.V.Z > MAX_ACC_Z_POS);
 
-    VEC3_CONSTRAIN_XY_LENGTH(accSpNed, accMax);
+    VEC3_CONSTRAIN_XY_LENGTH(accSpNed, MAX_ACC_XY);
     accSpNed.V.Z = constrainf(accSpNed.V.Z, MAX_ACC_Z_NEG, MAX_ACC_Z_POS);
 
     // todo: how to handle course/yaw?

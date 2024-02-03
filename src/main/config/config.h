@@ -42,6 +42,7 @@ PG_DECLARE(pilotConfig_t, pilotConfig);
 
 typedef struct systemConfig_s {
     uint8_t pidProfileIndex;
+    uint8_t indiProfileIndex;
     uint8_t activeRateProfile;
     uint8_t debug_mode;
     uint8_t task_statistics;

@@ -63,6 +63,8 @@
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "flight/pos_ctl.h"
+#include "flight/att_ctl.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1219,6 +1221,38 @@ const clivalue_t valueTable[] = {
 #endif
     { PARAM_NAME_TPA_RATE,          VAR_UINT8  | PROFILE_VALUE, .config.minmaxUnsigned = { 0, TPA_MAX}, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_rate) },
     { PARAM_NAME_TPA_BREAKPOINT,    VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_PULSE_MIN, PWM_PULSE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_breakpoint) },
+
+#ifdef USE_INDI
+#endif
+
+#ifdef USE_POS_CTL
+    { PARAM_NAME_POSITION_HORIZONTAL_P,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_p) },
+    { PARAM_NAME_POSITION_HORIZONTAL_I,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 5, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_i) },
+    { PARAM_NAME_POSITION_HORIZONTAL_D,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_d) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED, VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 100, 1 << 15 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_v) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL, VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, 1 << 15  }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_a) },
+    { PARAM_NAME_POSITION_VERTICAL_P,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_p) },
+    { PARAM_NAME_POSITION_VERTICAL_I,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 2, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_i) },
+    { PARAM_NAME_POSITION_VERTICAL_D,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_d) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_SPEED,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, 1 << 15 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED,  VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, 750 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_down) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, 1 << 15 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL,  VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, 1 << 15 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_down) },
+    { PARAM_NAME_POSITION_YAW_P,                VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 20, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, yaw_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_P,        VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 << 7 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, 1 << 15 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
+#endif
+
+#ifdef USE_CATAPULT
+    { PARAM_NAME_CATAPULT_TARGET_ALTITUDE, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 100, 1000 }, PG_CATAPULT, offsetof(catapultConfig_t, altitude) },
+    { PARAM_NAME_CATAPULT_TARGET_X_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT, offsetof(catapultConfig_t, xNed) },
+    { PARAM_NAME_CATAPULT_TARGET_Y_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT, offsetof(catapultConfig_t, yNed) },
+    { PARAM_NAME_CATAPULT_ROTATION_ROLL,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationRoll) },
+    { PARAM_NAME_CATAPULT_ROTATION_PITCH,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationPitch) },
+    { PARAM_NAME_CATAPULT_ROTATION_YAW,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationYaw) },
+    { PARAM_NAME_CATAPULT_ROTATION_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationTimeMs) },
+    { PARAM_NAME_CATAPULT_LOAD_FACTOR,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 40 }, PG_CATAPULT, offsetof(catapultConfig_t, upwardsAccel) },
+#endif
 
 // PG_TELEMETRY_CONFIG
 #ifdef USE_TELEMETRY

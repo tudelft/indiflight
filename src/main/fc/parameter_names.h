@@ -123,6 +123,82 @@
 #define PARAM_NAME_POSITION_ALTITUDE_LPF "altitude_lpf"
 #define PARAM_NAME_POSITION_ALTITUDE_D_LPF "altitude_d_lpf"
 
+#ifdef USE_INDI
+#define PARAM_NAME_INDI_ATTITUDE_GAINS "indi_attitude_gains"
+#define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
+#define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"
+#define PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE "indi_attitude_max_yaw_rate"
+#define PARAM_NAME_INDI_ATTITUDE_THRUST_ATTENUATION "indi_attitude_thrust_attenuation"
+#define PARAM_NAME_INDI_ATTITUDE_COORDINATED_YAW "indi_attitude_coordinated_yaw"
+#define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
+#define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
+#define PARAM_NAME_INDI_AUTO_MAX_TILT "indi_auto_max_tilt"
+#define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
+#define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
+#define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
+#define PARAM_NAME_INDI_ACT_TIME_CONSTANT "indi_act_time_constant"
+#define PARAM_NAME_INDI_ACT_MAX_THRUST "indi_act_max_thrust"
+#define PARAM_NAME_INDI_ACT_PROP_CONST "indi_act_prop_constant"
+#define PARAM_NAME_INDI_ACT_NONLINEARITY "indi_act_nonlinearity"
+#define PARAM_NAME_INDI_ACT_LIMIT "indi_act_limit"
+#define PARAM_NAME_INDI_ACT_G1_FX "indi_act_g1_fx"
+#define PARAM_NAME_INDI_ACT_G1_FY "indi_act_g1_fy"
+#define PARAM_NAME_INDI_ACT_G1_FZ "indi_act_g1_fz"
+#define PARAM_NAME_INDI_ACT_G1_ROLL "indi_act_g1_roll"
+#define PARAM_NAME_INDI_ACT_G1_PITCH "indi_act_g1_pitch"
+#define PARAM_NAME_INDI_ACT_G1_YAW "indi_act_g1_yaw"
+#define PARAM_NAME_INDI_ACT_G2_ROLL "indi_act_g2_roll"
+#define PARAM_NAME_INDI_ACT_G2_PITCH "indi_act_g2_pitch"
+#define PARAM_NAME_INDI_ACT_G2_YAW "indi_act_g2_yaw"
+#define PARAM_NAME_INDI_SYNC_LOWPASS_HZ "indi_sync_lowpass_hz"
+#define PARAM_NAME_INDI_WLS_AXES_WEIGHTS "indi_wls_axes_weights"
+#define PARAM_NAME_INDI_WLS_ACT_PENALTIES "indi_wls_act_penalties"
+#define PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE "indi_wls_act_preferred_state"
+#endif
+
+#ifdef USE_POS_CTL
+#define PARAM_NAME_POSITION_HORIZONTAL_P "position_horizontal_p"
+#define PARAM_NAME_POSITION_HORIZONTAL_I "position_horizontal_i"
+#define PARAM_NAME_POSITION_HORIZONTAL_D "position_horizontal_d"
+#define PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED "position_max_horizontal_speed"
+#define PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL "position_max_horizontal_accel"
+#define PARAM_NAME_POSITION_VERTICAL_P "position_vertical_p"
+#define PARAM_NAME_POSITION_VERTICAL_I "position_vertical_i"
+#define PARAM_NAME_POSITION_VERTICAL_D "position_vertical_d"
+#define PARAM_NAME_POSITION_MAX_UPWARDS_SPEED "position_max_upwards_speed"
+#define PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED "position_max_downwards_speed"
+#define PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL "position_max_upwards_accel"
+#define PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL "position_max_downwards_accel"
+#define PARAM_NAME_POSITION_YAW_P "position_yaw_p"
+#define PARAM_NAME_POSITION_WEATHERVANE_P "position_weathervane_p"
+#define PARAM_NAME_POSITION_WEATHERVANE_MIN_V "position_weathervane_min_v"
+#endif
+
+#ifdef USE_CATAPULT
+#define PARAM_NAME_CATAPULT_TARGET_ALTITUDE "catapult_target_altitude"
+#define PARAM_NAME_CATAPULT_TARGET_X_NED "catapult_target_x_ned"
+#define PARAM_NAME_CATAPULT_TARGET_Y_NED "catapult_target_y_ned"
+#define PARAM_NAME_CATAPULT_ROTATION_ROLL "catapult_rotation_roll"
+#define PARAM_NAME_CATAPULT_ROTATION_PITCH "catapult_rotation_pitch"
+#define PARAM_NAME_CATAPULT_ROTATION_YAW "catapult_rotation_yaw"
+#define PARAM_NAME_CATAPULT_ROTATION_TIME "catapult_rotation_time"
+#define PARAM_NAME_CATAPULT_LOAD_FACTOR "catapult_load_factor"
+#endif
+
+#ifdef USE_THROWTOARM
+#endif
+
+#ifdef USE_LEARNER
+#define PARAM_NAME_LEARNER_MODE "learner_mode" // (1 << 0) after cat. (1 << 1) during flight
+#define PARAM_NAME_LEARNER_DELAY_TIME_MS "learner_delay_time_ms"
+#define PARAM_NAME_LEARNER_STEP_TIME_MS "learner_step_time_ms"
+#define PARAM_NAME_LEARNER_RAMP_TIME_MS "learner_ramp_time_ms"
+#define PARAM_NAME_LEARNER_OVERLAP_TIME_MS "learner_overlap_time_ms"
+#define PARAM_NAME_LEARNER_STEP_AMPLITUDE "learner_step_amplitude"
+#define PARAM_NAME_LEARNER_RAMP_AMPLITUDE "learner_ramp_amplitude"
+#define PARAM_NAME_LEARNER_GYRO_MAX "learner_gyro_max"
+#endif
+
 #ifdef USE_GPS
 #define PARAM_NAME_GPS_PROVIDER "gps_provider"
 #define PARAM_NAME_GPS_SBAS_MODE "gps_sbas_mode"
