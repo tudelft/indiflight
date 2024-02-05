@@ -71,6 +71,7 @@
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
 #include "flight/att_ctl.h"
+#include "flight/catapult.h"
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1366,8 +1367,7 @@ bool isTouchingGround(void) {
 
 #ifdef USE_INDI
 static FAST_CODE_NOINLINE void subTaskIndiController(timeUs_t currentTimeUs) {
-    UNUSED(currentTimeUs);
-    indiController();
+    indiController(currentTimeUs);
 }
 
 static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeUs) {

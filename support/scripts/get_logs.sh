@@ -65,9 +65,10 @@ if [[ $? -gt 0 ]]; then
         exit 1
     fi
 
-    echo "MSC device available! Attempting checking/fixing of FAT filesystem on ${DEV}:"
-    echo ""
-    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V ${DEV}"
+    echo "MSC device available!"
+    #echo "MSC device available! Attempting checking/fixing of FAT filesystem on ${DEV}:"
+    #echo ""
+    #sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V ${DEV}"
 
     echo ""
     echo "Attempting mounting ${DEV} on remote:/mnt..."

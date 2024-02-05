@@ -14,6 +14,7 @@
 #include "flight/pid.h"
 #include "flight/mixer_init.h"
 #include "flight/pos_ctl.h"
+#include "flight/catapult.h"
 #include "drivers/motor.h"
 #include "drivers/dshot.h"
 #include <math.h>
@@ -401,165 +402,29 @@ void indiInit(const pidProfile_t * pidProfile) {
     }
 }
 
-void indiController(void) {
+void indiController(timeUs_t current) {
     if (flightModeFlags
         && (!FLIGHT_MODE(CATAPULT_MODE) || catapultState == CATAPULT_DONE) 
         && (!FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) || learningState == LEARNING_DONE)) {
         // any flight mode but ACRO --> get attitude setpoint
         if ( !((++attExecCounter)%attRateDenom) ) {
             // rate limit attitude control
-            getSetpoints();
+            getSetpoints(current);
             attExecCounter = 0;
         }
     } else {
         // function is cheap, let's go
         //stavrow here we get setpoints
-        getSetpoints();
+        getSetpoints(current);
     }
 
     // for any flight mode:
     // 1. compute desired angular accelerations
-    getAlphaSpBody();
+    getAlphaSpBody(current);
 
     // allocation and INDI
-    getMotor();
+    getMotor(current);
 }
-
-catapult_state_t catapultState = CATAPULT_DISABLED;
-
-#ifdef USE_CATAPULT
-void disableCatapult(void) {
-    beeper(BEEPER_SILENCE);
-    catapultState = CATAPULT_DISABLED;
-}
-
-PG_REGISTER_WITH_RESET_TEMPLATE(catapultConfig_t, catapultConfig, PG_CATAPULT_CONFIG, 0);
-PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig, 
-    .altitude = 300,
-    .xNed = 0,
-    .yNed = 0,
-    .rotationRoll = 400,
-    .rotationPitch = 400,
-    .rotationYaw = 400,
-    .rotationTimeMs = 150,
-    .upwardsAccel = 20,
-);
-
-catapultRuntime_t catapultRuntime;
-void initCatapultRuntime(void) {
-    catapultRuntime.altitude = catapultConfig()->altitude * 0.01f;
-    catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
-    catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
-    catapultRuntime.rotationRate[0] = catapultConfig()->rotationRoll;
-    catapultRuntime.rotationRate[1] = catapultConfig()->rotationPitch;
-    catapultRuntime.rotationRate[2] = catapultConfig()->rotationYaw;
-    catapultRuntime.rotationTimeUs = catapultConfig()->rotationTimeMs * 1e3;
-    catapultRuntime.upwardsAccel = constrainf(catapultConfig()->upwardsAccel, 1.f, 40.f);
-    // FIXME: singularity checks
-    float h = catapultRuntime.altitude;
-    float a = catapultRuntime.upwardsAccel;
-    float g = GRAVITYf;
-    float x = catapultRuntime.xyNed[0];
-    float y = catapultRuntime.xyNed[1];
-    float axis_x = y - posEstNed.V.Y;
-    float axis_y = - (x - posEstNed.V.X);
-    float distance = hypotf(axis_x, axis_y);
-    float crashTime = 2.f*sqrtf(2*h/g);
-    float vHorz = distance / crashTime;
-    float fireTimeSec = sqrtf(2.f*h / (a + a*a/g));
-    float vVertMax = a * fireTimeSec;
-    float angleFromVertical = atan2f(vHorz, vVertMax);
-    axis_x /= distance;
-    axis_y /= distance;
-    fp_quaternion_t att = {
-        cosf(angleFromVertical / 2.f),
-        axis_x * sinf(angleFromVertical / 2.f),
-        axis_y * sinf(angleFromVertical / 2.f),
-        0.f,
-    };
-    catapultRuntime.attitude = att;
-    catapultRuntime.upwardsAccel /= cosf(angleFromVertical);
-
-    //float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
-    catapultRuntime.fireTimeUs = 1e6 * fireTimeSec;
-}
-
-void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
-#define CATAPULT_DELAY_TIME 1000000 // 1sec
-#define CATAPULT_MAX_LAUNCH_TIME 500000 // 0.5sec
-#define CATAPULT_ALTITUDE 4.f
-#define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
-#define CATAPULT_ROTATION_TIME 150000 // 150ms
-    static timeUs_t launchTime = 0;
-    static timeUs_t cutoffTime = 0;
-
-    bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
-                || (extPosState == EXT_POS_NO_SIGNAL)
-                || (posSetpointState == EXT_POS_NO_SIGNAL)
-#if defined(USE_EKF) && false
-                || !ekf_is_healthy() // implement this!
-#endif
-                ;
-    bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);
-
-    *spfSpBodyZ = 0.;
-    rateSpBody->V.X = 0.;
-    rateSpBody->V.Y = 0.;
-    rateSpBody->V.Z = 0.;
-
-doMore:
-    switch (catapultState) {
-        case CATAPULT_DISABLED:
-            launchTime = 0;
-            cutoffTime = 0;
-
-            if (enableConditions)
-                catapultState = CATAPULT_WAITING_FOR_ARM;
-
-            break;
-        case CATAPULT_WAITING_FOR_ARM:
-            beeper(BEEPER_THROW_TO_ARM);
-            if (ARMING_FLAG(ARMED)) {
-                launchTime = micros() + CATAPULT_DELAY_TIME;
-                catapultState = CATAPULT_DELAY; goto doMore;
-            }
-            if (disableConditions)
-                catapultState = CATAPULT_DISABLED;
-            break;
-        case CATAPULT_DELAY:
-            if (cmpTimeUs(micros(), launchTime) > 0) {
-                float a = CATAPULT_ACCELERATION;
-                float h = CATAPULT_ALTITUDE;
-                float g = GRAVITYf;
-                float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
-                timeDelta_t fireTimeUs = 1e6 * fireTimeSec;
-                cutoffTime = micros() + ( fireTimeUs > CATAPULT_MAX_LAUNCH_TIME ? CATAPULT_MAX_LAUNCH_TIME : fireTimeUs );
-                catapultState = CATAPULT_LAUNCHING; goto doMore;
-            }
-            break;
-        case CATAPULT_LAUNCHING:
-            if (cmpTimeUs(micros(), cutoffTime) <= 0) {
-                *spfSpBodyZ = -(CATAPULT_ACCELERATION + GRAVITYf);
-            } else { 
-                catapultState = CATAPULT_ROTATING; goto doMore;
-            }
-            break;
-        case CATAPULT_ROTATING:
-            if ( cmpTimeUs(micros(), cutoffTime) <= CATAPULT_ROTATION_TIME ) {
-                rateSpBody->V.X = DEGREES_TO_RADIANS(400.f);
-                rateSpBody->V.Y = DEGREES_TO_RADIANS(400.f);
-                rateSpBody->V.Z = DEGREES_TO_RADIANS(400.f);
-            } else {
-                beeper(BEEPER_SILENCE);
-                catapultState = CATAPULT_DONE;
-            }
-            break;
-        case CATAPULT_DONE:
-            break;
-    }
-
-}
-#endif
 
 learning_state_t learningState = LEARNING_DISABLED;
 
@@ -681,7 +546,7 @@ doMoreMotors:
 }
 #endif
 
-void getSetpoints(void) {
+void getSetpoints(timeUs_t current) {
     // sets:
     // 1. at least one of attSpNed and/or rateSpBody
     // 2. spfSpBody
@@ -709,13 +574,19 @@ void getSetpoints(void) {
     if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_DONE)) {
 #ifdef USE_CATAPULT
         // this part is never reached anyway ifndef USE_CATAPULT because the flight mode is disabled
-        controlAttitude = false;
-        runCatapultStateMachine(&(spfSpBody.V.Z), &rateSpBody);
+        runCatapultStateMachine(current);
+        controlAttitude = controlAttitudeFromCat;
+        attSpNed = attSpNedFromCat;
+        spfSpBody = spfSpBodyFromCat;
+        rateSpBody = rateSpBodyFromCat;
+
     } else if (FLIGHT_MODE(CATAPULT_MODE) && FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE) && (learningState != LEARNING_DONE)) {
 #ifdef USE_LEARN_AFTER_CATAPULT
         bypassControl = true;
         runLearningStateMachine();
 #endif
+#else
+    UNUSED(current);
 #endif
     } else if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
@@ -801,7 +672,8 @@ void getSetpoints(void) {
     }
 }
 
-void getAlphaSpBody(void) {
+void getAlphaSpBody(timeUs_t current) {
+    UNUSED(current);
 
     // get body rates in z-down, x-fwd frame
     t_fp_vector rateEstBody = {
@@ -886,7 +758,9 @@ void getAlphaSpBody(void) {
     #undef USE_OMEGA_DOT_FEEDBACK
 #endif
 
-void getMotor(void) {
+void getMotor(timeUs_t current) {
+    UNUSED(current);
+
     static float du[MAXU] = {0.f};
     static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
 #ifdef USE_OMEGA_DOT_FEEDBACK

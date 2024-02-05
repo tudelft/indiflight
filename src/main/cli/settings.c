@@ -65,6 +65,7 @@
 #include "flight/servos.h"
 #include "flight/pos_ctl.h"
 #include "flight/att_ctl.h"
+#include "flight/catapult.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"

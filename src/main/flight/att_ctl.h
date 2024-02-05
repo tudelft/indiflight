@@ -127,32 +127,6 @@ typedef struct quadLin_s {
     float k;
 } quadLin_t;
 
-typedef struct catapultConfig_s {
-    uint16_t altitude;        // in cm
-    int16_t xNed;             // in cm
-    int16_t yNed;             // in cm
-    int16_t rotationRoll;    // in deg/s
-    int16_t rotationPitch;   // in deg/s
-    int16_t rotationYaw;     // in deg/s
-    uint16_t rotationTimeMs;  // in ms
-    uint8_t upwardsAccel;     // in m/s/s
-} catapultConfig_t;
-
-PG_DECLARE(catapultConfig_t, catapultConfig);
-
-typedef struct catapultRuntime_s {
-    float altitude;
-    float xyNed[2];
-    float rotationRate[3];
-    timeDelta_t rotationTimeUs;
-    timeDelta_t fireTimeUs;
-    float upwardsAccel;
-    fp_quaternion_t attitude;
-} catapultRuntime_t;
-extern catapultRuntime_t catapultRuntime;
-
-void initCatapultRuntime(void);
-
 extern fp_quaternion_t attSpNed;
 extern t_fp_vector rateSpBodyUse;
 extern t_fp_vector alphaSpBody;
@@ -171,31 +145,15 @@ extern float omega_dot[MAXU];
 extern float alpha[XYZ_AXIS_COUNT];
 
 void indiInit(const pidProfile_t * pidProfile);
-void indiController(void);
+void indiController(timeUs_t current);
 float indiThrustLinearization(quadLin_t lin, float in);
 float indiThrustCurve(quadLin_t lin, float in);
 
 float getYawWithoutSingularity(void);
 t_fp_vector coordinatedYaw(float yaw);
-void getSetpoints(void);
-void getAlphaSpBody(void);
-void getMotor(void);
-
-typedef enum catapult_state_s {
-    CATAPULT_DISABLED = -1,
-    CATAPULT_WAITING_FOR_ARM = 0,
-    CATAPULT_DELAY,
-    CATAPULT_LAUNCHING,
-    CATAPULT_ROTATING,
-    CATAPULT_DONE,
-} catapult_state_t;
-
-extern catapult_state_t catapultState;
-
-#ifdef USE_CATAPULT
-void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody);
-void disableCatapult(void);
-#endif
+void getSetpoints(timeUs_t current);
+void getAlphaSpBody(timeUs_t current);
+void getMotor(timeUs_t current);
 
 typedef enum learning_state_e {
     LEARNING_DISABLED = -1,
