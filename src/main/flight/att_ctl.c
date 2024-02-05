@@ -106,10 +106,9 @@ void pgResetFn_indiProfiles(indiProfile_t *indiProfiles) {
 }
 
 indiRuntime_t indiRuntime;
-
-void initAttRuntime(indiProfile_t *indiProfile) {
+void initIndiRuntime(void) {
     indiRuntime_t *r = &indiRuntime;
-    indiProfile_t *p = indiProfile;
+    const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     // ---- Att/Rate config
     r->attGains.A[0] = p->attGains[0] * 0.1f;
     r->attGains.A[1] = p->attGains[1] * 0.1f;
@@ -147,11 +146,12 @@ void initAttRuntime(indiProfile_t *indiProfile) {
         r->actG2[1][i] = p->actG2_pitch[i] * 0.1f / p->actHoverRpm[i] * 0.1f;
         r->actG2[2][i] = p->actG2_yaw[i]   * 0.1f / p->actHoverRpm[i] * 0.1f;
         // ---- WLS config
-        if (i < 6)
-            r->wlsWv[i] = (float) p->wlsWv[i];
         r->wlsWu[i] = (float) p->wlsWu[i];
         r->u_pref[i] = p->u_pref[i] * 0.01f;
     }
+    for (int i = 0; i < MAXV; i++)
+        r->wlsWv[i] = (float) p->wlsWv[i];
+
     // ---- Filtering config
     r->imuSyncLp2Hz = (float) p->imuSyncLp2Hz;
     // ---- WLS config
@@ -162,6 +162,15 @@ void initAttRuntime(indiProfile_t *indiProfile) {
     r->wlsCondBound = p->wlsCondBound * 1e4f;
     r->wlsTheta = p->wlsTheta * 1e-4;
     r->wlsNanLimit = p->wlsNanLimit;
+}
+
+void changeIndiProfile(uint8_t profileIndex)
+{
+    if (profileIndex < INDI_PROFILE_COUNT) {
+        systemConfigMutable()->indiProfileIndex = profileIndex;
+    }
+
+    initIndiRuntime();
 }
 
 #define RC_SCALE_THROTTLE 0.001f

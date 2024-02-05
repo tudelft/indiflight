@@ -7,6 +7,8 @@
 #include "common/maths.h"
 #include "solveActiveSet.h"
 
+#include "config/config.h"
+
 #define MAXU MAX_SUPPORTED_MOTORS
 #define MAX_SUPPORTED_PSEUDOCONTROLS 6
 #define MAXV MAX_SUPPORTED_PSEUDOCONTROLS
@@ -112,11 +114,14 @@ typedef struct indiRuntime_s {
     uint8_t wlsNanLimit;
 } indiRuntime_t;
 
-extern indiRuntime_t indiRuntime;
-
 #define INDI_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles);
 void resetIndiProfile(indiProfile_t *profile);
+
+extern indiRuntime_t indiRuntime;
+void initIndiRuntime(void);
+
+void changeIndiProfile(uint8_t profileIndex);
 
 // linearization
 typedef struct quadLin_s {
@@ -130,9 +135,9 @@ typedef struct catapultConfig_s {
     uint16_t altitude;        // in cm
     int16_t xNed;             // in cm
     int16_t yNed;             // in cm
-    uint16_t rotationRoll;    // in deg/s
-    uint16_t rotationPitch;   // in deg/s
-    uint16_t rotationYaw;     // in deg/s
+    int16_t rotationRoll;    // in deg/s
+    int16_t rotationPitch;   // in deg/s
+    int16_t rotationYaw;     // in deg/s
     uint16_t rotationTimeMs;  // in ms
     uint8_t upwardsAccel;     // in m/s/s
 } catapultConfig_t;

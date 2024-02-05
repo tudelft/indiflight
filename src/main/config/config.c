@@ -150,6 +150,16 @@ uint8_t getCurrentControlRateProfileIndex(void)
     return systemConfig()->activeRateProfile;
 }
 
+uint8_t getCurrentIndiProfileIndex(void)
+{
+    return systemConfig()->indiProfileIndex;
+}
+
+uint8_t getCurrentPositionProfileIndex(void)
+{
+    return systemConfig()->positionProfileIndex;
+}
+
 uint16_t getCurrentMinthrottle(void)
 {
     return motorConfig()->minthrottle;

@@ -1,6 +1,7 @@
 
 #include "common/maths.h"
 #include "common/time.h"
+#include "config/config.h"
 
 //FIXME: are box shaped constraints what we want?
 #define MAX_ACC_Z_NEG -20.f // around 2.0g
@@ -52,12 +53,13 @@ typedef struct positionRuntime_s {
     float weathervane_min_v; // m/s min speed to use weathervaneing
 } positionRuntime_t;
 
-extern positionRuntime_t posRuntime;
-void initPositionRuntime(positionProfile_t *p);
-
 #define POSITION_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles);
 
+extern positionRuntime_t posRuntime;
+void initPositionRuntime();
+
+void changePositionProfile(uint8_t profileIndex);
 
 void updatePosCtl(timeUs_t current);
 void getAccSpNed(timeUs_t current);

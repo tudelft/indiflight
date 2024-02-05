@@ -6,6 +6,7 @@
 #include "common/maths.h"
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"
+#include "config/config.h"
 
 #ifdef USE_POS_CTL
 
@@ -36,12 +37,13 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->vert_max_a_down = 950;
         p->yaw_p = 80;
         p->weathervane_p = 0;
-        p->weathervane_min_v = 20;
+        p->weathervane_min_v = 100;
     }
 }
 
 positionRuntime_t posRuntime;
-void initPositionRuntime(positionProfile_t *p) {
+void initPositionRuntime(void) {
+    const positionProfile_t* p = positionProfiles(systemConfig()->positionProfileIndex);
     posRuntime.horz_p = p->horz_p * 0.1;
     posRuntime.horz_i = p->horz_i * 0.1;
     posRuntime.horz_d = p->horz_d * 0.1;
@@ -57,6 +59,15 @@ void initPositionRuntime(positionProfile_t *p) {
     posRuntime.yaw_p = p->yaw_p * 0.1; 
     posRuntime.weathervane_p = p->weathervane_p * 0.1; 
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01; 
+}
+
+void changePositionProfile(uint8_t profileIndex)
+{
+    if (profileIndex < POSITION_PROFILE_COUNT) {
+        systemConfigMutable()->positionProfileIndex = profileIndex;
+    }
+
+    initPositionRuntime();
 }
 
 // --- control variables
