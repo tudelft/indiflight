@@ -29,7 +29,7 @@ typedef enum {
     WAS_ARMED_WITH_PREARM       = (1 << 2)
 } armingFlag_e;
 
-extern uint8_t armingFlags;
+extern armingFlag_e armingFlags;
 
 #define DISABLE_ARMING_FLAG(mask) (armingFlags &= ~(mask))
 #define ENABLE_ARMING_FLAG(mask) (armingFlags |= (mask))

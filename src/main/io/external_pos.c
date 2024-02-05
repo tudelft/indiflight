@@ -22,7 +22,7 @@
 //extern
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
-pos_setpoint_ned_t posSetpointNed;
+pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
 timeUs_t extLatestMsgTime = 0;
 
@@ -173,14 +173,14 @@ void getPosSetpoint(timeUs_t current) {
             
             // -----------------------------------------------------------------------------------------------
             latestSetpointTime = currentSetpointTime;
-            posSetpointNed.pos.V.X = piMsgPosSetpointRx->enu_y;
-            posSetpointNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
-            posSetpointNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
+            posSpNed.pos.V.X = piMsgPosSetpointRx->enu_y;
+            posSpNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
+            posSpNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
             
-            posSetpointNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
-            posSetpointNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
-            posSetpointNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
-            posSetpointNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
+            posSpNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
+            posSpNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
+            posSpNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
+            posSpNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
             posSetpointState = EXT_POS_NEW_MESSAGE;
             
         } else {

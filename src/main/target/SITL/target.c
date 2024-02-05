@@ -78,7 +78,7 @@ int lockMainPID(void)
 }
 
 #define RAD2DEG (180.0 / M_PI)
-#define ACC_SCALE (256 / 9.80665)
+#define ACC_SCALE (256 / GRAVITYf)
 #define GYRO_SCALE (16.4)
 void sendMotorUpdate(void)
 {

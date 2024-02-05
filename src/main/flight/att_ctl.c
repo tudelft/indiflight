@@ -43,11 +43,9 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     p->rateGains[2] = 200; // yaw
     p->attMaxTiltRate = 800; // deg/s
     p->attMaxYawRate = 400; // deg/s
-    p->manualUseSpfAttenuation = true;
     p->manualUseCoordinatedYaw = true;
     p->manualMaxUpwardsSpf = 30;
     p->manualMaxTilt = 45; // degrees
-    p->autoMaxTilt = 50; // degrees
     // ---- general INDI config
     p->useIncrement = true;
     p->useRpmDotFeedback = true;
@@ -119,11 +117,9 @@ void initIndiRuntime(void) {
     r->attMaxTiltRate = DEGREES_TO_RADIANS(p->attMaxTiltRate);
     r->attMaxYawRate  = DEGREES_TO_RADIANS(p->attMaxYawRate);
     r->attRateDenom = p->attRateDenom;
-    r->manualUseSpfAttenuation = (bool) p->manualUseSpfAttenuation;
     r->manualUseCoordinatedYaw = (bool) p->manualUseCoordinatedYaw;
     r->manualMaxUpwardsSpf = (float) p->manualMaxUpwardsSpf;
     r->manualMaxTilt = DEGREES_TO_RADIANS(p->manualMaxTilt);
-    r->autoMaxTilt   = DEGREES_TO_RADIANS(p->autoMaxTilt);
     // ---- general INDI config
     r->useIncrement = (bool) p->useIncrement;
     r->useConstantG2 = (bool) p->useConstantG2;
@@ -349,6 +345,7 @@ float maxRateAttYaw = DEGREES_TO_RADIANS(400.f);
 
 void indiInit(const pidProfile_t * pidProfile) {
     UNUSED(pidProfile);
+    initIndiRuntime();
 
     // emulate parallel PD with cascaded (so we can limit velocity)
     attGainsCasc.V.X = attGains.V.X / rateGains.V.X;
@@ -461,7 +458,7 @@ void initCatapultRuntime(void) {
     // FIXME: singularity checks
     float h = catapultRuntime.altitude;
     float a = catapultRuntime.upwardsAccel;
-    float g = 9.80665;
+    float g = GRAVITYf;
     float x = catapultRuntime.xyNed[0];
     float y = catapultRuntime.xyNed[1];
     float axis_x = y - posEstNed.V.Y;
@@ -493,7 +490,6 @@ void runCatapultStateMachine(float * spfSpBodyZ, t_fp_vector * rateSpBody) {
 #define CATAPULT_ALTITUDE 4.f
 #define CATAPULT_ACCELERATION 20.f // must be positive, else segfault!
 #define CATAPULT_ROTATION_TIME 150000 // 150ms
-#define GRAVITY 9.80665f
     static timeUs_t launchTime = 0;
     static timeUs_t cutoffTime = 0;
 
@@ -534,7 +530,7 @@ doMore:
             if (cmpTimeUs(micros(), launchTime) > 0) {
                 float a = CATAPULT_ACCELERATION;
                 float h = CATAPULT_ALTITUDE;
-                float g = GRAVITY;
+                float g = GRAVITYf;
                 float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
                 timeDelta_t fireTimeUs = 1e6 * fireTimeSec;
                 cutoffTime = micros() + ( fireTimeUs > CATAPULT_MAX_LAUNCH_TIME ? CATAPULT_MAX_LAUNCH_TIME : fireTimeUs );
@@ -543,7 +539,7 @@ doMore:
             break;
         case CATAPULT_LAUNCHING:
             if (cmpTimeUs(micros(), cutoffTime) <= 0) {
-                *spfSpBodyZ = -(CATAPULT_ACCELERATION + GRAVITY);
+                *spfSpBodyZ = -(CATAPULT_ACCELERATION + GRAVITYf);
             } else { 
                 catapultState = CATAPULT_ROTATING; goto doMore;
             }
@@ -692,6 +688,11 @@ void getSetpoints(void) {
     // 3. controlAttitude
     // 4. trackAttitudeYaw
 
+    attSpNed.qi = 1.f;
+    attSpNed.qx = 0.f;
+    attSpNed.qy = 0.f;
+    attSpNed.qz = 0.f;
+
     spfSpBody.V.X = 0.f;
     spfSpBody.V.Y = 0.f;
     spfSpBody.V.Z = 0.f;
@@ -720,12 +721,16 @@ void getSetpoints(void) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
         // convert acc setpoint from position mode
-        getAttSpNedFromAccSpNed(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
+        //getAttSpNedFromAccSpNed(&accSpNedFromPos, &attSpNed, &(spfSpBody.V.Z));
         //rateSpBody = coordinatedYaw(yawRateSpFromOuter);
-        if (FLIGHT_MODE(POSITION_MODE))
-            rateSpBody.V.Z = yawRateSpFromOuter;
-        else
-            rateSpBody = coordinatedYaw(yawRateSpFromOuter);
+        //if (FLIGHT_MODE(POSITION_MODE))
+        //    rateSpBody.V.Z = yawRateSpFromOuter;
+        //else
+        //    rateSpBody = coordinatedYaw(yawRateSpFromOuter);
+
+        attSpNed = attSpNedFromPos;
+        spfSpBody = spfSpBodyFromPos;
+        rateSpBody = rateSpBodyFromPos;
 
     } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
         // get desired attitude setpoints from sticks
@@ -738,7 +743,7 @@ void getSetpoints(void) {
         // which results in a sort of radial deadzone past the x*y=1 circle
         float roll = getRcDeflection(ROLL);
         float pitch = -getRcDeflection(PITCH);
-        float maxTilt = DEGREES_TO_RADIANS(MAX_BANK_DEGREE_MANUAL);
+        float maxTilt = indiRuntime.manualMaxTilt;
 
         t_fp_vector axis = {
             .V.X = maxTilt*roll,
@@ -760,7 +765,7 @@ void getSetpoints(void) {
 
         // this is probaby the most expensive operation... can be half the cost if
         // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
-        attSpNed = quatMult(yawNed, attSpYaw);
+        attSpNed = quatMult(&yawNed, &attSpYaw);
 
         // convert throttle
         spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
@@ -823,7 +828,7 @@ void getAlphaSpBody(void) {
 
         // add in the error term based on attitude quaternion error
         // todo: fix this. Shortest-distance quat division is no bueno for position control with yaw tracking
-        attErrBody = quatMult(attEstNedInv, attSpNed);
+        attErrBody = quatMult(&attEstNedInv, &attSpNed);
 
         // this would ideally be a normalize instead of constrain, but that is slow...
         attErrBody.qi = constrainf(attErrBody.qi, -1.f, +1.f);
@@ -947,7 +952,7 @@ void getMotor(void) {
     // compute pseudocontrol
     dv[0] = 0.f;
     dv[1] = 0.f;
-    dv[2] = spfSpBody.V.Z - doIndi * 9.81f * (-acc.accADC[Z]) * acc.dev.acc_1G_rec;
+    dv[2] = spfSpBody.V.Z - doIndi * GRAVITYf * (-acc.accADC[Z]) * acc.dev.acc_1G_rec;
     dv[3] = alphaSpBody.V.X - doIndi * alpha[FD_ROLL];
     dv[4] = alphaSpBody.V.Y - doIndi * alpha[FD_PITCH];
     dv[5] = alphaSpBody.V.Z - doIndi * alpha[FD_YAW];
@@ -1092,114 +1097,6 @@ float getYawWithoutSingularity(void) {
     return yaw;
 }
 
-void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz) {
-    /*
-    * system of equations:
-    * 
-    * a^I = Rz(Psi) @ axang(alpha, axis) @ f^B   +   (0 0 G)'
-    *   where:
-    *       a^I: craft acceleration in inertial frame
-    *       Psi: craft yaw
-    *       alpha: tilt angle (assume positive)
-    *       axis: tilt axis (tx ty 0), where (tx^2 + ty^2 == 1)
-    *       f^B: body forces in body frame. Assume for MC: f^B == (0 0 fz)
-    *       G: gravity (9.80665)
-    * 
-    * define    v^Y := Rz(Psi)^(-1) @ ( a^I - (0 0 G)' )   which results in:
-    * 
-    * v^Y = axang(alpha, axis) @ f^B  +  (0 0 G)'
-    * 
-    * We require to solve tilt/thrust setpoint. Ie: solve the following 
-    * system for (fz alpha tx ty):
-    *   1      ==   tx**2  +  ty**2
-    *   vx^Y   ==   ty * sin(alpha) * fz
-    *   vy^Y   ==  -tx * sin(alpha) * fz
-    *   vz^Y   ==        cos(alpha) * fz
-    * 
-    * where we obtain the axang multplication from the last column of https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
-    * 
-    * 
-    * The solution of the system is given by:
-    *   tx      =  sgn(vy) * 1 / sqrt( 1 + (vx / vy)^2 ) = vy / sqrt(vy^2 + vx^2)
-    *   ty      =  - (vx * tx) / vy
-    *   alpha   =  atan( sqrt(vx^2 + vy^2) / (-vz) )
-    *   fz      =  vz / cos(alpha)
-    *
-    */
-
-    //float Psi = (float) DECIDEGREES_TO_RADIANS(-attitude.values.yaw);
-    float Psi = getYawWithoutSingularity();
-    float cPsi = cos_approx(Psi);
-    float sPsi = sin_approx(Psi);
-
-    // a^I - g^I
-    t_fp_vector aSp_min_g = {
-        .V.X = accSpNed->V.X,
-        .V.Y = accSpNed->V.Y,
-        .V.Z = accSpNed->V.Z - 9.80665f,
-    };
-
-    // v^I = Rz(Psi)^(-1) @ aSp_min_g
-    t_fp_vector v = {
-        .V.X =  cPsi * aSp_min_g.V.X  +  sPsi * aSp_min_g.V.Y,
-        .V.Y = -sPsi * aSp_min_g.V.X  +  cPsi * aSp_min_g.V.Y,
-        .V.Z =                                                  aSp_min_g.V.Z,
-    };
-
-    t_fp_vector ax = {0};
-    float vx2 = v.V.X*v.V.X;
-    float vy2 = v.V.Y*v.V.Y;
-    float XYnorm = sqrtf( vx2  +  vy2 );
-    if ( XYnorm < 1e-4f ) {
-        // 0.01% of a g
-        // fall back logic, either ax = (+-1 0 0) or (0 +-1 0)
-        // doesnt really matter since alpha will be tiny or close to pi
-        ax.V.X = (vy2 >= vx2) ? ((v.V.Y >= 0.f) ? +1.f : -1.f) : 0.f;
-        ax.V.Y = (vy2 <  vx2) ? ((v.V.X >= 0.f) ? -1.f : +1.f) : 0.f;
-    } else {
-        // base case
-        if (vy2 > vx2) {
-            ax.V.X  =  v.V.Y  /  XYnorm;
-            ax.V.Y  =  - (v.V.X * ax.V.X) / v.V.Y;
-        } else {
-            ax.V.Y  =  - v.V.X  /  XYnorm;
-            ax.V.X  =  - (v.V.Y * ax.V.Y) / v.V.X;
-        }
-    }
-
-    float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
-    alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE_AUTO)); //todo: make parameter
-
-    // *fz = v.V.Z / cos_approx(alpha);
-    float fz_target = v.V.Z / cos_approx(alpha);
-
-    // attitude setpoint in the yaw frame
-    fp_quaternion_t attSpYaw;
-    float_quat_of_axang(&attSpYaw, &ax, alpha);
-
-    // add in the yaw
-    fp_quaternion_t yawNed = {
-        .qi = cos_approx(Psi/2.f),
-        .qx = 0.f,
-        .qy = 0.f,
-        .qz = sin_approx(Psi/2.f),
-    };
-
-    // this is probaby the most expensive operation... can be half the cost if
-    // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
-    *attSpNed = quatMult(yawNed, attSpYaw);
-
-    // discount thrust if we have not yet reached our attitude
-    t_fp_vector zDesNed = quatRotMatCol(*attSpNed, 2);
-    float zDotProd = 
-        zDesNed.V.X * (+rMat[0][2])
-        - zDesNed.V.Y * (-rMat[1][2])
-        - zDesNed.V.Z * (-rMat[2][2]);
-
-    *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
-    //*fz = fz_target;
-}
-
 t_fp_vector coordinatedYaw(float yaw) {
     // convert yawRateSpNed to Body
     // todo: this local is defined twice.. make static somehow
@@ -1209,7 +1106,7 @@ t_fp_vector coordinatedYaw(float yaw) {
         .qy = -attitude_q.y,
         .qz = -attitude_q.z,
     };
-    yawRateSpBody = quatRotMatCol(attEstNedInv, 2);
+    yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
     VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 
     return yawRateSpBody;

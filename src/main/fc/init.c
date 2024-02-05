@@ -99,6 +99,7 @@
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
 #include "flight/att_ctl.h"
+#include "flight/pos_ctl.h"
 #include "flight/pid_init.h"
 #include "flight/position.h"
 #include "flight/servos.h"
@@ -731,7 +732,12 @@ void init(void)
     gyroInitFilters();
 
     pidInit(currentPidProfile);
+#ifdef USE_INDI
     indiInit(currentPidProfile);
+#endif
+#ifdef USE_POS_CTL
+    posCtlInit();
+#endif
 
     mixerInitProfile();
 

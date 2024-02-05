@@ -365,7 +365,7 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
 
     UNUSED(Ki);
 
-    VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*9.80665f, aNed);
+    VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*GRAVITYf, aNed);
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
 
     t_fp_vector posErrorNed = extPosNed.pos;

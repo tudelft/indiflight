@@ -6486,46 +6486,35 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                     cliDumpPidProfile(cmdName, pidProfileIndex, dumpMask);
                 }
 
-                pidProfileIndexToUse = systemConfig_Copy.pidProfileIndex;
-
-                if (!(dumpMask & BARE)) {
-                    cliPrintHashLine("restore original profile selection");
-
-                    cliProfile(cmdName, "");
-                }
-
-
-                pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
-
                 for (uint32_t rateIndex = 0; rateIndex < CONTROL_RATE_PROFILE_COUNT; rateIndex++) {
                     cliDumpRateProfile(cmdName, rateIndex, dumpMask);
                 }
-
-                rateProfileIndexToUse = systemConfig_Copy.activeRateProfile;
-
-
-                indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
 
                 for (uint32_t rateIndex = 0; rateIndex < INDI_PROFILE_COUNT; rateIndex++) {
                     cliDumpIndiProfile(cmdName, rateIndex, dumpMask);
                 }
 
-                indiProfileIndexToUse = systemConfig_Copy.indiProfileIndex;
-
-
-                positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
-
                 for (uint32_t rateIndex = 0; rateIndex < INDI_PROFILE_COUNT; rateIndex++) {
                     cliDumpPositionProfile(cmdName, rateIndex, dumpMask);
                 }
 
+                pidProfileIndexToUse = systemConfig_Copy.pidProfileIndex;
+                rateProfileIndexToUse = systemConfig_Copy.activeRateProfile;
+                indiProfileIndexToUse = systemConfig_Copy.indiProfileIndex;
                 positionProfileIndexToUse = systemConfig_Copy.positionProfileIndex;
 
-
                 if (!(dumpMask & BARE)) {
-                    cliPrintHashLine("restore original rateprofile selection");
+                    cliPrintHashLine("restore original profile selection");
+                    cliProfile(cmdName, "");
 
+                    cliPrintHashLine("restore original rateprofile selection");
                     cliRateProfile(cmdName, "");
+
+                    cliPrintHashLine("restore original indi profile selection");
+                    cliIndiProfile(cmdName, "");
+
+                    cliPrintHashLine("restore original position profile selection");
+                    cliPositionProfile(cmdName, "");
 
                     cliPrintHashLine("save configuration");
                     cliPrint("save");
@@ -6534,7 +6523,11 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 #endif
                 }
 
+                pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
                 rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
+                indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+                positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
+
             } else {
                 cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
                 cliDumpRateProfile(cmdName, systemConfig_Copy.activeRateProfile, dumpMask);

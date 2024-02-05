@@ -128,11 +128,9 @@
 #define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE "indi_attitude_max_yaw_rate"
-#define PARAM_NAME_INDI_ATTITUDE_USE_THRUST_ATTENUATION "indi_attitude_use_thrust_attenuation"
 #define PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW "indi_manual_use_coordinated_yaw"
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
-#define PARAM_NAME_INDI_AUTO_MAX_TILT "indi_auto_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
 #define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
@@ -162,6 +160,7 @@
 #define PARAM_NAME_POSITION_HORIZONTAL_D "position_horizontal_d"
 #define PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED "position_max_horizontal_speed"
 #define PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL "position_max_horizontal_accel"
+#define PARAM_NAME_POSITION_MAX_TILT "position_max_tilt"
 #define PARAM_NAME_POSITION_VERTICAL_P "position_vertical_p"
 #define PARAM_NAME_POSITION_VERTICAL_I "position_vertical_i"
 #define PARAM_NAME_POSITION_VERTICAL_D "position_vertical_d"
@@ -172,6 +171,7 @@
 #define PARAM_NAME_POSITION_YAW_P "position_yaw_p"
 #define PARAM_NAME_POSITION_WEATHERVANE_P "position_weathervane_p"
 #define PARAM_NAME_POSITION_WEATHERVANE_MIN_V "position_weathervane_min_v"
+#define PARAM_NAME_POSITION_THRUST_ATTENUATION "position_use_thrust_attenuation"
 #endif
 
 #ifdef USE_CATAPULT

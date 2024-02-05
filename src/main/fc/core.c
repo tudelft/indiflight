@@ -274,7 +274,7 @@ static bool accNeedsCalibration(void)
 #ifdef USE_ACC
 
 static float totalAccSq(void) {
-    return sq(9.81f) * sq(acc.dev.acc_1G_rec) * 
+    return sq(GRAVITYf) * sq(acc.dev.acc_1G_rec) * 
         ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
 }
 
@@ -377,12 +377,12 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             momentum = 0.f;
             break;
         case THROW_STATE_ACC_HIGH:
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
+            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - GRAVITYf ) * 1e-6f * ((float) delta);
             if (momentum > THROW_MOMENTUM_THRESH) { throwState = THROW_STATE_ENOUGH_MOMENTUM; }
             if (totalAccSq() < sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_READY; }
             break;
         case THROW_STATE_ENOUGH_MOMENTUM: // will definitely arm, just waiting for release
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
+            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - GRAVITYf ) * 1e-6f * ((float) delta);
             if ( (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH))
                     || (totalGyroSq() > sq(THROW_GYRO_HIGH)) ) {
                 // WTF: why gyroSq < thresh?! should be > thresh!

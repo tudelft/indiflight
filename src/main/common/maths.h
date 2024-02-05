@@ -38,6 +38,8 @@
 #define M_PIf       3.14159265358979323846f
 #define M_EULERf    2.71828182845904523536f
 
+#define GRAVITYf 9.80665f
+
 #define RAD    (M_PIf / 180.0f)
 #define DEGREES_TO_DECIDEGREES(angle) ((angle) * 10)
 #define DECIDEGREES_TO_DEGREES(angle) ((angle) / 10)
@@ -213,9 +215,9 @@ void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle);
 
 
 // https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/arithmetic/index.htm
-fp_quaternion_t quatMult(fp_quaternion_t ql, fp_quaternion_t qr);
-t_fp_vector quatRotate(fp_quaternion_t q, t_fp_vector v);
-t_fp_vector quatRotMatCol(fp_quaternion_t q, uint8_t axis);
+fp_quaternion_t quatMult(fp_quaternion_t* ql, fp_quaternion_t* qr);
+t_fp_vector quatRotate(fp_quaternion_t* q, t_fp_vector* v);
+t_fp_vector quatRotMatCol(fp_quaternion_t* q, uint8_t axis);
 
 int gcd(int num, int denom);
 int32_t applyDeadband(int32_t value, int32_t deadband);

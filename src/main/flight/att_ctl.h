@@ -27,11 +27,9 @@ typedef struct indiProfile_s {
     uint16_t rateGains[3]; // rate error to rotational accel gain * 10
     uint16_t attMaxTiltRate; // max tilt rate in deg/s
     uint16_t attMaxYawRate; // max yaw rate in deg/s
-    uint8_t manualUseSpfAttenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
     uint8_t manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     uint8_t manualMaxUpwardsSpf; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
-    uint8_t autoMaxTilt;   // in automatic flight in deg (0, 180)
     // ---- general INDI config
     uint8_t useIncrement;          // bool: use incremental law. NDI (or more precisely linDI) otherwise
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
@@ -81,11 +79,9 @@ typedef struct indiRuntime_s {
     float attMaxTiltRate; // rad/s
     float attMaxYawRate;  // rad/s
     uint8_t attRateDenom;
-    bool manualUseSpfAttenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
     bool manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     float manualMaxUpwardsSpf; // 255 means sum(G1[2, :])
     float manualMaxTilt; // rad
-    float autoMaxTilt; // rad
     // ---- general INDI config
     bool useIncrement;
     bool useConstantG2;
@@ -157,12 +153,6 @@ extern catapultRuntime_t catapultRuntime;
 
 void initCatapultRuntime(void);
 
-#define MAX_BANK_DEGREE_MANUAL 40.f
-
-#ifndef MAX_BANK_DEGREE_AUTO
-#define MAX_BANK_DEGREE_AUTO 50.f
-#endif
-
 extern fp_quaternion_t attSpNed;
 extern t_fp_vector rateSpBodyUse;
 extern t_fp_vector alphaSpBody;
@@ -186,7 +176,6 @@ float indiThrustLinearization(quadLin_t lin, float in);
 float indiThrustCurve(quadLin_t lin, float in);
 
 float getYawWithoutSingularity(void);
-void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz);
 t_fp_vector coordinatedYaw(float yaw);
 void getSetpoints(void);
 void getAlphaSpBody(void);

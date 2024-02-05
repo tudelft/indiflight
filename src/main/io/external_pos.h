@@ -25,7 +25,7 @@ typedef struct __pos_setpoint_ned_t {
 
 extern ext_pos_ned_t extPosNed;
 extern ext_pos_state_t extPosState;
-extern pos_setpoint_ned_t posSetpointNed;
+extern pos_setpoint_ned_t posSpNed;
 extern ext_pos_state_t posSetpointState;
 extern timeUs_t extLatestMsgTime;
 

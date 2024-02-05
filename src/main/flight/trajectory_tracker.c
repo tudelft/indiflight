@@ -99,10 +99,10 @@ void initTrajectoryTracker(void) {
 
     // setpoint = starting point of trajectory
     getRefsTrajectoryTracker(0.0f);
-    posSetpointNed.pos.V.X = tt_pos_ref[0];
-    posSetpointNed.pos.V.Y = tt_pos_ref[1];
-    posSetpointNed.pos.V.Z = tt_pos_ref[2];
-    posSetpointNed.psi = tt_yaw_ref;
+    posSpNed.pos.V.X = tt_pos_ref[0];
+    posSpNed.pos.V.Y = tt_pos_ref[1];
+    posSpNed.pos.V.Z = tt_pos_ref[2];
+    posSpNed.psi = tt_yaw_ref;
 }
 
 void setSpeedTrajectoryTracker(float speed) {
@@ -132,24 +132,24 @@ void updateTrajectoryTracker(timeUs_t current) {
         // update acceleration and yaw rate setpoints
         getSetpointsTrajectoryTracker();
 
-        // overwrite accSpNed and yawRateSpFromOuter (from pos_ctl.c)
-        accSpNed.V.X = tt_acc_sp[0];
-        accSpNed.V.Y = tt_acc_sp[1];
-        accSpNed.V.Z = tt_acc_sp[2];
+        // overwrite accSpNedFromPos and yawRateSpFromOuter (from pos_ctl.c)
+        accSpNedFromPos.V.X = tt_acc_sp[0];
+        accSpNedFromPos.V.Y = tt_acc_sp[1];
+        accSpNedFromPos.V.Z = tt_acc_sp[2];
         yawRateSpFromOuter = tt_yaw_rate_sp;
 
-        // overwrite posSetpointNed (from pos_ctl.c)
-        posSetpointNed.pos.V.X = tt_pos_ref[0];
-        posSetpointNed.pos.V.Y = tt_pos_ref[1];
-        posSetpointNed.pos.V.Z = tt_pos_ref[2];
+        // overwrite posSpNed (from pos_ctl.c)
+        posSpNed.pos.V.X = tt_pos_ref[0];
+        posSpNed.pos.V.Y = tt_pos_ref[1];
+        posSpNed.pos.V.Z = tt_pos_ref[2];
 
         // overwrite velSetpointNed (from pos_ctl.c)
-        posSetpointNed.vel.V.X = tt_vel_ref[0];
-        posSetpointNed.vel.V.Y = tt_vel_ref[1];
-        posSetpointNed.vel.V.Z = tt_vel_ref[2];
+        posSpNed.vel.V.X = tt_vel_ref[0];
+        posSpNed.vel.V.Y = tt_vel_ref[1];
+        posSpNed.vel.V.Z = tt_vel_ref[2];
 
         // overwrite yawSetpoint (from pos_ctl.c)
-        posSetpointNed.psi = tt_yaw_ref;
+        posSpNed.psi = tt_yaw_ref;
     }
 
     // update last
