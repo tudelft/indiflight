@@ -32,17 +32,136 @@
 #include <stdbool.h>
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+
 void resetIndiProfile(indiProfile_t *indiProfile) {
-    UNUSED(indiProfile);
-    //RESET_CONFIG(indiProfile_t, indiProfile,
-    //    .attGains = {.V.X = 200.f}
-    //)
+    indiProfile_t *p = indiProfile;
+    p->attGains[0] = 2000; // roll
+    p->attGains[1] = 2000; // pitch
+    p->attGains[2] = 1000; // yaw
+    p->rateGains[0] = 200; // roll
+    p->rateGains[1] = 200; // pitch
+    p->rateGains[2] = 200; // yaw
+    p->attMaxTiltRate = 800; // deg/s
+    p->attMaxYawRate = 400; // deg/s
+    p->manualUseSpfAttenuation = true;
+    p->manualUseCoordinatedYaw = true;
+    p->manualMaxUpwardsSpf = 30;
+    p->manualMaxTilt = 45; // degrees
+    p->autoMaxTilt = 50; // degrees
+    // ---- general INDI config
+    p->useIncrement = true;
+    p->useRpmDotFeedback = true;
+    // ---- INDI actuator config
+    for (int i = 0; i < MAXU; i++) {
+        p->actHoverRpm[i] = 1500;
+        p->actTimeConstMs[i] = 25;
+        p->actPropConst[i] = 1e5;
+        p->actMaxT[i] = 500;
+        p->actNonlinearity[i] = 50;
+        p->actLimit[i] = 100;
+        p->actG1_fx[i] = 0;
+        p->actG1_fy[i] = 0;
+        p->actG1_fz[i] = 0;
+        p->actG1_roll[i] = 0;
+        p->actG1_pitch[i] = 0;
+        p->actG1_yaw[i] = 0;
+        p->actG2_roll[i] = 0;
+        p->actG2_pitch[i] = 0;
+        p->actG2_yaw[i] = 0;     // actuator rate effectiveness
+        // ---- WLS config
+        p->wlsWu[i] = 1;
+        p->u_pref[i] = 0;
+    }
+
+    p->wlsWv[0] = 1; // fx
+    p->wlsWv[1] = 1; // fy
+    p->wlsWv[2] = 10; // fz
+    p->wlsWv[3] = 10; // roll
+    p->wlsWv[4] = 10; // pitch
+    p->wlsWv[5] = 1; // yaw
+
+    // ---- Filtering config
+    p->imuSyncLp2Hz = 40;
+
+    // -------- inaccessible parameters for now (will always be the values from the reset function)
+    // ---- Att/Rate config
+    p->attRateDenom = 8;
+    // ---- WLS config
+    p->useConstantG2 = false;
+    p->useRpmFeedback = false;
+    // ---- general INDI config
+    p->useWls = true;
+    p->wlsWarmstart = true;
+    p->wlsMaxIter = 1;
+    p->wlsAlgo = 1;
+    p->wlsCondBound = 1 << 15;
+    p->wlsTheta = 1;
+    p->wlsNanLimit = 20;
 }
 
 void pgResetFn_indiProfiles(indiProfile_t *indiProfiles) {
     for (int i = 0; i < INDI_PROFILE_COUNT; i++) {
         resetIndiProfile(&indiProfiles[i]);
     }
+}
+
+indiRuntime_t indiRuntime;
+
+void initAttRuntime(indiProfile_t *indiProfile) {
+    indiRuntime_t *r = &indiRuntime;
+    indiProfile_t *p = indiProfile;
+    // ---- Att/Rate config
+    r->attGains.A[0] = p->attGains[0] * 0.1f;
+    r->attGains.A[1] = p->attGains[1] * 0.1f;
+    r->attGains.A[2] = p->attGains[2] * 0.1f;
+    r->rateGains.A[0] = p->rateGains[0] * 0.1f;
+    r->rateGains.A[1] = p->rateGains[1] * 0.1f;
+    r->rateGains.A[2] = p->rateGains[2] * 0.1f;
+    r->attMaxTiltRate = DEGREES_TO_RADIANS(p->attMaxTiltRate);
+    r->attMaxYawRate  = DEGREES_TO_RADIANS(p->attMaxYawRate);
+    r->attRateDenom = p->attRateDenom;
+    r->manualUseSpfAttenuation = (bool) p->manualUseSpfAttenuation;
+    r->manualUseCoordinatedYaw = (bool) p->manualUseCoordinatedYaw;
+    r->manualMaxUpwardsSpf = (float) p->manualMaxUpwardsSpf;
+    r->manualMaxTilt = DEGREES_TO_RADIANS(p->manualMaxTilt);
+    r->autoMaxTilt   = DEGREES_TO_RADIANS(p->autoMaxTilt);
+    // ---- general INDI config
+    r->useIncrement = (bool) p->useIncrement;
+    r->useConstantG2 = (bool) p->useConstantG2;
+    r->useRpmFeedback = (bool) p->useRpmFeedback;
+    r->useRpmDotFeedback = (bool) p->useRpmDotFeedback;
+    // ---- INDI actuator config
+    for (int i = 0; i < MAXU; i++) {
+        r->actHoverOmega[i]   = p->actHoverRpm[i]*10.f / 60.f * 2.f * M_PIf;
+        r->actTimeConstS[i]   = p->actTimeConstMs[i] * 1e-3f;
+        r->actMaxT[i]         = p->actMaxT[i] * 0.01f;
+        r->actNonlinearity[i] = p->actNonlinearity[i] * 0.01f;
+        r->actLimit[i]        = p->actLimit[i] * 0.01f;
+        r->actG1[0][i] = p->actG1_fx[i] * 0.01f;
+        r->actG1[1][i] = p->actG1_fy[i] * 0.01f;
+        r->actG1[2][i] = p->actG1_fz[i] * 0.01f;
+        r->actG1[3][i] = p->actG1_roll[i]  * 0.1f;
+        r->actG1[4][i] = p->actG1_pitch[i] * 0.1f;
+        r->actG1[5][i] = p->actG1_yaw[i]   * 0.01f;
+        r->actG2[0][i] = p->actG2_roll[i]  * 0.1f / p->actHoverRpm[i] * 0.1f;
+        r->actG2[1][i] = p->actG2_pitch[i] * 0.1f / p->actHoverRpm[i] * 0.1f;
+        r->actG2[2][i] = p->actG2_yaw[i]   * 0.1f / p->actHoverRpm[i] * 0.1f;
+        // ---- WLS config
+        if (i < 6)
+            r->wlsWv[i] = (float) p->wlsWv[i];
+        r->wlsWu[i] = (float) p->wlsWu[i];
+        r->u_pref[i] = p->u_pref[i] * 0.01f;
+    }
+    // ---- Filtering config
+    r->imuSyncLp2Hz = (float) p->imuSyncLp2Hz;
+    // ---- WLS config
+    r->wlsAlgo = (activeSetAlgoChoice) p->wlsAlgo;
+    r->useWls = (bool) p->useWls;
+    r->wlsWarmstart = (bool) p->wlsWarmstart;
+    r->wlsMaxIter = p->wlsMaxIter;
+    r->wlsCondBound = p->wlsCondBound * 1e4f;
+    r->wlsTheta = p->wlsTheta * 1e-4;
+    r->wlsNanLimit = p->wlsNanLimit;
 }
 
 #define RC_SCALE_THROTTLE 0.001f
@@ -308,9 +427,9 @@ void disableCatapult(void) {
     catapultState = CATAPULT_DISABLED;
 }
 
-PG_REGISTER_WITH_RESET_TEMPLATE(catapultConfig_t, catapultConfig, PG_CATAPULT, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(catapultConfig_t, catapultConfig, PG_CATAPULT_CONFIG, 0);
 PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig, 
-    .altitude = 400,
+    .altitude = 300,
     .xNed = 0,
     .yNed = 0,
     .rotationRoll = 400,
@@ -329,15 +448,33 @@ void initCatapultRuntime(void) {
     catapultRuntime.rotationRate[1] = catapultConfig()->rotationPitch;
     catapultRuntime.rotationRate[2] = catapultConfig()->rotationYaw;
     catapultRuntime.rotationTimeUs = catapultConfig()->rotationTimeMs * 1e3;
-    catapultRuntime.upwardsAccel = catapultConfig()->upwardsAccel;
-    fp_quaternion_t up = {1.f, 0.f, 0.f, 0.f};
-    catapultRuntime.attitude = up;
+    catapultRuntime.upwardsAccel = constrainf(catapultConfig()->upwardsAccel, 1.f, 40.f);
+    // FIXME: singularity checks
     float h = catapultRuntime.altitude;
     float a = catapultRuntime.upwardsAccel;
-    //float x = catapultRuntime.xyNed[0];
-    //float y = catapultRuntime.xyNed[1];
     float g = 9.80665;
-    float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
+    float x = catapultRuntime.xyNed[0];
+    float y = catapultRuntime.xyNed[1];
+    float axis_x = y - posEstNed.V.Y;
+    float axis_y = - (x - posEstNed.V.X);
+    float distance = hypotf(axis_x, axis_y);
+    float crashTime = 2.f*sqrtf(2*h/g);
+    float vHorz = distance / crashTime;
+    float fireTimeSec = sqrtf(2.f*h / (a + a*a/g));
+    float vVertMax = a * fireTimeSec;
+    float angleFromVertical = atan2f(vHorz, vVertMax);
+    axis_x /= distance;
+    axis_y /= distance;
+    fp_quaternion_t att = {
+        cosf(angleFromVertical / 2.f),
+        axis_x * sinf(angleFromVertical / 2.f),
+        axis_y * sinf(angleFromVertical / 2.f),
+        0.f,
+    };
+    catapultRuntime.attitude = att;
+    catapultRuntime.upwardsAccel /= cosf(angleFromVertical);
+
+    //float fireTimeSec = sqrtf( (sqrtf(g*g + 8.f*a*h*g) - g) / (2.f*a*a) );
     catapultRuntime.fireTimeUs = 1e6 * fireTimeSec;
 }
 

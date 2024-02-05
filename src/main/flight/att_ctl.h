@@ -21,13 +21,13 @@
 
 typedef struct indiProfile_s {
     // ---- Att/Rate config
-    int16_t attGains[3]; // attitude error to rotational accel gain * 10
-    int16_t rateGains[3]; // rate error to rotational accel gain * 10
+    uint16_t attGains[3]; // attitude error to rotational accel gain * 10
+    uint16_t rateGains[3]; // rate error to rotational accel gain * 10
     uint16_t attMaxTiltRate; // max tilt rate in deg/s
     uint16_t attMaxYawRate; // max yaw rate in deg/s
-    uint8_t attUseSpfAttenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
-    uint8_t attCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
-    uint8_t manualMaxUpwardsSpfZ; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
+    uint8_t manualUseSpfAttenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
+    uint8_t manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
+    uint8_t manualMaxUpwardsSpf; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
     uint8_t autoMaxTilt;   // in automatic flight in deg (0, 180)
     // ---- general INDI config
@@ -35,7 +35,7 @@ typedef struct indiProfile_s {
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
     // ---- INDI actuator config
     uint16_t actHoverRpm[MAXU];     // approximate rpm/10 in hover flight. FIXME: make an estimator for this
-    uint8_t actTimeConst[MAXU];     // time constant for actuator spool up in ms
+    uint8_t actTimeConstMs[MAXU];     // time constant for actuator spool up in ms
     uint32_t actPropConst[MAXU];    // propeller constant in N / (rad/s)^2 * 1e11
     uint16_t actMaxT[MAXU];         // max motor thrust in N*100 (centinewton)
     uint8_t actNonlinearity[MAXU];  // motor nonlinearity percentage between (0, 100)
@@ -59,59 +59,60 @@ typedef struct indiProfile_s {
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
     uint8_t attRateDenom;        // only execute attitude loop every attRateDenom loops
-    // ---- WLS config
+    // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
     uint8_t useRpmFeedback;        // bool: make use of dshot rpm data in feedback loop if available. FIXME: actually implement this
-    // ---- general INDI config
+    // ---- WLS config
     uint8_t useWls;              // bool: enable Wls in favour of static pinv
     uint8_t wlsWarmstart;        // bool: use warmstarting of wls
     uint8_t wlsMaxIter;          // wls iteration limit per loop. Keep to 1 usually, if warmstarting is used
     uint8_t wlsAlgo;             // 0: QR, but slow. 1: QR, 2: Chol
-    uint16_t wlsCondBound;       // bound condition number to wlsCondBound * 1e4
-    uint16_t wlsTheta;           // objective segragation * 1e-4
-    uint8_t wlsNanLimit;         // disarm because of repeating failures in wls. Keep low FIXME: make this fallback to pinv
+    uint16_t wlsCondBound;       // condition number bound / 1e4
+    uint16_t wlsTheta;           // objective segragation / 1e-4
+    uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
 } indiProfile_t;
 
 typedef struct indiRuntime_s {
-    // ---- INDI config
+    // ---- Att/Rate config
     t_fp_vector attGains;
     t_fp_vector rateGains;
-    float attTiltRateLimit;
-    float attYawRateLimit;
-    float maxUpwardsSpfZManual; // -1 means sum(G1[2, :])
-    float maxBankDegreeManual;
-    float maxBankDegreeAuto;
-    float omegaHover;
-    float actTimeConst;
+    float attMaxTiltRate; // rad/s
+    float attMaxYawRate;  // rad/s
     uint8_t attRateDenom;
-    bool attUseSpfzDiscounting;
-    bool attCoordinateYaw;
+    bool manualUseSpfAttenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
+    bool manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
+    float manualMaxUpwardsSpf; // 255 means sum(G1[2, :])
+    float manualMaxTilt; // rad
+    float autoMaxTilt; // rad
+    // ---- general INDI config
     bool useIncrement;
-    bool useOmegaFeedback;
-    bool useOmegaDotFeedback;
-    //float kThrust;
-    //float tauRpm;
-    float Tmax;
-    float kLin;
-    float motorOutputLimit;
+    bool useConstantG2;
+    bool useRpmFeedback;
+    bool useRpmDotFeedback;
+    // ---- INDI actuator config
+    float actHoverOmega[MAXU];   // rad/s
+    float actTimeConstS[MAXU];   // sec
+    float actMaxT[MAXU];         // N
+    float actNonlinearity[MAXU]; // - 
+    float actLimit[MAXU];        // 
+    float actG1[MAXV][MAXU];
+    float actG2[3][MAXU];
     // ---- Filtering config
-
+    float imuSyncLp2Hz;        // 2nd order butterworth break frequency in Hz for imu synchoronous filtering
     // ---- WLS config
-    activeSetAlgoChoice wlsAlgo;
+    float wlsWv[MAXV];
+    float wlsWu[MAXU];
     float u_pref[MAXU];
+    activeSetAlgoChoice wlsAlgo;
     bool useWls;
     bool wlsWarmstart;
-    bool useConstantG2;
-    float G2Normalizer; // 1/(2 * tauRpm * kThrust)
-    int wlsMaxIter;
+    uint8_t wlsMaxIter;
     float wlsCondBound;
     float wlsTheta;
-    float wlsWv2[MAXV];
-    float wlsWu2[MAXU];
-    uint16_t wlsNanLimit;
-    float wlsG1[MAXV][MAXU];
-    float wlsG2[MAXV][MAXU];
+    uint8_t wlsNanLimit;
 } indiRuntime_t;
+
+extern indiRuntime_t indiRuntime;
 
 #define INDI_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles);

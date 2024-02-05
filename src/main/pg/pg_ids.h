@@ -83,9 +83,9 @@
 #define PG_VTX_IO_CONFIG 57
 #define PG_INDI_PROFILE 58
 #define PG_POSITION_PROFILE 59
-#define PG_CATAPULT 60
-#define PG_THROWTOARM 61
-#define PG_LEARNER 62
+#define PG_CATAPULT_CONFIG 60
+#define PG_THROW_CONFIG 61
+#define PG_LEARNER_CONFIG 62
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

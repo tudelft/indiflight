@@ -1223,6 +1223,36 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_TPA_BREAKPOINT,    VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_PULSE_MIN, PWM_PULSE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_breakpoint) },
 
 #ifdef USE_INDI
+    { PARAM_NAME_INDI_ATTITUDE_GAINS,                   VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, attGains) },
+    { PARAM_NAME_INDI_RATE_GAINS,                       VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, rateGains) },
+    { PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE,           VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxTiltRate) },
+    { PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE,            VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxYawRate) },
+    { PARAM_NAME_INDI_ATTITUDE_USE_THRUST_ATTENUATION,  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualUseSpfAttenuation) },
+    { PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW,       VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualUseCoordinatedYaw) },
+    { PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL,         VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxUpwardsSpf) },
+    { PARAM_NAME_INDI_MANUAL_MAX_TILT,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 90 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxTilt) },
+    { PARAM_NAME_INDI_AUTO_MAX_TILT,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 180 }, PG_INDI_PROFILE, offsetof(indiProfile_t, autoMaxTilt) },
+    { PARAM_NAME_INDI_USE_INCREMENT,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useIncrement) },
+    { PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK,             VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useRpmDotFeedback) },
+    { PARAM_NAME_INDI_ACT_HOVER_RPM,                    VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actHoverRpm) },
+    { PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS,             VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstMs) },
+    { PARAM_NAME_INDI_ACT_PROP_CONSTANT,                VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actPropConst) },
+    { PARAM_NAME_INDI_ACT_MAX_THRUST,                   VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actMaxT) },
+    { PARAM_NAME_INDI_ACT_NONLINEARITY,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actNonlinearity) },
+    { PARAM_NAME_INDI_ACT_LIMIT,                        VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actLimit) },
+    { PARAM_NAME_INDI_ACT_G1_FX,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fx) },
+    { PARAM_NAME_INDI_ACT_G1_FY,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fy) },
+    { PARAM_NAME_INDI_ACT_G1_FZ,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fz) },
+    { PARAM_NAME_INDI_ACT_G1_ROLL,                      VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_roll) },
+    { PARAM_NAME_INDI_ACT_G1_PITCH,                     VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_pitch) },
+    { PARAM_NAME_INDI_ACT_G1_YAW,                       VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_yaw) },
+    { PARAM_NAME_INDI_ACT_G2_ROLL,                      VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_roll) },
+    { PARAM_NAME_INDI_ACT_G2_PITCH,                     VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_pitch) },
+    { PARAM_NAME_INDI_ACT_G2_YAW,                       VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_yaw) },
+    { PARAM_NAME_INDI_SYNC_LOWPASS_HZ,                  VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 1, 50 }, PG_INDI_PROFILE, offsetof(indiProfile_t, imuSyncLp2Hz) },
+    { PARAM_NAME_INDI_WLS_AXES_WEIGHTS,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXV, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWv) },
+    { PARAM_NAME_INDI_WLS_ACT_PENALTIES,                VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWu) },
+    { PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE,          VAR_INT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, u_pref) },
 #endif
 
 #ifdef USE_POS_CTL
@@ -1244,14 +1274,26 @@ const clivalue_t valueTable[] = {
 #endif
 
 #ifdef USE_CATAPULT
-    { PARAM_NAME_CATAPULT_TARGET_ALTITUDE, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 100, 1000 }, PG_CATAPULT, offsetof(catapultConfig_t, altitude) },
-    { PARAM_NAME_CATAPULT_TARGET_X_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT, offsetof(catapultConfig_t, xNed) },
-    { PARAM_NAME_CATAPULT_TARGET_Y_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT, offsetof(catapultConfig_t, yNed) },
-    { PARAM_NAME_CATAPULT_ROTATION_ROLL,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationRoll) },
-    { PARAM_NAME_CATAPULT_ROTATION_PITCH,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationPitch) },
-    { PARAM_NAME_CATAPULT_ROTATION_YAW,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationYaw) },
-    { PARAM_NAME_CATAPULT_ROTATION_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_CATAPULT, offsetof(catapultConfig_t, rotationTimeMs) },
-    { PARAM_NAME_CATAPULT_LOAD_FACTOR,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 40 }, PG_CATAPULT, offsetof(catapultConfig_t, upwardsAccel) },
+    { PARAM_NAME_CATAPULT_TARGET_ALTITUDE, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 100, 1000 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, altitude) },
+    { PARAM_NAME_CATAPULT_TARGET_X_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, xNed) },
+    { PARAM_NAME_CATAPULT_TARGET_Y_NED,   VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.minmax = { -300, 300 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, yNed) },
+    { PARAM_NAME_CATAPULT_ROTATION_ROLL,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationRoll) },
+    { PARAM_NAME_CATAPULT_ROTATION_PITCH,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationPitch) },
+    { PARAM_NAME_CATAPULT_ROTATION_YAW,   VAR_UINT16 | MASTER_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 0, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationYaw) },
+    { PARAM_NAME_CATAPULT_ROTATION_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationTimeMs) },
+    { PARAM_NAME_CATAPULT_UPWARDS_ACCEL,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 40 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, upwardsAccel) },
+#endif
+
+#ifdef USE_THROW_TO_ARM
+    { PARAM_NAME_THROW_TO_ARM_ACC_HIGH,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 15, 30 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accHighThresh) },
+    { PARAM_NAME_THROW_TO_ARM_ACC_CLIP,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 40, 100 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accClipThresh) },
+    { PARAM_NAME_THROW_TO_ARM_ACC_LOW,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 10, 30 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accLowAgainThresh) },
+    { PARAM_NAME_THROW_TO_ARM_GYRO_HIGH,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 270, 900 }, PG_THROW_CONFIG, offsetof(throwConfig_t, gyroHighThresh) },
+    { PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 200, 2000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, momentumThresh) },
+    { PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 5000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, releaseDelayMs) },
+#endif
+
+#ifdef USE_LEARNER
 #endif
 
 // PG_TELEMETRY_CONFIG

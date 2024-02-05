@@ -288,6 +288,16 @@ static float totalGyroSq(void) {
 #define THROW_RELEASE_DELAY_MS 250
 #define THROW_GYRO_HIGH 720.f
 
+PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
+PG_RESET_TEMPLATE(throwConfig_t, throwConfig,
+    .accHighThresh = 20,
+    .accClipThresh = 45,     // m/s/s
+    .accLowAgainThresh = 20, // m/s/s
+    .gyroHighThresh = 600,   // deg/s
+    .momentumThresh = 400,   // cm/s
+    .releaseDelayMs = 250   // ms
+);
+
 typedef enum {
     THROW_STATE_DISABLED = -1,
     THROW_STATE_READY = 0,
@@ -374,7 +384,8 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
         case THROW_STATE_ENOUGH_MOMENTUM: // will definitely arm, just waiting for release
             momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
             if ( (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH))
-                    || (totalGyroSq() < sq(THROW_GYRO_HIGH)) ) {
+                    || (totalGyroSq() > sq(THROW_GYRO_HIGH)) ) {
+                // WTF: why gyroSq < thresh?! should be > thresh!
                 momentumAtLeavingHand = momentum;
                 leftHandSince = currentTimeUs;
                 throwState = THROW_STATE_LEFT_HAND;

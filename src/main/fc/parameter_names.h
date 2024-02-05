@@ -128,17 +128,17 @@
 #define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE "indi_attitude_max_yaw_rate"
-#define PARAM_NAME_INDI_ATTITUDE_THRUST_ATTENUATION "indi_attitude_thrust_attenuation"
-#define PARAM_NAME_INDI_ATTITUDE_COORDINATED_YAW "indi_attitude_coordinated_yaw"
+#define PARAM_NAME_INDI_ATTITUDE_USE_THRUST_ATTENUATION "indi_attitude_use_thrust_attenuation"
+#define PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW "indi_manual_use_coordinated_yaw"
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
 #define PARAM_NAME_INDI_AUTO_MAX_TILT "indi_auto_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
 #define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
-#define PARAM_NAME_INDI_ACT_TIME_CONSTANT "indi_act_time_constant"
+#define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
+#define PARAM_NAME_INDI_ACT_PROP_CONSTANT "indi_act_prop_constant"
 #define PARAM_NAME_INDI_ACT_MAX_THRUST "indi_act_max_thrust"
-#define PARAM_NAME_INDI_ACT_PROP_CONST "indi_act_prop_constant"
 #define PARAM_NAME_INDI_ACT_NONLINEARITY "indi_act_nonlinearity"
 #define PARAM_NAME_INDI_ACT_LIMIT "indi_act_limit"
 #define PARAM_NAME_INDI_ACT_G1_FX "indi_act_g1_fx"
@@ -182,10 +182,16 @@
 #define PARAM_NAME_CATAPULT_ROTATION_PITCH "catapult_rotation_pitch"
 #define PARAM_NAME_CATAPULT_ROTATION_YAW "catapult_rotation_yaw"
 #define PARAM_NAME_CATAPULT_ROTATION_TIME "catapult_rotation_time"
-#define PARAM_NAME_CATAPULT_LOAD_FACTOR "catapult_load_factor"
+#define PARAM_NAME_CATAPULT_UPWARDS_ACCEL "catapult_upwards_accel"
 #endif
 
-#ifdef USE_THROWTOARM
+#ifdef USE_THROW_TO_ARM
+#define PARAM_NAME_THROW_TO_ARM_ACC_HIGH "throw_to_arm_acc_high"
+#define PARAM_NAME_THROW_TO_ARM_ACC_CLIP "throw_to_arm_acc_clip"
+#define PARAM_NAME_THROW_TO_ARM_ACC_LOW "throw_to_arm_acc_low"
+#define PARAM_NAME_THROW_TO_ARM_GYRO_HIGH "throw_to_arm_gyro_high"
+#define PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH "throw_to_arm_momentum_thresh"
+#define PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS "throw_to_arm_release_delay_ms"
 #endif
 
 #ifdef USE_LEARNER
