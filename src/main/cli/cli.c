@@ -109,6 +109,7 @@ bool cliMode = false;
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/att_ctl.h"
+#include "flight/att_ctl_init.h"
 #include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"

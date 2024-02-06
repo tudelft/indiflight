@@ -1351,7 +1351,7 @@ bool isTouchingGround(void) {
     bool throttleLow = true;
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
-        throttleLow = spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow = indiRuntime.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
 #ifdef USE_GPS_RESCUE
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
@@ -1412,7 +1412,7 @@ static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeU
         */
 
         for (int i = 0; i < numMotors; i++) {
-            motor[i] = scaleRangef(u_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+            motor[i] = scaleRangef(indiRuntime.d[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
         }
     }
 

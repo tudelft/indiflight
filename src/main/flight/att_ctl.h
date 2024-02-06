@@ -7,6 +7,7 @@
 #include "flight/pid.h"
 #include "solveActiveSet.h"
 #include "common/maths.h"
+#include "common/filter.h"
 
 #include "config/config.h"
 
@@ -35,6 +36,7 @@ typedef struct indiProfile_s {
     uint8_t useIncrement;          // bool: use incremental law. NDI (or more precisely linDI) otherwise
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
     // ---- INDI actuator config
+    uint8_t actNum;                 // number of actuators
     uint16_t actHoverRpm[MAXU];     // approximate rpm/10 in hover flight. FIXME: make an estimator for this
     uint8_t actTimeConstMs[MAXU];     // time constant for actuator spool up in ms
     uint32_t actPropConst[MAXU];    // propeller constant in N / (rad/s)^2 * 1e11
@@ -73,6 +75,14 @@ typedef struct indiProfile_s {
     uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
 } indiProfile_t;
 
+// linearization
+typedef struct actLin_s {
+    float A;
+    float B;
+    float C;
+    float k;
+} actLin_t;
+
 typedef struct indiRuntime_s {
     // ---- Att/Rate config
     t_fp_vector attGains;
@@ -89,8 +99,10 @@ typedef struct indiRuntime_s {
     bool useRpmFeedback;
     bool useRpmDotFeedback;
     // ---- INDI actuator config
+    uint8_t actNum;
     float actHoverOmega[MAXU];   // rad/s
     float actTimeConstS[MAXU];   // sec
+    float actPropConst[MAXU];    // propeller constant in N / (rad/s)^2 * 1e11
     float actMaxT[MAXU];         // N
     float actNonlinearity[MAXU]; // - 
     float actLimit[MAXU];        // 
@@ -109,46 +121,73 @@ typedef struct indiRuntime_s {
     float wlsCondBound;
     float wlsTheta;
     uint8_t wlsNanLimit;
+    // ---- runtime values -- actauators
+    float d[MAXU]; // command issued to the actuators on [-1, 1] scale
+    float u[MAXU]; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
+    float uState[MAXU]; // estimated force state of the actuators [-1, 1]
+    float uState_fs[MAXU]; // sync-filtered estiamted force state
+    actLin_t lin[MAXU]; // linearization. u = indiOutputCurve(lin, d) and d = indiLinearization(lin, u)
+    float omega[MAXU]; // unfiltered motor speed rad/s
+    float omega_fs[MAXU]; // sync-filtered motor speed rad/s
+    //float omegaDot[MAXU]; // unfiltered motor rate rad/s/s
+    float omegaDot_fs[MAXU]; // sync-filtered motor rate rad/s/s
+    float G2_normalizer[MAXU];
+    float erpmToRads; // factor to move from motor erpm to rad/s
+    // ---- runtime values -- axes
+    t_fp_vector attGainsCasc; // attitude gains simulating parallel PD
+    fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
+    fp_quaternion_t attErrBody; // attitude error in body coordinates
+    t_fp_vector rateSpBody; // rate setpoint in body coordinates
+    t_fp_vector rateDotSpBody; // rate derivative setpoint in body coordinates
+    t_fp_vector spfSpBody; // specific force setpoint in body coordinates
+    float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    //t_fp_vector rate_fs; // sync-filtered gyro in rad/s
+    t_fp_vector rateDot; // unfiltered gyro derivative in rad/s/s
+    t_fp_vector rateDot_fs; // sync-filtered gyro derivative in rad/s/s
+    t_fp_vector spf_fs; // sync-filterd accelerometer (specific force) in N/kg
+    // ---- filters
+    pt1Filter_t uLagFilter[MAXU]; // to simulate spinup
+    biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
+    // ---- housekeeping
+    float dT; // target looptime in Sec
+    float indiFrequency; // frequency in Hz
+    uint8_t attExecCounter; // count executions (wrapping)
+    uint16_t nanCounter; // count times consequtive nans appear in allocation
+    // ---- control law selection
+    bool bypassControl; // no control at all. u and d are unmodified by loop
+    bool controlAttitude; // attempt to reach tilt given by attSpNed
+    bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles);
-void resetIndiProfile(indiProfile_t *profile);
 
 extern indiRuntime_t indiRuntime;
-void initIndiRuntime(void);
 
-void changeIndiProfile(uint8_t profileIndex);
+//extern fp_quaternion_t attSpNed;
+//extern t_fp_vector rateSpBodyUse;
+//extern t_fp_vector alphaSpBody;
+//extern t_fp_vector spfSpBody;
+//extern float zAccSpNed;
+//extern float yawRateSpNed;
+//extern bool attTrackYaw;
+//extern float dv[MAXV];
+//extern float u[MAXU];
+//extern float u_state[MAXU];
+//extern float u_state_sync[MAXU];
+//extern float d[MAXU];
+//extern float omegaUnfiltered[MAXU];
+//extern float omega[MAXU];
+//extern float omega_dot[MAXU];
+//extern float alpha[XYZ_AXIS_COUNT];
 
-// linearization
-typedef struct quadLin_s {
-    float A;
-    float B;
-    float C;
-    float k;
-} quadLin_t;
-
-extern fp_quaternion_t attSpNed;
-extern t_fp_vector rateSpBodyUse;
-extern t_fp_vector alphaSpBody;
-extern t_fp_vector spfSpBody;
-extern float zAccSpNed;
-extern float yawRateSpNed;
-extern bool attTrackYaw;
-extern float dv[MAXV];
-extern float u[MAXU];
-extern float u_state[MAXU];
-extern float u_state_sync[MAXU];
-extern float u_output[MAXU];
-extern float omegaUnfiltered[MAXU];
-extern float omega[MAXU];
-extern float omega_dot[MAXU];
-extern float alpha[XYZ_AXIS_COUNT];
-
-void indiInit(const pidProfile_t * pidProfile);
 void indiController(timeUs_t current);
-float indiThrustLinearization(quadLin_t lin, float in);
-float indiThrustCurve(quadLin_t lin, float in);
+void updateLinearization(actLin_t* lin, float k);
+float indiLinearization(actLin_t* lin, float in);
+float indiOutputCurve(actLin_t* lin, float in);
 
 float getYawWithoutSingularity(void);
 t_fp_vector coordinatedYaw(float yaw);

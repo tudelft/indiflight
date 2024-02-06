@@ -171,7 +171,7 @@ doMoreMotors:
 
     for (int motor = 0; motor < c->numAct; motor++) {
         outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
-        u[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
+        indiRuntime.d[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
     }
 }
 #endif

@@ -99,6 +99,7 @@
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
 #include "flight/att_ctl.h"
+#include "flight/att_ctl_init.h"
 #include "flight/pos_ctl.h"
 #include "flight/pid_init.h"
 #include "flight/position.h"
@@ -733,7 +734,8 @@ void init(void)
 
     pidInit(currentPidProfile);
 #ifdef USE_INDI
-    indiInit(currentPidProfile);
+    //indiInit(currentPidProfile);
+    initIndiRuntime();
 #endif
 #ifdef USE_POS_CTL
     posCtlInit();

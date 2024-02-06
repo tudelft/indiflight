@@ -43,6 +43,9 @@
 #include "drivers/nvic.h"
 
 #include "flight/mixer.h"
+#ifdef HIL_BUILD
+#include "flight/rpm_filter.h"
+#endif
 
 #include "io/hil.h"
 
@@ -262,8 +265,6 @@ static void dshotUpdateTelemetryData(uint8_t motorIndex, dshotTelemetryType_t ty
 uint16_t getDshotTelemetry(uint8_t index)
 {
 #ifdef HIL_BUILD
-
-#define ERPM_PER_LSB 100.0f
 
     if (index > 3) return 0;
     else return (uint16_t) ( hilInput.rpm[index] * motorConfig()->motorPoleCount / 2 / ERPM_PER_LSB );
