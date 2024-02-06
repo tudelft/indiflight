@@ -195,7 +195,8 @@
 #endif
 
 #ifdef USE_LEARNER
-#define PARAM_NAME_LEARNER_MODE "learner_mode" // (1 << 0) after cat. (1 << 1) during flight
+#define PARAM_NAME_LEARNER_MODE "learner_mode"
+#define PARAM_NAME_LEARNER_NUM_ACT "learner_num_actuators"
 #define PARAM_NAME_LEARNER_DELAY_TIME_MS "learner_delay_time_ms"
 #define PARAM_NAME_LEARNER_STEP_TIME_MS "learner_step_time_ms"
 #define PARAM_NAME_LEARNER_RAMP_TIME_MS "learner_ramp_time_ms"

@@ -72,6 +72,7 @@
 #include "flight/pid.h"
 #include "flight/att_ctl.h"
 #include "flight/catapult.h"
+#include "flight/learner.h"
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1226,20 +1227,20 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (FLIGHT_MODE(CATAPULT_MODE) || !ARMING_FLAG(ARMED))) { // only transition if disarmed
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) { // only transition if disarmed
         ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
-        disableCatapult();
+        resetCatapult();
         DISABLE_FLIGHT_MODE(CATAPULT_MODE);
     }
 #endif
 
-#ifdef USE_LEARN_AFTER_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXLEARNAFTERCATAPULT) && (FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) || !ARMING_FLAG(ARMED))) {
-        ENABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
+#ifdef USE_LEARNER
+    if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
+        ENABLE_FLIGHT_MODE(LEARNER_MODE);
     } else {
-        disableLearning();
-        DISABLE_FLIGHT_MODE(LEARNAFTERCATAPULT_MODE);
+        resetLearningQuery();
+        DISABLE_FLIGHT_MODE(LEARNER_MODE);
     }
 #endif
 

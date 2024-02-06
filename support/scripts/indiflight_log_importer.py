@@ -69,7 +69,7 @@ class IndiflightLog(object):
                 case 8: return "VELCTL"
                 case 9: return "POSCTL"
                 case 10: return "CATAPULT"
-                case 11: return "LEARNAFTERCATAPULT"
+                case 11: return "LEARNER"
                 case 12: return "ANTIGRAVITY"
                 case 13: return "HEADADJ"
                 case 14: return "CAMSTAB"

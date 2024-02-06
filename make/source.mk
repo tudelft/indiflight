@@ -106,6 +106,7 @@ COMMON_SRC = \
             flight/pos_ctl.c \
             flight/att_ctl.c \
             flight/catapult.c \
+            flight/learner.c \
             flight/rpm_filter.c \
             flight/servos.c \
             flight/servos_tricopter.c \

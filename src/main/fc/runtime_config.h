@@ -21,6 +21,7 @@
 #pragma once
 
 #include "common/utils.h"
+#include <stdbool.h>
 
 // FIXME some of these are flight modes, some of these are general status indicators
 typedef enum {
@@ -93,7 +94,7 @@ typedef enum {
     VELOCITY_MODE    = (1 << 12),
     POSITION_MODE    = (1 << 13),
     CATAPULT_MODE    = (1 << 14),
-    LEARNAFTERCATAPULT_MODE    = (1 << 15)
+    LEARNER_MODE    = (1 << 15)
 } flightModeFlags_e;
 
 extern flightModeFlags_e flightModeFlags;
@@ -115,7 +116,7 @@ extern flightModeFlags_e flightModeFlags;
    [BOXVELCTL]      = LOG2(VELOCITY_MODE),               \
    [BOXPOSCTL]      = LOG2(POSITION_MODE),               \
    [BOXCATAPULT]    = LOG2(CATAPULT_MODE),               \
-   [BOXLEARNAFTERCATAPULT]    = LOG2(LEARNAFTERCATAPULT_MODE),               \
+   [BOXLEARNER]    = LOG2(LEARNER_MODE),               \
 }                                                        \
 /**/
 

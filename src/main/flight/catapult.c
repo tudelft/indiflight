@@ -10,15 +10,17 @@
 #ifdef USE_CATAPULT
 
 // extern
-catapult_state_t catapultState = CATAPULT_DISABLED;
+catapult_state_t catapultState = CATAPULT_IDLE;
 fp_quaternion_t attSpNedFromCat = { 1.f, 0.f, 0.f, 0.f };
 t_fp_vector spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
 t_fp_vector rateSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
 bool controlAttitudeFromCat = false;
 
-void disableCatapult(void) {
-    beeper(BEEPER_SILENCE);
-    catapultState = CATAPULT_DISABLED;
+void resetCatapult(void) {
+    if (!ARMING_FLAG(ARMED)) {
+        beeper(BEEPER_SILENCE);
+        catapultState = CATAPULT_IDLE;
+    }
 }
 
 PG_REGISTER_WITH_RESET_TEMPLATE(catapultConfig_t, catapultConfig, PG_CATAPULT_CONFIG, 0);
@@ -35,7 +37,7 @@ PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig,
 
 catapultRuntime_t catapultRuntime;
 void initCatapultRuntime(void) {
-    catapultRuntime.altitude = constrain(catapultConfig()->altitude, 1, 1000) * 0.01f; //FIXME constrainu
+    catapultRuntime.altitude = constrainu(catapultConfig()->altitude, 1, 1000) * 0.01f;
     catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
     catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
     catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(catapultConfig()->rotationRoll);
@@ -107,6 +109,7 @@ void runCatapultStateMachine(timeUs_t current) {
     static timeUs_t cutoffTime = 0;
 
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
+                || !FLIGHT_MODE(CATAPULT_MODE)
                 || (extPosState == EXT_POS_NO_SIGNAL)
                 || (posSetpointState == EXT_POS_NO_SIGNAL)
 #if defined(USE_EKF) && false
@@ -132,7 +135,7 @@ void runCatapultStateMachine(timeUs_t current) {
 
 doMore:
     switch (catapultState) {
-        case CATAPULT_DISABLED:
+        case CATAPULT_IDLE:
             launchTime = 0;
             cutoffTime = 0;
 
@@ -147,7 +150,7 @@ doMore:
                 catapultState = CATAPULT_DELAY; goto doMore;
             }
             if (disableConditions)
-                catapultState = CATAPULT_DISABLED;
+                catapultState = CATAPULT_IDLE;
             break;
         case CATAPULT_DELAY:
             if (cmpTimeUs(current, launchTime) > 0) {

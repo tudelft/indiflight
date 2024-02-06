@@ -1,4 +1,6 @@
 
+#pragma once
+
 #include "common/maths.h"
 #include <math.h>
 
@@ -35,7 +37,7 @@ extern catapultRuntime_t catapultRuntime;
 void initCatapultRuntime(void);
 
 typedef enum catapult_state_s {
-    CATAPULT_DISABLED = -1,
+    CATAPULT_IDLE = -1,
     CATAPULT_WAITING_FOR_ARM = 0,
     CATAPULT_DELAY,
     CATAPULT_LAUNCHING,
@@ -51,4 +53,4 @@ extern t_fp_vector rateSpBodyFromCat;
 extern bool controlAttitudeFromCat;
 
 void runCatapultStateMachine(timeUs_t current);
-void disableCatapult(void);
+void resetCatapult(void);

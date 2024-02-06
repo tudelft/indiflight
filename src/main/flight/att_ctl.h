@@ -1,11 +1,12 @@
 
-#include "common/maths.h"
+#pragma once
+
 #include <stdbool.h>
 
 #include "platform.h"
 #include "flight/pid.h"
-#include "common/maths.h"
 #include "solveActiveSet.h"
+#include "common/maths.h"
 
 #include "config/config.h"
 
@@ -154,32 +155,3 @@ t_fp_vector coordinatedYaw(float yaw);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotor(timeUs_t current);
-
-typedef enum learning_state_e {
-    LEARNING_DISABLED = -1,
-    LEARNING_DELAY = 0,
-    LEARNING_ACTIVE,
-    LEARNING_DONE
-} learning_state_t;
-
-extern learning_state_t learningState;
-
-#ifdef USE_LEARN_AFTER_CATAPULT
-typedef enum query_state_e {
-    QUERY_ZERO = 0,
-    QUERY_STEP,
-    QUERY_RAMP,
-    QUERY_DONE
-} query_state_t;
-
-typedef struct motor_stats_s {
-    timeUs_t startTime;
-    float minGyro[3];
-    float maxGyro[3];
-    query_state_t queryState;
-} motor_state_t;
-
-
-void runLearningStateMachine(void);
-void disableLearning(void);
-#endif

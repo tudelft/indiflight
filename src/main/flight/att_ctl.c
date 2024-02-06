@@ -21,6 +21,7 @@
 #include "config/config.h"
 #include "setupWLS.h"
 #include "solveActiveSet.h"
+#include "flight/learner.h"
 
 #include "io/external_pos.h"
 #include "io/beeper.h"
@@ -405,7 +406,7 @@ void indiInit(const pidProfile_t * pidProfile) {
 void indiController(timeUs_t current) {
     if (flightModeFlags
         && (!FLIGHT_MODE(CATAPULT_MODE) || catapultState == CATAPULT_DONE) 
-        && (!FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) || learningState == LEARNING_DONE)) {
+        && (!FLIGHT_MODE(LEARNER_MODE) || learningQueryState == LEARNING_QUERY_DONE)) {
         // any flight mode but ACRO --> get attitude setpoint
         if ( !((++attExecCounter)%attRateDenom) ) {
             // rate limit attitude control
@@ -426,127 +427,11 @@ void indiController(timeUs_t current) {
     getMotor(current);
 }
 
-learning_state_t learningState = LEARNING_DISABLED;
-
-#ifdef USE_LEARN_AFTER_CATAPULT
-
-#define LEARNING_ACT 4
-#define LEARNING_DELAY_TIME 250000 // 250ms
-#define LEARNING_STEP_TIME 50000 // 50ms
-#define LEARNING_RAMP_TIME 100000 // 100ms
-#define LEARNING_OVERLAP_TIME 50000 // 50ms, suggested not more than STEP_TIME
-#define LEARNING_STEP_AMPLITUDE 0.35f
-#define LEARNING_RAMP_AMPLITUDE 0.70f
-#define LEARNING_TOTAL_QUERY_TIME ((LEARNING_STEP_TIME+LEARNING_RAMP_TIME)*LEARNING_ACT - LEARNING_OVERLAP_TIME*(LEARNING_ACT-1))
-STATIC_ASSERT(LEARNING_OVERLAP_TIME <= LEARNING_STEP_TIME, "LEARNING_OVERLAP_TIME larger than LEARNING_STEP_TIME untested");
-STATIC_ASSERT(LEARNING_TOTAL_QUERY_TIME + LEARNING_DELAY_TIME < 1000000, "Dangerously high total learning time"); // 1 sec
-
-#define LEARNING_GYRO_MAX 1600.f // deg/s
-
-void disableLearning(void) {
-    if (catapultState != CATAPULT_DONE)
-        learningState = LEARNING_DISABLED; // only reset if catapult is also reset
-}
-
-static void resetMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
-    if ( motor >= LEARNING_ACT ) return;
-
-    motor_state_t* p = motorStates + motor;
-    if (enable) {
-        p->startTime = micros();
-        p->queryState = QUERY_STEP;
-        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-            p->minGyro[axis] = gyro.gyroADCf[axis] + (-LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
-            p->maxGyro[axis] = gyro.gyroADCf[axis] + (+LEARNING_GYRO_MAX - gyro.gyroADCf[axis]) / (LEARNING_ACT - motor);
-        }
-    } else {
-        p->queryState = QUERY_ZERO;
-    } // do nothing if enable, but already enabled
-}
-
-void runLearningStateMachine(void) {
-    static timeUs_t startAt;
-    static motor_state_t motorStates[LEARNING_ACT];
-
-    for (int i=0; i < LEARNING_ACT; i++)  u_output[i] = 0.f;
-
-doMore:
-    switch (learningState) {
-        case LEARNING_DISABLED:
-            startAt = micros() + LEARNING_DELAY_TIME;
-            learningState = LEARNING_DELAY; goto doMore;
-        case LEARNING_DELAY:
-            if (cmpTimeUs(micros(), startAt) > 0) {
-
-                resetMotorQueryState(motorStates, 0, true);
-                for (int motor = 1; motor < LEARNING_ACT; motor++)
-                    resetMotorQueryState(motorStates, motor, false);
-
-                learningState = LEARNING_ACTIVE; goto doMore;
-            }
-            break;
-        case LEARNING_ACTIVE:
-            // invoke learning here!
-            for (int motor = 0; motor < LEARNING_ACT; motor++) {
-                if (motorStates[motor].queryState == QUERY_ZERO) { break; } // no more motors possible
-
-                // trigger next motor, if overlap time reached
-                timeDelta_t time_in_query = cmpTimeUs(micros(), motorStates[motor].startTime);
-                if ( (motor+1 < LEARNING_ACT)
-                        && ( (time_in_query + LEARNING_OVERLAP_TIME) > (LEARNING_STEP_TIME + LEARNING_RAMP_TIME) ) )
-                    if (motorStates[motor+1].queryState == QUERY_ZERO)
-                        resetMotorQueryState(motorStates, motor + 1, true);
-
-                // protect somewhat against gyro overrun, probably wont work because of filter delays
-                for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-                    float val = gyro.gyroADCf[axis];
-                    if ( (val > motorStates[motor].maxGyro[axis]) || (val < motorStates[motor].minGyro[axis]) ) {
-                        motorStates[motor].queryState = QUERY_DONE;
-                    }
-                }
-
-doMoreMotors:
-                switch (motorStates[motor].queryState) {
-                    case QUERY_ZERO: { break; } // should never happen
-                    case QUERY_STEP:
-                        if (cmpTimeUs(micros(), motorStates[motor].startTime + LEARNING_STEP_TIME) > 0) {
-                            motorStates[motor].queryState = QUERY_RAMP; goto doMoreMotors;
-                        }
-                        u_output[motor] = LEARNING_STEP_AMPLITUDE;
-                        break;
-                    case QUERY_RAMP: {
-                        timeDelta_t time_in_ramp = cmpTimeUs(micros(), motorStates[motor].startTime + LEARNING_STEP_TIME);
-                        if (time_in_ramp > LEARNING_RAMP_TIME) {
-                            motorStates[motor].queryState = QUERY_DONE; goto doMoreMotors;
-                        }
-                        u_output[motor] = LEARNING_RAMP_AMPLITUDE * ( 1.f - ( ((float) time_in_ramp) / ((float) LEARNING_RAMP_TIME) ) );
-                        break;
-                    }
-                    case QUERY_DONE: { break; }
-                }
-            }
-
-            bool allMotorsDone = true;
-            for (int motor = 0; motor < LEARNING_ACT; motor++)
-                allMotorsDone &= (motorStates[motor].queryState == QUERY_DONE);
-
-            // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
-            if (allMotorsDone || (cmpTimeUs(micros(), startAt) > (LEARNING_TOTAL_QUERY_TIME + 10000)) ) {
-                learningState = LEARNING_DONE; goto doMore;
-            }
-
-            break;
-        case LEARNING_DONE: { break; }
-    }
-
-    for (int motor = 0; motor < LEARNING_ACT; motor++) {
-        u_output[motor] = constrainf(u_output[motor], 0.f, 1.f);
-        u[motor] = u_output[motor]; // for logging purposes. TODO: also log du
-    }
-}
+void getSetpoints(timeUs_t current) {
+#if !defined(USE_CATAPULT) && !defined(USE_LEARNER)
+    UNUSED(current)
 #endif
 
-void getSetpoints(timeUs_t current) {
     // sets:
     // 1. at least one of attSpNed and/or rateSpBody
     // 2. spfSpBody
@@ -570,40 +455,43 @@ void getSetpoints(timeUs_t current) {
     controlAttitude = true;
     trackAttitudeYaw = false;
 
-    // flight mode handling for setpoints
-    if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_DONE)) {
+    // update state machines
 #ifdef USE_CATAPULT
-        // this part is never reached anyway ifndef USE_CATAPULT because the flight mode is disabled
-        runCatapultStateMachine(current);
+    runCatapultStateMachine(current);
+#endif
+#ifdef USE_LEARNER
+    runLearningQueryStateMachine(current);
+#endif
+
+    // flight mode handling for setpoints
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE)
+            && (catapultState != CATAPULT_IDLE)
+            && (catapultState != CATAPULT_DONE)) {
         controlAttitude = controlAttitudeFromCat;
         attSpNed = attSpNedFromCat;
         spfSpBody = spfSpBodyFromCat;
         rateSpBody = rateSpBodyFromCat;
-
-    } else if (FLIGHT_MODE(CATAPULT_MODE) && FLIGHT_MODE(LEARNAFTERCATAPULT_MODE) && (catapultState == CATAPULT_DONE) && (learningState != LEARNING_DONE)) {
-#ifdef USE_LEARN_AFTER_CATAPULT
+    } else
+#endif
+#ifdef USE_LEARNER
+    if (FLIGHT_MODE(LEARNER_MODE)
+            && (learningQueryState != LEARNING_QUERY_IDLE)
+            && (learningQueryState != LEARNING_QUERY_DONE)) {
         bypassControl = true;
-        runLearningStateMachine();
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
+            u_output[i] = outputFromLearningQuery[i];
+        }
+    } else
 #endif
-#else
-    UNUSED(current);
-#endif
-    } else if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
-        //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
-
-        // convert acc setpoint from position mode
-        //getAttSpNedFromAccSpNed(&accSpNedFromPos, &attSpNed, &(spfSpBody.V.Z));
-        //rateSpBody = coordinatedYaw(yawRateSpFromOuter);
-        //if (FLIGHT_MODE(POSITION_MODE))
-        //    rateSpBody.V.Z = yawRateSpFromOuter;
-        //else
-        //    rateSpBody = coordinatedYaw(yawRateSpFromOuter);
-
+#ifdef USE_POS_CTL
+    if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         attSpNed = attSpNedFromPos;
         spfSpBody = spfSpBodyFromPos;
         rateSpBody = rateSpBodyFromPos;
-
-    } else if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
+    } else
+#endif
+    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
         // get desired attitude setpoints from sticks
 
         // get proper yaw
@@ -649,16 +537,6 @@ void getSetpoints(timeUs_t current) {
         //DONE todo: replace call to getAttSpNed by logic more suited to manual flying
         //      ie. just yaw * tilt?
 
-    //} else if (flightModeFlags) {
-    //    trackAttitudeYaw = true;
-
-    //    // unknown, but not acro flight mode, just command upright
-    //    attSpNed.qi = 1.0f;
-    //    attSpNed.qx = 0.f;
-    //    attSpNed.qy = 0.f;
-    //    attSpNed.qz = 0.f;
-
-    //    spfSpBody.V.Z = 2.f; // low but downwards
     } else {
         controlAttitude = false;
         // acro
@@ -698,44 +576,79 @@ void getAlphaSpBody(timeUs_t current) {
         if (attEstNed.qi * attSpNed.qi < 0.f)
             QUAT_SCALAR_MULT(attSpNed, -1.f);
 
-        // add in the error term based on attitude quaternion error
-        // todo: fix this. Shortest-distance quat division is no bueno for position control with yaw tracking
-        attErrBody = quatMult(&attEstNedInv, &attSpNed);
+        // we decompose the error quaternion into first tilt, then yaw
+        // q_sp^B  =  q_yaw^B  *  q_tilt^B
+        //
+        // q_yaw = (w 0 0 z)
+        // q_tilt = (w x y 0)
+        fp_quaternion_t attSpBody = quatMult(&attEstNedInv, &attSpNed);
 
-        // this would ideally be a normalize instead of constrain, but that is slow...
-        attErrBody.qi = constrainf(attErrBody.qi, -1.f, +1.f);
+        // --- tilt component ---
+        // get tilt as the rotation from the body z (0 0 1) to the target bodyZ 
+        // which is the cross product of (0 0 1) x targetZBody:
+        //
+        // tiltAxis = (-targetZBody.V.Y  targetZBody.V.X  0)
+        t_fp_vector targetZBody = quatRotMatCol(&attSpBody, 2);
+        float tiltAxisNorm = hypotf(targetZBody.V.X, targetZBody.V.Y);
 
-        float angleErr = 2.f*acos_approx(attErrBody.qi);
-        if (angleErr > M_PIf)
-            angleErr -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
-            // some heuristic could be used here, because this is far from optimal
-            // in cases where we have high angular rate and the most efficient way
-            // to get to the setpoint is actually to continue through a flip, and
-            // not counter steer initially
-            // NOTE: if you change this to not be [-pi, pi], then line 345 breaks!
+        // get tilt axis without singularity traps at 0 and pi
+        t_fp_vector tiltAxis = { .V.Z = 0.f };
+        if (tiltAxisNorm > 1e-8f) {
+            // error = error_angle * unit_vector_rotation_axis
+            float itiltAxisNorm = 1.f / tiltAxisNorm;
+            tiltAxis.V.X = -targetZBody.V.Y * itiltAxisNorm;
+            tiltAxis.V.Y = targetZBody.V.X * itiltAxisNorm;
+        } else {
+            // just rotate around X, either almost left or right
+            tiltAxis.V.X = (-targetZBody.V.Y > 0.) ? 1.f : -1.f;
+            tiltAxis.V.Y = 0.f;
+        }
 
-        t_fp_vector attErrAxis = {.V.X = 1.f};
-        float norm = sqrtf(1.f - attErrBody.qi*attErrBody.qi);
-        // todo: nan happens here!
-        if (norm > 1e-8f) {
-            // procede as normal
-            float normInv = 1.f / norm;
-            attErrAxis.V.X = normInv * attErrBody.qx;
-            attErrAxis.V.Y = normInv * attErrBody.qy;
-            attErrAxis.V.Z = normInv * attErrBody.qz;
-        } // else {
-            // qi = +- 1 singularity. But this means the error angle is so small, 
-            // that we don't care abuot this axis. So chose axis to remain 1,0,0
-        // }
+        // now we have the axis, but we still need the angle.
+        // a.dot(b) = ||a|| * ||b|| * cos(theta) 
+        //      but (0 0 1) and targetZBody are unit vectors
+        //      therefore:  (0 0 1).dot(targetZBody) = targetZBody.Z
+        //
+        // and angle is  theta = acos(targetZBody.Z)
+        // on interval 0 to pi (direction is given by tiltAxis)
+        //
+        // NOTE: some heuristic could be used here, because this is far from optimal
+        // in cases where we have high angular rate and the most efficient way
+        // to get to the setpoint is actually to continue through a flip, and
+        // not counter steer initially
+        float tiltErrorAngle = acos_approx(constrainf(targetZBody.V.Z, -1.f, 1.f));
 
-        // final error is angle times axis
-        VEC3_SCALAR_MULT(attErrAxis, angleErr);
+        // finalize tilt error used to generate rate setpoint
+        t_fp_vector tiltError = tiltAxis;
+        VEC3_SCALAR_MULT(tiltError, tiltErrorAngle);
 
-        // multiply with gains and add in
-        rateSpBodyUse.V.X += attGainsCasc.V.X * attErrAxis.V.X;
-        rateSpBodyUse.V.Y += attGainsCasc.V.Y * attErrAxis.V.Y;
+        // --- yaw component ---
+        // we need (only) the w component of q_yaw to get yaw error angle
+        // q_yaw^B  =  q_sp^B  *  q_tilt^-B
+
+        // setup q_tilt inverse first from ax ang rotation found above
+        fp_quaternion_t q_tilt_inv;
+        float_quat_of_axang(&q_tilt_inv, &tiltAxis, -tiltErrorAngle);
+
+        // get q_yaw via multiplication.
+        // TODO: we only need qi and sign(qz). Surely there is somethign faster than dense quaternion mult
+        fp_quaternion_t q_yaw = quatMult(&attSpBody, &q_tilt_inv);
+
+        q_yaw.qi = constrainf(q_yaw.qi, -1.f, 1.f);
+        float yawErrorAngle = 2.f*acos_approx(q_yaw.qi);
+        if (yawErrorAngle > M_PIf)
+            yawErrorAngle -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
+
+        // we still have to check if the vector compoenent is negative
+        // this inverts the error angle
+        if (q_yaw.qz < 0.f)
+            yawErrorAngle = -yawErrorAngle;
+
+        // multiply with gains and mix existing rate setpoint
+        rateSpBodyUse.V.X += attGainsCasc.V.X * tiltError.V.X;
+        rateSpBodyUse.V.Y += attGainsCasc.V.Y * tiltError.V.Y;
         if (trackAttitudeYaw)
-            rateSpBodyUse.V.Z += attGainsCasc.V.Z * attErrAxis.V.Z;
+            rateSpBodyUse.V.Z += attGainsCasc.V.Z * yawErrorAngle;
         // else: just keep rateSpBody.V.Z that has been set
 
         // constrain to be safe
