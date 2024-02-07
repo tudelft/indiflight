@@ -1,6 +1,6 @@
 #pragma once
 
-#include "att_ctl.h"
+#include "indi.h"
 
 void resetIndiProfile(indiProfile_t *profile);
 void changeIndiProfile(uint8_t profileIndex);

@@ -65,7 +65,7 @@
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
 #include "flight/imu.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/pos_ctl.h"
 #include "flight/ekf.h"
 
@@ -1488,30 +1488,30 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quat[1] = lrintf(attitude_q.x  * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[2] = lrintf(-attitude_q.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[3] = lrintf(-attitude_q.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
-    blackboxCurrent->alpha[0] = lrintf(RADIANS_TO_DEGREES(alpha[FD_ROLL]) * 0.1f);
-    blackboxCurrent->alpha[1] = lrintf(RADIANS_TO_DEGREES(alpha[FD_PITCH]) * 0.1f);
-    blackboxCurrent->alpha[2] = lrintf(RADIANS_TO_DEGREES(alpha[FD_YAW]) * 0.1f);
-    blackboxCurrent->quatSp[0] = lrintf(attSpNed.qi * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->quatSp[1] = lrintf(attSpNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->quatSp[2] = lrintf(attSpNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->quatSp[3] = lrintf(attSpNed.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
-    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.X) * blackboxHighResolutionScale);
-    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Y) * blackboxHighResolutionScale);
-    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(rateSpBodyUse.V.Z) * blackboxHighResolutionScale);
-    blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.X) * 0.1f);
-    blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Y) * 0.1f);
-    blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(alphaSpBody.V.Z) * 0.1f);
-    blackboxCurrent->spfSp[0] = lrintf(spfSpBody.V.X*100.f);
-    blackboxCurrent->spfSp[1] = lrintf(spfSpBody.V.Y*100.f);
-    blackboxCurrent->spfSp[2] = lrintf(spfSpBody.V.Z*100.f);
+    blackboxCurrent->alpha[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDot_fs.V.X) * 0.1f);
+    blackboxCurrent->alpha[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDot_fs.V.Y) * 0.1f);
+    blackboxCurrent->alpha[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDot_fs.V.Z) * 0.1f);
+    blackboxCurrent->quatSp[0] = lrintf(indiRun.attSpNed.qi * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSp[1] = lrintf(indiRun.attSpNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSp[2] = lrintf(indiRun.attSpNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSp[3] = lrintf(indiRun.attSpNed.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+    blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.X) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Y) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Z) * blackboxHighResolutionScale);
+    blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.X) * 0.1f);
+    blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Y) * 0.1f);
+    blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Z) * 0.1f);
+    blackboxCurrent->spfSp[0] = lrintf(indiRun.spfSpBody.V.X*100.f);
+    blackboxCurrent->spfSp[1] = lrintf(indiRun.spfSpBody.V.Y*100.f);
+    blackboxCurrent->spfSp[2] = lrintf(indiRun.spfSpBody.V.Z*100.f);
     for (int i=0; i < MAXV; i++)
-        blackboxCurrent->dv[i] = lrintf(dv[i] * 10.f);
+        blackboxCurrent->dv[i] = lrintf(indiRun.dv[i] * 10.f);
     for (int i=0; i < MAXU; i++) {
-        blackboxCurrent->u[i] = lrintf(u[i] * UNIT_FLOAT_TO_SIGNED16VB);
-        blackboxCurrent->u_state[i] = lrintf(u_state[i] * UNIT_FLOAT_TO_SIGNED16VB);
-        blackboxCurrent->omega[i] = lrintf(omega[i]);
-        blackboxCurrent->omegaUnfiltered[i] = lrintf(omegaUnfiltered[i]);
-        blackboxCurrent->omega_dot[i] = lrintf(omega_dot[i] * 0.01f);
+        blackboxCurrent->u[i] = lrintf(indiRun.u[i] * UNIT_FLOAT_TO_SIGNED16VB);
+        blackboxCurrent->u_state[i] = lrintf(indiRun.uState[i] * UNIT_FLOAT_TO_SIGNED16VB);
+        blackboxCurrent->omega[i] = lrintf(indiRun.omega_fs[i]);
+        blackboxCurrent->omegaUnfiltered[i] = lrintf(indiRun.omega[i]);
+        blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
     }
 #endif
 #ifdef USE_POS_CTL

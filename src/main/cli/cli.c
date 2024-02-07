@@ -108,8 +108,8 @@ bool cliMode = false;
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
-#include "flight/att_ctl.h"
-#include "flight/att_ctl_init.h"
+#include "flight/indi.h"
+#include "flight/indi_init.h"
 #include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"
@@ -4168,6 +4168,7 @@ static void cliRateProfile(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_INDI
 static void cliIndiProfile(const char *cmdName, char *cmdline)
 {
     if (isEmpty(cmdline)) {
@@ -4183,7 +4184,9 @@ static void cliIndiProfile(const char *cmdName, char *cmdline)
         }
     }
 }
+#endif
 
+#ifdef USE_POS_CTL
 static void cliPositionProfile(const char *cmdName, char *cmdline)
 {
     if (isEmpty(cmdline)) {
@@ -4199,6 +4202,7 @@ static void cliPositionProfile(const char *cmdName, char *cmdline)
         }
     }
 }
+#endif
 
 static void cliDumpPidProfile(const char *cmdName, uint8_t pidProfileIndex, dumpFlags_t dumpMask)
 {
@@ -4245,6 +4249,7 @@ static void cliDumpIndiProfile(const char *cmdName, uint8_t profileIndex, dumpFl
         return;
     }
 
+#ifdef USE_INDI
     indiProfileIndexToUse = profileIndex;
 
     cliPrintLinefeed();
@@ -4253,8 +4258,13 @@ static void cliDumpIndiProfile(const char *cmdName, uint8_t profileIndex, dumpFl
     char profileStr[15];
     tfp_sprintf(profileStr, "indiprofile %d", profileIndex);
     dumpAllValues(cmdName, PROFILE_INDI_VALUE, dumpMask, profileStr);
+#else
+    UNUSED(cmdName);
+    UNUSED(dumpMask);
+#endif
 
     indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+
 }
 
 static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
@@ -4264,6 +4274,7 @@ static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, du
         return;
     }
 
+#ifdef USE_POS_CTL
     positionProfileIndexToUse = profileIndex;
 
     cliPrintLinefeed();
@@ -4272,6 +4283,10 @@ static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, du
     char profileStr[19];
     tfp_sprintf(profileStr, "positionprofile %d", profileIndex);
     dumpAllValues(cmdName, PROFILE_POSITION_VALUE, dumpMask, profileStr);
+#else
+    UNUSED(cmdName);
+    UNUSED(dumpMask);
+#endif
 
     positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 }
@@ -4570,14 +4585,18 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
                 cliRateProfile(cmdName, "");
 
                 break;
+#ifdef USE_INDI
             case PROFILE_INDI_VALUE:
                 cliIndiProfile(cmdName, "");
 
                 break;
+#endif
+#ifdef USE_POS_CTL
             case PROFILE_POSITION_VALUE:
                 cliPositionProfile(cmdName, "");
 
                 break;
+#endif
             default:
 
                 break;
@@ -6510,13 +6529,14 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
                     cliPrintHashLine("restore original rateprofile selection");
                     cliRateProfile(cmdName, "");
-
+#ifdef USE_INDI
                     cliPrintHashLine("restore original indi profile selection");
                     cliIndiProfile(cmdName, "");
-
+#endif
+#ifdef USE_POS_CTL
                     cliPrintHashLine("restore original position profile selection");
                     cliPositionProfile(cmdName, "");
-
+#endif
                     cliPrintHashLine("save configuration");
                     cliPrint("save");
 #ifdef USE_CLI_BATCH
@@ -6734,8 +6754,12 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("profile", "change profile", "[<index>]", cliProfile),
     CLI_COMMAND_DEF("rateprofile", "change rate profile", "[<index>]", cliRateProfile),
+#ifdef USE_INDI
     CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
+#endif
+#ifdef USE_POS_CTL
     CLI_COMMAND_DEF("positionprofile", "change position profile", "[<index>]", cliPositionProfile),
+#endif
 #ifdef USE_RC_SMOOTHING_FILTER
     CLI_COMMAND_DEF("rc_smoothing_info", "show rc_smoothing operational settings", NULL, cliRcSmoothing),
 #endif // USE_RC_SMOOTHING_FILTER

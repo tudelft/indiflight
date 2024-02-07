@@ -104,10 +104,11 @@ COMMON_SRC = \
             flight/pid.c \
             flight/pid_init.c \
             flight/pos_ctl.c \
-            flight/att_ctl.c \
-            flight/att_ctl_init.c \
+            flight/indi.c \
+            flight/indi_init.c \
             flight/catapult.c \
             flight/learner.c \
+            flight/throw.c \
             flight/rpm_filter.c \
             flight/servos.c \
             flight/servos_tricopter.c \
@@ -278,7 +279,10 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/mixer.c \
             flight/pid.c \
             flight/pos_ctl.c \
-            flight/att_ctl.c \
+            flight/indi.c \
+            flight/catapult.c \
+            flight/learner.c \
+            flight/throw.c \
             flight/rpm_filter.c \
             flight/ekf.c \
             flight/ekf_calc.c \

@@ -49,7 +49,7 @@ typedef struct indiProfile_s {
     int16_t actG1_roll[MAXU];    // actuator effectiveness (Nm/(kg m^2)) / u * 10
     int16_t actG1_pitch[MAXU];   // actuator effectiveness * 10 
     int16_t actG1_yaw[MAXU];     // actuator effectiveness * 100
-    int16_t actG2_roll[MAXU];    // actuator rate effectiveness (Nm/(kg m^2)) / (rad/s/s) * hoverRpm * 10
+    int16_t actG2_roll[MAXU];    // actuator rate effectiveness (Nm/(kg m^2)) / (rad/s/s) * hoverRpm * 10 TODO: change scaling
     int16_t actG2_pitch[MAXU];   // actuator rate effectiveness
     int16_t actG2_yaw[MAXU];     // actuator rate effectiveness
     // ---- Filtering config
@@ -165,24 +165,7 @@ typedef struct indiRuntime_s {
 #define INDI_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles);
 
-extern indiRuntime_t indiRuntime;
-
-//extern fp_quaternion_t attSpNed;
-//extern t_fp_vector rateSpBodyUse;
-//extern t_fp_vector alphaSpBody;
-//extern t_fp_vector spfSpBody;
-//extern float zAccSpNed;
-//extern float yawRateSpNed;
-//extern bool attTrackYaw;
-//extern float dv[MAXV];
-//extern float u[MAXU];
-//extern float u_state[MAXU];
-//extern float u_state_sync[MAXU];
-//extern float d[MAXU];
-//extern float omegaUnfiltered[MAXU];
-//extern float omega[MAXU];
-//extern float omega_dot[MAXU];
-//extern float alpha[XYZ_AXIS_COUNT];
+extern indiRuntime_t indiRun;
 
 void indiController(timeUs_t current);
 void updateLinearization(actLin_t* lin, float k);
@@ -193,4 +176,4 @@ float getYawWithoutSingularity(void);
 t_fp_vector coordinatedYaw(float yaw);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
-void getMotor(timeUs_t current);
+void getMotorCommands(timeUs_t current);

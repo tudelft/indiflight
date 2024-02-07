@@ -60,8 +60,9 @@
 #include "flight/position.h"
 #include "flight/pos_ctl.h"
 #include "flight/trajectory_tracker.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/ekf.h"
+#include "flight/throw.h"
 
 
 #include "io/asyncfatfs/asyncfatfs.h"
@@ -175,7 +176,9 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
 static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
 {
     accUpdate(currentTimeUs);
+#ifdef USE_THROW_TO_ARM
     updateThrowFallStateMachine(currentTimeUs);
+#endif
 }
 #endif
 

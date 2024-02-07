@@ -70,9 +70,10 @@
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
+#include "flight/throw.h"
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -272,163 +273,6 @@ static bool accNeedsCalibration(void)
 }
 #endif
 
-// throwing mode
-#ifdef USE_ACC
-
-static float totalAccSq(void) {
-    return sq(GRAVITYf) * sq(acc.dev.acc_1G_rec) * 
-        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
-}
-
-static float totalGyroSq(void) {
-    return sq(gyro.gyroADCf[X]) + sq(gyro.gyroADCf[Y]) + sq(gyro.gyroADCf[Z]);
-}
-
-#define THROW_ACC_HIGH_THRESH 20.f
-#define THROW_MOMENTUM_THRESH 4.f
-#define THROW_ACC_LOW_AGAIN_THRESH 13.f
-#define THROW_RELEASE_DELAY_MS 250
-#define THROW_GYRO_HIGH 720.f
-
-PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
-PG_RESET_TEMPLATE(throwConfig_t, throwConfig,
-    .accHighThresh = 20,
-    .accClipThresh = 45,     // m/s/s
-    .accLowAgainThresh = 20, // m/s/s
-    .gyroHighThresh = 600,   // deg/s
-    .momentumThresh = 400,   // cm/s
-    .releaseDelayMs = 250   // ms
-);
-
-typedef enum {
-    THROW_STATE_DISABLED = -1,
-    THROW_STATE_READY = 0,
-    THROW_STATE_ACC_HIGH,
-    THROW_STATE_ENOUGH_MOMENTUM,
-    THROW_STATE_LEFT_HAND,
-    THROW_STATE_THROWN,
-} throwState_t;
-static throwState_t throwState = THROW_STATE_DISABLED;
-static float momentumAtLeavingHand = 0;
-
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-#define FALL_ACC_LOW_THRESH 3.f
-#define FALL_ACC_LOW_TIME_MS 400
-
-typedef enum {
-    FALL_STATE_DISABLED = -1,
-    FALL_STATE_READY = 0,
-    FALL_STATE_ACC_LOW,
-    FALL_STATE_FALLING
-} fallState_t;
-static fallState_t fallState = FALL_STATE_ACC_LOW;
-#endif
-
-// If some of these flags are set, then we cannot arm from throw. Disable 
-// throwing mode, which also disables the beeper so we notice.
-// If the pilot has already started throwing, then too bad.
-armingDisableFlags_e doNotTolerateDuringThrow = (
-    ARMING_DISABLED_NO_GYRO 
-    | ARMING_DISABLED_FAILSAFE
-    | ARMING_DISABLED_RX_FAILSAFE
-    | ARMING_DISABLED_BAD_RX_RECOVERY
-    | ARMING_DISABLED_BOXFAILSAFE
-    | ARMING_DISABLED_PARALYZE
-);
-
-void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
-    static float momentum = 0;
-    static timeUs_t leftHandSince = 0;
-
-    // handle timings
-    static timeUs_t lastCall = 0;
-    timeDelta_t delta = cmpTimeUs(currentTimeUs, lastCall);
-    bool timingValid = ((delta < 100000) && (delta > 0) && (lastCall > 0));
-    lastCall = currentTimeUs;
-
-    // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED)
-        || !FLIGHT_MODE(POSITION_MODE)
-        || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
-        || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
-
-    if (disableConditions && (throwState >= THROW_STATE_READY)) {
-        throwState = THROW_STATE_DISABLED;
-        beeper(BEEPER_SILENCE);
-    }
-
-    // throwing state machine
-    bool enableConditions;
-    timeDelta_t timeSinceRelease;
-    switch(throwState) {
-        case THROW_STATE_DISABLED:
-            // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
-            enableConditions = 
-                !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce
-                #ifdef USE_GPS_PI
-                    && (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID)
-                #endif
-                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
-
-            if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }
-            break;
-        case THROW_STATE_READY:
-            if (totalAccSq() > sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_ACC_HIGH; }
-            momentum = 0.f;
-            break;
-        case THROW_STATE_ACC_HIGH:
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - GRAVITYf ) * 1e-6f * ((float) delta);
-            if (momentum > THROW_MOMENTUM_THRESH) { throwState = THROW_STATE_ENOUGH_MOMENTUM; }
-            if (totalAccSq() < sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_READY; }
-            break;
-        case THROW_STATE_ENOUGH_MOMENTUM: // will definitely arm, just waiting for release
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - GRAVITYf ) * 1e-6f * ((float) delta);
-            if ( (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH))
-                    || (totalGyroSq() > sq(THROW_GYRO_HIGH)) ) {
-                // WTF: why gyroSq < thresh?! should be > thresh!
-                momentumAtLeavingHand = momentum;
-                leftHandSince = currentTimeUs;
-                throwState = THROW_STATE_LEFT_HAND;
-            }
-            break;
-        case THROW_STATE_LEFT_HAND:
-            timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
-            if (timeSinceRelease > (1e3 * THROW_RELEASE_DELAY_MS)) { throwState = THROW_STATE_THROWN; }
-            break;
-        case THROW_STATE_THROWN:
-            break;
-    }
-
-    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
-
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-    // falling state machine
-    if (throwState == THROW_STATE_DISABLED) { fallState = FALL_STATE_DISABLED; }
-
-    switch(fallState) {
-        case FALL_STATE_DISABLED:
-            if (throwState >= THROW_STATE_READY) { fallState = FALL_STATE_READY; }
-            break;
-        case FALL_STATE_READY:
-            if (totalAccSq() < sq(FALL_ACC_LOW_THRESH)) {
-                accLowSince = currentTimeUs;
-                fallState = FALL_STATE_ACC_LOW;
-            }
-            break;
-        case FALL_STATE_ACC_LOW:
-            if (totalAccSq() > sq(FALL_ACC_LOW_THRESH)) { fallState = FALL_STATE_READY; }
-
-            timeDelta_t timeAccLow = cmpTimeUs(currentTimeUs, accLowSince);
-            if (timeAccLow > (1e3 * FALL_ACC_LOW_TIME_MS)) { fallState = FALL_STATE_FALLING; }
-            break;
-        case FALL_STATE_FALLING:
-            break;
-    }
-#endif
-}
-#endif
 
 void updateArmingStatus(void)
 {
@@ -506,25 +350,6 @@ void updateArmingStatus(void)
                 setArmingDisabled(ARMING_DISABLED_NOPREARM);
             }
         }
-
-        /*
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && IS_RC_MODE_ACTIVE(BOXARM) && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_NOPREARM | ARMING_DISABLED_ARM_SWITCH))) {
-            beeper(BEEPER_THROW_TO_ARM);
-        } else {
-            beeper(BEEPER_SILENCE);
-        }
-
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && isAccLow() && (noThrowToArmSince > 0)) {
-            //unsetArmingDisabled(ARMING_DISABLED_THROTTLE); // may be dangerous
-            if (cmpTimeUs(micros(), noThrowToArmSince) > 250000) {
-                unsetArmingDisabled(ARMING_DISABLED_ANGLE);
-                unsetArmingDisabled(ARMING_DISABLED_NOPREARM);
-                unsetArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
-            }
-        } else {
-            noThrowToArmSince = micros();
-        }
-        */
 
 #ifdef USE_GPS_RESCUE
         if (gpsRescueIsConfigured()) {
@@ -605,7 +430,7 @@ void updateArmingStatus(void)
             }
         }
 
-#ifdef USE_ACC
+#ifdef USE_THROW_TO_ARM
         if ( (throwState == THROW_STATE_THROWN)
 #ifdef THROW_TO_ARM_USE_FALL_LOGIC
                 || (fallState == FALL_STATE_FALLING)
@@ -1351,7 +1176,7 @@ bool isTouchingGround(void) {
     bool throttleLow = true;
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
-        throttleLow = indiRuntime.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
 #ifdef USE_GPS_RESCUE
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
@@ -1412,7 +1237,7 @@ static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeU
         */
 
         for (int i = 0; i < numMotors; i++) {
-            motor[i] = scaleRangef(indiRuntime.d[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+            motor[i] = scaleRangef(indiRun.d[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
         }
     }
 

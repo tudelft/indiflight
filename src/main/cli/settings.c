@@ -64,9 +64,10 @@
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "flight/pos_ctl.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
+#include "flight/throw.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1250,7 +1251,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_ACT_G2_ROLL,                      VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_roll) },
     { PARAM_NAME_INDI_ACT_G2_PITCH,                     VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_pitch) },
     { PARAM_NAME_INDI_ACT_G2_YAW,                       VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_yaw) },
-    { PARAM_NAME_INDI_SYNC_LOWPASS_HZ,                  VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.minmaxUnsigned = { 1, 50 }, PG_INDI_PROFILE, offsetof(indiProfile_t, imuSyncLp2Hz) },
+    { PARAM_NAME_INDI_SYNC_LOWPASS_HZ,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_INDI_PROFILE, offsetof(indiProfile_t, imuSyncLp2Hz) },
     { PARAM_NAME_INDI_WLS_AXES_WEIGHTS,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXV, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWv) },
     { PARAM_NAME_INDI_WLS_ACT_PENALTIES,                VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWu) },
     { PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE,          VAR_INT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, u_pref) },

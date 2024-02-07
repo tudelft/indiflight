@@ -8,7 +8,7 @@
 #include "pg/pg_ids.h"
 
 #include "sensors/gyro.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/catapult.h"
 
 #include <stdbool.h>
@@ -171,7 +171,7 @@ doMoreMotors:
 
     for (int motor = 0; motor < c->numAct; motor++) {
         outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
-        indiRuntime.d[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
+        indiRun.d[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
     }
 }
 #endif

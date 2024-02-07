@@ -73,19 +73,6 @@ void handleInflightCalibrationStickPosition(void);
 
 void resetArmingDisabled(void);
 
-typedef struct throwConfig_s {
-    uint8_t accHighThresh;     // m/s/s
-    uint8_t accClipThresh;     // m/s/s
-    uint8_t accLowAgainThresh; // m/s/s
-    uint16_t gyroHighThresh;   // deg/s
-    uint16_t momentumThresh;   // cm/s
-    uint16_t releaseDelayMs;   // ms
-} throwConfig_t;
-
-PG_DECLARE(throwConfig_t, throwConfig);
-
-void updateThrowFallStateMachine(timeUs_t currentTimeUs);
-
 void disarm(flightLogDisarmReason_e reason);
 void tryArm(void);
 

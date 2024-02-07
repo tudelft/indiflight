@@ -7,7 +7,7 @@
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"
 #include "config/config.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 
 #ifdef USE_POS_CTL
 
