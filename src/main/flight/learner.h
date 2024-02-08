@@ -15,6 +15,9 @@ typedef struct learnerConfig_s {
     uint8_t stepAmp;
     uint8_t rampAmp;
     uint16_t gyroMax;
+    uint8_t imuFiltHz;
+    uint8_t fxFiltHz;
+    uint8_t motorFiltHz;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -25,10 +28,32 @@ typedef enum learning_mode_e {
     LEARN_AFTER_CATAPULT = 1 << 1,
 } learning_mode_t;
 
+typedef struct learningRuntime_s {
+    t_fp_vector imuRate;
+    t_fp_vector imuRateDot;
+    t_fp_vector imuSpf;
+    float fxOmega[MAX_SUPPORTED_MOTORS];
+    float fxOmegaDiff[MAX_SUPPORTED_MOTORS];
+    float fxOmegaDotDiff[MAX_SUPPORTED_MOTORS];
+    t_fp_vector fxRateDotDiff;
+    t_fp_vector fxSpfDiff;
+    float motorOmega[MAX_SUPPORTED_MOTORS];
+    float motorOmegaDot[MAX_SUPPORTED_MOTORS];
+    float motorD[MAX_SUPPORTED_MOTORS];
+} learningRuntime_t;
+
+extern learningRuntime_t learnRun;
+
 void initLearningRuntime(void);
 
 
 // --- states and functions
+
+// learning stuff
+void initLearner(void);
+void updateLearner(timeUs_t current);
+
+// query stuff
 typedef enum query_state_e {
     LEARNING_QUERY_IDLE = -1,
     LEARNING_QUERY_DELAY = 0,

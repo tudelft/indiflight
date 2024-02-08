@@ -61,10 +61,13 @@ void indiController(timeUs_t current) {
             indiRun.attExecCounter = 0;
         }
     } else {
-        // function is cheap, let's go
-        //stavrow here we get setpoints
+        // function is cheap, let's do it an all iterations
         getSetpoints(current);
     }
+
+    //if (FLIGHT_MODE(LEARNER_MODE)) {
+        updateLearner(current);
+    //}
 
     // for any flight mode:
     // 1. compute desired angular accelerations
@@ -304,30 +307,34 @@ void getAlphaSpBody(timeUs_t current) {
     indiRun.rateDotSpBody.V.Z = indiRun.rateGains.V.Z * rateErr.V.Z;
 }
 
-
 void getMotorCommands(timeUs_t current) {
     UNUSED(current);
 
     static float du[MAXU] = {0.f};
-    static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+    static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
     static float omega_prev[MAXU] = {0.f};
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        // get gyro derivative
-        indiRun.rateDot.A[axis] = indiRun.indiFrequency * DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis] - gyro_prev[axis]);
-        gyro_prev[axis] = gyro.gyroADCf[axis];
-
-        // get (filtered) accel
-        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], acc.accADCunfiltered[axis]);
+        // rate
+        indiRun.rate.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
+        indiRun.spf.A[axis] = acc.accADCunfiltered[axis] * acc.dev.acc_1G_rec * GRAVITYf;
 
         // adjust axes
         if ((axis == FD_PITCH) || (axis == FD_YAW)) {
-            indiRun.rateDot.A[axis] *= (-1.f);
-            indiRun.spf_fs.A[axis]  *= (-1.f);
+            indiRun.rate.A[axis] *= (-1.f);
+            indiRun.spf.A[axis]  *= (-1.f);
         }
+
+        // get gyro derivative
+        indiRun.rateDot.A[axis] = indiRun.indiFrequency * (indiRun.rate.A[axis] - rate_prev[axis]);
+        rate_prev[axis] = indiRun.rate.A[axis];
 
         // filter gyro derivative
         indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDot.A[axis]);
+
+        // get (filtered) accel
+        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spf.A[axis]);
+
     }
 
     // get rotation speeds and accelerations from dshot, or fallback
@@ -484,7 +491,6 @@ void getMotorCommands(timeUs_t current) {
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
     }
 }
-
 
 // --- helpers --- //
 float getYawWithoutSingularity(void) {

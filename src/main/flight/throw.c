@@ -4,7 +4,7 @@
 // throwing mode
 #if defined(USE_THROW_TO_ARM)
 #ifndef USE_ACC
-#error "Can only use USE_THROW_TO_ARM with USE_ACC
+#error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
 
 #include "fc/runtime_config.h"

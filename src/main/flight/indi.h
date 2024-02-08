@@ -142,8 +142,10 @@ typedef struct indiRuntime_s {
     t_fp_vector spfSpBody; // specific force setpoint in body coordinates
     float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
     //t_fp_vector rate_fs; // sync-filtered gyro in rad/s
+    t_fp_vector rate; // unfiltered gyro in rad/s
     t_fp_vector rateDot; // unfiltered gyro derivative in rad/s/s
     t_fp_vector rateDot_fs; // sync-filtered gyro derivative in rad/s/s
+    t_fp_vector spf; // unfiltered accelerometer (specific force) in N/kg
     t_fp_vector spf_fs; // sync-filterd accelerometer (specific force) in N/kg
     // ---- filters
     pt1Filter_t uLagFilter[MAXU]; // to simulate spinup

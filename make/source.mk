@@ -243,6 +243,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             common/encoding.c \
             common/filter.c \
             common/maths.c \
+			common/rls.c \
             common/sdft.c \
             common/typeconversion.c \
             drivers/accgyro/accgyro_mpu.c \
@@ -524,4 +525,35 @@ OPTIONS += "AS_SINGLE_FLOAT"
 OPTIONS += "AS_COST_TRUNCATE"
 OPTIONS += "AS_RECORD_COST"
 OPTIONS += "AS_RECORD_COST_N=5"
+endif
+
+# to get this to work do this to the extracted clapack.tgz
+# 1. cd lib/main/clapack/F2CLIBS/libf2c and then
+# 2. make f2c.h signal1.h sysdep1.h arith.h
+LAPACK_DIR = $(ROOT)/lib/main/clapack
+LAPACK_SOURCE = 
+
+ifneq ($(LAPACK_DIR),)
+INCLUDE_DIRS += $(LAPACK_DIR)/INCLUDE
+
+LAPACK_FILTER_OUT := $(LAPACK_DIR)/F2CLIBS/libf2c/arithchk.c
+LAPACK_FILTER_OUT += $(LAPACK_DIR)/F2CLIBS/libf2c/main.c
+LAPACK_FILTER_OUT += $(LAPACK_DIR)/F2CLIBS/libf2c/uninit.c
+LAPACK_FILTER_OUT += $(LAPACK_DIR)/SRC/xerbla.c
+LAPACK_FILTER_OUT += $(LAPACK_DIR)/SRC/xerbla_array.c
+
+LAPACK_SOURCE += $(wildcard $(LAPACK_DIR)/BLAS/SRC/*.c)
+#LAPACK_SOURCE += $(wildcard $(LAPACK_DIR)/F2CLIBS/libf2c/*.c)
+LAPACK_SOURCE += $(filter-out $(LAPACK_FILTER_OUT), $(wildcard $(LAPACK_DIR)/F2CLIBS/libf2c/*.c))
+LAPACK_SOURCE += $(LAPACK_DIR)/INSTALL/dlamch.c
+LAPACK_SOURCE += $(LAPACK_DIR)/INSTALL/dsecnd.c
+LAPACK_SOURCE += $(LAPACK_DIR)/INSTALL/second.c
+LAPACK_SOURCE += $(LAPACK_DIR)/INSTALL/slamch.c
+LAPACK_SOURCE += $(filter-out $(LAPACK_FILTER_OUT), $(wildcard $(LAPACK_DIR)/SRC/*.c))
+SRC += $(LAPACK_SOURCE)
+SPEED_OPTIMISED_SRC += $(LAPACK_SOURCE)
+OPTIONS += "NO_LONG_LONG"
+OPTIONS += "NO_BLAS_WRAP"
+OPTIONS += "NO_TRUNCATE"
+OPTIONS += "INTEGER_STAR_8"
 endif

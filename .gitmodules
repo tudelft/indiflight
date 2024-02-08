@@ -4,3 +4,6 @@
 [submodule "lib/main/ActiveSetCtlAlloc"]
 	path = lib/main/ActiveSetCtlAlloc
 	url = git@github.com:tblaha/ActiveSetCtlAlloc
+[submodule "lib/main/clapack"]
+	path = lib/main/clapack
+	url = git@github.com:tblaha/clapack

@@ -223,15 +223,16 @@ CC_NO_OPTIMISATION      :=
 #
 TEMPORARY_FLAGS :=
 
-EXTRA_WARNING_FLAGS := -Wold-style-definition
+WARNING_FLAGS := -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wold-style-definition -Wdouble-promotion
+WARNING_FLAGS += -Wno-parentheses -Wno-double-promotion
 
+#              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion
 CFLAGS     += $(ARCH_FLAGS) \
               $(addprefix -D,$(OPTIONS)) \
               $(addprefix -I,$(INCLUDE_DIRS)) \
               $(DEBUG_FLAGS) \
               -std=gnu17 \
-              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion \
-              $(EXTRA_WARNING_FLAGS) \
+              $(WARNING_FLAGS) \
               -ffunction-sections \
               -fdata-sections \
               -fno-common \
@@ -395,8 +396,13 @@ $(TARGET_ELF): $(TARGET_OBJS) $(LD_SCRIPT) $(LD_SCRIPTS)
 
 ## compile_file takes two arguments: (1) optimisation description string and (2) optimisation compiler flag
 define compile_file
-	echo "%% ($(1)) $<" "$(STDOUT)" && \
-	$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $<
+	$(V1) $(if $(findstring $<,$(LAPACK_SOURCE)), \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) -Wno-maybe-uninitialized -Wno-parentheses -Wno-double-promotion -Wno-unused-variable -Wno-old-style-definition -Wno-unused-parameter -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-variable -Wno-implicit-fallthrough -Wno-sign-compare $< \
+	, \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $< \
+	)
 endef
 
 ifeq ($(DEBUG),GDB)

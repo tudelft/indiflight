@@ -1,10 +1,12 @@
 
 #include "common/maths.h"
+#include "common/rls.h"
 #include "common/axis.h"
-//#include "common/filter.h"
+#include "common/filter.h"
 
 #include "drivers/time.h"
 #include "fc/runtime_config.h"
+#include "fc/core.h"
 #include "pg/pg_ids.h"
 
 #include "sensors/gyro.h"
@@ -34,7 +36,13 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .stepAmp = 35,
     .rampAmp = 70,
     .gyroMax = 1600,
+    .imuFiltHz = 10,
+    .fxFiltHz = 20,
+    .motorFiltHz = 40
 );
+
+// extern
+learningRuntime_t learnRun = {0};
 
 void initLearningRuntime(void) {
     // for future extension
@@ -42,7 +50,172 @@ void initLearningRuntime(void) {
 
 // externs
 float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
+static timeUs_t learningQueryEnabledAt = 0;
+static rls_t motorRls[MAXU];
+static rls_t imuRls;
+static rls_t fxRls[MAXV];
 
+static biquadFilter_t imuRateFilter[3];
+static biquadFilter_t imuSpfFilter[3];
+
+static biquadFilter_t motorOmegaFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t motorDFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t fxOmegaFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t fxUFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t fxRateFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t fxSpfFilter[MAX_SUPPORTED_MOTORS];
+
+#define LEARNING_MAX_ACT ((int) RLS_MAX_N / 2)
+
+// learning
+void initLearner(void) {
+    // limited to 4 for now
+    learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
+
+    rlsInit(&imuRls, 3, 3, 1e5f, 1.f);
+
+    // init filters and other rls
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        rlsInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
+        rlsInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
+        biquadFilterInitLPF(&imuRateFilter[axis], learnerConfig()->imuFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&imuSpfFilter[axis], learnerConfig()->imuFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&fxRateFilter[axis], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&fxSpfFilter[axis], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+    }
+
+    for (int act = 0; act < learnerConfig()->numAct; act++) {
+        rlsInit(&motorRls[act], 4, 1, 1e7, 0.997);
+        biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&motorDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+    }
+}
+
+static void updateLearningFilters(void) {
+    static t_fp_vector imuPrevRate = {0};
+    static t_fp_vector fxPrevRateDot = {0};
+    static t_fp_vector fxPrevSpf = {0};
+
+#pragma message "TODO: implement imu location correction"
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        learnRun.imuRate.A[axis] = biquadFilterApply(&imuRateFilter[axis], indiRun.rate.A[axis]);
+        learnRun.imuSpf.A[axis] = biquadFilterApply(&imuSpfFilter[axis], indiRun.spf.A[axis]);
+
+        learnRun.imuRateDot.A[axis] = indiRun.indiFrequency * (learnRun.imuRate.A[axis] - imuPrevRate.A[axis]);
+        imuPrevRate.A[axis] = learnRun.imuRate.A[axis];
+
+        float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDot.A[axis]);
+        learnRun.fxRateDotDiff.A[axis] = fxRateDot - fxPrevRateDot.A[axis];
+        fxPrevRateDot.A[axis] = fxRateDot;
+
+        float fxSpf = biquadFilterApply(&fxSpfFilter[axis], indiRun.spf.A[axis]);
+        learnRun.fxSpfDiff.A[axis] = fxSpf - fxPrevSpf.A[axis];
+        fxPrevSpf.A[axis] = fxSpf;
+    }
+
+    static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
+    static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
+    static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
+    for (int act = 0; act < learnerConfig()->numAct; act++) {
+        learnRun.fxOmega[act] = biquadFilterApply(&fxOmegaFilter[act], indiRun.omega[act]);
+        learnRun.fxOmegaDiff[act] = learnRun.fxOmega[act] - fxPrevOmega[act];
+        fxPrevOmega[act] = learnRun.fxOmega[act];
+
+        float fxOmegaDot = indiRun.indiFrequency * learnRun.fxOmegaDiff[act];
+        learnRun.fxOmegaDotDiff[act] = fxOmegaDot - fxPrevOmegaDot[act];
+        fxPrevOmegaDot[act] = fxOmegaDot;
+
+        learnRun.motorOmega[act] = biquadFilterApply(&motorOmegaFilter[act], indiRun.omega[act]);
+        learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (learnRun.motorOmega[act] - motorPrevOmega[act]);
+        motorPrevOmega[act] = learnRun.motorOmega[act];
+
+        learnRun.motorD[act] = biquadFilterApply(&motorDFilter[act], indiRun.d[act]);
+        // second order filters could the signal to exceed bounds of the input
+        // but we need to ensure [0, 1] for a square root later on
+        learnRun.motorD[act] = constrainf(learnRun.motorD[act], 0.f, 1.f);
+    }
+}
+
+void updateLearner(timeUs_t current) {
+    UNUSED(current);
+    // last profile is for learning
+    const indiProfile_t* p = indiProfiles(INDI_PROFILE_COUNT-1);
+    UNUSED(p);
+
+    // update learning sync filters
+    updateLearningFilters();
+
+    UNUSED(fxRls);
+    UNUSED(motorRls);
+
+    // wait for motors to spool down before learning imu position
+    bool imuLearningConditions = ((learningQueryState == LEARNING_QUERY_DELAY) 
+            && (cmpTimeUs(current, learningQueryEnabledAt) > 75000));
+
+    if (imuLearningConditions) {
+        // accIMU  =  accB  +  rateDot x R  +  rate x (rate x R)
+        // assume accB = 0
+        t_fp_vector_def* w = &learnRun.imuRate.V;
+        t_fp_vector_def* dw = &learnRun.imuRateDot.V;
+        t_fp_vector_def* a = &learnRun.imuSpf.V;
+
+        // regressors
+
+        // remember: column major formulation! So this looks like the transpose, but isn't
+        float A[3*3] = {
+            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y + dw->Z,           w->X * w->Z - dw->Y,
+             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Z * w->Z + dw->X,
+             w->X * w->Z + dw->Y,           w->Z * w->Z - dw->X,          -(w->X * w->X + w->Y * w->Y)
+        };
+        float y[3] = { a->X, a->Y, a->Z };
+
+        // perform rls step
+        rlsNewSample(&imuRls, A, y);
+    }
+
+    bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround() && (
+            (learnerConfig()->mode & LEARN_DURING_FLIGHT)
+            || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+        );
+
+    if (fxLearningConditions) {
+        //setup regressors
+        float A[RLS_MAX_N];
+        for (int act = 0; act < learnerConfig()->numAct; act++) {
+            A[act] = 2 * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+            A[act + learnerConfig()->numAct] = learnRun.fxOmegaDotDiff[act];
+        }
+
+        // perform rls step
+        float* y_ptr;
+        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            // forces
+            y_ptr = &learnRun.fxSpfDiff.A[axis];
+            rlsNewSample(&fxRls[axis], A, y_ptr);
+        }
+    }
+
+    // same for now
+    bool motorLearningConditions = fxLearningConditions;
+
+    if (motorLearningConditions) {
+        for (int act = 0; act < learnerConfig()->numAct; act++) {
+            float A[4] = {
+                learnRun.motorD[act],
+                sqrtf(learnRun.motorD[act]),
+                1.f,
+                -learnRun.motorOmegaDot[act]
+            };
+            float y = learnRun.motorOmega[act];
+            rlsNewSample(&motorRls[act], A, &y);
+        }
+    }
+}
+
+
+// query
 #define LEARNING_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
 
 void resetLearningQuery(void) {
@@ -93,7 +266,8 @@ doMore:
     switch (learningQueryState) {
         case LEARNING_QUERY_IDLE:
             if (enableConditions) {
-                startAt = current + MIN(c->delayMs, 1000)*1e3;
+                learningQueryEnabledAt = current;
+                startAt = current + MIN(c->delayMs, LEARNING_SAFETY_TIME_MAX)*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
                 safetyTimeoutUs = 10000
                     + 1e3 * c->numAct * (c->stepMs + c->rampMs)
@@ -174,4 +348,5 @@ doMoreMotors:
         indiRun.d[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
     }
 }
+
 #endif
