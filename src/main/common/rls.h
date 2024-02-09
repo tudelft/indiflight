@@ -8,6 +8,7 @@ typedef enum rls_exit_code_e {
 
 #define RLS_MAX_N 8
 #define RLS_MAX_D 3
+#define RLS_P_LIM 1e12f
 // todo: finally give in and use VLA or some malloc in order for this not to
 // blow up when RLS_MAX_N rises?
 

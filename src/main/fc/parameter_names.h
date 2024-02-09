@@ -205,6 +205,9 @@
 #define PARAM_NAME_LEARNER_STEP_AMPLITUDE "learner_step_amplitude"
 #define PARAM_NAME_LEARNER_RAMP_AMPLITUDE "learner_ramp_amplitude"
 #define PARAM_NAME_LEARNER_GYRO_MAX "learner_gyro_max"
+#define PARAM_NAME_LEARNER_IMU_LOWPASS_HZ "learner_imu_lowpass_hz"
+#define PARAM_NAME_LEARNER_FX_LOWPASS_HZ "learner_fx_lowpass_hz"
+#define PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ "learner_motor_lowpass_hz"
 #endif
 
 #ifdef USE_GPS

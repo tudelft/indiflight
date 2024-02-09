@@ -289,7 +289,7 @@ void init(void)
     // initialize IO (needed for all IO operations)
     IOInitGlobal();
 
-    rlsTest();
+    //rlsTest();
 
 #ifdef USE_HARDWARE_REVISION_DETECTION
     detectHardwareRevision();

@@ -101,13 +101,34 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* A, float* y) {
             M, &rls->d,
             KT, &rls->d,
             &INFO);
-    if (INFO != 0)
+    if (INFO != 0) {
         return RLS_FAIL;
+    }
 
     // P  =  1/lam * (P - K * A * P)
     // P  =  -1/lam * K * AP  +  1/lam P
     // C  =  alpha * A * B    +  beta P
-    beta = 1. / rls->lambda;
+
+    // If we keep supplying zero-matrices and lam < 1, then P will grow. We
+    // need to bound that somehow. This p-controller is the best thing I could
+    // come up with..
+    //float limitP = 1.;
+    //for (int row = 0; row < rls->n; row++) {
+    //    float Pdiag = rls->P[row + row*rls->n];
+    //    if ((Pdiag > 0.1f * RLS_P_LIM)) {
+    //        float tmp = (RLS_P_LIM - Pdiag)  /  (0.9f * RLS_P_LIM);
+    //        limitP = (tmp < limitP) ? ((tmp < 0.f) ? 0.f : tmp) : limitP;
+    //    }
+    //}
+
+    float limitP = 1.f;
+    for (int row = 0; row < rls->n; row++) {
+        if ((rls->P[row + row*rls->n] > RLS_P_LIM)) {
+            limitP = 0.f;
+        }
+    }
+
+    beta = 1.f + limitP * (1.f / rls->lambda  -  1.f);
     alpha = -beta;
     TRANSA = 'T';
     TRANSB = 'N';
@@ -143,6 +164,10 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* A, float* y) {
             y, &INCXY,
             &beta,
             rls->x, &INCXY);
+
+    if (rls->x[0] != rls->x[0]) {
+        return RLS_FAIL;
+    }
 
     return RLS_SUCCESS;
 }

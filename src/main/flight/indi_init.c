@@ -118,7 +118,7 @@ void initIndiRuntime(void) {
         indiRun.actPropConst[i]    = MAX(1UL, p->actPropConst[i]) * 1e-11f;
         indiRun.actMaxT[i]         = MAX(1UL, p->actMaxT[i]) * 0.01f;
         indiRun.actNonlinearity[i] = constrainu(p->actNonlinearity[i], 0, 100) * 0.01f;
-        unsigned int tmp = MIN(currentPidProfile->motor_output_limit, indiRun.actLimit[i]);
+        unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actLimit[i]);
         indiRun.actLimit[i] = constrainu(tmp, 0, 100) * 0.01f;
         indiRun.actG1[0][i] = p->actG1_fx[i] * 0.01f;
         indiRun.actG1[1][i] = p->actG1_fy[i] * 0.01f;
@@ -190,7 +190,7 @@ void initIndiRuntime(void) {
 
     // ---- housekeeping
     indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
-    indiRun.indiFrequency = 1.0f / gyro.targetLooptime; // target looptime in S
+    indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
     indiRun.attExecCounter = 0; // count executions (wrapping)
     indiRun.nanCounter = 0; // count times consequtive nans appear in allocation
 

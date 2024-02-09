@@ -53,6 +53,7 @@ indiRuntime_t indiRun;
 #endif
 
 void indiController(timeUs_t current) {
+    /*
     if (flightModeFlags & ~(CATAPULT_MODE | LEARNER_MODE)) {
         // any flight mode active other than catapult, learner or acro (acro is all off)?
         if ( !((++indiRun.attExecCounter)%indiRun.attRateDenom) ) {
@@ -64,9 +65,11 @@ void indiController(timeUs_t current) {
         // function is cheap, let's do it an all iterations
         getSetpoints(current);
     }
+    */
+
+    getSetpoints(current);
 
     //if (FLIGHT_MODE(LEARNER_MODE)) {
-        updateLearner(current);
     //}
 
     // for any flight mode:
@@ -75,6 +78,10 @@ void indiController(timeUs_t current) {
 
     // allocation and INDI
     getMotorCommands(current);
+
+    // update learner.
+    // FIXME: delay setpoints used by learner by one sample to be in sync
+    updateLearner(current);
 }
 
 void getSetpoints(timeUs_t current) {
@@ -384,7 +391,6 @@ void getMotorCommands(timeUs_t current) {
     // compute pseudocontrol
     indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
-    //indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * GRAVITYf * (-acc.accADC[Z]) * acc.dev.acc_1G_rec;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
@@ -418,9 +424,9 @@ void getMotorCommands(timeUs_t current) {
 
     for (int i=0; i < indiRun.actNum; i++) {
         // todo: what if negative u are possible?
-        du_min[i]  = 0.f - doIndi * indiRun.uState[i];
-        du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState[i];
-        du_pref[i] = 0.f - doIndi * indiRun.uState[i];
+        du_min[i]  = 0.f - doIndi * indiRun.uState_fs[i];
+        du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState_fs[i];
+        du_pref[i] = 0.f - doIndi * indiRun.uState_fs[i];
     }
 
     // setup problem

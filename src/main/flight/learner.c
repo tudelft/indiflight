@@ -175,10 +175,11 @@ void updateLearner(timeUs_t current) {
         rlsNewSample(&imuRls, A, y);
     }
 
-    bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround() && (
+    bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
+        && (
             (learnerConfig()->mode & LEARN_DURING_FLIGHT)
             || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-        );
+           );
 
     if (fxLearningConditions) {
         //setup regressors
@@ -194,6 +195,9 @@ void updateLearner(timeUs_t current) {
             // forces
             y_ptr = &learnRun.fxSpfDiff.A[axis];
             rlsNewSample(&fxRls[axis], A, y_ptr);
+
+            y_ptr = &learnRun.fxRateDotDiff.A[axis];
+            rlsNewSample(&fxRls[axis+3], A, y_ptr);
         }
     }
 
