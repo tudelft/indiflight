@@ -80,6 +80,9 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- WLS config
     indiProfile->useConstantG2 = false;
     indiProfile->useRpmFeedback = false;
+    indiProfile->maxRateSp[0] = 1800.f;          // maximum rate setpoint in deg/s
+    indiProfile->maxRateSp[1] = 1800.f;          // maximum rate setpoint in deg/s
+    indiProfile->maxRateSp[2] = 1800.f;          // maximum rate setpoint in deg/s
     // ---- general INDI config
     indiProfile->useWls = true;
     indiProfile->wlsWarmstart = true;
@@ -109,8 +112,11 @@ void initIndiRuntime(void) {
     indiRun.useConstantG2 = (bool) p->useConstantG2;
     indiRun.useRpmFeedback = (bool) p->useRpmFeedback;
     indiRun.useRpmDotFeedback = (bool) p->useRpmDotFeedback;
-    indiRun.actNum = MIN(p->actNum, MAXU);
+    indiRun.maxRateSp.A[0] = (float) DEGREES_TO_RADIANS(p->maxRateSp[0]);          // maximum rate setpoint in deg/s
+    indiRun.maxRateSp.A[1] = (float) DEGREES_TO_RADIANS(p->maxRateSp[0]);          // maximum rate setpoint in deg/s
+    indiRun.maxRateSp.A[2] = (float) DEGREES_TO_RADIANS(p->maxRateSp[0]);          // maximum rate setpoint in deg/s
     // ---- INDI actuator config
+    indiRun.actNum = MIN(p->actNum, MAXU);
     for (int i = 0; i < MAXU; i++) {
         float hoverRpm = MAX(1U, p->actHoverRpm[i]) * 10.f;
         indiRun.actHoverOmega[i]   = hoverRpm / SECONDS_PER_MINUTE * 2.f * M_PIf;

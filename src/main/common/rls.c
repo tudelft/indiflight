@@ -1,10 +1,12 @@
 
+//#include "platform.h"
+
+
+#include "common/maths.h"
+
 #include "rls.h"
 
-#include "f2c.h"
-#include "clapack.h"
-#include <string.h>
-
+// --- helpers
 rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
     if (rls == NULL)
         return RLS_FAIL;
@@ -13,7 +15,7 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
     *rls = (rls_t){0};
 
     // check bounds on n, d and assign
-    if ((n > 0) && (n < RLS_MAX_N) && (d > 0) && (d < RLS_MAX_N)) {
+    if ((n > 0) && (n <= RLS_MAX_N) && (d > 0) && (d <= RLS_MAX_D)) {
         rls->n = n;
         rls->d = d;
     } else {
@@ -28,156 +30,158 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
         rls->P[i*n + i] = gamma;
 
     // initalize forgetting factor
-    if (rlsUpdateLambda(rls, lambda) == RLS_FAIL)
-        return RLS_FAIL;
-
-    return RLS_SUCCESS;
-}
-
-rls_exit_code_t rlsUpdateLambda(rls_t* rls, float lambda) {
-    if (rls == NULL)
-        return RLS_FAIL;
-
-    if ((lambda < 0.01f) || (lambda > 1.f)) {
+    if ((lambda <= 0.f) || (lambda > 1.0f)) {
         return RLS_FAIL;
     }
-
     rls->lambda = lambda;
 
     return RLS_SUCCESS;
 }
 
-rls_exit_code_t rlsNewSample(rls_t* rls, float* A, float* y) {
-    // A is column major!!
+rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float lambda) {
+    if (rls == NULL)
+        return RLS_FAIL;
 
-    // equations
-    // 
-    // x: parameters, A: regressors, y: observations, K: gain, P: covariance
-    // K ( lambda I  +  A P A^T ) = P A^T
-    // P  <--  1 / lambda  *  (P - K A P)
-    // x  <--  x + K (y - A x)
-    //
-    // A few observations:
-    // P A^T  ==  (A P)^T  because of the symmetry of P. We only have to compute that once
-    // ( lambda I  +  A P A^T ) is symmetric positive definite. Cholesky is fastest to solve the system, if well conditioned. TODO: how do we check this? gershgorin disks?
+    // init to all zero
+    *rls = (rls_parallel_t){0};
 
-    // AP   =   1.  *  A * P  +    0. * AP
-    // C    = alpha *  B * A  +  beta * C    // A symmetric
-    float AP [RLS_MAX_D*RLS_MAX_N];
-    char SIDE = 'R';
-    char UPLO = 'L';
-    float alpha = 1.f;
-    float beta = 0.f;
-    ssymm_(&SIDE, &UPLO, &rls->d, &rls->n,
-            &alpha,
-            rls->P, &rls->n,
-            A, &rls->d,
-            &beta,
-            AP, &rls->d);
-
-    float M[RLS_MAX_D*RLS_MAX_D] = {0};
-    for (int i = 0; i < rls->d; i++)
-        M[i + i*rls->d] = rls->lambda;
-
-    // M  =  alpha (AP) *  (A)**T   +   beta M
-    //         1.   A   *   B**T    +    1.
-    char TRANSA = 'N'; // no transpose for AP
-    char TRANSB = 'T'; // transpose for A
-    alpha = 1.f;
-    beta = 1.f;
-    sgemm_(&TRANSA, &TRANSB,
-            &rls->d, &rls->d, &rls->n,
-            &alpha, AP, &rls->d, // alpha * AP
-            A, &rls->d,          // * A**T
-            &beta, M, &rls->d);  // + beta M
-
-#pragma message "implement routines for K and x separetely, for speed in fx calc"
-    float KT[RLS_MAX_D*RLS_MAX_N];
-    memcpy(KT, AP, (rls->d)*(rls->n)*sizeof(float));
-    // solve AP = M K^T
-    //       B  = A * X
-    long INFO=-1;
-    sposv_(&UPLO, &rls->d, &rls->n,
-            M, &rls->d,
-            KT, &rls->d,
-            &INFO);
-    if (INFO != 0) {
+    // check bounds on n, p and assign
+    if ((n > 0) && (n <= RLS_MAX_N) && (p > 0) && (p <= RLS_MAX_P)) {
+        rls->n = n;
+        rls->p = p;
+    } else {
         return RLS_FAIL;
     }
 
-    // P  =  1/lam * (P - K * A * P)
-    // P  =  -1/lam * K * AP  +  1/lam P
-    // C  =  alpha * A * B    +  beta P
+    // check bounds on gamma and assign P
+    if (gamma <= 0.f)
+        return RLS_FAIL;
 
-    // If we keep supplying zero-matrices and lam < 1, then P will grow. We
-    // need to bound that somehow. This p-controller is the best thing I could
-    // come up with..
-    //float limitP = 1.;
-    //for (int row = 0; row < rls->n; row++) {
-    //    float Pdiag = rls->P[row + row*rls->n];
-    //    if ((Pdiag > 0.1f * RLS_P_LIM)) {
-    //        float tmp = (RLS_P_LIM - Pdiag)  /  (0.9f * RLS_P_LIM);
-    //        limitP = (tmp < limitP) ? ((tmp < 0.f) ? 0.f : tmp) : limitP;
-    //    }
-    //}
+    for (int i = 0; i < n; i++)
+        rls->P[i*n + i] = gamma;
 
-    float limitP = 1.f;
-    for (int row = 0; row < rls->n; row++) {
-        if ((rls->P[row + row*rls->n] > RLS_P_LIM)) {
-            limitP = 0.f;
-        }
-    }
-
-    beta = 1.f + limitP * (1.f / rls->lambda  -  1.f);
-    alpha = -beta;
-    TRANSA = 'T';
-    TRANSB = 'N';
-    sgemm_(&TRANSA, &TRANSB, &rls->n, &rls->n, &rls->d,
-            &alpha,
-            KT, &rls->d,
-            AP, &rls->d,
-            &beta,
-            rls->P, &rls->n);
-
-    // e = y - A * x
-    // e =       - A * x  +   y
-    // y = alpha * A * x  +  beta*y
-    TRANSA = 'N';
-    alpha = -1.;
-    beta = 1.;
-    long int INCXY = 1;
-    sgemv_(&TRANSA, &rls->d, &rls->n,
-            &alpha,
-            A, &rls->d,
-            rls->x, &INCXY,
-            &beta,
-            y, &INCXY);
-
-    // x = x + K * e
-    // x  =  alpha * K * y   +   beta * x
-    TRANSA = 'T'; // need to transpose KT to K
-    alpha = 1.;
-    beta = 1.;
-    sgemv_(&TRANSA, &rls->d, &rls->n,
-            &alpha,
-            KT, &rls->d,
-            y, &INCXY,
-            &beta,
-            rls->x, &INCXY);
-
-    if (rls->x[0] != rls->x[0]) {
+    // initalize forgetting factor
+    if ((lambda <= 0.f) || (lambda > 1.0f)) {
         return RLS_FAIL;
     }
+    rls->lambda = lambda;
 
     return RLS_SUCCESS;
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
+rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
+    float lam = rls->lambda;
+    for (int row = 0; row < rls->n; row++) {
+        if (rls->P[row + row*rls->n] > RLS_COV_LIM) {
+            lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
+            break;
+        }
+    }
+
+    // M = lambda I  +  A P A**T
+    // K = P A**T * inv(M)
+
+    // P A**T  =  P**T A**T  which is likely faster (however SSYMM would be even faster of course)
+    float PAT[RLS_MAX_D*RLS_MAX_N];
+    SGEMMt(rls->n, rls->d, rls->n, rls->P, AT, PAT, 0.f, 1.f);
+
+    // M = lambda I  +  A (P A**T)  = lambda I  +  (P A**T)**T AT
+    float M[RLS_MAX_D*RLS_MAX_D] = {0};
+    for (int row = 0; row < rls->d; row++)
+        M[row + row*rls->d] = lam;
+
+    SGEMMt(rls->d, rls->d, rls->n, PAT, AT, M, 1.f, 1.f);
+
+    // solve K = P A**T inv(M)
+    // solve K**T = inv(M) A P
+    float AP[RLS_MAX_D*RLS_MAX_N];
+    for (int row = 0; row < rls->d; row++) {
+        for (int col = 0; col < rls->n; col++) {
+            AP[row + col*rls->n] = PAT[col + row*rls->d];
+        }
+    }
+
+    float KT[RLS_MAX_D*RLS_MAX_N];
+    float U[RLS_MAX_D*RLS_MAX_D] = {0};
+    float iDiag[RLS_MAX_D];
+    chol(U, M, iDiag, rls->d);
+    for (int col = 0; col < rls->n; col++)
+        chol_solve(U, iDiag, rls->d, &AP[col*rls->d], &KT[col*rls->d]);
+
+    // K A P  =  (A P)**T K**T  =  (P A**T) K**T
+    // lambda**(-1) (P  -  K A P)  =  ilam (P  -  (P A**T) K**T)
+    float ilam = 1.f / lam;
+    SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -1., -ilam);
+
+    // e = y - A x
+    // e**T = y**T - x**T A**T
+    float e[RLS_MAX_D];
+    SGEMV(rls->d, rls->n, AT, rls->x, e);
+    for (int row = 0; row < rls->d; row++)
+        e[row] = y[row] - e[row];
+
+    // x = x + K * e
+    // x**T = x**T  +  e**T K**T
+    float dx[RLS_MAX_N];
+    SGEMV(rls->d, rls->n, KT, e, dx);
+    for (int row = 0; row < rls->n; row++)
+        rls->x[row] += dx[row];
+
+    return RLS_SUCCESS;
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* A, float* y) {
+    float lam = rls->lambda;
+    for (int row = 0; row < rls->n; row++) {
+        if (rls->P[row + row*rls->n] > RLS_COV_LIM) {
+            lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
+            break;
+        }
+    }
+
+    // P AT, but more efficient to compute A PT = A P
+    float PAT[RLS_MAX_N];
+    SGEMV(rls->n, rls->p, rls->P, A, PAT);
+
+    // A (P AT)  as dot product
+    float APAT;
+    SGEVV(rls->n, A, PAT, APAT);
+
+    // (lambda + A P AT)**(-1)
+    float isig = 1.f / (lam + APAT);
+
+    // K = P AT * (lambda + A P AT)**(-1)
+    float K[RLS_MAX_N];
+    SGEVS(rls->n, PAT, isig, K);
+
+    // P = lambda**(-1) (P - K A P) = lambda**(-1) (P - K P AT)
+    float ilam = 1.f / lam;
+    SGEMM(rls->n, rls->n, 1, K, PAT, rls->P, -1.f, -ilam);
+
+    // e = y - A * x = 
+    float e[RLS_MAX_P];
+    SGEMV(rls->n, rls->p, rls->x, A, e);
+    for (int row = 0; row < rls->p; row++)
+        e[row] = y[row] - e[row];
+
+    // x = x + K * e
+    SGEMM(rls->n, rls->p, 1, K, e, rls->x, 1.f, 1.f);
+
+    return RLS_SUCCESS;
+}
+
+/*
 rls_exit_code_t rlsTest(void) {
     rls_t rls;
     float gamma = 1e3f;
-    float lambda = 0.99f;
+    float lambda = 1.f;
     rlsInit(&rls, 3, 2, gamma, lambda);
-    rlsUpdateLambda(&rls, 1.f);
 
     float A[RLS_MAX_D*RLS_MAX_N] = {
         0.03428682, 0.13472362,
@@ -200,3 +204,4 @@ rls_exit_code_t rlsTest(void) {
 
     return RLS_SUCCESS;
 }
+*/

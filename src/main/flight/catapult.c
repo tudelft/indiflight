@@ -7,10 +7,19 @@
 
 #include "catapult.h"
 
+catapult_state_t catapultState = CATAPULT_IDLE;
+
 #ifdef USE_CATAPULT
 
+#ifndef USE_INDI
+#error "must use catapult with USE_INDI"
+#endif
+
+#ifndef USE_POS_CTL
+#error "muse use catapult with USE_POS_CTL"
+#endif
+
 // extern
-catapult_state_t catapultState = CATAPULT_IDLE;
 fp_quaternion_t attSpNedFromCat = { 1.f, 0.f, 0.f, 0.f };
 t_fp_vector spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
 t_fp_vector rateSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };

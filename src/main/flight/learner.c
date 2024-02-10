@@ -21,8 +21,8 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 
 #ifdef USE_LEARNER
 
-#ifndef USE_CATAPULT
-#error "so far, learner has to be used with USE_CATAPULT"
+#ifndef USE_INDI
+#error "must use learner with USE_INDI"
 #endif
 
 PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
@@ -51,9 +51,10 @@ void initLearningRuntime(void) {
 // externs
 float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
 static timeUs_t learningQueryEnabledAt = 0;
-static rls_t motorRls[MAXU];
+static rls_parallel_t motorRls[MAXU];
 static rls_t imuRls;
-static rls_t fxRls[MAXV];
+static rls_parallel_t fxSpfRls;
+static rls_parallel_t fxRateDotRls;
 
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
@@ -75,9 +76,11 @@ void initLearner(void) {
     rlsInit(&imuRls, 3, 3, 1e5f, 1.f);
 
     // init filters and other rls
+    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e0f, 0.997f); // forces
+    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e0f, 0.997f); // rotations
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        rlsInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
-        rlsInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
+        //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
+        //rlsParallelInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
         biquadFilterInitLPF(&imuRateFilter[axis], learnerConfig()->imuFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&imuSpfFilter[axis], learnerConfig()->imuFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxRateFilter[axis], learnerConfig()->fxFiltHz, gyro.targetLooptime);
@@ -85,7 +88,7 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsInit(&motorRls[act], 4, 1, 1e7, 0.997);
+        rlsParallelInit(&motorRls[act], 4, 1, 1e7, 0.997);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
@@ -93,6 +96,9 @@ void initLearner(void) {
     }
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 static void updateLearningFilters(void) {
     static t_fp_vector imuPrevRate = {0};
     static t_fp_vector fxPrevRateDot = {0};
@@ -138,6 +144,9 @@ static void updateLearningFilters(void) {
     }
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 void updateLearner(timeUs_t current) {
     UNUSED(current);
     // last profile is for learning
@@ -146,9 +155,6 @@ void updateLearner(timeUs_t current) {
 
     // update learning sync filters
     updateLearningFilters();
-
-    UNUSED(fxRls);
-    UNUSED(motorRls);
 
     // wait for motors to spool down before learning imu position
     bool imuLearningConditions = ((learningQueryState == LEARNING_QUERY_DELAY) 
@@ -190,15 +196,8 @@ void updateLearner(timeUs_t current) {
         }
 
         // perform rls step
-        float* y_ptr;
-        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-            // forces
-            y_ptr = &learnRun.fxSpfDiff.A[axis];
-            rlsNewSample(&fxRls[axis], A, y_ptr);
-
-            y_ptr = &learnRun.fxRateDotDiff.A[axis];
-            rlsNewSample(&fxRls[axis+3], A, y_ptr);
-        }
+        rlsParallelNewSample(&fxSpfRls, A, learnRun.fxSpfDiff.A);
+        rlsParallelNewSample(&fxRateDotRls, A, learnRun.fxRateDotDiff.A);
     }
 
     // same for now
@@ -213,8 +212,35 @@ void updateLearner(timeUs_t current) {
                 -learnRun.motorOmegaDot[act]
             };
             float y = learnRun.motorOmega[act];
-            rlsNewSample(&motorRls[act], A, &y);
+            rlsParallelNewSample(&motorRls[act], A, &y);
         }
+    }
+
+    bool hoverAttitudeLearningConditions = false;
+
+    if (hoverAttitudeLearningConditions) {
+        // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
+        // this avoids code bloat and likely the blocking will not help
+        // us anyway for our sizes of matrices
+        // for the unblocked cholesky and cholesky-solve needed for W != I
+        // use the dependency-less chol routines from maths.h
+
+        // 1. Get Nullspace of Gr = indiRun.G1[3:][:]
+        //      - Qh, R = QR(Gr.T)
+        //      - Qh.T, L = LQ(Gr) // (sgelq2)
+        //      --> Nr = last n - 3 columns of Qh
+        //    Potentially more efficient hover solutions can be found if we use
+        //    the last n - rk(Br) columns (to take into account the extra freedom)
+        //    from not being able to satisfy Br u = 0)? This would require using 
+        //    a rank-revealing factorization, such as sgeqp3
+        // 2. form  Q = Nr.T W Nr. if W == I, then Q == I
+        // 3. form  A = Nr.T Bf.T Bf Nr.  Maybe this is faster without sorgr2?
+        // 4. find the only eigenvector of  Av = sigma Qv
+        //      - probably best with power iteration
+        //      - v <-- Q-1 A v / sqrt(vT AT QT-1 Q-1 A v)
+        //      - Q-1 A v best done with cholesky solve
+        //      -- 1 / sqrt could be fast-inverse-square-root
+        // 5. find if  we need v or -v by  checking ensuring  sum(Nr v) > 0
     }
 }
 

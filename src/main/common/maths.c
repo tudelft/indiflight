@@ -107,7 +107,7 @@ float acos_approx(float x)
 }
 #endif
 
-void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle) {
+FAST_CODE void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle) {
     // require ax to be normalized
     float ang2 = angle * 0.5f;
     float cang2 = cos_approx(ang2);
@@ -119,7 +119,7 @@ void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle) {
     q->qz = ax->V.Z * sang2;
 }
 
-void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q)
+FAST_CODE void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q)
 {
   // lis
   const float qx2  = q->qx * q->qx;
@@ -145,7 +145,7 @@ void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q)
   e->angles.yaw = atan2f(dcm01, dcm00);
 }
 
-fp_quaternion_t quatMult(fp_quaternion_t* ql, fp_quaternion_t* qr) {
+FAST_CODE fp_quaternion_t quatMult(fp_quaternion_t* ql, fp_quaternion_t* qr) {
     fp_quaternion_t res = {
         .qi = ql->qi * qr->qi - ql->qx * qr->qx - ql->qy * qr->qy - ql->qz * qr->qz,
         .qx = ql->qx * qr->qi + ql->qi * qr->qx + ql->qy * qr->qz - ql->qz * qr->qy,
@@ -155,7 +155,7 @@ fp_quaternion_t quatMult(fp_quaternion_t* ql, fp_quaternion_t* qr) {
     return res;
 }
 
-t_fp_vector quatRotate(fp_quaternion_t* q, t_fp_vector* v) {
+FAST_CODE t_fp_vector quatRotate(fp_quaternion_t* q, t_fp_vector* v) {
     // slow code that uses lots memory, use some library ffs
     fp_quaternion_t qv = {.qx = v->V.X, .qy = v->V.Y, .qz = v->V.Z};
     fp_quaternion_t q_qv = quatMult(q, &qv);
@@ -166,7 +166,7 @@ t_fp_vector quatRotate(fp_quaternion_t* q, t_fp_vector* v) {
     return res;
 }
 
-t_fp_vector quatRotMatCol(fp_quaternion_t* q, uint8_t axis) {
+FAST_CODE t_fp_vector quatRotMatCol(fp_quaternion_t* q, uint8_t axis) {
     // basically q * v * qinv, where v = (0 1 0 0) or (0 0 1 0) or (0 0 0 1)
     // https://danceswithcode.net/engineeringnotes/quaternions/quaternions.html
     t_fp_vector res = {0};
@@ -191,6 +191,52 @@ t_fp_vector quatRotMatCol(fp_quaternion_t* q, uint8_t axis) {
             break;
     }
     return res;
+}
+
+// columns major. upper factor
+#ifdef STM32H7
+FAST_CODE
+#endif
+void chol(float *U, float *A, float *iDiag, int n)
+{
+    // rosetta code
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < (i+1); j++) {
+            float s = 0;
+            for (int k = 0; k < j; k++) {
+                s += U[i * n + k] * U[j * n + k];
+            }
+            if (i == j) {
+                U[i * n + j] = sqrt(A[i * n + i] - s);
+                iDiag[j] = 1.f / U[i * n + j];
+            } else {
+                U[i * n + j] = iDiag[j] * (A[i * n + j] - s);
+            }
+        }
+    }
+}
+
+// column major, upper factor
+#ifdef STM32H7
+FAST_CODE
+#endif
+void chol_solve(float *U, float* iDiag, int n, float *b, float *x) {
+    // Antoine Drouin, 2007, modified
+	int j,k;
+	float t;
+
+    for(j = 0 ; j < n ; j++) { // solve Uty=b
+        t = b[j];
+        for(k = j - 1 ; k >= 0 ; k--)
+            t -= U[k + n*j] * x[j];
+        x[j] = t*iDiag[j];
+    }
+    for(j = n - 1 ; j >= 0 ; j--) { // solve Ux=y
+        t = x[j];
+        for(k = j + 1 ; k < n ; k++)
+            t -= U[j + n*k] * x[j];
+        x[j] = t*iDiag[j];
+    }
 }
 
 int gcd(int num, int denom)

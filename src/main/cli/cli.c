@@ -6944,8 +6944,10 @@ static void processCharacterInteractive(const char c)
             /* Print list of ambiguous matches */
             cliPrint("\r\n\033[K");
             for (cmd = pstart; cmd <= pend; cmd++) {
-                cliPrint(cmd->name);
-                cliWrite('\t');
+                if (cmd != NULL) {
+                    cliPrint(cmd->name);
+                    cliWrite('\t');
+                }
             }
             cliPrompt();
             i = 0;    /* Redraw prompt */

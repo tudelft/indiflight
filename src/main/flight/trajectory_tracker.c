@@ -3,6 +3,7 @@
 #include <math.h>
 #include "flight/imu.h"
 #include "io/external_pos.h"
+#include "flight/indi.h"
 #include "pos_ctl.h"
 
 
@@ -132,11 +133,12 @@ void updateTrajectoryTracker(timeUs_t current) {
         // update acceleration and yaw rate setpoints
         getSetpointsTrajectoryTracker();
 
-        // overwrite accSpNedFromPos and yawRateSpFromOuter (from pos_ctl.c)
+        // overwrite accSpNedFromPos and rateSpBodyFromPos (from pos_ctl.c)
         accSpNedFromPos.V.X = tt_acc_sp[0];
         accSpNedFromPos.V.Y = tt_acc_sp[1];
         accSpNedFromPos.V.Z = tt_acc_sp[2];
-        yawRateSpFromOuter = tt_yaw_rate_sp;
+
+        rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_sp);
 
         // overwrite posSpNed (from pos_ctl.c)
         posSpNed.pos.V.X = tt_pos_ref[0];

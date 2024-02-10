@@ -224,7 +224,7 @@ CC_NO_OPTIMISATION      :=
 TEMPORARY_FLAGS :=
 
 WARNING_FLAGS := -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wold-style-definition -Wdouble-promotion
-WARNING_FLAGS += -Wno-parentheses -Wno-double-promotion
+#WARNING_FLAGS += -Wstack-usage=1024
 
 #              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion
 CFLAGS     += $(ARCH_FLAGS) \

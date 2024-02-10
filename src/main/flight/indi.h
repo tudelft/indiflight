@@ -27,8 +27,8 @@ typedef struct indiProfile_s {
     // ---- Att/Rate config
     uint16_t attGains[3]; // attitude error to rotational accel gain * 10
     uint16_t rateGains[3]; // rate error to rotational accel gain * 10
-    uint16_t attMaxTiltRate; // max tilt rate in deg/s
-    uint16_t attMaxYawRate; // max yaw rate in deg/s
+    uint16_t attMaxTiltRate; // max tilt rate in deg/s, if attitude is controlled
+    uint16_t attMaxYawRate; // max yaw rate in deg/s, if attitude is controlled
     uint8_t manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     uint8_t manualMaxUpwardsSpf; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
@@ -65,6 +65,7 @@ typedef struct indiProfile_s {
     // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
     uint8_t useRpmFeedback;        // bool: make use of dshot rpm data in feedback loop if available. FIXME: actually implement this
+    uint16_t maxRateSp[3];          // maximum rate setpoint in deg/s
     // ---- WLS config
     uint8_t useWls;              // bool: enable Wls in favour of static pinv
     uint8_t wlsWarmstart;        // bool: use warmstarting of wls
@@ -98,6 +99,7 @@ typedef struct indiRuntime_s {
     bool useConstantG2;
     bool useRpmFeedback;
     bool useRpmDotFeedback;
+    t_fp_vector maxRateSp;          // maximum rate setpoint in deg/s
     // ---- INDI actuator config
     uint8_t actNum;
     float actHoverOmega[MAXU];   // rad/s
@@ -138,6 +140,7 @@ typedef struct indiRuntime_s {
     fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
     fp_quaternion_t attErrBody; // attitude error in body coordinates
     t_fp_vector rateSpBody; // rate setpoint in body coordinates
+    t_fp_vector rateSpBodyCommanded; // rate setpoint before attitude control
     t_fp_vector rateDotSpBody; // rate derivative setpoint in body coordinates
     t_fp_vector spfSpBody; // specific force setpoint in body coordinates
     float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
