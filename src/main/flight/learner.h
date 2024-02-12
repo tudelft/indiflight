@@ -51,6 +51,7 @@ void initLearningRuntime(void);
 
 // learning stuff
 void initLearner(void);
+void testLearner(void);
 void updateLearner(timeUs_t current);
 
 // query stuff

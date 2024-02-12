@@ -36,7 +36,7 @@
             "args": [
                 "127.0.0.1"
             ],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,

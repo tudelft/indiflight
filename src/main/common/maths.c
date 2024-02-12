@@ -228,13 +228,13 @@ void chol_solve(float *U, float* iDiag, int n, float *b, float *x) {
     for(j = 0 ; j < n ; j++) { // solve Uty=b
         t = b[j];
         for(k = j - 1 ; k >= 0 ; k--)
-            t -= U[k + n*j] * x[j];
+            t -= U[k + n*j] * x[k];
         x[j] = t*iDiag[j];
     }
     for(j = n - 1 ; j >= 0 ; j--) { // solve Ux=y
         t = x[j];
         for(k = j + 1 ; k < n ; k++)
-            t -= U[j + n*k] * x[j];
+            t -= U[j + n*k] * x[k];
         x[j] = t*iDiag[j];
     }
 }

@@ -127,6 +127,7 @@ EXTRA_LD_FLAGS  :=
 #
 # Default Tool options - can be overridden in {mcu}.mk files.
 #
+DEBUG_FLAGS            = -ggdb3 -gdwarf-5 -DDEBUG
 ifeq ($(DEBUG),GDB)
 OPTIMISE_DEFAULT      := -Og
 

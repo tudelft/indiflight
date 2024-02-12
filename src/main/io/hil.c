@@ -53,8 +53,9 @@
 #include "pi-messages.h"
 #include "flight/mixer_init.h"
 
-#define USE_CLI_DEBUG_PRINT
+#ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
+#endif
 
 #define HIL_INITIAL_PORT_MODE MODE_RXTX
 //#define HIL_MAXRATE 50

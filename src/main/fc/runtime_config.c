@@ -26,7 +26,7 @@
 #include "fc/runtime_config.h"
 #include "io/beeper.h"
 
-uint8_t armingFlags = 0;
+armingFlag_e armingFlags = 0;
 uint8_t stateFlags = 0;
 flightModeFlags_e flightModeFlags = 0;
 

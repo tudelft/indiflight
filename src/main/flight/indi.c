@@ -341,7 +341,9 @@ void getMotorCommands(timeUs_t current) {
 
     static float du[MAXU] = {0.f};
     static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
     static float omega_prev[MAXU] = {0.f};
+#endif
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         // rate
