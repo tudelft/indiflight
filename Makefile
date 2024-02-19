@@ -127,7 +127,6 @@ EXTRA_LD_FLAGS  :=
 #
 # Default Tool options - can be overridden in {mcu}.mk files.
 #
-DEBUG_FLAGS            = -ggdb3 -gdwarf-5 -DDEBUG
 ifeq ($(DEBUG),GDB)
 OPTIMISE_DEFAULT      := -Og
 
@@ -671,3 +670,6 @@ $(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildca
 -include $(TARGET_DEPS)
 
 include $(ROOT)/make/remote_flash.mk
+
+echo-cflags:
+	@echo $(CFLAGS)

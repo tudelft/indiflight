@@ -2,6 +2,7 @@
 #pragma once
 
 #include "common/time.h"
+#include "common/rls.h"
 #include "config/config.h"
 
 // --- config
@@ -43,6 +44,11 @@ typedef struct learningRuntime_s {
 } learningRuntime_t;
 
 extern learningRuntime_t learnRun;
+
+extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
+extern rls_t imuRls;
+extern rls_parallel_t fxSpfRls;
+extern rls_parallel_t fxRateDotRls;
 
 void initLearningRuntime(void);
 

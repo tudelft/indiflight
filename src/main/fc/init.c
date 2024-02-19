@@ -741,7 +741,7 @@ void init(void)
 #endif
 #ifdef USE_LEARNER
     initLearner();
-    testLearner();
+    //testLearner();
 #endif
 #ifdef USE_POS_CTL
     posCtlInit();

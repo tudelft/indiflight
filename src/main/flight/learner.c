@@ -32,7 +32,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARNING_OFF,
     .numAct = 4,
@@ -58,10 +58,10 @@ void initLearningRuntime(void) {
 // externs
 float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
 static timeUs_t learningQueryEnabledAt = 0;
-static rls_parallel_t motorRls[MAXU];
-static rls_t imuRls;
-static rls_parallel_t fxSpfRls;
-static rls_parallel_t fxRateDotRls;
+rls_parallel_t motorRls[MAXU];
+rls_t imuRls;
+rls_parallel_t fxSpfRls;
+rls_parallel_t fxRateDotRls;
 
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
@@ -104,11 +104,11 @@ void initLearner(void) {
     // limited to 4 for now
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
 
-    rlsInit(&imuRls, 3, 3, 1e5f, 1.f);
+    rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
 
     // init filters and other rls
-    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e0f, 0.997f); // forces
-    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e0f, 0.997f); // rotations need twice the parameters
+    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, 0.995f); // forces
+    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e2f, 0.995f); // rotations need twice the parameters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
         //rlsParallelInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
@@ -119,7 +119,7 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsParallelInit(&motorRls[act], 4, 1, 1e7, 0.997);
+        rlsParallelInit(&motorRls[act], 4, 1, 1e2f, 0.995);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
@@ -212,37 +212,46 @@ void updateLearner(timeUs_t current) {
 
         // regressors
 
-        // remember: column major formulation! So this looks like the transpose, but isn't
-        float A[3*3] = {
-            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y + dw->Z,           w->X * w->Z - dw->Y,
-             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Z * w->Z + dw->X,
-             w->X * w->Z + dw->Y,           w->Z * w->Z - dw->X,          -(w->X * w->X + w->Y * w->Y)
+        // remember: column major formulation!
+        float AT[3*3] = {
+            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y - dw->Z,           w->X * w->Z + dw->Y,
+             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z - dw->X,
+             w->X * w->Z - dw->Y,           w->Y * w->Z + dw->X,          -(w->X * w->X + w->Y * w->Y)
         };
-        float y[3] = { a->X, a->Y, a->Z };
+        float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
+
+        for (int i = 0; i < 9; i++)
+            AT[i] *= 1e-2; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
+            // it if true parameter is 30cm is logged at in 0.3*100*1000 = 30000, which is max for logging. 1mm is logged as 0.001*100*1000 = 100
 
         // perform rls step
-        rlsNewSample(&imuRls, A, y);
+        rlsNewSample(&imuRls, AT, y);
     }
     learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
 
     bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
         && (
             (learnerConfig()->mode & LEARN_DURING_FLIGHT)
-            || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+            || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
     if (fxLearningConditions) {
         //setup regressors
         float A[RLS_MAX_N];
         for (int act = 0; act < learnerConfig()->numAct; act++) {
-            A[act] = 2 * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
-            A[act + learnerConfig()->numAct] = learnRun.fxOmegaDotDiff[act];
-            A[act + learnerConfig()->numAct] *= LEARNER_OMEGADOTDIFF_SCALER;
+            A[act] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+            A[act + learnerConfig()->numAct] = 1e-3f * learnRun.fxOmegaDotDiff[act];
+        }
+        float ySpf[3];
+        float yRateDot[3];
+        for (int i = 0; i < 3; i++) {
+            ySpf[i] = learnRun.fxSpfDiff.A[i] * 10.f; // scaling likely depends on sample time..
+            yRateDot[i] = learnRun.fxRateDotDiff.A[i]; // scaling seems okay at this sample time/filtering
         }
 
         // perform rls step
-        rlsParallelNewSample(&fxSpfRls, A, learnRun.fxSpfDiff.A);
-        rlsParallelNewSample(&fxRateDotRls, A, learnRun.fxRateDotDiff.A);
+        rlsParallelNewSample(&fxSpfRls, A, ySpf);
+        rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
     }
     learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -255,9 +264,9 @@ void updateLearner(timeUs_t current) {
                 learnRun.motorD[act],
                 sqrtf(learnRun.motorD[act]), // filter before or after sqrt?
                 1.f,
-                -LEARNER_OMEGADOT_SCALER * learnRun.motorOmegaDot[act]
+                1e-4f * learnRun.motorOmegaDot[act]
             };
-            float y = learnRun.motorOmega[act];
+            float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
             rlsParallelNewSample(&motorRls[act], A, &y);
         }
     }
@@ -422,19 +431,19 @@ panic:
 
 void testLearner(void) {
     rlsTest();
-    //learnerConfigMutable()->numAct = 6;
+    learnerConfigMutable()->numAct = 6;
 
-    //float G1Tmp[6][6] = {
-    //    {-0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608},
-    //    {-0.55116244, -0.55116244, -0.55116244, -0.55116244, -0.55116244, -0.55116244},
-    //    {0.07819308,  0.07819308,  0.07819308,  0.07819308,  0.07819308, 0.07819308},
-    //    {1.05405066, -0.07579926, -1.5856529 ,  0.60740149,  1.21480297, 1.82220446},
-    //    {0.03071845, -1.61020823,  0.50788336,  1.07160642,  2.14321284, 3.21481927},
-    //    {-1.37405734,  0.63362759, -0.47724144,  1.21767118,  2.43534237, 3.65301355}
-    //};
-    //for (int row = 0; row < 6; row++)
-    //    for (int col = 0; col < 6; col++)
-    //        indiRun.actG1[row][col] = G1Tmp[row][col];
+    float G1Tmp[6][6] = {
+        {-0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608},
+        {-0.55116244, -0.55116244, -0.55116244, -0.55116244, -0.55116244, -0.55116244},
+        {0.07819308,  0.07819308,  0.07819308,  0.07819308,  0.07819308, 0.07819308},
+        {1.05405066, -0.07579926, -1.5856529 ,  0.60740149,  1.21480297, 1.82220446},
+        {0.03071845, -1.61020823,  0.50788336,  1.07160642,  2.14321284, 3.21481927},
+        {-1.37405734,  0.63362759, -0.47724144,  1.21767118,  2.43534237, 3.65301355}
+    };
+    for (int row = 0; row < 6; row++)
+        for (int col = 0; col < 6; col++)
+            indiRun.actG1[row][col] = G1Tmp[row][col];
 
     updateLearner(0);
     updateLearner(0);
@@ -494,9 +503,9 @@ doMore:
         case LEARNING_QUERY_IDLE:
             if (enableConditions) {
                 learningQueryEnabledAt = current;
-                startAt = current + MIN(c->delayMs, LEARNING_SAFETY_TIME_MAX)*1e3;
+                startAt = current + c->delayMs*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
-                safetyTimeoutUs = 10000
+                safetyTimeoutUs = 10000 + c->delayMs*1e3 +
                     + 1e3 * c->numAct * (c->stepMs + c->rampMs)
                     - 1e3 * (c->numAct-1) * c->overlapMs;
                 safetyTimeoutUs = MIN(safetyTimeoutUs, LEARNING_SAFETY_TIME_MAX);
@@ -572,7 +581,6 @@ doMoreMotors:
 
     for (int motor = 0; motor < c->numAct; motor++) {
         outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
-        indiRun.d[motor] = outputFromLearningQuery[motor]; // for logging purposes. TODO: also log du
     }
 }
 

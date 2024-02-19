@@ -179,7 +179,7 @@ typedef union u_fp_vector {
 #define SGEVV(m_, a_, b_, c_) {\
     c_ = 0.f;\
     for (int row = 0; row < m_; row++)\
-        c_ += a_[row] * b_[row];\
+        c_ += (a_)[row] * (b_)[row];\
 }
 
 // calculate c_ = A_ b_

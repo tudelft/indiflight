@@ -46,7 +46,7 @@
 #endif
 
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 1);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -137,7 +137,7 @@ void getSetpoints(timeUs_t current) {
             && (learningQueryState != LEARNING_QUERY_IDLE)
             && (learningQueryState != LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
-        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
+        for (int i=0; i < indiRun.actNum; i++) {
             indiRun.d[i] = outputFromLearningQuery[i];
         }
     } else

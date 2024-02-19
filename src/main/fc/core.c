@@ -1052,7 +1052,7 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) { // only transition if disarmed
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) {
         ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
         resetCatapult();

@@ -73,11 +73,15 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
 FAST_CODE
 #endif
 rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
+    rls->samples++;
+
     float lam = rls->lambda;
+    float traceP = 0.f;
     for (int row = 0; row < rls->n; row++) {
+        traceP += rls->P[row + row*rls->n];
         if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
             lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
-            break;
+            // break; // still need to compute trace
         }
     }
 
@@ -111,17 +115,36 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     for (int col = 0; col < rls->n; col++)
         chol_solve(U, iDiag, rls->d, &AP[col*rls->d], &KT[col*rls->d]);
 
+    // in the subtraction below numerical inaccuracies can creep in.
+    // limit the order reduction
+    float traceKAP = 0.f;
+    // get trace(PAT KT) = trace(K A P)
+    for (int i = 0; i < rls->n; i++) {
+        // n dot products of dimension d
+        float tmp = 0;
+        SGEVV(rls->d, (&AP[i*rls->d]), (&KT[i*rls->d]), tmp);
+        traceKAP += tmp;
+    }
+
     // K A P  =  (A P)**T K**T  =  (P A**T) K**T
-    // lambda**(-1) (P  -  K A P)  =  ilam (P  -  (P A**T) K**T)
+    // lambda**(-1) (P  -  K A P)  =  ilam (P  - KAPmult * (P A**T) K**T)
+
+    // select KAPmult to ensure that traceP - trace(KAP * KAPmult) > 0.1 traceP
+    // to maintain numerical accuracy
+    float KAPmult = 1.f;
+    if (traceKAP > RLS_COV_MIN)
+        KAPmult = MIN((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1.f);
+
     float ilam = 1.f / lam;
-    SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -1.f, -ilam);
+    SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -KAPmult, -ilam);
 
     // ensure positive definiteness (of at least the upper/lower factor)
     // we potentially need to re-symmetrize every couple of iterations in order
     // to not accumulate errors. Or actually write SSYMM/SSYMV routines that only
     // look at the upper triangular of P
-    for (int row = 0; row < rls->n; row++)
-        rls->P[row + row*rls->n] = MAX(RLS_COV_MIN, rls->P[row + row*rls->n]);
+    //for (int row = 0; row < rls->n; row++)
+    //    rls->P[row + row*rls->n] = MAX(RLS_COV_MIN, rls->P[row + row*rls->n]);
+    // can never happen now, since we have KAPmult. Re-symmetrizing is a good idea though
 
     // e = y - A x
     // e**T = y**T - x**T A**T
@@ -144,11 +167,15 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
 FAST_CODE
 #endif
 rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) {
+    rls->samples++;
+
     float lam = rls->lambda;
+    float traceP = 0.f;
     for (int row = 0; row < rls->n; row++) {
+        traceP += rls->P[row + row*rls->n];
         if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
             lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
-            break;
+            // break; // still need to compute trace
         }
     }
 
@@ -167,9 +194,25 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
     float k[RLS_MAX_N];
     SGEVS(rls->n, PaT, isig, k);
 
-    // P = lambda**(-1) (P - k a P) = lambda**(-1) (P - k P aT)
+    // in the subtraction below numerical inaccuracies can creep in.
+    // limit the order reduction
+    float traceKAP = 0.f;
+    // get trace(k P aT)
+    for (int i = 0; i < rls->n; i++) {
+        // n dot products of dimension d
+        traceKAP += k[i] * PaT[i]; // diagonal of the rank 1 matrix. Always > 0
+    }
+
+    // P = lambda**(-1) (P - k a P) = lambda**(-1) (P - k (P aT)**T)
+
+    // select KAPmult to ensure that traceP - trace(KAP * KAPmult) > 0.1 traceP
+    // to maintain numerical accuracy
+    float KAPmult = 1.f;
+    if (traceKAP > RLS_COV_MIN)
+        KAPmult = MIN((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1.f);
+
     float ilam = 1.f / lam;
-    SGEMM(rls->n, rls->n, 1, k, PaT, rls->P, -1.f, -ilam);
+    SGEMM(rls->n, rls->n, 1, k, PaT, rls->P, -KAPmult, -ilam);
 
     // eT = yT - a * X = 
     float eT[RLS_MAX_P];
