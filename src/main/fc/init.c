@@ -35,6 +35,7 @@
 #include "cms/cms_types.h"
 
 #include "common/axis.h"
+#include "common/benchmark.h"
 #include "common/color.h"
 #include "common/maths.h"
 #include "common/rls.h"

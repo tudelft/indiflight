@@ -1293,12 +1293,18 @@ static void writeInterframe(void)
         blackboxWriteSigned16VBArray(deltas16, 4);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_p_rls_x, blackboxLast->fx_p_rls_x, 2*4);
+        for (int i=0; i < 4*2; i++)
+            deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_q_rls_x, blackboxLast->fx_q_rls_x, 2*4);
+        for (int i=0; i < 4*2; i++)
+            deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_r_rls_x, blackboxLast->fx_r_rls_x, 2*4);
+        for (int i=0; i < 4*2; i++)
+            deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
     }
 #else
@@ -1714,14 +1720,14 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
     }
     for (int i = 0; i < 4; i++) {
-        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0 + 3*i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[1 + 3*i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[2 + 3*i]);
+        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[4  + i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[8  + i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[12 + i]);
     }
     for (int i = 0; i < 2*4; i++) {
-        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0 + 3*i]);
-        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[1 + 3*i]);
-        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[2 + 3*i]);
+        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[4  + i]);
+        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[8  + i]);
+        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[12 + i]);
     }
 #endif
 

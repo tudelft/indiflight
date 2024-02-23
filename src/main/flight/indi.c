@@ -254,7 +254,7 @@ void getAlphaSpBody(timeUs_t current) {
             tiltAxis.V.Y = targetZBody.V.X * itiltAxisNorm;
         } else {
             // just rotate around X, either almost left or right
-            tiltAxis.V.X = (-targetZBody.V.Y > 0.) ? 1.f : -1.f;
+            tiltAxis.V.X = (-targetZBody.V.Y > 0.f) ? 1.f : -1.f;
             tiltAxis.V.Y = 0.f;
         }
 

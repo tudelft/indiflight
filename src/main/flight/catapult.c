@@ -87,13 +87,13 @@ static bool calculateCatapult(void) {
     }
 
     // get firetime to reach vertical height
-    float fireTimeSec = sqrtf( (2.f * h) / (a * (a * IGf + 1)) );
+    float fireTimeSec = sqrtf( (2.f * h) / (a * (a * IGf + 1.f)) );
     catapultRuntime.fireTimeUs = 1e6f * fireTimeSec; // always below 2.8sec
 
     // get launch angle to get enough lateral velocity to cover distance
     float vVertMax = a * fireTimeSec;
     float freefallTimeSec = vVertMax * IGf + sqrtf(2.f * h * IGf);
-    float phi = atanf( distance / (0.5*a*sq(fireTimeSec) + a*fireTimeSec*freefallTimeSec) );
+    float phi = atanf( distance / (0.5f*a*sq(fireTimeSec) + a*fireTimeSec*freefallTimeSec) );
 
     // normalize axis and then calculate quaternion setpoint
     if (distance > 0.01f) {

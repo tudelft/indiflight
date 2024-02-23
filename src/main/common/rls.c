@@ -3,6 +3,7 @@
 
 
 #include "common/maths.h"
+#include <math.h>
 
 #include "rls.h"
 
@@ -38,7 +39,7 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
     return RLS_SUCCESS;
 }
 
-rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float lambda) {
+rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float Tchar) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -61,10 +62,12 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
         rls->P[i*n + i] = gamma;
 
     // initalize forgetting factor
-    if ((lambda <= 0.f) || (lambda > 1.0f)) {
+    if ((Ts <= 0.f) || (Tchar <= 2.f*Ts)) {
         return RLS_FAIL;
     }
-    rls->lambda = lambda;
+
+    //rls->baseLambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
+    rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
 
     return RLS_SUCCESS;
 }
@@ -170,10 +173,10 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
     rls->samples++;
 
     float lam = rls->lambda;
-    float traceP = 0.f;
+    float diagP[RLS_MAX_N] = {0};
     for (int row = 0; row < rls->n; row++) {
-        traceP += rls->P[row + row*rls->n];
-        if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
+        diagP[row] = rls->P[row + row*rls->n];
+        if (diagP[row] > RLS_COV_MAX) {
             lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
             // break; // still need to compute trace
         }
@@ -187,6 +190,29 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
     float aPaT;
     SGEVV(rls->n, aT, PaT, aPaT);
 
+    // output noise estimate
+    // if output/regressor noise known, could add those terms here. then it's almost a Kalman filter
+    //static float movingVar = 0.f;
+    //static float varLambda = 0.995f;
+    //float eVarEst = aPaT + movingVar;
+    //float ieVarEst = (eVarEst > 1e-6f)  ?  1.f / eVarEst  :  1e6f;
+
+    // eT = yT - a * X
+    float eT[RLS_MAX_P];
+    //float varRatioMax = 0.f;
+    SGEMVt(rls->n, rls->p, rls->X, aT, eT); // not really eT yet
+    for (int row = 0; row < rls->p; row++) {
+        eT[row] = yT[row] - eT[row];
+        //float eTe = (eT[row] * eT[row]);
+        // // exponentially weighed moving variance estimator assuming 0 mean
+        //movingVar = varLambda*movingVar + (1.f-varLambda) * eTe;
+        //varRatioMax = MAX(eTe * ieVarEst, varRatioMax);
+    }
+
+    //varRatioMax = MIN(varRatioMax, RLS_FORGET_MAX_VAR);
+    //lam = powf(rls->baseLambda, varRatioMax);
+    //varLambda = lam; // is this backwards?
+
     // (lambda + a P aT)**(-1)
     float isig = 1.f / (lam + aPaT);
 
@@ -196,29 +222,29 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
 
     // in the subtraction below numerical inaccuracies can creep in.
     // limit the order reduction
-    float traceKAP = 0.f;
+    float diagKAP[RLS_MAX_N] = {0};
+    float maxDiagRatio = 0.f;
     // get trace(k P aT)
     for (int i = 0; i < rls->n; i++) {
         // n dot products of dimension d
-        traceKAP += k[i] * PaT[i]; // diagonal of the rank 1 matrix. Always > 0
+        diagKAP[i] += k[i] * PaT[i]; // diagonal of the rank 1 matrix. Always > 0
+        if (diagKAP[i] > 1e-6f) {
+            diagP[i] /= diagKAP[i];
+            maxDiagRatio = (maxDiagRatio < diagP[i]) ? diagP[i] : maxDiagRatio;
+        }
     }
 
     // P = lambda**(-1) (P - k a P) = lambda**(-1) (P - k (P aT)**T)
 
     // select KAPmult to ensure that traceP - trace(KAP * KAPmult) > 0.1 traceP
     // to maintain numerical accuracy
+    // TODO: don't do this on the trace, but on every diagonal element separetely!
     float KAPmult = 1.f;
-    if (traceKAP > RLS_COV_MIN)
-        KAPmult = MIN((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1.f);
+    if (maxDiagRatio > RLS_COV_MIN)
+        KAPmult = MIN((1.f - RLS_MAX_P_ORDER_DECREMENT) * maxDiagRatio, 1.f);
 
     float ilam = 1.f / lam;
     SGEMM(rls->n, rls->n, 1, k, PaT, rls->P, -KAPmult, -ilam);
-
-    // eT = yT - a * X = 
-    float eT[RLS_MAX_P];
-    SGEMVt(rls->n, rls->p, rls->X, aT, eT);
-    for (int row = 0; row < rls->p; row++)
-        eT[row] = yT[row] - eT[row];
 
     // X = X + k * eT
     SGEMM(rls->n, rls->p, 1, k, eT, rls->X, 1.f, 1.f);
@@ -254,7 +280,7 @@ rls_exit_code_t rlsTest(void) {
 
     //----
     rls_parallel_t rlsP;
-    rlsParallelInit(&rlsP, 3, 2, gamma, lambda);
+    rlsParallelInit(&rlsP, 3, 2, gamma, 0.005f, 0.011212807f);
     rlsP.X[0] = 1.f;
     rlsP.X[1] = 1.f;
     rlsP.X[2] = 1.f;

@@ -7,6 +7,7 @@ COMMON_SRC = \
             main.c \
             $(addprefix pg/, $(notdir $(wildcard $(SRC_DIR)/pg/*.c))) \
             $(addprefix common/,$(notdir $(wildcard $(SRC_DIR)/common/*.c))) \
+			common/scalar_mult_f32_asm.S \
             $(addprefix config/,$(notdir $(wildcard $(SRC_DIR)/config/*.c))) \
             cli/cli.c \
             cli/settings.c \
@@ -240,6 +241,8 @@ SPEED_OPTIMISED_SRC := ""
 SIZE_OPTIMISED_SRC  := ""
 
 SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
+			common/benchmark.c \
+			common/scalar_mult_f32_asm.S \
             common/encoding.c \
             common/filter.c \
             common/maths.c \

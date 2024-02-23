@@ -78,7 +78,7 @@ static t_fp_vector hoverThrust;
 #define LEARNING_MAX_ACT ((int) RLS_MAX_N / 2)
 #define LEARNER_OMEGADOT_SCALER 1e-5f // for numerical stability
 #define LEARNER_OMEGADOTDIFF_SCALER 10.f // for numerical stability
-#define LEARNER_NULLSPACE_THRESH 1e-3 // todo, do we need somethign relative here?
+#define LEARNER_NULLSPACE_THRESH 1e-3f // todo, do we need somethign relative here?
 #define LEARNER_NUM_POWER_ITERATIONS 1
 
 // really dumb rng number to reset power iterations in case a numerically 
@@ -107,8 +107,10 @@ void initLearner(void) {
     rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
 
     // init filters and other rls
-    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, 0.995f); // forces
-    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e2f, 0.995f); // rotations need twice the parameters
+    float dT = indiRun.dT;
+    float Tchar = 10.f*0.025f; // 10 times act constant
+    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
+    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // rotations need twice the parameters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
         //rlsParallelInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
@@ -119,7 +121,7 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsParallelInit(&motorRls[act], 4, 1, 1e2f, 0.995);
+        rlsParallelInit(&motorRls[act], 4, 1, 1e2f, dT, Tchar);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
@@ -221,7 +223,7 @@ void updateLearner(timeUs_t current) {
         float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
 
         for (int i = 0; i < 9; i++)
-            AT[i] *= 1e-2; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
+            AT[i] *= 1e-2f; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
             // it if true parameter is 30cm is logged at in 0.3*100*1000 = 30000, which is max for logging. 1mm is logged as 0.001*100*1000 = 100
 
         // perform rls step
@@ -375,7 +377,7 @@ void updateLearner(timeUs_t current) {
         for (int i = LEARNER_NUM_POWER_ITERATIONS; i > 0; i--) {
             SGEMVt(sizeNr, sizeNr, A, v, HinvAv); // A is symmetric, SGEMVf is faster
             SGEVV(sizeNr, HinvAv, HinvAv, HinvAvNorm2); // guaranteed >= 0.f
-            if (HinvAvNorm2 < 1e-8) {
+            if (HinvAvNorm2 < 1e-8f) {
                 // we picked a starting vector near orthogonal to the eigenvector
                 // we want to find. reset to a pseudorandom vector
                 for (int row = 0; row < sizeNr; row++)
@@ -393,7 +395,7 @@ void updateLearner(timeUs_t current) {
         float vTAv;
         SGEMVt(sizeNr, sizeNr, A, v, Av);
         SGEVV(sizeNr, v, Av, vTAv);
-        if (vTAv < 1e-10)
+        if (vTAv < 1e-10f)
             goto panic; // panic
 
         float scale = GRAVITYf * 1.f / sqrtf( vTAv ); // fast inverse sqrt?
@@ -559,7 +561,7 @@ doMoreMotors:
                         if (time_in_ramp > c->rampMs*1e3) {
                             motorStates[motor].queryState = MOTOR_QUERY_DONE; goto doMoreMotors;
                         }
-                        outputFromLearningQuery[motor] = c->rampAmp * 0.01f * ( 1.f - ( ((float) time_in_ramp) / ((float) c->rampMs * 1e3) ) );
+                        outputFromLearningQuery[motor] = c->rampAmp * 0.01f * ( 1.f - ( ((float) time_in_ramp) / ((float) c->rampMs * 1e3f) ) );
                         break;
                     }
                     case MOTOR_QUERY_DONE: { break; }
