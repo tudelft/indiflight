@@ -3,6 +3,8 @@
 #include "common/time.h"
 #include "config/config.h"
 
+#pragma once
+
 typedef struct positionProfile_s {
     uint8_t horz_p; // m/s/s per m * 10
     uint8_t horz_i; // m/s/s per m/s * s  * 10

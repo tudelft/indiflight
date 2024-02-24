@@ -8,7 +8,7 @@ typedef enum rls_exit_code_e {
     RLS_FAIL, // TODO fine grained error handliing
 } rls_exit_code_t;
 
-#define RLS_MAX_N 12
+#define RLS_MAX_N 8
 #define RLS_MAX_D 3
 #define RLS_MAX_P 3
 #define RLS_COV_MAX 1e+10f

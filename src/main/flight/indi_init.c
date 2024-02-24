@@ -72,7 +72,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsWv[5] = 1; // yaw
 
     // ---- Filtering config
-    indiProfile->imuSyncLp2Hz = 40;
+    indiProfile->imuSyncLp2Hz = 15;
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config

@@ -15,7 +15,9 @@
 
 #include "sensors/gyro.h"
 #include "flight/indi.h"
+#include "flight/indi_init.h"
 #include "flight/catapult.h"
+#include "flight/pos_ctl.h"
 
 #include "f2c.h"
 #include "clapack.h"
@@ -106,14 +108,16 @@ static float dumbRng(void) {
     return ( ((float)(randomSequence[rngSeed] - 127)) / 128.f );
 }
 
-static indiProfile_t* indiLearner;
+static indiProfile_t* indiProfileLearned;
+static positionProfile_t* positionProfileLearned;
 
 // learning
 void initLearner(void) {
     // limited to 4 for now
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
 
-    indiLearner = indiProfilesMutable(INDI_PROFILE_COUNT-1);
+    indiProfileLearned = indiProfilesMutable(INDI_PROFILE_COUNT-1);
+    positionProfileLearned = positionProfilesMutable(POSITION_PROFILE_COUNT-1);
     initLearnerRuntime();
 
     rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
@@ -203,9 +207,6 @@ FAST_CODE
 #endif
 void updateLearner(timeUs_t current) {
     UNUSED(current);
-    // last profile is for learning
-    const indiProfile_t* p = indiProfiles(INDI_PROFILE_COUNT-1);
-    UNUSED(p);
 
     learnerTimings.start = micros();
 
@@ -460,18 +461,89 @@ panic:
 #endif
 }
 
-void updateLearnedParameters(indiProfile_t* p) {
+void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     for (int axis = 0; axis < 3; axis++) {
-        p->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
-        p->attGains[axis]  = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_ATTITUDE];
-        // todo: position
+        indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
+        // attGains are expected for parallel PD, but we have cascaded, so
+        indi->attGains[axis]  = (uint16_t) 10.f
+             * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
     }
 
-    p->attMaxTiltRate = 500; // reduce slightly
-    p->attMaxYawRate = 300; // reduce
+    // same for position
+    pos->horz_p = (uint8_t) 10.f 
+        * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
+    pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
+    pos->horz_i = pos->horz_p / 10; // by lack of better option at this point
+    pos->horz_max_v = 250; // cm/s
+    pos->horz_max_a = 500; // cm/s/s
+    pos->horz_max_iterm = 200; // cm/s
+    pos->max_tilt = 30; // conservative, like the others
+    pos->vert_p = pos->horz_p;
+    pos->vert_i = pos->horz_i;
+    pos->vert_d = pos->horz_d;
+    pos->vert_max_v_up = 100; // cm/s
+    pos->vert_max_v_down = 100; // cm/s
+    pos->vert_max_a_up = 500; // cm/s/s
+    pos->vert_max_a_down = 500; // cm/s/s
+    pos->vert_max_iterm = 100; // cm/s/s
+    pos->yaw_p = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
+    pos->weathervane_p = 0;
+    pos->weathervane_min_v = 200; // cm/s/s
+    pos->use_spf_attenuation = 1;
+
+    indi->manualUseCoordinatedYaw = 1;
+    indi->manualMaxUpwardsSpf = 20; // conservative
+
+    indi->attMaxTiltRate = 500; // reduce slightly
+    indi->attMaxYawRate = 300; // reduce
     for (int act = 0; act < learnerConfig()->numAct ; act++) {
-        p->actHoverRpm[act] = 20000 / 10; // guess
+        indi->actHoverRpm[act] = (uint16_t) 20000 / 10; // guess
+        indi->actTimeConstMs[act] = (uint8_t) constrainf(1000.f * 0.1f * motorRls[act].X[3], 10.f, 200.f);
+        //indi->actPropConst[act] = ???
+        //indi->actMaxT[act] = ???
+        if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
+            indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
+                motorRls[act].X[0] / (motorRls[act].X[0] + motorRls[act].X[1]),
+                0.f, 1.f);
+        else
+            indi->actNonlinearity[act] = 50;
+
+        indi->actLimit[act] = 60; // conservative for now
+        indi->actG1_fx[act]    = fxSpfRls.X[0 + act];
+        indi->actG1_fy[act]    = fxSpfRls.X[4 + act];
+        indi->actG1_fz[act]    = fxSpfRls.X[8 + act];
+        indi->actG1_roll[act]  = fxRateDotRls.X[0  + act];
+        indi->actG1_pitch[act] = fxRateDotRls.X[8  + act];
+        indi->actG1_yaw[act]   = fxRateDotRls.X[16 + act];
+        indi->actG2_roll[act]  = fxRateDotRls.X[0  + 4 + act];
+        indi->actG2_pitch[act] = fxRateDotRls.X[8  + 4 + act];
+        indi->actG2_yaw[act]   = fxRateDotRls.X[16 + 4 + act];
+
+        indi->wlsWu[act] = 1;
+        indi->u_pref[act] = 0;
     }
+
+    indi->imuSyncLp2Hz = 15; // lord knows
+    indi->wlsWv[0] = 1;
+    indi->wlsWv[0] = 1;
+    indi->wlsWv[0] = 50;
+    indi->wlsWv[0] = 50;
+    indi->wlsWv[0] = 50;
+    indi->wlsWv[0] = 5;
+
+    // keep same:
+    // indi->useIncrement = true;
+    // indi->useRpmDotFeedback = true;
+    // indi->attRateDenom = 4; 
+    // indi->useConstantG2 = false;
+    // indi->useRpmFeedback = false;
+    // indi->maxRateSp = 1800.f for all
+    // indi->useWls = true;
+    // indi->wlsMaxIter = 1;
+    // indi->wlsAlgo = AS_QR;
+    // indi->wlsCondBound = ...;
+    // indi->wlsNanLimit = 10;
+
 }
 
 void testLearner(void) {
@@ -617,10 +689,15 @@ doMoreMotors:
 
             // safety cutoff even when not fully done
             if (allMotorsDone || (cmpTimeUs(micros(), safetyTimeoutUs) > 0) ) {
-                learningQueryState = LEARNING_QUERY_DONE; goto doMore;
+                learningQueryState = LEARNING_QUERY_APPLYING; goto doMore;
             }
 
             break;
+        case LEARNING_QUERY_APPLYING: 
+            updateLearnedParameters(indiProfileLearned, positionProfileLearned);
+            // changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+            // changePositionProfile(POSITION_PROFILE_COUNT-1); 
+            learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE: { break; }
     }
 

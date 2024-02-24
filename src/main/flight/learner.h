@@ -4,7 +4,9 @@
 #include "common/time.h"
 #include "common/rls.h"
 #include "config/config.h"
+
 #include "flight/indi.h"
+#include "flight/pos_ctl.h"
 
 // --- config
 typedef struct learnerConfig_s {
@@ -75,13 +77,14 @@ void initLearner(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
 void updateGains(void);
-void updateLearnedParameters(indiProfile_t* p);
+void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
 
 // query stuff
 typedef enum query_state_e {
     LEARNING_QUERY_IDLE = -1,
     LEARNING_QUERY_DELAY = 0,
     LEARNING_QUERY_ACTIVE,
+    LEARNING_QUERY_APPLYING,
     LEARNING_QUERY_DONE
 } learning_query_state_t;
 

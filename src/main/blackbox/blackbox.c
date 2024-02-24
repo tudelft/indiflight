@@ -463,6 +463,11 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_r_rls_x",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_r_rls_x",   6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_r_rls_x",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
+
+    {"learnerGains",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerGains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerGains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerGains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 };
 
@@ -589,6 +594,7 @@ typedef struct blackboxMainState_s {
     int16_t fx_p_rls_x[2*4];
     int16_t fx_q_rls_x[2*4];
     int16_t fx_r_rls_x[2*4];
+    uint16_t learnerGains[LEARNER_LOOP_COUNT];
 #endif
 } blackboxMainState_t;
 
@@ -998,6 +1004,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_p_rls_x, 8);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_q_rls_x, 8);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, 8);
+        blackboxWriteUnsigned16VBArray(blackboxCurrent->learnerGains, LEARNER_LOOP_COUNT);
     }
 #endif
 
@@ -1306,6 +1313,9 @@ static void writeInterframe(void)
         for (int i=0; i < 4*2; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
+
+        arraySubUint16(deltas16, blackboxCurrent->learnerGains, blackboxLast->learnerGains, LEARNER_LOOP_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, LEARNER_LOOP_COUNT);
     }
 #else
     UNUSED(deltas16);
@@ -1720,15 +1730,18 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
     }
     for (int i = 0; i < 4; i++) {
-        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[4  + i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[8  + i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[12 + i]);
+        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0 + i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[4 + i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[8 + i]);
     }
     for (int i = 0; i < 2*4; i++) {
-        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[4  + i]);
-        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[8  + i]);
-        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[12 + i]);
+        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0 + i]);
+        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[8 + i]);
+        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[16 + i]);
     }
+
+    for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
+        blackboxCurrent->learnerGains[loop] = lrintf(10.f * learnRun.gains[loop]);
 #endif
 
 #else
