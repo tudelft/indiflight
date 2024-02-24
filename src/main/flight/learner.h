@@ -4,6 +4,7 @@
 #include "common/time.h"
 #include "common/rls.h"
 #include "config/config.h"
+#include "flight/indi.h"
 
 // --- config
 typedef struct learnerConfig_s {
@@ -19,15 +20,27 @@ typedef struct learnerConfig_s {
     uint8_t imuFiltHz;
     uint8_t fxFiltHz;
     uint8_t motorFiltHz;
+    uint8_t zetaRate;
+    uint8_t zetaAttitude;
+    uint8_t zetaVelocity;
+    uint8_t zetaPosition;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
+
+typedef enum learner_loops_e {
+    LEARNER_LOOP_RATE = 0,
+    LEARNER_LOOP_ATTITUDE,
+    LEARNER_LOOP_VELOCITY,
+    LEARNER_LOOP_POSITION,
+    LEARNER_LOOP_COUNT
+} learner_loops_t;
 
 typedef enum learning_mode_e {
     LEARNING_OFF = 0,
     LEARN_DURING_FLIGHT = 1 << 0,
     LEARN_AFTER_CATAPULT = 1 << 1,
-} learning_mode_t;
+} learner_mode_t;
 
 typedef struct learningRuntime_s {
     t_fp_vector imuRate;
@@ -41,16 +54,18 @@ typedef struct learningRuntime_s {
     float motorOmega[MAX_SUPPORTED_MOTORS];
     float motorOmegaDot[MAX_SUPPORTED_MOTORS];
     float motorD[MAX_SUPPORTED_MOTORS];
-} learningRuntime_t;
+    float zeta[LEARNER_LOOP_COUNT];
+    float gains[LEARNER_LOOP_COUNT];
+} learnerRuntime_t;
 
-extern learningRuntime_t learnRun;
+extern learnerRuntime_t learnRun;
 
 extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
 extern rls_t imuRls;
 extern rls_parallel_t fxSpfRls;
 extern rls_parallel_t fxRateDotRls;
 
-void initLearningRuntime(void);
+void initLearnerRuntime(void);
 
 
 // --- states and functions
@@ -59,6 +74,8 @@ void initLearningRuntime(void);
 void initLearner(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
+void updateGains(void);
+void updateLearnedParameters(indiProfile_t* p);
 
 // query stuff
 typedef enum query_state_e {

@@ -1311,6 +1311,10 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_IMU_LOWPASS_HZ,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, imuFiltHz) },
     { PARAM_NAME_LEARNER_FX_LOWPASS_HZ,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxFiltHz) },
     { PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, motorFiltHz) },
+    { PARAM_NAME_LEARNER_ZETA_RATE,         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaRate) },
+    { PARAM_NAME_LEARNER_ZETA_ATTITUDE,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaAttitude) },
+    { PARAM_NAME_LEARNER_ZETA_VELOCITY,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocity) },
+    { PARAM_NAME_LEARNER_ZETA_POSITION,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPosition) },
 #endif
 
 // PG_TELEMETRY_CONFIG

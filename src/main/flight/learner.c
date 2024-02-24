@@ -32,9 +32,9 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
-    .mode = (uint8_t) LEARNING_OFF,
+    .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
     .delayMs = 250,
     .stepMs = 50,
@@ -45,14 +45,21 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .gyroMax = 1600,
     .imuFiltHz = 10,
     .fxFiltHz = 20,
-    .motorFiltHz = 40
+    .motorFiltHz = 40,
+    .zetaRate = 0.8,
+    .zetaAttitude = 0.8,
+    .zetaVelocity = 0.6,
+    .zetaPosition = 0.8
 );
 
 // extern
-learningRuntime_t learnRun = {0};
+learnerRuntime_t learnRun = {0};
 
-void initLearningRuntime(void) {
-    // for future extension
+void initLearnerRuntime(void) {
+    learnRun.zeta[LEARNER_LOOP_RATE]     = constrainf(0.01f * learnerConfig()->zetaRate    , 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_ATTITUDE] = constrainf(0.01f * learnerConfig()->zetaAttitude, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_VELOCITY] = constrainf(0.01f * learnerConfig()->zetaVelocity, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
 }
 
 // externs
@@ -99,10 +106,15 @@ static float dumbRng(void) {
     return ( ((float)(randomSequence[rngSeed] - 127)) / 128.f );
 }
 
+static indiProfile_t* indiLearner;
+
 // learning
 void initLearner(void) {
     // limited to 4 for now
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
+
+    indiLearner = indiProfilesMutable(INDI_PROFILE_COUNT-1);
+    initLearnerRuntime();
 
     rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
 
@@ -274,7 +286,24 @@ void updateLearner(timeUs_t current) {
     }
     learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
 
-    bool hoverAttitudeLearningConditions = true; // for debugging
+    bool gainTuningConditions = fxLearningConditions;
+
+    if (gainTuningConditions) {
+        // get slowest actuator
+        float maxTau = 0.f;
+        for (int act = 0; act < learnerConfig()->numAct; act++)
+            maxTau = MAX(maxTau, motorRls[act].X[3] * 0.1f);
+        maxTau = constrainf(maxTau, 0.01f, 0.2f);
+
+        // calculate gains
+        learnRun.gains[LEARNER_LOOP_RATE] = 
+            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+
+        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
+            learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+    }
+
+    bool hoverAttitudeLearningConditions = false; // for debugging
 
     if (hoverAttitudeLearningConditions) {
         // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
@@ -429,6 +458,20 @@ panic:
     if (!(++printCounter % 1000))
         cliPrintLinef("Learner Timings (us): filt %d, imu %d, fx %d, mot %d, hover %d", learnerTimings.filters, learnerTimings.imu, learnerTimings.fx, learnerTimings.motor, learnerTimings.hover);
 #endif
+}
+
+void updateLearnedParameters(indiProfile_t* p) {
+    for (int axis = 0; axis < 3; axis++) {
+        p->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
+        p->attGains[axis]  = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_ATTITUDE];
+        // todo: position
+    }
+
+    p->attMaxTiltRate = 500; // reduce slightly
+    p->attMaxYawRate = 300; // reduce
+    for (int act = 0; act < learnerConfig()->numAct ; act++) {
+        p->actHoverRpm[act] = 20000 / 10; // guess
+    }
 }
 
 void testLearner(void) {

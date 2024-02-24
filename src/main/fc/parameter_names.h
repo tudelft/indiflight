@@ -209,6 +209,10 @@
 #define PARAM_NAME_LEARNER_IMU_LOWPASS_HZ "learner_imu_lowpass_hz"
 #define PARAM_NAME_LEARNER_FX_LOWPASS_HZ "learner_fx_lowpass_hz"
 #define PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ "learner_motor_lowpass_hz"
+#define PARAM_NAME_LEARNER_ZETA_RATE "learner_zeta_rate"
+#define PARAM_NAME_LEARNER_ZETA_ATTITUDE "learner_zeta_attitude"
+#define PARAM_NAME_LEARNER_ZETA_VELOCITY "learner_zeta_velocity"
+#define PARAM_NAME_LEARNER_ZETA_POSITION "learner_zeta_position"
 #endif
 
 #ifdef USE_GPS
