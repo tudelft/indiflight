@@ -56,6 +56,7 @@ typedef struct learningRuntime_s {
     float motorOmega[MAX_SUPPORTED_MOTORS];
     float motorOmegaDot[MAX_SUPPORTED_MOTORS];
     float motorD[MAX_SUPPORTED_MOTORS];
+    float motorSqrtD[MAX_SUPPORTED_MOTORS];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
 } learnerRuntime_t;

@@ -44,10 +44,9 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- INDI actuator config
     indiProfile->actNum = 4;
     for (int i = 0; i < MAXU; i++) {
-        indiProfile->actHoverRpm[i] = 1500;
         indiProfile->actTimeConstMs[i] = 25;
-        indiProfile->actPropConst[i] = 1e5;
-        indiProfile->actMaxT[i] = 500;
+        indiProfile->actHoverRpm[i] = 20000;
+        indiProfile->actMaxRpm[i] = 40000;
         indiProfile->actNonlinearity[i] = 50;
         indiProfile->actLimit[i] = 100;
         indiProfile->actG1_fx[i] = 0;
@@ -66,10 +65,10 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
 
     indiProfile->wlsWv[0] = 1; // fx
     indiProfile->wlsWv[1] = 1; // fy
-    indiProfile->wlsWv[2] = 10; // fz
-    indiProfile->wlsWv[3] = 10; // roll
-    indiProfile->wlsWv[4] = 10; // pitch
-    indiProfile->wlsWv[5] = 1; // yaw
+    indiProfile->wlsWv[2] = 50; // fz
+    indiProfile->wlsWv[3] = 50; // roll
+    indiProfile->wlsWv[4] = 50; // pitch
+    indiProfile->wlsWv[5] = 5; // yaw
 
     // ---- Filtering config
     indiProfile->imuSyncLp2Hz = 15;
@@ -118,11 +117,11 @@ void initIndiRuntime(void) {
     // ---- INDI actuator config
     indiRun.actNum = MIN(p->actNum, MAXU);
     for (int i = 0; i < MAXU; i++) {
-        float hoverRpm = MAX(1U, p->actHoverRpm[i]) * 10.f;
-        indiRun.actHoverOmega[i]   = hoverRpm / SECONDS_PER_MINUTE * 2.f * M_PIf;
-        indiRun.actTimeConstS[i]   = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
-        indiRun.actPropConst[i]    = MAX(1UL, p->actPropConst[i]) * 1e-11f;
-        indiRun.actMaxT[i]         = MAX(1UL, p->actMaxT[i]) * 0.01f;
+        indiRun.actHoverOmega[i] = ((float) MAX(100U, p->actHoverRpm[i])) / SECONDS_PER_MINUTE * 2.f * M_PIf;
+        float maxRpm = (float) MAX(100U, p->actMaxRpm[i]);
+        indiRun.actMaxOmega[i]  = maxRpm / SECONDS_PER_MINUTE * 2.f * M_PIf;
+        indiRun.actMaxOmega2[i] = sq( indiRun.actMaxOmega[i] );
+        indiRun.actTimeConstS[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
         indiRun.actNonlinearity[i] = constrainu(p->actNonlinearity[i], 0, 100) * 0.01f;
         unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actLimit[i]);
         indiRun.actLimit[i] = constrainu(tmp, 0, 100) * 0.01f;
@@ -131,10 +130,11 @@ void initIndiRuntime(void) {
         indiRun.actG1[2][i] = p->actG1_fz[i] * 0.01f;
         indiRun.actG1[3][i] = p->actG1_roll[i]  * 0.1f;
         indiRun.actG1[4][i] = p->actG1_pitch[i] * 0.1f;
-        indiRun.actG1[5][i] = p->actG1_yaw[i]   * 0.01f;
-        indiRun.actG2[0][i] = p->actG2_roll[i] / hoverRpm * 0.1f;
-        indiRun.actG2[1][i] = p->actG2_pitch[i] / hoverRpm * 0.1f;
-        indiRun.actG2[2][i] = p->actG2_yaw[i] / hoverRpm * 0.1f;
+        indiRun.actG1[5][i] = p->actG1_yaw[i]   * 0.1f;
+        indiRun.actG2[0][i] = p->actG2_roll[i]  * 1e-5f;
+        indiRun.actG2[1][i] = p->actG2_pitch[i] * 1e-5f;
+        indiRun.actG2[2][i] = p->actG2_yaw[i]   * 1e-5f;
+        indiRun.G2_scaler[i] = 0.5f * indiRun.actMaxOmega2[i] / indiRun.actTimeConstS[i];
         // ---- WLS config
         indiRun.wlsWu[i] = (float) p->wlsWu[i];
         indiRun.u_pref[i] = p->u_pref[i] * 0.01f;
@@ -173,7 +173,6 @@ void initIndiRuntime(void) {
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
         indiRun.omegaDot_fs[i] = 0.f; // sync-filtered motor rate rad/s/s
-        indiRun.G2_normalizer[i] = 1.f / (2.f * indiRun.actTimeConstS[i] * indiRun.actPropConst[i]);
     }
     indiRun.erpmToRads = ERPM_PER_LSB / SECONDS_PER_MINUTE / (motorConfig()->motorPoleCount / 2.f) * (2.f * M_PIf);
     // ---- runtime values -- axes

@@ -135,10 +135,13 @@
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
 #define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
-#define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
+/*
 #define PARAM_NAME_INDI_ACT_PROP_CONSTANT "indi_act_prop_constant"
 #define PARAM_NAME_INDI_ACT_MAX_THRUST "indi_act_max_thrust"
+*/
+#define PARAM_NAME_INDI_ACT_MAX_RPM "indi_act_max_rpm"
+#define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
 #define PARAM_NAME_INDI_ACT_NONLINEARITY "indi_act_nonlinearity"
 #define PARAM_NAME_INDI_ACT_LIMIT "indi_act_limit"
 #define PARAM_NAME_INDI_ACT_G1_FX "indi_act_g1_fx"

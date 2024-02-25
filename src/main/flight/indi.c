@@ -46,7 +46,7 @@
 #endif
 
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 2);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -377,7 +377,7 @@ void getMotorCommands(timeUs_t current) {
 
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
             indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
-            indiRun.omega_fs[i] = biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]);
+            indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
         } else
 #endif
         {
@@ -389,7 +389,8 @@ void getMotorCommands(timeUs_t current) {
         }
 
         // needed later as well, not just for fallback
-        omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > (0.5f * indiRun.actHoverOmega[i])) ? 1.f / indiRun.omega_fs[i] : 1.f / indiRun.actHoverOmega[i];
+        float invThresh = 0.1f * indiRun.actMaxOmega[i];
+        omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
     }
 
     // get motor acceleration
@@ -401,7 +402,7 @@ void getMotorCommands(timeUs_t current) {
         } else
 #endif
         {
-            indiRun.omegaDot_fs[i] = (indiRun.actMaxT[i] * du[i]) * omega_inv[i] * indiRun.G2_normalizer[i];
+            indiRun.omegaDot_fs[i] = du[i] * indiRun.G2_scaler[i] * omega_inv[i];
         }
     }
 
@@ -423,7 +424,7 @@ void getMotorCommands(timeUs_t current) {
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {
         for (int i=0; i < indiRun.actNum; i++) {
-            indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i] / indiRun.actMaxT[i];
+            indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
         }
     }
 
@@ -434,7 +435,7 @@ void getMotorCommands(timeUs_t current) {
         for (int j=0; j < MAXV; j++) {
             G1G2[MAXV*i + j] = indiRun.actG1[j][i];
             if (j > 2)
-                G1G2[MAXV*i + j] += indiRun.G2_normalizer[i] * omega_inv[i] * indiRun.actG2[j-3][i];
+                G1G2[MAXV*i + j] += indiRun.G2_scaler[i] * omega_inv[i] * indiRun.actG2[j-3][i];
         }
     }
 
@@ -519,6 +520,7 @@ void getMotorCommands(timeUs_t current) {
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
+        indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
     }
 }
 

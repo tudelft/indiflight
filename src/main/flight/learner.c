@@ -34,7 +34,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -77,6 +77,7 @@ static biquadFilter_t imuSpfFilter[3];
 
 static biquadFilter_t motorOmegaFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t motorDFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t motorSqrtDFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t fxOmegaFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t fxUFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t fxRateFilter[MAX_SUPPORTED_MOTORS];
@@ -142,6 +143,7 @@ void initLearner(void) {
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+        biquadFilterInitLPF(&motorSqrtDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
     }
 }
 
@@ -187,9 +189,11 @@ static void updateLearningFilters(void) {
         motorPrevOmega[act] = learnRun.motorOmega[act];
 
         learnRun.motorD[act] = biquadFilterApply(&motorDFilter[act], indiRun.d[act]);
+        float dConstr = constrainf(indiRun.d[act], 0.f, 1.f);
+        learnRun.motorSqrtD[act] = biquadFilterApply(&motorDFilter[act], sqrtf(dConstr));
         // second order filters could the signal to exceed bounds of the input
         // but we need to ensure [0, 1] for a square root later on
-        learnRun.motorD[act] = constrainf(learnRun.motorD[act], 0.f, 1.f);
+        //learnRun.motorD[act] = constrainf(learnRun.motorD[act], 0.f, 1.f);
     }
 }
 
@@ -277,7 +281,7 @@ void updateLearner(timeUs_t current) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
-                sqrtf(learnRun.motorD[act]), // filter before or after sqrt?
+                learnRun.motorSqrtD[act],
                 1.f,
                 1e-4f * learnRun.motorOmegaDot[act]
             };
@@ -497,27 +501,31 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->attMaxTiltRate = 500; // reduce slightly
     indi->attMaxYawRate = 300; // reduce
     for (int act = 0; act < learnerConfig()->numAct ; act++) {
-        indi->actHoverRpm[act] = (uint16_t) 20000 / 10; // guess
+        //              inv y-scale 
+        float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
+        indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
+        indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         indi->actTimeConstMs[act] = (uint8_t) constrainf(1000.f * 0.1f * motorRls[act].X[3], 10.f, 200.f);
-        //indi->actPropConst[act] = ???
-        //indi->actMaxT[act] = ???
+
         if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
                 motorRls[act].X[0] / (motorRls[act].X[0] + motorRls[act].X[1]),
                 0.f, 1.f);
+            // todo: transform to match kappa better
         else
             indi->actNonlinearity[act] = 50;
 
         indi->actLimit[act] = 60; // conservative for now
-        indi->actG1_fx[act]    = fxSpfRls.X[0 + act];
-        indi->actG1_fy[act]    = fxSpfRls.X[4 + act];
-        indi->actG1_fz[act]    = fxSpfRls.X[8 + act];
-        indi->actG1_roll[act]  = fxRateDotRls.X[0  + act];
-        indi->actG1_pitch[act] = fxRateDotRls.X[8  + act];
-        indi->actG1_yaw[act]   = fxRateDotRls.X[16 + act];
-        indi->actG2_roll[act]  = fxRateDotRls.X[0  + 4 + act];
-        indi->actG2_pitch[act] = fxRateDotRls.X[8  + 4 + act];
-        indi->actG2_yaw[act]   = fxRateDotRls.X[16 + 4 + act];
+        //                    inv y-scale        a-scale           config scale
+        indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
+        indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
+        indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
+        indi->actG1_roll[act]  = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
+        indi->actG1_pitch[act] = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
+        indi->actG1_yaw[act]   = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
+        indi->actG2_roll[act]  = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
+        indi->actG2_pitch[act] = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
+        indi->actG2_yaw[act]   = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
 
         indi->wlsWu[act] = 1;
         indi->u_pref[act] = 0;
@@ -697,6 +705,7 @@ doMoreMotors:
             updateLearnedParameters(indiProfileLearned, positionProfileLearned);
             // changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
             // changePositionProfile(POSITION_PROFILE_COUNT-1); 
+
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE: { break; }
     }

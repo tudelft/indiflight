@@ -37,10 +37,13 @@ typedef struct indiProfile_s {
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
     // ---- INDI actuator config
     uint8_t actNum;                 // number of actuators
-    uint16_t actHoverRpm[MAXU];     // approximate rpm/10 in hover flight. FIXME: make an estimator for this
     uint8_t actTimeConstMs[MAXU];     // time constant for actuator spool up in ms
+    /*
     uint32_t actPropConst[MAXU];    // propeller constant in N / (rad/s)^2 * 1e11
     uint16_t actMaxT[MAXU];         // max motor thrust in N*100 (centinewton)
+    */
+    uint32_t actMaxRpm[MAXU];       // max rpm.
+    uint32_t actHoverRpm[MAXU];     // approximate rpm in hover flight. FIXME: make an estimator for this
     uint8_t actNonlinearity[MAXU];  // motor nonlinearity percentage between (0, 100)
     uint8_t actLimit[MAXU];         // limit motor output in percent (100 full power)
     int16_t actG1_fx[MAXU];      // actuator effectiveness (N/kg) / u * 100
@@ -48,7 +51,7 @@ typedef struct indiProfile_s {
     int16_t actG1_fz[MAXU];      // actuator effectiveness * 100
     int16_t actG1_roll[MAXU];    // actuator effectiveness (Nm/(kg m^2)) / u * 10
     int16_t actG1_pitch[MAXU];   // actuator effectiveness * 10 
-    int16_t actG1_yaw[MAXU];     // actuator effectiveness * 100
+    int16_t actG1_yaw[MAXU];     // actuator effectiveness * 10
     int16_t actG2_roll[MAXU];    // actuator rate effectiveness (Nm/(kg m^2)) / (rad/s/s) * hoverRpm * 10 TODO: change scaling
     int16_t actG2_pitch[MAXU];   // actuator rate effectiveness
     int16_t actG2_yaw[MAXU];     // actuator rate effectiveness
@@ -102,14 +105,19 @@ typedef struct indiRuntime_s {
     t_fp_vector maxRateSp;          // maximum rate setpoint in deg/s
     // ---- INDI actuator config
     uint8_t actNum;
-    float actHoverOmega[MAXU];   // rad/s
-    float actTimeConstS[MAXU];   // sec
+    /*
     float actPropConst[MAXU];    // propeller constant in N / (rad/s)^2 * 1e11
     float actMaxT[MAXU];         // N
+    */
+    float actMaxOmega[MAXU];    // rad/s
+    float actMaxOmega2[MAXU];    // rad/s
+    float actHoverOmega[MAXU];   // rad/s
+    float actTimeConstS[MAXU];   // sec
     float actNonlinearity[MAXU]; // - 
     float actLimit[MAXU];        // 
     float actG1[MAXV][MAXU];
     float actG2[3][MAXU];
+    float G2_scaler[MAXU];
     // ---- Filtering config
     float imuSyncLp2Hz;        // 2nd order butterworth break frequency in Hz for imu synchoronous filtering
     // ---- WLS config
@@ -133,7 +141,6 @@ typedef struct indiRuntime_s {
     float omega_fs[MAXU]; // sync-filtered motor speed rad/s
     //float omegaDot[MAXU]; // unfiltered motor rate rad/s/s
     float omegaDot_fs[MAXU]; // sync-filtered motor rate rad/s/s
-    float G2_normalizer[MAXU];
     float erpmToRads; // factor to move from motor erpm to rad/s
     // ---- runtime values -- axes
     t_fp_vector attGainsCasc; // attitude gains simulating parallel PD
