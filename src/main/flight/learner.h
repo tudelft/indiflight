@@ -26,6 +26,8 @@ typedef struct learnerConfig_s {
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
+    uint8_t applyIndiProfileAfterQuery;
+    uint8_t applyPositionProfileAfterQuery;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -59,6 +61,8 @@ typedef struct learningRuntime_s {
     float motorSqrtD[MAX_SUPPORTED_MOTORS];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
+    bool applyIndiProfileAfterQuery;
+    bool applyPositionProfileAfterQuery;
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;

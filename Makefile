@@ -136,9 +136,10 @@ else
 ifeq ($(DEBUG),INFO)
 DEBUG_FLAGS            = -ggdb3
 endif
-OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+#OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+OPTIMISATION_BASE     := -flto -fuse-linker-plugin -fmerge-all-constants # todo: try -funroll-loops here
 OPTIMISE_DEFAULT      := -O2
-OPTIMISE_SPEED        := -Ofast
+OPTIMISE_SPEED        := -O3
 OPTIMISE_SIZE         := -Os
 
 LTO_FLAGS             := $(OPTIMISATION_BASE) $(OPTIMISE_SPEED)

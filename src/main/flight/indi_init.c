@@ -139,6 +139,7 @@ void initIndiRuntime(void) {
         indiRun.wlsWu[i] = (float) p->wlsWu[i];
         indiRun.u_pref[i] = p->u_pref[i] * 0.01f;
     }
+    //indiRun.actG1[0][0] = NAN; // FIXME: crashtesting
     for (int i = 0; i < MAXV; i++)
         indiRun.wlsWv[i] = (float) p->wlsWv[i];
 

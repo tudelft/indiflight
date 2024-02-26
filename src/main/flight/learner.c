@@ -48,10 +48,12 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .imuFiltHz = 10,
     .fxFiltHz = 20,
     .motorFiltHz = 40,
-    .zetaRate = 0.8,
-    .zetaAttitude = 0.8,
-    .zetaVelocity = 0.6,
-    .zetaPosition = 0.8
+    .zetaRate = 80,
+    .zetaAttitude = 80,
+    .zetaVelocity = 60,
+    .zetaPosition = 80,
+    .applyIndiProfileAfterQuery = false,
+    .applyPositionProfileAfterQuery = false
 );
 
 // extern
@@ -62,6 +64,8 @@ void initLearnerRuntime(void) {
     learnRun.zeta[LEARNER_LOOP_ATTITUDE] = constrainf(0.01f * learnerConfig()->zetaAttitude, 0.5f, 1.0f);
     learnRun.zeta[LEARNER_LOOP_VELOCITY] = constrainf(0.01f * learnerConfig()->zetaVelocity, 0.5f, 1.0f);
     learnRun.zeta[LEARNER_LOOP_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
+    learnRun.applyIndiProfileAfterQuery = (bool) learnerConfig()->applyIndiProfileAfterQuery;
+    learnRun.applyPositionProfileAfterQuery = (bool) learnerConfig()->applyPositionProfileAfterQuery;
 }
 
 // externs
@@ -155,19 +159,51 @@ static void updateLearningFilters(void) {
     static t_fp_vector fxPrevRateDot = {0};
     static t_fp_vector fxPrevSpf = {0};
 
-#pragma message "TODO: implement imu location correction"
+    // IMU rls filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         learnRun.imuRate.A[axis] = biquadFilterApply(&imuRateFilter[axis], indiRun.rate.A[axis]);
         learnRun.imuSpf.A[axis] = biquadFilterApply(&imuSpfFilter[axis], indiRun.spf.A[axis]);
 
         learnRun.imuRateDot.A[axis] = indiRun.indiFrequency * (learnRun.imuRate.A[axis] - imuPrevRate.A[axis]);
         imuPrevRate.A[axis] = learnRun.imuRate.A[axis];
+    }
 
+//#pragma message "TODO: implement imu location correction"
+    // IMU correction
+    float wx, wy, wz;
+    float rx, ry, rz;
+    float dwx, dwy, dwz;
+    float ax, ay, az;
+
+#ifdef HIL_BUILD
+    rx = 0.f; ry = 0.f; rz = 0.f;
+#else
+    rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
+#endif
+
+    dwx = indiRun.rateDot.A[0];
+    dwy = indiRun.rateDot.A[1];
+    dwz = indiRun.rateDot.A[2];
+
+    wx = indiRun.rate.A[0];
+    wy = indiRun.rate.A[1];
+    wz = indiRun.rate.A[2];
+
+    ax = indiRun.spf.A[0];
+    ay = indiRun.spf.A[1];
+    az = indiRun.spf.A[2];
+
+    float fxSpfCorrected[3];
+    fxSpfCorrected[0] = ax - ( rx * (-sq(wy)-sq(wz)) + ry * (wx*wy - dwz)    + rz * (wx*wz + dwy)    );
+    fxSpfCorrected[1] = ay - ( rx * (wx*wy + dwz)    + ry * (-sq(wx)-sq(wz)) + rz * (wy*wz - dwx)    );
+    fxSpfCorrected[2] = az - ( rx * (wx*wz - dwy)    + ry * (wy*wz + dwx)    + rz * (-sq(wx)-sq(wy)) );
+
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDot.A[axis]);
         learnRun.fxRateDotDiff.A[axis] = fxRateDot - fxPrevRateDot.A[axis];
         fxPrevRateDot.A[axis] = fxRateDot;
 
-        float fxSpf = biquadFilterApply(&fxSpfFilter[axis], indiRun.spf.A[axis]);
+        float fxSpf = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
         learnRun.fxSpfDiff.A[axis] = fxSpf - fxPrevSpf.A[axis];
         fxPrevSpf.A[axis] = fxSpf;
     }
@@ -283,7 +319,7 @@ void updateLearner(timeUs_t current) {
                 learnRun.motorD[act],
                 learnRun.motorSqrtD[act],
                 1.f,
-                1e-4f * learnRun.motorOmegaDot[act]
+                -1e-4f * learnRun.motorOmegaDot[act]
             };
             float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
             rlsParallelNewSample(&motorRls[act], A, &y);
@@ -477,11 +513,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     pos->horz_p = (uint8_t) 10.f 
         * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
     pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
-    pos->horz_i = pos->horz_p / 10; // by lack of better option at this point
+    pos->horz_i = pos->horz_d / 10; // fudge factor: by lack of better option at this point
     pos->horz_max_v = 250; // cm/s
     pos->horz_max_a = 500; // cm/s/s
     pos->horz_max_iterm = 200; // cm/s
-    pos->max_tilt = 30; // conservative, like the others
+    pos->max_tilt = 40; // conservative, like the others
     pos->vert_p = pos->horz_p;
     pos->vert_i = pos->horz_i;
     pos->vert_d = pos->horz_d;
@@ -490,7 +526,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     pos->vert_max_a_up = 500; // cm/s/s
     pos->vert_max_a_down = 500; // cm/s/s
     pos->vert_max_iterm = 100; // cm/s/s
-    pos->yaw_p = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
+    // fudge factor 0.5f, maybe try to see what happens with lower zeta_attitude
+    pos->yaw_p = (uint8_t) 10.f * .5f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
     pos->weathervane_p = 0;
     pos->weathervane_min_v = 200; // cm/s/s
     pos->use_spf_attenuation = 1;
@@ -505,7 +542,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
-        indi->actTimeConstMs[act] = (uint8_t) constrainf(1000.f * 0.1f * motorRls[act].X[3], 10.f, 200.f);
+        //                                            inv y-scale   a-scale     config-scale
+        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].X[3], 10.f, 200.f);
 
         if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
@@ -533,11 +571,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
     indi->imuSyncLp2Hz = 15; // lord knows
     indi->wlsWv[0] = 1;
-    indi->wlsWv[0] = 1;
-    indi->wlsWv[0] = 50;
-    indi->wlsWv[0] = 50;
-    indi->wlsWv[0] = 50;
-    indi->wlsWv[0] = 5;
+    indi->wlsWv[1] = 1;
+    indi->wlsWv[2] = 50;
+    indi->wlsWv[3] = 50;
+    indi->wlsWv[4] = 50;
+    indi->wlsWv[5] = 5;
 
     // keep same:
     // indi->useIncrement = true;
@@ -620,8 +658,9 @@ void runLearningQueryStateMachine(timeUs_t current) {
     }
 
     bool enableConditions = (ARMING_FLAG(ARMED)) 
-            && (catapultState == CATAPULT_DONE)
-            && (learnerConfig()->mode & LEARN_AFTER_CATAPULT);
+            && (FLIGHT_MODE(LEARNER_MODE))
+            && (learnerConfig()->mode & LEARN_AFTER_CATAPULT)
+            && (catapultState == CATAPULT_DONE);
 
 doMore:
     switch (learningQueryState) {
@@ -659,8 +698,14 @@ doMore:
                 // trigger next motor, if overlap time reached
                 if ( (motor+1 < c->numAct)
                         && (motorStates[motor+1].queryState == MOTOR_QUERY_ZERO)
-                        && ( (time_in_query + 1e3 * c->overlapMs) > 1e3 * (c->stepMs + c->rampMs) ) )
+                        && ( (time_in_query + 1e3 * c->overlapMs) > 1e3 * (c->stepMs + c->rampMs) ) ) {
                     resetMotorQueryState(motorStates, motor + 1, true);
+                    // FIXME
+                    //uint8_t* p = NULL;
+                    //*p = 0; // generate crash
+                    //__asm("b ."); // generate hang
+                    //while (1) __asm("nop"); // another hang 
+                }
 
                 // protect somewhat against gyro overrun, probably wont work because of filter delays
                 for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -703,8 +748,12 @@ doMoreMotors:
             break;
         case LEARNING_QUERY_APPLYING: 
             updateLearnedParameters(indiProfileLearned, positionProfileLearned);
-            // changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-            // changePositionProfile(POSITION_PROFILE_COUNT-1); 
+
+            if (learnRun.applyIndiProfileAfterQuery)
+                changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+
+            if (learnRun.applyPositionProfileAfterQuery)
+                changePositionProfile(POSITION_PROFILE_COUNT-1); 
 
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE: { break; }

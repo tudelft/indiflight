@@ -71,6 +71,7 @@
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
 #include "flight/indi.h"
+#include "flight/indi_init.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
@@ -1064,6 +1065,12 @@ void processRxModes(timeUs_t currentTimeUs)
     if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
         ENABLE_FLIGHT_MODE(LEARNER_MODE);
     } else {
+        // reset to manually tuned parameters
+        if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
+            changeIndiProfile(0);
+        if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
+            changePositionProfile(0);
+
         resetLearningQuery();
         DISABLE_FLIGHT_MODE(LEARNER_MODE);
     }
@@ -1161,6 +1168,19 @@ void processRxModes(timeUs_t currentTimeUs)
 bool isTouchingGround(void) {
     // if total trust is low, but we have high total accel then we are likely touching ground
     // this breaks down for fixed wings, and probably "3D" thrust ESCs
+#ifdef USE_LEARNER
+    if (FLIGHT_MODE(LEARNER_MODE) 
+        && (learningQueryState >= LEARNING_QUERY_DELAY)
+        && (learningQueryState != LEARNING_QUERY_DONE))
+        return false; // never touching ground here
+#endif
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE)
+        && (catapultState >= CATAPULT_LAUNCHING)
+        && (catapultState != CATAPULT_DONE))
+        return false;
+#endif
+
     bool gyroLow = (
         sq(gyro.gyroADCf[X])
         + sq(gyro.gyroADCf[Y])
