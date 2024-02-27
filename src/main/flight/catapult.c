@@ -45,14 +45,16 @@ PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig,
     .upwardsAccel = 20,
 );
 
+#include "flight/learner.h"
+
 catapultRuntime_t catapultRuntime;
 void initCatapultRuntime(void) {
     catapultRuntime.altitude = constrainu(catapultConfig()->altitude, 1, 1000) * 0.01f;
     catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
     catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
-    catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(catapultConfig()->rotationRoll);
-    catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(catapultConfig()->rotationPitch);
-    catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(catapultConfig()->rotationYaw);
+    catapultRuntime.rotationRate.V.X = 10.f * dumbRng();
+    catapultRuntime.rotationRate.V.Y = 10.f * dumbRng();
+    catapultRuntime.rotationRate.V.Z = 10.f * dumbRng();
     catapultRuntime.rotationTimeUs = constrainu(catapultConfig()->rotationTimeMs, 0, 1000) * 1e3;
     catapultRuntime.fireTimeUs = 0;
     catapultRuntime.upwardsAccel = (float) constrainu(catapultConfig()->upwardsAccel, 4, 100); // real thrust setting can be up to 17% higher if higher than 20m/s/s

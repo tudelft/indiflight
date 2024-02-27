@@ -74,6 +74,7 @@ extern rls_parallel_t fxSpfRls;
 extern rls_parallel_t fxRateDotRls;
 
 void initLearnerRuntime(void);
+float dumbRng(void);
 
 
 // --- states and functions
