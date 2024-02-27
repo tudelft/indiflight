@@ -124,8 +124,8 @@ void getSetpoints(timeUs_t current) {
     // flight mode handling for setpoints
 #ifdef USE_CATAPULT
     if (FLIGHT_MODE(CATAPULT_MODE)
-            && (catapultState != CATAPULT_IDLE)
-            && (catapultState != CATAPULT_DONE)) {
+            && (catapultState > CATAPULT_IDLE)
+            && (catapultState < CATAPULT_DONE)) {
         indiRun.controlAttitude = controlAttitudeFromCat;
         indiRun.attSpNed = attSpNedFromCat;
         indiRun.spfSpBody = spfSpBodyFromCat;
@@ -134,8 +134,8 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState != LEARNING_QUERY_IDLE)
-            && (learningQueryState != LEARNING_QUERY_DONE)) {
+            && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
         for (int i=0; i < indiRun.actNum; i++) {
             indiRun.d[i] = outputFromLearningQuery[i];

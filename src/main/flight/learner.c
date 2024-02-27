@@ -18,6 +18,7 @@
 #include "flight/indi_init.h"
 #include "flight/catapult.h"
 #include "flight/pos_ctl.h"
+#include "flight/throw.h"
 
 #include "f2c.h"
 #include "clapack.h"
@@ -287,7 +288,7 @@ void updateLearner(timeUs_t current) {
     bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
         && (
             (learnerConfig()->mode & LEARN_DURING_FLIGHT)
-            || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
+            || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
     if (fxLearningConditions) {
@@ -617,11 +618,6 @@ void testLearner(void) {
 // query
 #define LEARNING_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
 
-void resetLearningQuery(void) {
-    if (catapultState == CATAPULT_IDLE)
-        learningQueryState = LEARNING_QUERY_IDLE;
-}
-
 static void resetMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
     const learnerConfig_t* c = learnerConfig();
     if ( motor >= c->numAct ) return;
@@ -657,15 +653,27 @@ void runLearningQueryStateMachine(timeUs_t current) {
         return;
     }
 
-    bool enableConditions = (ARMING_FLAG(ARMED)) 
-            && (FLIGHT_MODE(LEARNER_MODE))
-            && (learnerConfig()->mode & LEARN_AFTER_CATAPULT)
-            && (catapultState == CATAPULT_DONE);
+    bool disableConditions = !FLIGHT_MODE(LEARNER_MODE)
+            || !(learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW));
+
+    bool enableConditions = !ARMING_FLAG(ARMED) && !disableConditions;
 
 doMore:
     switch (learningQueryState) {
         case LEARNING_QUERY_IDLE:
             if (enableConditions) {
+                initLearner(); // reset all RLS filters to 0 initial state, and reset lowpass filters
+                learningQueryState = LEARNING_QUERY_WAITING_FOR_LAUNCH; goto doMore;
+            }
+            break;
+        case LEARNING_QUERY_WAITING_FOR_LAUNCH: // catapult or throw
+            if (disableConditions) {
+                learningQueryState = LEARNING_QUERY_IDLE;
+                break;
+            }
+
+            if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
                 learningQueryEnabledAt = current;
                 startAt = current + c->delayMs*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
@@ -756,7 +764,12 @@ doMoreMotors:
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
 
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
-        case LEARNING_QUERY_DONE: { break; }
+        case LEARNING_QUERY_DONE:
+            if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_WAITING_FOR_ARM))
+                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW))
+                )
+                learningQueryState = LEARNING_QUERY_IDLE;
+            break;
     }
 
     for (int motor = 0; motor < c->numAct; motor++) {

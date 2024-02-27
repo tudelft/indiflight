@@ -33,12 +33,12 @@ float tt_progress = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 1.5;
-float tt_vel_gain = 2.5;
-float tt_yaw_gain = 1.0;
+//float tt_pos_gain = 1.5;
+//float tt_vel_gain = 2.5;
+//float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 2.0f;
+float tt_R = 1.0f;
 
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
@@ -49,20 +49,37 @@ void getRefsTrajectoryTracker(float p) {
     // where:
     // dp/dt  = speed_factor (piecewise constant)
 
+    //tt_pos_ref[0] = tt_R*cosf(p);
+    //tt_pos_ref[1] = tt_R*sinf(p);
+    //tt_pos_ref[2] = -1.5f;
+
+    //tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
+    //tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
+    //tt_vel_ref[2] = 0.0f;
+
+    //tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
+    //tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
+    //tt_acc_ref[2] = 0.0f;
+
+    //tt_yaw_ref = p + M_PIf/2.0f;
+    //tt_yaw_rate_ref = tt_speed_factor;
+
+    // Lissajou trajectory from https://arxiv.org/pdf/2311.13081.pdf
+    // cos(2πt/T ) sin(4πt/T )/2 const
     tt_pos_ref[0] = tt_R*cosf(p);
-    tt_pos_ref[1] = tt_R*sinf(p);
+    tt_pos_ref[1] = tt_R*sinf(2.f*p)/2.f;
     tt_pos_ref[2] = -1.5f;
 
     tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
+    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(2.f*p);
     tt_vel_ref[2] = 0.0f;
 
     tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
+    tt_acc_ref[1] = -tt_R*2.f*tt_speed_factor*tt_speed_factor*sinf(2.f*p);
     tt_acc_ref[2] = 0.0f;
 
-    tt_yaw_ref = p + M_PIf/2.0f;
-    tt_yaw_rate_ref = tt_speed_factor;
+    tt_yaw_ref = 0.f;
+    tt_yaw_rate_ref = 0.f;
 }
 
 void getSetpointsTrajectoryTracker(void) {
@@ -72,14 +89,16 @@ void getSetpointsTrajectoryTracker(void) {
     float z_error = tt_pos_ref[2] - posEstNed.V.Z;
 
     // vel setpoint
-    float vx_sp = tt_vel_ref[0] + tt_pos_gain*x_error;
-    float vy_sp = tt_vel_ref[1] + tt_pos_gain*y_error;
-    float vz_sp = tt_vel_ref[2] + tt_pos_gain*z_error;
+    float Dgain = posRuntime.horz_d > 1.f  ?  posRuntime.horz_d  :  1.f;
+    float Pgain = posRuntime.horz_p / Dgain;
+    float vx_sp = tt_vel_ref[0] + Pgain*x_error;
+    float vy_sp = tt_vel_ref[1] + Pgain*y_error;
+    float vz_sp = tt_vel_ref[2] + Pgain*z_error;
 
     // acc setpoint
-    tt_acc_sp[0] = tt_acc_ref[0] + tt_vel_gain*(vx_sp - velEstNed.V.X);
-    tt_acc_sp[1] = tt_acc_ref[1] + tt_vel_gain*(vy_sp - velEstNed.V.Y);
-    tt_acc_sp[2] = tt_acc_ref[2] + tt_vel_gain*(vz_sp - velEstNed.V.Z);
+    tt_acc_sp[0] = tt_acc_ref[0] + Dgain*(vx_sp - velEstNed.V.X);
+    tt_acc_sp[1] = tt_acc_ref[1] + Dgain*(vy_sp - velEstNed.V.Y);
+    tt_acc_sp[2] = tt_acc_ref[2] + Dgain*(vz_sp - velEstNed.V.Z);
 
     // yaw error
     float yaw_error = tt_yaw_ref - DECIDEGREES_TO_RADIANS(attitude.values.yaw);
@@ -89,7 +108,7 @@ void getSetpointsTrajectoryTracker(void) {
         yaw_error += 2.f * M_PIf;
 
     // yaw rate setpoint
-    tt_yaw_rate_sp = tt_yaw_rate_ref + tt_yaw_gain*yaw_error;
+    tt_yaw_rate_sp = tt_yaw_rate_ref + posRuntime.yaw_p*yaw_error;
 }
 
 void initTrajectoryTracker(void) {

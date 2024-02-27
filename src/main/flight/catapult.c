@@ -3,6 +3,7 @@
 #include "io/beeper.h"
 #include "io/external_pos.h"
 #include "flight/imu.h"
+#include "flight/indi.h"
 #include "fc/runtime_config.h"
 
 #include "catapult.h"
@@ -121,8 +122,11 @@ void runCatapultStateMachine(timeUs_t current) {
                 || !FLIGHT_MODE(CATAPULT_MODE)
                 || (extPosState == EXT_POS_NO_SIGNAL)
                 || (posSetpointState == EXT_POS_NO_SIGNAL)
+#ifdef USE_INDI
+                || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
+#endif
 #if defined(USE_EKF) && false
-                || !ekf_is_healthy() // implement this!
+                || !ekf_is_healthy() // TODO: implement this!
 #endif
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);
@@ -148,7 +152,7 @@ doMore:
             launchTime = 0;
             cutoffTime = 0;
 
-            if (enableConditions)
+            if (enableConditions && calculateCatapult())
                 catapultState = CATAPULT_WAITING_FOR_ARM;
 
             break;
@@ -163,7 +167,6 @@ doMore:
             break;
         case CATAPULT_DELAY:
             if (cmpTimeUs(current, launchTime) > 0) {
-                calculateCatapult();
                 cutoffTime = current + catapultRuntime.fireTimeUs;
                 catapultState = CATAPULT_LAUNCHING; goto doMore;
             }
@@ -186,6 +189,8 @@ doMore:
             }
             break;
         case CATAPULT_DONE:
+            if (!ARMING_FLAG(ARMED) && !FLIGHT_MODE(CATAPULT_MODE))
+                catapultState = CATAPULT_IDLE;
             break;
     }
     if ((catapultState > CATAPULT_WAITING_FOR_ARM) 

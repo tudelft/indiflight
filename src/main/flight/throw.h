@@ -21,19 +21,20 @@ float totalGyroSq(void);
 void updateThrowFallStateMachine(timeUs_t currentTimeUs);
 
 typedef enum {
-    THROW_STATE_DISABLED = -1,
-    THROW_STATE_READY = 0,
+    THROW_STATE_IDLE = -1,
+    THROW_STATE_WAITING_FOR_THROW = 0,
     THROW_STATE_ACC_HIGH,
     THROW_STATE_ENOUGH_MOMENTUM,
     THROW_STATE_LEFT_HAND,
     THROW_STATE_THROWN,
+    THROW_STATE_ARMED_AFTER_THROW,
 } throwState_t;
 
 #define FALL_ACC_LOW_THRESH 3.f
 #define FALL_ACC_LOW_TIME_MS 400
 
 typedef enum {
-    FALL_STATE_DISABLED = -1,
+    FALL_STATE_IDLE = -1,
     FALL_STATE_READY = 0,
     FALL_STATE_ACC_LOW,
     FALL_STATE_FALLING

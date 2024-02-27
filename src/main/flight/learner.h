@@ -41,9 +41,10 @@ typedef enum learner_loops_e {
 } learner_loops_t;
 
 typedef enum learning_mode_e {
-    LEARNING_OFF = 0,
-    LEARN_DURING_FLIGHT = 1 << 0,
+    LEARNING_OFF         = 0,
+    LEARN_DURING_FLIGHT  = 1 << 0,
     LEARN_AFTER_CATAPULT = 1 << 1,
+    LEARN_AFTER_THROW    = 1 << 2,
 } learner_mode_t;
 
 typedef struct learningRuntime_s {
@@ -87,7 +88,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
 // query stuff
 typedef enum query_state_e {
     LEARNING_QUERY_IDLE = -1,
-    LEARNING_QUERY_DELAY = 0,
+    LEARNING_QUERY_WAITING_FOR_LAUNCH = 0,
+    LEARNING_QUERY_DELAY,
     LEARNING_QUERY_ACTIVE,
     LEARNING_QUERY_APPLYING,
     LEARNING_QUERY_DONE
@@ -111,4 +113,3 @@ typedef struct motor_state_s {
 } motor_state_t;
 
 void runLearningQueryStateMachine(timeUs_t current);
-void resetLearningQuery(void);

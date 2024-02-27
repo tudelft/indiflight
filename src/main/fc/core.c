@@ -432,13 +432,12 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if ( (throwState == THROW_STATE_THROWN)
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-                || (fallState == FALL_STATE_FALLING)
-#endif
-        ) {
+        if (throwState == THROW_STATE_THROWN) {
             // unset all but doNotTolerate.
             unsetArmingDisabled(~doNotTolerateDuringThrow);
+        } else if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+            // do not allow arming in any other way (switch or sticks) if throw to arm switch enabled
+            setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
         }
 #endif
 
@@ -1053,10 +1052,9 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) {
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
         ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
-        resetCatapult();
         DISABLE_FLIGHT_MODE(CATAPULT_MODE);
     }
 #endif
@@ -1071,7 +1069,6 @@ void processRxModes(timeUs_t currentTimeUs)
         if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
             changePositionProfile(0);
 
-        resetLearningQuery();
         DISABLE_FLIGHT_MODE(LEARNER_MODE);
     }
 #endif
