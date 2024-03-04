@@ -15,6 +15,8 @@
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
 
+#include "io/hil.h"
+
 #include "pg/pg_ids.h"
 
 #include "throw.h"
@@ -92,6 +94,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
+            hilThrowDetected = false;
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
@@ -107,6 +110,13 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:
+            if (hilThrowDetected) {
+                momentumAtLeavingHand = 0.f;
+                leftHandSince = currentTimeUs;
+                throwState = THROW_STATE_LEFT_HAND;
+                hilThrowDetected = false;
+                break;
+            }
             if (totalAccSq() > sq((float)throwConfig()->accHighThresh)) {
                 throwState = THROW_STATE_ACC_HIGH;
             }

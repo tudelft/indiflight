@@ -13,6 +13,7 @@ typedef struct hilInput_s {
 } hilInput_t;
 
 extern hilInput_t hilInput;
+extern bool hilThrowDetected;
 
 //typedef struct hilOutput_s {
 //    float actuator_set[4];
