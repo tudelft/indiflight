@@ -1063,11 +1063,13 @@ void processRxModes(timeUs_t currentTimeUs)
     if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
         ENABLE_FLIGHT_MODE(LEARNER_MODE);
     } else {
-        // reset to manually tuned parameters
-        if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
-            changeIndiProfile(0);
-        if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
-            changePositionProfile(0);
+        if (FLIGHT_MODE(LEARNER_MODE)) {
+            // reset to manually tuned parameters on transition
+            if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
+                changeIndiProfile(0);
+            if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
+                changePositionProfile(0);
+        }
 
         DISABLE_FLIGHT_MODE(LEARNER_MODE);
     }

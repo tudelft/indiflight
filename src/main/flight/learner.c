@@ -226,11 +226,10 @@ static void updateLearningFilters(void) {
         motorPrevOmega[act] = learnRun.motorOmega[act];
 
         learnRun.motorD[act] = biquadFilterApply(&motorDFilter[act], indiRun.d[act]);
-        float dConstr = constrainf(indiRun.d[act], 0.f, 1.f);
-        learnRun.motorSqrtD[act] = biquadFilterApply(&motorDFilter[act], sqrtf(dConstr));
         // second order filters could the signal to exceed bounds of the input
-        // but we need to ensure [0, 1] for a square root later on
-        //learnRun.motorD[act] = constrainf(learnRun.motorD[act], 0.f, 1.f);
+        // but we need to ensure [0, 1] for the square root
+        float dConstr = constrainf(indiRun.d[act], 0.f, 1.f);
+        learnRun.motorSqrtD[act] = biquadFilterApply(&motorSqrtDFilter[act], sqrtf(dConstr));
     }
 }
 
