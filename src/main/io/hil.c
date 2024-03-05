@@ -69,7 +69,7 @@ static portSharing_e hilPortSharing;
 
 // input from simulation in natural units (deg/s, g, rpm)
 hilInput_t hilInput;
-bool hilThrowDetected = false;
+int hilThrowDetected = 0;
 //hilOutput_t hilOutput;
 
 void freeHilPort(void)
@@ -197,7 +197,11 @@ void processHilInput(void)
         hilInput.rpm[3]  = HIL_TO_RPM * piMsgHilInRx->rpm_4;
     }
 
-    hilThrowDetected |= hilInput.acc[2] > 32.f;
+    if (fabsf(hilInput.acc[2]) < 0.01f) {
+        hilThrowDetected++;
+    } else
+        hilThrowDetected = 0;
+
 }
 
 void handleHil(void)

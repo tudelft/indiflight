@@ -94,7 +94,6 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
-            hilThrowDetected = false;
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
@@ -110,11 +109,11 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:
-            if (hilThrowDetected) {
+            if (hilThrowDetected > 20) {
                 momentumAtLeavingHand = 0.f;
                 leftHandSince = currentTimeUs;
                 throwState = THROW_STATE_LEFT_HAND;
-                hilThrowDetected = false;
+                hilThrowDetected = 0;
                 break;
             }
             if (totalAccSq() > sq((float)throwConfig()->accHighThresh)) {
