@@ -1067,8 +1067,10 @@ void processRxModes(timeUs_t currentTimeUs)
             // reset to manually tuned parameters on transition
             if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
                 changeIndiProfile(0);
+#ifdef USE_POS_CTL
             if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
                 changePositionProfile(0);
+#endif
         }
 
         DISABLE_FLIGHT_MODE(LEARNER_MODE);

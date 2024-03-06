@@ -108,7 +108,9 @@ void initLearner(void) {
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
 
     indiProfileLearned = indiProfilesMutable(INDI_PROFILE_COUNT-1);
+#ifdef USE_POS_CTL
     positionProfileLearned = positionProfilesMutable(POSITION_PROFILE_COUNT-1);
+#endif
     initLearnerRuntime();
 
     rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
@@ -272,6 +274,8 @@ void updateLearner(timeUs_t current) {
             (learnerConfig()->mode & LEARN_DURING_FLIGHT)
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
+
+    fxLearningConditions = true;
 
     if (fxLearningConditions) {
         //setup regressors
@@ -741,9 +745,10 @@ doMoreMotors:
 
             if (learnRun.applyIndiProfileAfterQuery)
                 changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-
+#ifdef USE_POS_CTL
             if (learnRun.applyPositionProfileAfterQuery)
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
+#endif
 
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE:
