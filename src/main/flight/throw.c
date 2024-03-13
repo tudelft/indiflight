@@ -7,6 +7,9 @@
 #error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
 
+#pragma message "You are compiling with dangerous code!"
+
+
 #include "fc/runtime_config.h"
 #include "fc/rc_modes.h"
 #include "io/beeper.h"

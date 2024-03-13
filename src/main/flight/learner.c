@@ -32,6 +32,7 @@
 learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 
 #ifdef USE_LEARNER
+#pragma message "You are compiling with dangerous code!"
 
 #ifndef USE_INDI
 #error "must use learner with USE_INDI"
@@ -154,7 +155,6 @@ static void updateLearningFilters(void) {
         imuPrevRate.A[axis] = learnRun.imuRate.A[axis];
     }
 
-//#pragma message "TODO: implement imu location correction"
     // IMU correction
     float wx, wy, wz;
     float rx, ry, rz;

@@ -12,6 +12,7 @@
 catapult_state_t catapultState = CATAPULT_IDLE;
 
 #ifdef USE_CATAPULT
+#pragma message "You are compiling with dangerous code!"
 
 #ifndef USE_INDI
 #error "must use catapult with USE_INDI"
