@@ -32,6 +32,7 @@
 #define PARAM_NAME_DYN_NOTCH_MIN_HZ "dyn_notch_min_hz"
 #define PARAM_NAME_ACC_HARDWARE "acc_hardware"
 #define PARAM_NAME_ACC_LPF_HZ "acc_lpf_hz"
+#define PARAM_NAME_ACC_OFFSET "acc_offset"
 #define PARAM_NAME_MAG_HARDWARE "mag_hardware"
 #define PARAM_NAME_BARO_HARDWARE "baro_hardware"
 #define PARAM_NAME_RC_SMOOTHING "rc_smoothing"
@@ -136,10 +137,6 @@
 #define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
-/*
-#define PARAM_NAME_INDI_ACT_PROP_CONSTANT "indi_act_prop_constant"
-#define PARAM_NAME_INDI_ACT_MAX_THRUST "indi_act_max_thrust"
-*/
 #define PARAM_NAME_INDI_ACT_MAX_RPM "indi_act_max_rpm"
 #define PARAM_NAME_INDI_ACT_HOVER_RPM "indi_act_hover_rpm"
 #define PARAM_NAME_INDI_ACT_NONLINEARITY "indi_act_nonlinearity"
@@ -186,6 +183,7 @@
 #define PARAM_NAME_CATAPULT_ROTATION_ROLL "catapult_rotation_roll"
 #define PARAM_NAME_CATAPULT_ROTATION_PITCH "catapult_rotation_pitch"
 #define PARAM_NAME_CATAPULT_ROTATION_YAW "catapult_rotation_yaw"
+#define PARAM_NAME_CATAPULT_ROTATION_RANDOMIZE "catapult_rotation_randomize"
 #define PARAM_NAME_CATAPULT_ROTATION_TIME "catapult_rotation_time"
 #define PARAM_NAME_CATAPULT_UPWARDS_ACCEL "catapult_upwards_accel"
 #endif
@@ -216,6 +214,7 @@
 #define PARAM_NAME_LEARNER_ZETA_ATTITUDE "learner_zeta_attitude"
 #define PARAM_NAME_LEARNER_ZETA_VELOCITY "learner_zeta_velocity"
 #define PARAM_NAME_LEARNER_ZETA_POSITION "learner_zeta_position"
+#define PARAM_NAME_LEARNER_ACT_LIMIT "learner_act_limit"
 #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
 #endif

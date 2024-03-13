@@ -16,6 +16,7 @@ typedef struct catapultConfig_s {
     int16_t rotationRoll;    // in deg/s
     int16_t rotationPitch;   // in deg/s
     int16_t rotationYaw;     // in deg/s
+    uint8_t randomizeRotation; // bool
     uint16_t rotationTimeMs;  // in ms
     uint8_t upwardsAccel;     // in m/s/s
 } catapultConfig_t;

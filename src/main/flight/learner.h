@@ -26,6 +26,7 @@ typedef struct learnerConfig_s {
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
+    uint8_t actLimit;
     uint8_t applyIndiProfileAfterQuery;
     uint8_t applyPositionProfileAfterQuery;
 } learnerConfig_t;
@@ -74,7 +75,6 @@ extern rls_parallel_t fxSpfRls;
 extern rls_parallel_t fxRateDotRls;
 
 void initLearnerRuntime(void);
-float dumbRng(void);
 
 
 // --- states and functions

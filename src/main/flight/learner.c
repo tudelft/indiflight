@@ -3,6 +3,7 @@
 #include "common/rls.h"
 #include "common/axis.h"
 #include "common/filter.h"
+#include "common/rng.h"
 
 #ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
@@ -14,6 +15,7 @@
 #include "pg/pg_ids.h"
 
 #include "sensors/gyro.h"
+#include "sensors/acceleration.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #include "flight/catapult.h"
@@ -35,7 +37,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -53,6 +55,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .zetaAttitude = 80,
     .zetaVelocity = 60,
     .zetaPosition = 80,
+    .actLimit = 70,
     .applyIndiProfileAfterQuery = false,
     .applyPositionProfileAfterQuery = false
 );
@@ -95,24 +98,6 @@ static t_fp_vector hoverThrust;
 #define LEARNER_OMEGADOTDIFF_SCALER 10.f // for numerical stability
 #define LEARNER_NULLSPACE_THRESH 1e-3f // todo, do we need somethign relative here?
 #define LEARNER_NUM_POWER_ITERATIONS 1
-
-// really dumb rng number to reset power iterations in case a numerically 
-// orthogonal vector is encountered
-#define LEARNER_RNG_MAX 101 // should be prime to avoid wrapping dumbRng onto itself
-static uint8_t randomSequence[LEARNER_RNG_MAX] = {
-    // from random import randint; ",".join([hex(randint(0,255)) for i in range(101)])
-    0x7a,0x11,0xaa,0x88,0xc,0x38,0x1,0xfc,0xd3,0x73,0xfc,0xd2,0x47,0xc1,0x39,0x6a,0x1b,0xe8,0x82,0x6,0x1c,0xd,0x11,0xa7,0x3b,0x2d,0x69,0xf7,0xad,0xef,0x75,0x6c,0x0,0x15,0x3d,0x18,0x1e,0x87,0xdc,0xda,0xa8,0x7c,0x6b,0xc5,0x18,0xe3,0xd8,0x86,0xf,0x2f,0x65,0x1,0x96,0xf0,0x11,0x43,0xd6,0x46,0x20,0x3d,0xc7,0x20,0xaa,0x60,0x6,0x5c,0x61,0x4f,0x83,0xf7,0x90,0x6,0xa7,0x4a,0x96,0x80,0x68,0x4b,0xa5,0x8b,0xdd,0xb0,0xce,0xa1,0xce,0x7b,0x2d,0xa1,0x5b,0x1,0x7e,0xfa,0xa1,0x8a,0x7,0xca,0x63,0xfe,0x69,0x9e,0xc5
-};
-
-float dumbRng(void) {
-    // return "random number" between -1 and 1
-    static int rngSeed = 0; // index in randomSequence
-    if (++rngSeed >= LEARNER_RNG_MAX)
-        // wrap sequence
-        rngSeed = 0;
-
-    return ( ((float)(randomSequence[rngSeed] - 127)) / 128.f );
-}
 
 static indiProfile_t* indiProfileLearned;
 static positionProfile_t* positionProfileLearned;
@@ -176,11 +161,10 @@ static void updateLearningFilters(void) {
     float dwx, dwy, dwz;
     float ax, ay, az;
 
-#ifdef HIL_BUILD
-    rx = 0.f; ry = 0.f; rz = 0.f;
-#else
-    rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
-#endif
+    //rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
+    rx =  accelerometerConfig()->acc_offset[0] * 1e-3f;
+    ry = -accelerometerConfig()->acc_offset[1] * 1e-3f;
+    rz = -accelerometerConfig()->acc_offset[2] * 1e-3f;
 
     dwx = indiRun.rateDot.A[0];
     dwy = indiRun.rateDot.A[1];
@@ -451,7 +435,7 @@ void updateLearner(timeUs_t current) {
                 // we picked a starting vector near orthogonal to the eigenvector
                 // we want to find. reset to a pseudorandom vector
                 for (int row = 0; row < sizeNr; row++)
-                    v[row] = dumbRng();
+                    v[row] = rngFloat();
                 continue;
             }
             SGEVS(sizeNr, HinvAv, 1.f / sqrtf(HinvAvNorm2), v); // fast inverse sqrt anyone?
@@ -553,7 +537,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         else
             indi->actNonlinearity[act] = 50;
 
-        indi->actLimit[act] = 60; // conservative for now
+        indi->actLimit[act] = learnerConfig()->actLimit;
         //                    inv y-scale        a-scale           config scale
         indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
         indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];

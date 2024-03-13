@@ -5,6 +5,7 @@
 #include "flight/imu.h"
 #include "flight/indi.h"
 #include "fc/runtime_config.h"
+#include "common/rng.h"
 
 #include "catapult.h"
 
@@ -41,6 +42,7 @@ PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig,
     .rotationRoll = 400,
     .rotationPitch = 400,
     .rotationYaw = 400,
+    .randomizeRotation = 1,
     .rotationTimeMs = 150,
     .upwardsAccel = 20,
 );
@@ -52,9 +54,17 @@ void initCatapultRuntime(void) {
     catapultRuntime.altitude = constrainu(catapultConfig()->altitude, 1, 1000) * 0.01f;
     catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
     catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
-    catapultRuntime.rotationRate.V.X = 10.f * dumbRng();
-    catapultRuntime.rotationRate.V.Y = 10.f * dumbRng();
-    catapultRuntime.rotationRate.V.Z = 10.f * dumbRng();
+
+    if (catapultConfig()->randomizeRotation) {
+        catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationRoll)) * rngFloat();
+        catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationPitch)) * rngFloat();
+        catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationYaw)) * rngFloat();
+    } else {
+        catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(catapultConfig()->rotationRoll);
+        catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(catapultConfig()->rotationPitch);
+        catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(catapultConfig()->rotationYaw);
+    }
+
     catapultRuntime.rotationTimeUs = constrainu(catapultConfig()->rotationTimeMs, 0, 1000) * 1e3;
     catapultRuntime.fireTimeUs = 0;
     catapultRuntime.upwardsAccel = (float) constrainu(catapultConfig()->upwardsAccel, 4, 100); // real thrust setting can be up to 17% higher if higher than 20m/s/s
