@@ -25,6 +25,10 @@
 
 #include <stdbool.h>
 
+#ifdef USE_TRAJECTORY_TRACKER
+#include "trajectory_tracker.h"
+#endif
+
 //PG_REGISTER_WITH_RESET_FN(indiConfig_t, indiConfig, PG_INDI_CONFIG, 1);
 //void pgResetFn_indiConfig(indiConfig_t* indiConfig) {
 //    RESET_CONFIG_2(indiConfig_t, indiConfig,
@@ -124,7 +128,7 @@ static float G2[MAXV][MAXU] = {
 
 // static float kThrust  = 1.89e-7f;
 // static float tauRpm = 0.02f;
-// static float Tmax = 4.2f;
+// static float Tmax = 4.2f;`
 static float kThrust  = 1.447e-6f; // results in the hardcoded G2 normalizer 17271808 used before
 static float tauRpm = 0.02f;
 static float Tmax = 15.8f;
@@ -305,7 +309,15 @@ void getSetpoints(void) {
         //trackAttitudeYaw = FLIGHT_MODE(POSITION_MODE);
 
         // convert acc setpoint from position mode
+        #ifdef USE_TRAJECTORY_TRACKER
+        if (isActiveTrajectoryTracker()) {
+            getAttSpNedFromAccSpNed2(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
+        } else {
+            getAttSpNedFromAccSpNed(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
+        }
+        #else
         getAttSpNedFromAccSpNed(&accSpNed, &attSpNed, &(spfSpBody.V.Z));
+        #endif
         //rateSpBody = coordinatedYaw(yawRateSpFromOuter);
         if (FLIGHT_MODE(POSITION_MODE))
             rateSpBody.V.Z = yawRateSpFromOuter;
@@ -400,6 +412,13 @@ void getAlphaSpBody(void) {
     attEstNedInv.qi = -attEstNed.qi;
 
     rateSpBodyUse = rateSpBody;
+
+    // #ifdef USE_TRAJECTORY_TRACKER
+    // // if trajectory tracker is active, rateSpBody is already set
+    // // so we skip this part
+    // controlAttitude = !isActiveTrajectoryTracker();
+    // #endif
+
     if (controlAttitude) {
         // for better readibility and logs, flip setpoint quaternion if needed
         // the resulting quaterion is always exactly equivalent
@@ -413,7 +432,7 @@ void getAlphaSpBody(void) {
         // this would ideally be a normalize instead of constrain, but that is slow...
         attErrBody.qi = constrainf(attErrBody.qi, -1.f, +1.f);
 
-        float angleErr = 2.f*acos_approx(attErrBody.qi);
+        float angleErr = 2.f*acosf(attErrBody.qi);
         if (angleErr > M_PIf)
             angleErr -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
             // some heuristic could be used here, because this is far from optimal
@@ -680,7 +699,7 @@ float getYawWithoutSingularity(void) {
         bodyXNed.V.X = bodyYNed.V.Y / bodyYProjLen;
         bodyXNed.V.Y = -bodyYNed.V.X / bodyYProjLen;
     }
-    float yaw = atan2_approx(bodyXNed.V.Y, bodyXNed.V.X);
+    float yaw = atan2f(bodyXNed.V.Y, bodyXNed.V.X);
 
     return yaw;
 }
@@ -722,8 +741,8 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
 
     //float Psi = (float) DECIDEGREES_TO_RADIANS(-attitude.values.yaw);
     float Psi = getYawWithoutSingularity();
-    float cPsi = cos_approx(Psi);
-    float sPsi = sin_approx(Psi);
+    float cPsi = cosf(Psi);
+    float sPsi = sinf(Psi);
 
     // a^I - g^I
     t_fp_vector aSp_min_g = {
@@ -760,11 +779,11 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
         }
     }
 
-    float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
+    float alpha = atan2f( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
     alpha = constrainf(alpha, 0.f, DEGREES_TO_RADIANS(MAX_BANK_DEGREE_AUTO)); //todo: make parameter
 
     // *fz = v.V.Z / cos_approx(alpha);
-    float fz_target = v.V.Z / cos_approx(alpha);
+    float fz_target = v.V.Z / cosf(alpha);
 
     // attitude setpoint in the yaw frame
     fp_quaternion_t attSpYaw;
@@ -772,10 +791,10 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
 
     // add in the yaw
     fp_quaternion_t yawNed = {
-        .qi = cos_approx(Psi/2.f),
+        .qi = cosf(Psi/2.f),
         .qx = 0.f,
         .qy = 0.f,
-        .qz = sin_approx(Psi/2.f),
+        .qz = sinf(Psi/2.f),
     };
 
     // this is probaby the most expensive operation... can be half the cost if
@@ -791,6 +810,64 @@ void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, f
 
     *fz = fz_target * constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
     *fz = fz_target;
+}
+
+void getAttSpNedFromAccSpNed2(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz) {
+    // we need to rotate the drone such that the z-up axis is aligned with accSpNed-g
+    // let v1 = accSpNed-g, v2 = z-up (both in NED frame)
+    // then we need to rotate v2 to v1
+    // the rotation axis is the cross product of v1 and v2
+    // the rotation angle is the angle between v1 and v2
+    t_fp_vector v1 = {
+        .V.X = accSpNed->V.X,
+        .V.Y = accSpNed->V.Y,
+        .V.Z = accSpNed->V.Z - 9.80665f,
+    };
+    t_fp_vector v2_body = {.V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f};
+    fp_quaternion_t attEstNed = {
+        .qi = attitude_q.w,
+        .qx = attitude_q.x,
+        .qy = -attitude_q.y,
+        .qz = -attitude_q.z,
+    };
+    // get v2 in Ned
+    t_fp_vector v2 = quatRotate(attEstNed, v2_body);
+
+    // rotation axis
+    t_fp_vector axis;
+    VEC3_CROSS(axis, v2, v1);
+    VEC3_NORMALIZE(axis);
+
+    // rotation angle
+    float angle = acosf(VEC3_DOT(v1, v2) / (VEC3_LENGTH(v1) * VEC3_LENGTH(v2)));
+
+    // attitude error
+    fp_quaternion_t attErrNed;
+    float_quat_of_axang(&attErrNed, &axis, angle);
+
+    // attitude setpoint
+    *attSpNed = quatMult(attErrNed, attEstNed);
+
+    // thrust setpoint
+    *fz = -VEC3_LENGTH(v1);
+
+    // thrust projected onto z-up
+    // *fz = -VEC3_DOT(v1, v2);
+
+    // rate setpoint
+    // we get the axis in body frame:
+    // fp_quaternion_t attEstNedInv = {
+    //     .qi = attEstNed.qi,
+    //     .qx =-attEstNed.qx,
+    //     .qy =-attEstNed.qy,
+    //     .qz =-attEstNed.qz,
+    // };
+    // t_fp_vector axis_body = quatRotate(attEstNedInv, axis);
+    
+    // and scale the axis by 'angle' and multiply by a gain to get the rate setpoint
+    //rateSpBody.V.X = attGainsCasc.V.X * angle * axis_body.V.X;
+    //rateSpBody.V.Y = attGainsCasc.V.Y * angle * axis_body.V.Y;
+    //rateSpBody.V.Z = attGainsCasc.V.Z * angle * axis_body.V.Z;
 }
 
 t_fp_vector coordinatedYaw(float yaw) {

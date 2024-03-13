@@ -180,12 +180,22 @@ void checkPiTelemetryState(void)
 void piSendIMU(void)
 {
     piMsgImuTx.time_ms = millis();
-    piMsgImuTx.roll = gyro.gyroADCf[FD_ROLL]; // filtered with notches and lpf
-    piMsgImuTx.pitch = gyro.gyroADCf[FD_PITCH]; // filtered with notches and lpf
-    piMsgImuTx.yaw = gyro.gyroADCf[FD_YAW]; // filtered with notches and lpf
-    piMsgImuTx.x = acc.accADC[X];
-    piMsgImuTx.y = acc.accADC[Y];
-    piMsgImuTx.z = acc.accADC[Z];
+    // piMsgImuTx.roll = gyro.gyroADCf[FD_ROLL]; // filtered with notches and lpf
+    // piMsgImuTx.pitch = gyro.gyroADCf[FD_PITCH]; // filtered with notches and lpf
+    // piMsgImuTx.yaw = gyro.gyroADCf[FD_YAW]; // filtered with notches and lpf
+    // piMsgImuTx.x = acc.accADC[X];
+    // piMsgImuTx.y = acc.accADC[Y];
+    // piMsgImuTx.z = acc.accADC[Z];
+
+    // change to a chill format for logging onto pi..
+    // FLU to FRD
+    piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
+    piMsgImuTx.pitch = DEGREES_TO_RADIANS(-gyro.gyroADCf[1]);
+    piMsgImuTx.yaw = DEGREES_TO_RADIANS(-gyro.gyroADCf[2]);
+    piMsgImuTx.x = 9.81 * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.y = 9.81 *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.z = 9.81 *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
+    
     piSendMsg(&piMsgImuTx, &serialWriter);
 
     // send dummy data to test serialization escaping

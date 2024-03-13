@@ -89,6 +89,7 @@ float indiThrustCurve(quadLin_t lin, float in);
 
 float getYawWithoutSingularity(void);
 void getAttSpNedFromAccSpNed(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz);
+void getAttSpNedFromAccSpNed2(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz);
 t_fp_vector coordinatedYaw(float yaw);
 void getSetpoints(void);
 void getAlphaSpBody(void);

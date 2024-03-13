@@ -159,8 +159,7 @@ t_fp_vector quatRotate(fp_quaternion_t q, t_fp_vector v) {
     // slow code that uses lots memory, use some library ffs
     fp_quaternion_t qv = {.qx = v.V.X, .qy = v.V.Y, .qz = v.V.Z};
     fp_quaternion_t q_qv = quatMult(q, qv);
-    fp_quaternion_t qi = q;
-    qi.qi *= -1;
+    fp_quaternion_t qi = {.qi = q.qi, .qx = -q.qx, .qy = -q.qy, .qz = -q.qz};
     fp_quaternion_t q_qv_qi = quatMult(q_qv, qi);
     t_fp_vector res = {.V.X = q_qv_qi.qx, .V.Y = q_qv_qi.qy, .V.Z = q_qv_qi.qz};
     return res;
