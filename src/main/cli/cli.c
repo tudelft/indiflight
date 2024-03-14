@@ -45,6 +45,7 @@ bool cliMode = false;
 #include "cms/cms.h"
 
 #include "common/axis.h"
+#include "common/benchmark.h"
 #include "common/color.h"
 #include "common/maths.h"
 #include "common/printf.h"
@@ -3189,6 +3190,28 @@ static void cliBoardName(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_BENCHMARK
+static void cliBenchmark(const char *cmdName, char *cmdline)
+{
+    UNUSED(cmdName);
+    UNUSED(cmdline);
+
+    // run the benchmarks
+    benchmark_harness();
+
+    cliPrintLinef("%-5s, %-7s, %-10s, %-10s, %-10s, %-10s", "Test", "Driver", "i16", "i32", "f32", "f64");
+
+    for (int test = 0; test < BENCH_TEST_COUNT; test++)
+        for (int driver = 0; driver < BENCH_DRIVER_COUNT; driver++)
+            cliPrintLinef("%5d  %7d  %10u  %10u  %10u  %10u",
+                test, driver, 
+                benchCounters[test][driver].i16,
+                benchCounters[test][driver].i32,
+                benchCounters[test][driver].f32,
+                benchCounters[test][driver].f64);
+}
+#endif
+
 static void printManufacturerId(dumpFlags_t dumpMask)
 {
     if (!(dumpMask & DO_DIFF) || strlen(getManufacturerId())) {
@@ -4082,7 +4105,7 @@ static void cliMotor(const char *cmdName, char *cmdline)
         if (motorValue < PWM_RANGE_MIN || motorValue > PWM_RANGE_MAX) {
             cliShowArgumentRangeError(cmdName, "VALUE", 1000, 2000);
         } else {
-            uint32_t motorOutputValue = motorConvertFromExternal(motorValue);
+            uint32_t motorOutputValue = (uint32_t) motorConvertFromExternal(motorValue);
 
             if (motorIndex != ALL_MOTORS) {
                 motor_disarmed[motorIndex] = motorOutputValue;
@@ -6672,6 +6695,9 @@ const clicmd_t cmdTable[] = {
 #if defined(USE_BOARD_INFO)
     CLI_COMMAND_DEF("board_name", "get / set the name of the board model", "[board name]", cliBoardName),
 #endif
+#if defined(USE_BENCHMARK)
+    CLI_COMMAND_DEF("benchmark", "benchmark common math functions", "", cliBenchmark),
+#endif
 #ifdef USE_LED_STRIP_STATUS_MODE
         CLI_COMMAND_DEF("color", "configure colors", NULL, cliColor),
 #endif
@@ -6944,8 +6970,10 @@ static void processCharacterInteractive(const char c)
             /* Print list of ambiguous matches */
             cliPrint("\r\n\033[K");
             for (cmd = pstart; cmd <= pend; cmd++) {
-                cliPrint(cmd->name);
-                cliWrite('\t');
+                if (cmd != NULL) {
+                    cliPrint(cmd->name);
+                    cliWrite('\t');
+                }
             }
             cliPrompt();
             i = 0;    /* Redraw prompt */

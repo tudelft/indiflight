@@ -3,14 +3,26 @@
 #include "io/beeper.h"
 #include "io/external_pos.h"
 #include "flight/imu.h"
+#include "flight/indi.h"
 #include "fc/runtime_config.h"
+#include "common/rng.h"
 
 #include "catapult.h"
 
+catapult_state_t catapultState = CATAPULT_IDLE;
+
 #ifdef USE_CATAPULT
+#pragma message "You are compiling with dangerous code!"
+
+#ifndef USE_INDI
+#error "must use catapult with USE_INDI"
+#endif
+
+#ifndef USE_POS_CTL
+#error "muse use catapult with USE_POS_CTL"
+#endif
 
 // extern
-catapult_state_t catapultState = CATAPULT_IDLE;
 fp_quaternion_t attSpNedFromCat = { 1.f, 0.f, 0.f, 0.f };
 t_fp_vector spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
 t_fp_vector rateSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
@@ -31,18 +43,29 @@ PG_RESET_TEMPLATE(catapultConfig_t, catapultConfig,
     .rotationRoll = 400,
     .rotationPitch = 400,
     .rotationYaw = 400,
+    .randomizeRotation = 1,
     .rotationTimeMs = 150,
     .upwardsAccel = 20,
 );
+
+#include "flight/learner.h"
 
 catapultRuntime_t catapultRuntime;
 void initCatapultRuntime(void) {
     catapultRuntime.altitude = constrainu(catapultConfig()->altitude, 1, 1000) * 0.01f;
     catapultRuntime.xyNed[0] = catapultConfig()->xNed * 0.01f;
     catapultRuntime.xyNed[1] = catapultConfig()->yNed * 0.01f;
-    catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(catapultConfig()->rotationRoll);
-    catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(catapultConfig()->rotationPitch);
-    catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(catapultConfig()->rotationYaw);
+
+    if (catapultConfig()->randomizeRotation) {
+        catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationRoll)) * rngFloat();
+        catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationPitch)) * rngFloat();
+        catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(ABS(catapultConfig()->rotationYaw)) * rngFloat();
+    } else {
+        catapultRuntime.rotationRate.V.X = DEGREES_TO_RADIANS(catapultConfig()->rotationRoll);
+        catapultRuntime.rotationRate.V.Y = DEGREES_TO_RADIANS(catapultConfig()->rotationPitch);
+        catapultRuntime.rotationRate.V.Z = DEGREES_TO_RADIANS(catapultConfig()->rotationYaw);
+    }
+
     catapultRuntime.rotationTimeUs = constrainu(catapultConfig()->rotationTimeMs, 0, 1000) * 1e3;
     catapultRuntime.fireTimeUs = 0;
     catapultRuntime.upwardsAccel = (float) constrainu(catapultConfig()->upwardsAccel, 4, 100); // real thrust setting can be up to 17% higher if higher than 20m/s/s
@@ -78,13 +101,13 @@ static bool calculateCatapult(void) {
     }
 
     // get firetime to reach vertical height
-    float fireTimeSec = sqrtf( (2.f * h) / (a * (a * IGf + 1)) );
+    float fireTimeSec = sqrtf( (2.f * h) / (a * (a * IGf + 1.f)) );
     catapultRuntime.fireTimeUs = 1e6f * fireTimeSec; // always below 2.8sec
 
     // get launch angle to get enough lateral velocity to cover distance
     float vVertMax = a * fireTimeSec;
     float freefallTimeSec = vVertMax * IGf + sqrtf(2.f * h * IGf);
-    float phi = atanf( distance / (0.5*a*sq(fireTimeSec) + a*fireTimeSec*freefallTimeSec) );
+    float phi = atanf( distance / (0.5f*a*sq(fireTimeSec) + a*fireTimeSec*freefallTimeSec) );
 
     // normalize axis and then calculate quaternion setpoint
     if (distance > 0.01f) {
@@ -112,8 +135,11 @@ void runCatapultStateMachine(timeUs_t current) {
                 || !FLIGHT_MODE(CATAPULT_MODE)
                 || (extPosState == EXT_POS_NO_SIGNAL)
                 || (posSetpointState == EXT_POS_NO_SIGNAL)
+#ifdef USE_INDI
+                || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
+#endif
 #if defined(USE_EKF) && false
-                || !ekf_is_healthy() // implement this!
+                || !ekf_is_healthy() // TODO: implement this!
 #endif
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);
@@ -139,7 +165,7 @@ doMore:
             launchTime = 0;
             cutoffTime = 0;
 
-            if (enableConditions)
+            if (enableConditions && calculateCatapult())
                 catapultState = CATAPULT_WAITING_FOR_ARM;
 
             break;
@@ -154,7 +180,6 @@ doMore:
             break;
         case CATAPULT_DELAY:
             if (cmpTimeUs(current, launchTime) > 0) {
-                calculateCatapult();
                 cutoffTime = current + catapultRuntime.fireTimeUs;
                 catapultState = CATAPULT_LAUNCHING; goto doMore;
             }
@@ -177,6 +202,8 @@ doMore:
             }
             break;
         case CATAPULT_DONE:
+            if (!ARMING_FLAG(ARMED) && !FLIGHT_MODE(CATAPULT_MODE))
+                catapultState = CATAPULT_IDLE;
             break;
     }
     if ((catapultState > CATAPULT_WAITING_FOR_ARM) 

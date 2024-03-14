@@ -136,9 +136,10 @@ else
 ifeq ($(DEBUG),INFO)
 DEBUG_FLAGS            = -ggdb3
 endif
-OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+#OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+OPTIMISATION_BASE     := -flto -fuse-linker-plugin -fmerge-all-constants # todo: try -funroll-loops here
 OPTIMISE_DEFAULT      := -O2
-OPTIMISE_SPEED        := -Ofast
+OPTIMISE_SPEED        := -O3
 OPTIMISE_SIZE         := -Os
 
 LTO_FLAGS             := $(OPTIMISATION_BASE) $(OPTIMISE_SPEED)
@@ -223,15 +224,16 @@ CC_NO_OPTIMISATION      :=
 #
 TEMPORARY_FLAGS :=
 
-EXTRA_WARNING_FLAGS := -Wold-style-definition
+WARNING_FLAGS := -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wold-style-definition -Wdouble-promotion
+#WARNING_FLAGS += -Wstack-usage=1024
 
+#              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion
 CFLAGS     += $(ARCH_FLAGS) \
               $(addprefix -D,$(OPTIONS)) \
               $(addprefix -I,$(INCLUDE_DIRS)) \
               $(DEBUG_FLAGS) \
               -std=gnu17 \
-              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion \
-              $(EXTRA_WARNING_FLAGS) \
+              $(WARNING_FLAGS) \
               -ffunction-sections \
               -fdata-sections \
               -fno-common \
@@ -395,8 +397,13 @@ $(TARGET_ELF): $(TARGET_OBJS) $(LD_SCRIPT) $(LD_SCRIPTS)
 
 ## compile_file takes two arguments: (1) optimisation description string and (2) optimisation compiler flag
 define compile_file
-	echo "%% ($(1)) $<" "$(STDOUT)" && \
-	$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $<
+	$(V1) $(if $(findstring $<,$(LAPACK_SOURCE)), \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) -Wno-maybe-uninitialized -Wno-parentheses -Wno-double-promotion -Wno-unused-variable -Wno-old-style-definition -Wno-unused-parameter -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-variable -Wno-implicit-fallthrough -Wno-sign-compare $< \
+	, \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $< \
+	)
 endef
 
 ifeq ($(DEBUG),GDB)
@@ -664,3 +671,6 @@ $(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildca
 -include $(TARGET_DEPS)
 
 include $(ROOT)/make/remote_flash.mk
+
+echo-cflags:
+	@echo $(CFLAGS)

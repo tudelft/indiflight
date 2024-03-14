@@ -35,8 +35,10 @@
 #include "cms/cms_types.h"
 
 #include "common/axis.h"
+#include "common/benchmark.h"
 #include "common/color.h"
 #include "common/maths.h"
+#include "common/rls.h"
 #include "common/printf_serial.h"
 
 #include "config/config.h"
@@ -104,6 +106,7 @@
 #include "flight/pid_init.h"
 #include "flight/position.h"
 #include "flight/servos.h"
+#include "flight/learner.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -736,6 +739,10 @@ void init(void)
 #ifdef USE_INDI
     //indiInit(currentPidProfile);
     initIndiRuntime();
+#endif
+#ifdef USE_LEARNER
+    initLearner();
+    //testLearner();
 #endif
 #ifdef USE_POS_CTL
     posCtlInit();

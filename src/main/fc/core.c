@@ -71,6 +71,7 @@
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
 #include "flight/indi.h"
+#include "flight/indi_init.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
@@ -431,13 +432,12 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if ( (throwState == THROW_STATE_THROWN)
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-                || (fallState == FALL_STATE_FALLING)
-#endif
-        ) {
+        if (throwState == THROW_STATE_THROWN) {
             // unset all but doNotTolerate.
             unsetArmingDisabled(~doNotTolerateDuringThrow);
+        } else if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+            // do not allow arming in any other way (switch or sticks) if throw to arm switch enabled
+            setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
         }
 #endif
 
@@ -1052,10 +1052,9 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_CATAPULT
-    if (IS_RC_MODE_ACTIVE(BOXCATAPULT)) { // only transition if disarmed
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
         ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
-        resetCatapult();
         DISABLE_FLIGHT_MODE(CATAPULT_MODE);
     }
 #endif
@@ -1064,7 +1063,14 @@ void processRxModes(timeUs_t currentTimeUs)
     if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
         ENABLE_FLIGHT_MODE(LEARNER_MODE);
     } else {
-        resetLearningQuery();
+        if (FLIGHT_MODE(LEARNER_MODE)) {
+            // reset to manually tuned parameters on transition
+            if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
+                changeIndiProfile(0);
+            if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
+                changePositionProfile(0);
+        }
+
         DISABLE_FLIGHT_MODE(LEARNER_MODE);
     }
 #endif
@@ -1161,6 +1167,19 @@ void processRxModes(timeUs_t currentTimeUs)
 bool isTouchingGround(void) {
     // if total trust is low, but we have high total accel then we are likely touching ground
     // this breaks down for fixed wings, and probably "3D" thrust ESCs
+#ifdef USE_LEARNER
+    if (FLIGHT_MODE(LEARNER_MODE) 
+        && (learningQueryState >= LEARNING_QUERY_DELAY)
+        && (learningQueryState != LEARNING_QUERY_DONE))
+        return false; // never touching ground here
+#endif
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE)
+        && (catapultState >= CATAPULT_LAUNCHING)
+        && (catapultState != CATAPULT_DONE))
+        return false;
+#endif
+
     bool gyroLow = (
         sq(gyro.gyroADCf[X])
         + sq(gyro.gyroADCf[Y])

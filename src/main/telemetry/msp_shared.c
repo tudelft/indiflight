@@ -273,7 +273,8 @@ bool sendMspReply(const uint8_t payloadSizeMax, mspResponseFnPtr responseFn)
 {
     static uint8_t seq = 0;
 
-    uint8_t payloadArray[payloadSizeMax];
+    //uint8_t payloadArray[payloadSizeMax];
+    uint8_t payloadArray[256];
     sbuf_t payloadBufStruct;
     sbuf_t *payloadBuf = sbufInit(&payloadBufStruct, payloadArray, payloadArray + payloadSizeMax);
 

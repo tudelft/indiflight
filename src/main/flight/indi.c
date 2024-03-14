@@ -40,9 +40,15 @@
 #include "indi_init.h"
 #include "indi.h"
 
+
+#ifndef USE_ACC
+#error "Must use accelerometer (USE_ACC) to USE_INDI"
+#endif
+
+
 PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
 
-indiRuntime_t indiRun;
+FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
 #define RC_SCALE_THROTTLE 0.001f
 #define RC_OFFSET_THROTTLE 1000.f
@@ -52,6 +58,9 @@ indiRuntime_t indiRun;
 #error "Sizes may be too much for ActiveSetCtlAlloc library"
 #endif
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 void indiController(timeUs_t current) {
     if (flightModeFlags & ~(CATAPULT_MODE | LEARNER_MODE)) {
         // any flight mode active other than catapult, learner or acro (acro is all off)?
@@ -61,8 +70,7 @@ void indiController(timeUs_t current) {
             indiRun.attExecCounter = 0;
         }
     } else {
-        // function is cheap, let's go
-        //stavrow here we get setpoints
+        // function is cheap, let's do it an all iterations
         getSetpoints(current);
     }
 
@@ -72,11 +80,20 @@ void indiController(timeUs_t current) {
 
     // allocation and INDI
     getMotorCommands(current);
+
+#ifdef USE_LEARNER
+    // update learner.
+    // FIXME: delay setpoints used by learner by one sample to be in sync
+    updateLearner(current);
+#endif
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 void getSetpoints(timeUs_t current) {
 #if !defined(USE_CATAPULT) && !defined(USE_LEARNER)
-    UNUSED(current)
+    UNUSED(current);
 #endif
 
     indiRun.attSpNed.qi = 1.f;
@@ -88,9 +105,9 @@ void getSetpoints(timeUs_t current) {
     indiRun.spfSpBody.V.Y = 0.f;
     indiRun.spfSpBody.V.Z = 0.f;
 
-    indiRun.rateSpBody.V.X = 0.f;
-    indiRun.rateSpBody.V.Y = 0.f;
-    indiRun.rateSpBody.V.Z = 0.f;
+    indiRun.rateSpBodyCommanded.V.X = 0.f;
+    indiRun.rateSpBodyCommanded.V.Y = 0.f;
+    indiRun.rateSpBodyCommanded.V.Z = 0.f;
 
     indiRun.bypassControl = false;
     indiRun.controlAttitude = true;
@@ -107,20 +124,20 @@ void getSetpoints(timeUs_t current) {
     // flight mode handling for setpoints
 #ifdef USE_CATAPULT
     if (FLIGHT_MODE(CATAPULT_MODE)
-            && (catapultState != CATAPULT_IDLE)
-            && (catapultState != CATAPULT_DONE)) {
+            && (catapultState > CATAPULT_IDLE)
+            && (catapultState < CATAPULT_DONE)) {
         indiRun.controlAttitude = controlAttitudeFromCat;
         indiRun.attSpNed = attSpNedFromCat;
         indiRun.spfSpBody = spfSpBodyFromCat;
-        indiRun.rateSpBody = rateSpBodyFromCat;
+        indiRun.rateSpBodyCommanded = rateSpBodyFromCat;
     } else
 #endif
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState != LEARNING_QUERY_IDLE)
-            && (learningQueryState != LEARNING_QUERY_DONE)) {
+            && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
-        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
+        for (int i=0; i < indiRun.actNum; i++) {
             indiRun.d[i] = outputFromLearningQuery[i];
         }
     } else
@@ -129,7 +146,7 @@ void getSetpoints(timeUs_t current) {
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         indiRun.attSpNed = attSpNedFromPos;
         indiRun.spfSpBody = spfSpBodyFromPos;
-        indiRun.rateSpBody = rateSpBodyFromPos;
+        indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
     } else
 #endif
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
@@ -172,14 +189,14 @@ void getSetpoints(timeUs_t current) {
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
 
         // get yaw rate
-        indiRun.rateSpBody = coordinatedYaw(DEGREES_TO_RADIANS(-getSetpointRate(YAW)));
+        indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(-getSetpointRate(YAW)));
 
     } else {
         indiRun.controlAttitude = false;
         // acro
-        indiRun.rateSpBody.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
-        indiRun.rateSpBody.V.Y = DEGREES_TO_RADIANS(-getSetpointRate(PITCH));
-        indiRun.rateSpBody.V.Z = DEGREES_TO_RADIANS(-getSetpointRate(YAW));
+        indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
+        indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(-getSetpointRate(PITCH));
+        indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(-getSetpointRate(YAW));
 
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
@@ -187,6 +204,9 @@ void getSetpoints(timeUs_t current) {
     }
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 void getAlphaSpBody(timeUs_t current) {
     UNUSED(current);
 
@@ -198,6 +218,10 @@ void getAlphaSpBody(timeUs_t current) {
     };
     fp_quaternion_t attEstNedInv = attEstNed;
     attEstNedInv.qi = -attEstNed.qi;
+
+    // get rate setpoint from the pilot. If controlAttitude == true, this
+    // setpoint will be mixed with the attitude command.
+    indiRun.rateSpBody = indiRun.rateSpBodyCommanded;
 
     //fp_quaternion_t rateSpBodyUse = indiRun.rateSpBody;
     if (indiRun.controlAttitude) {
@@ -230,7 +254,7 @@ void getAlphaSpBody(timeUs_t current) {
             tiltAxis.V.Y = targetZBody.V.X * itiltAxisNorm;
         } else {
             // just rotate around X, either almost left or right
-            tiltAxis.V.X = (-targetZBody.V.Y > 0.) ? 1.f : -1.f;
+            tiltAxis.V.X = (-targetZBody.V.Y > 0.f) ? 1.f : -1.f;
             tiltAxis.V.Y = 0.f;
         }
 
@@ -286,6 +310,11 @@ void getAlphaSpBody(timeUs_t current) {
         indiRun.rateSpBody.V.Z = constrainf(indiRun.rateSpBody.V.Z, -indiRun.attMaxYawRate, indiRun.attMaxYawRate);
     }
 
+    // limit to absolute max values
+    indiRun.rateSpBody.V.X = constrainf(indiRun.rateSpBody.V.X, -indiRun.maxRateSp.V.X, indiRun.maxRateSp.V.X);
+    indiRun.rateSpBody.V.Y = constrainf(indiRun.rateSpBody.V.Y, -indiRun.maxRateSp.V.Y, indiRun.maxRateSp.V.Y);
+    indiRun.rateSpBody.V.Z = constrainf(indiRun.rateSpBody.V.Z, -indiRun.maxRateSp.V.Z, indiRun.maxRateSp.V.Z);
+
     // --- get rotation acc setpoint simply by multiplying with gains
     // rateErr = rateSpBody - rateEstBody
     // get body rates in z-down, x-fwd frame
@@ -304,30 +333,39 @@ void getAlphaSpBody(timeUs_t current) {
     indiRun.rateDotSpBody.V.Z = indiRun.rateGains.V.Z * rateErr.V.Z;
 }
 
-
+#ifdef STM32H7
+FAST_CODE
+#endif
 void getMotorCommands(timeUs_t current) {
     UNUSED(current);
 
     static float du[MAXU] = {0.f};
-    static float gyro_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+    static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
     static float omega_prev[MAXU] = {0.f};
+#endif
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        // get gyro derivative
-        indiRun.rateDot.A[axis] = indiRun.indiFrequency * DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis] - gyro_prev[axis]);
-        gyro_prev[axis] = gyro.gyroADCf[axis];
-
-        // get (filtered) accel
-        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], acc.accADCunfiltered[axis]);
+        // rate
+        indiRun.rate.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
+        indiRun.spf.A[axis] = acc.accADCunfiltered[axis] * acc.dev.acc_1G_rec * GRAVITYf;
 
         // adjust axes
         if ((axis == FD_PITCH) || (axis == FD_YAW)) {
-            indiRun.rateDot.A[axis] *= (-1.f);
-            indiRun.spf_fs.A[axis]  *= (-1.f);
+            indiRun.rate.A[axis] *= (-1.f);
+            indiRun.spf.A[axis]  *= (-1.f);
         }
+
+        // get gyro derivative
+        indiRun.rateDot.A[axis] = indiRun.indiFrequency * (indiRun.rate.A[axis] - rate_prev[axis]);
+        rate_prev[axis] = indiRun.rate.A[axis];
 
         // filter gyro derivative
         indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDot.A[axis]);
+
+        // get (filtered) accel
+        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spf.A[axis]);
+
     }
 
     // get rotation speeds and accelerations from dshot, or fallback
@@ -339,7 +377,7 @@ void getMotorCommands(timeUs_t current) {
 
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
             indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
-            indiRun.omega_fs[i] = biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]);
+            indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
         } else
 #endif
         {
@@ -351,7 +389,8 @@ void getMotorCommands(timeUs_t current) {
         }
 
         // needed later as well, not just for fallback
-        omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > (0.5f * indiRun.actHoverOmega[i])) ? 1.f / indiRun.omega_fs[i] : 1.f / indiRun.actHoverOmega[i];
+        float invThresh = 0.1f * indiRun.actMaxOmega[i];
+        omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
     }
 
     // get motor acceleration
@@ -363,7 +402,7 @@ void getMotorCommands(timeUs_t current) {
         } else
 #endif
         {
-            indiRun.omegaDot_fs[i] = (indiRun.actMaxT[i] * du[i]) * omega_inv[i] * indiRun.G2_normalizer[i];
+            indiRun.omegaDot_fs[i] = du[i] * indiRun.G2_scaler[i] * omega_inv[i];
         }
     }
 
@@ -377,7 +416,6 @@ void getMotorCommands(timeUs_t current) {
     // compute pseudocontrol
     indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
-    //indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * GRAVITYf * (-acc.accADC[Z]) * acc.dev.acc_1G_rec;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
@@ -386,7 +424,7 @@ void getMotorCommands(timeUs_t current) {
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {
         for (int i=0; i < indiRun.actNum; i++) {
-            indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i] / indiRun.actMaxT[i];
+            indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
         }
     }
 
@@ -397,7 +435,7 @@ void getMotorCommands(timeUs_t current) {
         for (int j=0; j < MAXV; j++) {
             G1G2[MAXV*i + j] = indiRun.actG1[j][i];
             if (j > 2)
-                G1G2[MAXV*i + j] += indiRun.G2_normalizer[i] * omega_inv[i] * indiRun.actG2[j-3][i];
+                G1G2[MAXV*i + j] += indiRun.G2_scaler[i] * omega_inv[i] * indiRun.actG2[j-3][i];
         }
     }
 
@@ -411,9 +449,9 @@ void getMotorCommands(timeUs_t current) {
 
     for (int i=0; i < indiRun.actNum; i++) {
         // todo: what if negative u are possible?
-        du_min[i]  = 0.f - doIndi * indiRun.uState[i];
-        du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState[i];
-        du_pref[i] = 0.f - doIndi * indiRun.uState[i];
+        du_min[i]  = 0.f - doIndi * indiRun.uState_fs[i];
+        du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState_fs[i];
+        du_pref[i] = 0.f - doIndi * indiRun.uState_fs[i];
     }
 
     // setup problem
@@ -482,11 +520,14 @@ void getMotorCommands(timeUs_t current) {
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
+        indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
     }
 }
 
-
 // --- helpers --- //
+#ifdef STM32H7
+FAST_CODE
+#endif
 float getYawWithoutSingularity(void) {
     // get yaw from bodyX or bodyY axis expressed in inertial space, not from
     // eulers, which has singularity at pitch +-pi/2
@@ -521,6 +562,9 @@ float getYawWithoutSingularity(void) {
     return yaw;
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 t_fp_vector coordinatedYaw(float yaw) {
     // todo: this local is defined twice.. make static somehow
     fp_quaternion_t attEstNedInv = {
@@ -536,6 +580,9 @@ t_fp_vector coordinatedYaw(float yaw) {
 }
 
 // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
+#ifdef STM32H7
+FAST_CODE
+#endif
 void updateLinearization(actLin_t* lin, float k) {
     lin->k = constrainf(k, 0.025f, 0.7f);
     lin->A = 1.f / lin->k;
@@ -543,6 +590,9 @@ void updateLinearization(actLin_t* lin, float k) {
     lin->C = (lin->k - 1) / (2.f*lin->k);
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 float indiLinearization(actLin_t* lin, float in) {
     if ((lin->A < 1.f) || (lin->B < 0.f))
         // no thrust lin requested/configured or misconfigured
@@ -555,6 +605,9 @@ float indiLinearization(actLin_t* lin, float in) {
     return sqrtf(lin->A*in + lin->B) + lin->C;
 }
 
+#ifdef STM32H7
+FAST_CODE
+#endif
 float indiOutputCurve(actLin_t* lin, float in) {
     return lin->k*sq(in) + (1-lin->k)*in;
 }

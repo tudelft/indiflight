@@ -74,6 +74,7 @@ typedef union rollAndPitchTrims_u {
 typedef struct accelerometerConfig_s {
     uint16_t acc_lpf_hz;                    // cutoff frequency for the low pass filter used on the acc z-axis for althold in Hz
     uint8_t acc_hardware;                   // Which acc hardware to use on boards with more than one device
+    int16_t acc_offset[3];                  // offset from CoG to acc in Forward-Left-Up frame in mm
     bool acc_high_fsr;
     flightDynamicsTrims_t accZero;
     rollAndPitchTrims_t accelerometerTrims;

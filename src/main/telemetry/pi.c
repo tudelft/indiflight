@@ -52,8 +52,9 @@
 #include "pi-protocol.h"
 #include "pi-messages.h"
 
-#define USE_CLI_DEBUG_PRINT
+#ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
+#endif
 
 #define TELEMETRY_PI_INITIAL_PORT_MODE MODE_RXTX
 #define TELEMETRY_PI_MAXRATE 50

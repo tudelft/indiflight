@@ -93,7 +93,7 @@ typedef union u_fp_vector {
 
 // vector operation primitives
 
-// probably code bloat... convert to static functions?
+// ugly... convert to inline functions?
 #define VEC3_SCALAR_MULT_ADD(_orig, _sc, _add) { \
     _orig.V.X += _sc * _add.V.X; \
     _orig.V.Y += _sc * _add.V.Y; \
@@ -166,6 +166,76 @@ typedef union u_fp_vector {
     _c.V.Y = _a.V.Z * _b.V.X   -   _a.V.X * _b.V.Z; \
     _c.V.Z = _a.V.X * _b.V.Y   -   _a.V.Y * _b.V.X; \
 }
+
+// linear algebra operations. Column major. 
+// this is ugly, convert to inline functions?
+// calculate c_ = a_ s
+#define SGEVS(m_, a_, s, c_) {\
+    for (int row = 0; row < m_; row++)\
+        c_[row] = a_[row] * s;\
+}
+
+// calculate c_ = a_**T b_
+#define SGEVV(m_, a_, b_, c_) {\
+    c_ = 0.f;\
+    for (int row = 0; row < m_; row++)\
+        c_ += (a_)[row] * (b_)[row];\
+}
+
+// calculate c_ = A_ b_
+#define SGEMV(m_, n_, A_, b_, c_) {\
+    for (int row = 0; row < m_; row++) { \
+        c_[row] = A_[row] * b_[0]; \
+        for (int col = 1; col < n_; col++) { \
+            c_[row] += A_[row + col*m_] * b_[col]; \
+        } \
+    } \
+}
+
+// calculate c_**T = b_**T A_ . Likely faster than SGEMV
+#define SGEMVt(m_, n_, A_, b_, c_) {\
+    for (int col = 0; col < n_; col++) { \
+        c_[col] = A_[col*m_] * b_[0]; \
+        for (int row = 1; row < m_; row++) { \
+            c_[col] += A_[row + col*m_] * b_[row]; \
+        } \
+    } \
+}
+
+// calculate C_ = gamma_ * (alpha_ * C_ +  A_ B_)
+#define SGEMM(m_, n_, p_, A_, B_, C_, alpha_, gamma_) { \
+    for (int col = 0; col < n_; col++) { \
+        for (int row = 0; row < m_; row++) { \
+            if (alpha_ == 0.f) C_[row+col*m_] = 0.f; \
+            else if (alpha_ != 1.f) C_[row+col*m_] *= alpha_; \
+            for (int cA = 0; cA < p_; cA++) { \
+                C_[row + col*m_] += A_[row + cA*m_] * B_[cA + col*p_]; \
+            } \
+            if (gamma_ != 1.f) C_[row+col*m_] *= gamma_; \
+        } \
+    } \
+}
+
+// calculate C_ = gamma_ * (alpha_ * C_ +  A_**T B_)
+// p is rows of A_ and B_
+#define SGEMMt(m_, n_, p_, A_, B_, C_, alpha_, gamma_) { \
+    for (int col = 0; col < n_; col++) { \
+        for (int row = 0; row < m_; row++) { \
+            if (alpha_ == 0.f) C_[row+col*m_] = 0.f; \
+            else if (alpha_ != 1.f) C_[row+col*m_] *= alpha_; \
+            for (int cA = 0; cA < p_; cA++) { \
+                C_[row + col*m_] += A_[cA + row*p_] * B_[cA + col*p_]; \
+            } \
+            if (gamma_ != 1.f) C_[row+col*m_] *= gamma_; \
+        } \
+    } \
+}
+
+// columns major. upper factor
+void chol(float *U, float *A, float *iDiag, int n);
+
+// Column major upper factor. solve A x = UT U x = b
+void chol_solve(float *U, float* iDiag, int n, float *b, float *x);
 
 // Floating point Euler angles.
 // Be carefull, could be either of degrees or radians.

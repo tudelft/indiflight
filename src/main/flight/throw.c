@@ -4,8 +4,11 @@
 // throwing mode
 #if defined(USE_THROW_TO_ARM)
 #ifndef USE_ACC
-#error "Can only use USE_THROW_TO_ARM with USE_ACC
+#error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
+
+#pragma message "You are compiling with dangerous code!"
+
 
 #include "fc/runtime_config.h"
 #include "fc/rc_modes.h"
@@ -13,6 +16,7 @@
 #include "io/external_pos.h"
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
+#include "flight/indi.h"
 
 #include "pg/pg_ids.h"
 
@@ -43,11 +47,11 @@ armingDisableFlags_e doNotTolerateDuringThrow = (
     | ARMING_DISABLED_PARALYZE
 );
 
-throwState_t throwState = THROW_STATE_DISABLED;
+throwState_t throwState = THROW_STATE_IDLE;
 float momentumAtLeavingHand = 0.f;
 
 #ifdef THROW_TO_ARM_USE_FALL_LOGIC
-fallState_t fallState = FALL_STATE_DISABLED
+fallState_t fallState = FALL_STATE_IDLE
 #endif
 
 
@@ -75,10 +79,14 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     bool disableConditions = ARMING_FLAG(ARMED)
         || !FLIGHT_MODE(POSITION_MODE)
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
+#ifdef USE_INDI
+        || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
+#endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
-    if (disableConditions && (throwState >= THROW_STATE_READY)) {
-        throwState = THROW_STATE_DISABLED;
+    if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
+        // abort if in progress
+        throwState = THROW_STATE_IDLE;
         beeper(BEEPER_SILENCE);
     }
 
@@ -86,7 +94,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     bool enableConditions;
     timeDelta_t timeSinceRelease;
     switch(throwState) {
-        case THROW_STATE_DISABLED:
+        case THROW_STATE_IDLE:
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
@@ -98,10 +106,10 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { 
-                throwState = THROW_STATE_READY;
+                throwState = THROW_STATE_WAITING_FOR_THROW;
             }
             break;
-        case THROW_STATE_READY:
+        case THROW_STATE_WAITING_FOR_THROW:
             if (totalAccSq() > sq((float)throwConfig()->accHighThresh)) {
                 throwState = THROW_STATE_ACC_HIGH;
             }
@@ -115,7 +123,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             if (momentum > (throwConfig()->momentumThresh * 0.01f)) {
                 throwState = THROW_STATE_ENOUGH_MOMENTUM;
             } else if (totalAccSq() < sq((float)throwConfig()->accHighThresh)) {
-                throwState = THROW_STATE_READY;
+                throwState = THROW_STATE_WAITING_FOR_THROW;
             }
             break;
         }
@@ -136,38 +144,23 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
             if (timeSinceRelease > (1e3 * throwConfig()->releaseDelayMs)) {
                 throwState = THROW_STATE_THROWN;
+                beeper(BEEPER_SILENCE);
             }
             break;
         case THROW_STATE_THROWN:
+            if (ARMING_FLAG(ARMED))
+                throwState = THROW_STATE_ARMED_AFTER_THROW;
+            else if (cmpTimeUs(currentTimeUs, leftHandSince) > 3e6)
+                // 3 seconds timeout
+                throwState = THROW_STATE_IDLE;
+            break;
+        case THROW_STATE_ARMED_AFTER_THROW:
+            if (!ARMING_FLAG(ARMED) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM))
+                throwState = THROW_STATE_IDLE;
             break;
     }
 
-    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
-
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-    // falling state machine
-    if (throwState == THROW_STATE_DISABLED) { fallState = FALL_STATE_DISABLED; }
-
-    switch(fallState) {
-        case FALL_STATE_DISABLED:
-            if (throwState >= THROW_STATE_READY) { fallState = FALL_STATE_READY; }
-            break;
-        case FALL_STATE_READY:
-            if (totalAccSq() < sq(FALL_ACC_LOW_THRESH)) {
-                accLowSince = currentTimeUs;
-                fallState = FALL_STATE_ACC_LOW;
-            }
-            break;
-        case FALL_STATE_ACC_LOW:
-            if (totalAccSq() > sq(FALL_ACC_LOW_THRESH)) { fallState = FALL_STATE_READY; }
-
-            timeDelta_t timeAccLow = cmpTimeUs(currentTimeUs, accLowSince);
-            if (timeAccLow > (1e3 * FALL_ACC_LOW_TIME_MS)) { fallState = FALL_STATE_FALLING; }
-            break;
-        case FALL_STATE_FALLING:
-            break;
-    }
-#endif
+    if (throwState == THROW_STATE_WAITING_FOR_THROW) { beeper(BEEPER_THROW_TO_ARM); }
 }
 
 #endif // #if defined(USE_ACC) && defined(USE_THROW_TO_ARM)

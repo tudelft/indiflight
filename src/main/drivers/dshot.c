@@ -395,6 +395,10 @@ void validateAndfixMotorOutputReordering(uint8_t *array, const unsigned size)
 {
     bool invalid = false;
 
+    if (size > MAX_SUPPORTED_MOTORS) {
+        invalid = true;
+    }
+
     for (unsigned i = 0; i < size; i++) {
         if (array[i] >= size) {
             invalid = true;
@@ -402,7 +406,7 @@ void validateAndfixMotorOutputReordering(uint8_t *array, const unsigned size)
         }
     }
 
-    int valuesAsIndexes[size];
+    int valuesAsIndexes[MAX_SUPPORTED_MOTORS];
 
     for (unsigned i = 0; i < size; i++) {
         valuesAsIndexes[i] = -1;

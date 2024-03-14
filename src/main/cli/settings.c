@@ -715,6 +715,7 @@ const clivalue_t valueTable[] = {
 
     // 4 elements are output for the ACC calibration - The 3 axis values and the 4th representing whether calibration has been performed
     { "acc_calibration",            VAR_INT16  | MASTER_VALUE | MODE_ARRAY, .config.array.length = 4, PG_ACCELEROMETER_CONFIG, offsetof(accelerometerConfig_t, accZero.raw) },
+    { PARAM_NAME_ACC_OFFSET,        VAR_INT16  | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_ACCELEROMETER_CONFIG, offsetof(accelerometerConfig_t, acc_offset) },
 #endif
 
 // PG_COMPASS_CONFIG
@@ -1235,11 +1236,11 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_MANUAL_MAX_TILT,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 90 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxTilt) },
     { PARAM_NAME_INDI_USE_INCREMENT,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useIncrement) },
     { PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK,             VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useRpmDotFeedback) },
-    { PARAM_NAME_INDI_ACT_HOVER_RPM,                    VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actHoverRpm) },
+    { PARAM_NAME_INDI_MAX_RATE_SETPOINT,                VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, maxRateSp) },
     { PARAM_NAME_INDI_ACT_NUM,                          VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_INDI_PROFILE, offsetof(indiProfile_t, actNum) },
     { PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS,             VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstMs) },
-    { PARAM_NAME_INDI_ACT_PROP_CONSTANT,                VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actPropConst) },
-    { PARAM_NAME_INDI_ACT_MAX_THRUST,                   VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actMaxT) },
+    { PARAM_NAME_INDI_ACT_MAX_RPM,                      VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actMaxRpm) },
+    { PARAM_NAME_INDI_ACT_HOVER_RPM,                    VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actHoverRpm) },
     { PARAM_NAME_INDI_ACT_NONLINEARITY,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actNonlinearity) },
     { PARAM_NAME_INDI_ACT_LIMIT,                        VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actLimit) },
     { PARAM_NAME_INDI_ACT_G1_FX,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fx) },
@@ -1284,6 +1285,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_CATAPULT_ROTATION_ROLL,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationRoll) },
     { PARAM_NAME_CATAPULT_ROTATION_PITCH,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationPitch) },
     { PARAM_NAME_CATAPULT_ROTATION_YAW,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationYaw) },
+    { PARAM_NAME_CATAPULT_ROTATION_RANDOMIZE, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, randomizeRotation) },
     { PARAM_NAME_CATAPULT_ROTATION_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationTimeMs) },
     { PARAM_NAME_CATAPULT_UPWARDS_ACCEL,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 40 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, upwardsAccel) },
 #endif
@@ -1298,15 +1300,24 @@ const clivalue_t valueTable[] = {
 #endif
 
 #ifdef USE_LEARNER
-    { PARAM_NAME_LEARNER_MODE,            VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 3 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
-    { PARAM_NAME_LEARNER_NUM_ACT,         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
-    { PARAM_NAME_LEARNER_DELAY_TIME_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, delayMs) },
-    { PARAM_NAME_LEARNER_STEP_TIME_MS,    VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepMs) },
-    { PARAM_NAME_LEARNER_RAMP_TIME_MS,    VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampMs) },
-    { PARAM_NAME_LEARNER_OVERLAP_TIME_MS, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, overlapMs) },
-    { PARAM_NAME_LEARNER_STEP_AMPLITUDE,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepAmp) },
-    { PARAM_NAME_LEARNER_RAMP_AMPLITUDE,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampAmp) },
-    { PARAM_NAME_LEARNER_GYRO_MAX,        VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 720, 1600 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, gyroMax) },
+    { PARAM_NAME_LEARNER_MODE,              VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 7 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
+    { PARAM_NAME_LEARNER_NUM_ACT,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
+    { PARAM_NAME_LEARNER_DELAY_TIME_MS,     VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, delayMs) },
+    { PARAM_NAME_LEARNER_STEP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepMs) },
+    { PARAM_NAME_LEARNER_RAMP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampMs) },
+    { PARAM_NAME_LEARNER_OVERLAP_TIME_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, overlapMs) },
+    { PARAM_NAME_LEARNER_STEP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepAmp) },
+    { PARAM_NAME_LEARNER_RAMP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampAmp) },
+    { PARAM_NAME_LEARNER_GYRO_MAX,          VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 720, 1600 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, gyroMax) },
+    { PARAM_NAME_LEARNER_IMU_LOWPASS_HZ,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, imuFiltHz) },
+    { PARAM_NAME_LEARNER_FX_LOWPASS_HZ,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxFiltHz) },
+    { PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, motorFiltHz) },
+    { PARAM_NAME_LEARNER_ZETA_RATE,         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaRate) },
+    { PARAM_NAME_LEARNER_ZETA_ATTITUDE,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaAttitude) },
+    { PARAM_NAME_LEARNER_ZETA_VELOCITY,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocity) },
+    { PARAM_NAME_LEARNER_ZETA_POSITION,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPosition) },
+    { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
+    { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
 #endif
 
 // PG_TELEMETRY_CONFIG
