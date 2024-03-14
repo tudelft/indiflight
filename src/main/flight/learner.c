@@ -56,7 +56,6 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .zetaAttitude = 80,
     .zetaVelocity = 60,
     .zetaPosition = 80,
-    .actLimit = 70,
     .applyIndiProfileAfterQuery = false,
     .applyPositionProfileAfterQuery = false
 );
@@ -498,29 +497,29 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
     pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
     pos->horz_i = pos->horz_d / 10; // fudge factor: by lack of better option at this point
-    pos->horz_max_v = 250; // cm/s
-    pos->horz_max_a = 500; // cm/s/s
-    pos->horz_max_iterm = 200; // cm/s
-    pos->max_tilt = 40; // conservative, like the others
     pos->vert_p = pos->horz_p;
     pos->vert_i = pos->horz_i;
     pos->vert_d = pos->horz_d;
-    pos->vert_max_v_up = 100; // cm/s
-    pos->vert_max_v_down = 100; // cm/s
-    pos->vert_max_a_up = 1000; // cm/s/s
-    pos->vert_max_a_down = 500; // cm/s/s
-    pos->vert_max_iterm = 100; // cm/s/s
+    // pos->horz_max_v = 250; // cm/s
+    // pos->horz_max_a = 500; // cm/s/s
+    // pos->horz_max_iterm = 200; // cm/s
+    // pos->max_tilt = 40; // conservative, like the others
+    // pos->vert_max_v_up = 100; // cm/s
+    // pos->vert_max_v_down = 100; // cm/s
+    // pos->vert_max_a_up = 1000; // cm/s/s
+    // pos->vert_max_a_down = 500; // cm/s/s
+    // pos->vert_max_iterm = 100; // cm/s/s
     // fudge factor 0.5f, maybe try to see what happens with lower zeta_attitude
     pos->yaw_p = (uint8_t) 10.f * .5f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
-    pos->weathervane_p = 0;
-    pos->weathervane_min_v = 200; // cm/s/s
-    pos->use_spf_attenuation = 1;
+    // pos->weathervane_p = 0;
+    // pos->weathervane_min_v = 200; // cm/s/s
+    // pos->use_spf_attenuation = 1;
 
-    indi->manualUseCoordinatedYaw = 1;
-    indi->manualMaxUpwardsSpf = 20; // conservative
+    // indi->manualUseCoordinatedYaw = 1;
+    // indi->manualMaxUpwardsSpf = 20; // conservative
 
-    indi->attMaxTiltRate = 500; // reduce slightly
-    indi->attMaxYawRate = 300; // reduce
+    // indi->attMaxTiltRate = 500; // reduce slightly
+    // indi->attMaxYawRate = 300; // reduce
     for (int act = 0; act < learnerConfig()->numAct ; act++) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
@@ -537,7 +536,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         else
             indi->actNonlinearity[act] = 50;
 
-        indi->actLimit[act] = learnerConfig()->actLimit;
+        // indi->actLimit[act] = 0.6;
         //                    inv y-scale        a-scale           config scale
         indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
         indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
@@ -549,17 +548,17 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         indi->actG2_pitch[act] = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
         indi->actG2_yaw[act]   = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
 
-        indi->wlsWu[act] = 1;
-        indi->u_pref[act] = 0;
+        // indi->wlsWu[act] = 1;
+        // indi->u_pref[act] = 0;
     }
 
-    indi->imuSyncLp2Hz = 15; // lord knows
-    indi->wlsWv[0] = 1;
-    indi->wlsWv[1] = 1;
-    indi->wlsWv[2] = 50;
-    indi->wlsWv[3] = 50;
-    indi->wlsWv[4] = 50;
-    indi->wlsWv[5] = 5;
+    // indi->imuSyncLp2Hz = 15; // lord knows
+    // indi->wlsWv[0] = 1;
+    // indi->wlsWv[1] = 1;
+    // indi->wlsWv[2] = 50;
+    // indi->wlsWv[3] = 50;
+    // indi->wlsWv[4] = 50;
+    // indi->wlsWv[5] = 5;
 
     // keep same:
     // indi->useIncrement = true;

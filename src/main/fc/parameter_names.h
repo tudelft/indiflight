@@ -214,7 +214,6 @@
 #define PARAM_NAME_LEARNER_ZETA_ATTITUDE "learner_zeta_attitude"
 #define PARAM_NAME_LEARNER_ZETA_VELOCITY "learner_zeta_velocity"
 #define PARAM_NAME_LEARNER_ZETA_POSITION "learner_zeta_position"
-#define PARAM_NAME_LEARNER_ACT_LIMIT "learner_act_limit"
 #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
 #endif
