@@ -37,7 +37,7 @@ float tt_vel_gain = 3.0; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 2.5f;
+float tt_R = 3.0f;
 
 bool isActiveTrajectoryTracker(void) {
     return tt_active;
@@ -104,6 +104,13 @@ void updateTrajectoryTracker(timeUs_t current) {
 
         // update references
         getRefsTrajectoryTracker(tt_progress);
+        
+        // if speed_factor is zero, we forward posSetpointNed to tt_pos_ref
+        // if (tt_speed_factor == 0.0f) {
+        //     tt_pos_ref[0] = posSetpointNed.pos.V.X;
+        //     tt_pos_ref[1] = posSetpointNed.pos.V.Y;
+        //     tt_pos_ref[2] = posSetpointNed.pos.V.Z;
+        // }
 
         // update setpoints
         // pos error

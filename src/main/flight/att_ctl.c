@@ -870,6 +870,65 @@ void getAttSpNedFromAccSpNed2(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, 
     //rateSpBody.V.Z = attGainsCasc.V.Z * angle * axis_body.V.Z;
 }
 
+void getAttSpNedFromAccSpNed3(t_fp_vector* accSpNed, fp_quaternion_t* attSpNed, float* fz) {
+    // we need to rotate the drone such that the z-up axis is aligned with accSpNed-g
+    // let v1 = accSpNed-g-acc_drag, v2 = z-up (both in NED frame)
+    // where acc_drag = -RDR.T*v_ref
+    // then we need to rotate v2 to v1
+    // the rotation axis is the cross product of v1 and v2
+    // the rotation angle is the angle between v1 and v2
+    t_fp_vector v1 = {
+        .V.X = accSpNed->V.X,
+        .V.Y = accSpNed->V.Y,
+        .V.Z = accSpNed->V.Z - 9.80665f,
+    };
+    t_fp_vector v2_body = {.V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f};
+    fp_quaternion_t attEstNed = {
+        .qi = attitude_q.w,
+        .qx = attitude_q.x,
+        .qy = -attitude_q.y,
+        .qz = -attitude_q.z,
+    };
+    // get v2 in Ned
+    t_fp_vector v2 = quatRotate(attEstNed, v2_body);
+
+    // rotation axis
+    t_fp_vector axis;
+    VEC3_CROSS(axis, v2, v1);
+    VEC3_NORMALIZE(axis);
+
+    // rotation angle
+    float angle = acosf(VEC3_DOT(v1, v2) / (VEC3_LENGTH(v1) * VEC3_LENGTH(v2)));
+
+    // attitude error
+    fp_quaternion_t attErrNed;
+    float_quat_of_axang(&attErrNed, &axis, angle);
+
+    // attitude setpoint
+    *attSpNed = quatMult(attErrNed, attEstNed);
+
+    // thrust setpoint
+    *fz = -VEC3_LENGTH(v1);
+
+    // thrust projected onto z-up
+    // *fz = -VEC3_DOT(v1, v2);
+
+    // rate setpoint
+    // we get the axis in body frame:
+    // fp_quaternion_t attEstNedInv = {
+    //     .qi = attEstNed.qi,
+    //     .qx =-attEstNed.qx,
+    //     .qy =-attEstNed.qy,
+    //     .qz =-attEstNed.qz,
+    // };
+    // t_fp_vector axis_body = quatRotate(attEstNedInv, axis);
+    
+    // and scale the axis by 'angle' and multiply by a gain to get the rate setpoint
+    //rateSpBody.V.X = attGainsCasc.V.X * angle * axis_body.V.X;
+    //rateSpBody.V.Y = attGainsCasc.V.Y * angle * axis_body.V.Y;
+    //rateSpBody.V.Z = attGainsCasc.V.Z * angle * axis_body.V.Z;
+}
+
 t_fp_vector coordinatedYaw(float yaw) {
     // convert yawRateSpNed to Body
     // todo: this local is defined twice.. make static somehow

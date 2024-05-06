@@ -402,7 +402,10 @@ extern uint8_t _dmaram_end__;
 #define USE_TELEMETRY_IBUS_EXTENDED
 #define USE_TELEMETRY_JETIEXBUS
 #define USE_TELEMETRY_MAVLINK
-#define USE_TELEMETRY_PI
+#ifndef USE_TELEMETRY_PI
+    #define USE_TELEMETRY_PI
+#endif
+// #define USE_TELEMETRY_PI
 #define USE_TELEMETRY_HOTT
 #define USE_TELEMETRY_LTM
 

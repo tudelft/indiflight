@@ -77,6 +77,12 @@ void ekf_set_P_diag(float P_diag[N_STATES]) {
     }
 }
 
+void ekf_set_P(float P0[N_STATES*(N_STATES+1)/2]) {
+	for (int i=0; i<N_STATES*(N_STATES+1)/2; i++) {
+		P[i] = P0[i];
+	}
+}
+
 void ekf_predict(float U[N_INPUTS], float dt) {
     // PREDICTION STEP X_new, P_new = ...
     tmp[0] = cosf(X[8]);

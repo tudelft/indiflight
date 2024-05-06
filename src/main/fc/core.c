@@ -214,6 +214,10 @@ bool canUseLaunchControl(void)
 }
 #endif
 
+#ifdef USE_NN_CONTROL
+#include "flight/nn_control.h"
+#endif
+
 void resetArmingDisabled(void)
 {
     lastArmingDisabledReason = 0;
@@ -1378,6 +1382,15 @@ static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeU
         for (int i = 0; i < numMotors; i++) {
             motor[i] = scaleRangef(u_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
         }
+
+        #ifdef USE_NN_CONTROL
+        if (nn_is_active()) {
+            float* nn_output = nn_get_motor_cmds();
+            for (int i = 0; i < numMotors; i++) {
+                motor[i] = scaleRangef(nn_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+            }
+        }
+        #endif
     }
 
 #ifdef HIL_BUILD
