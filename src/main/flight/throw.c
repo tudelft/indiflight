@@ -77,11 +77,10 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // disable state machines (and possibly abort throw/fall if in progress)
     bool disableConditions = ARMING_FLAG(ARMED)
+#ifndef USE_THROWING_WITHOUT_POSITION
         || !FLIGHT_MODE(POSITION_MODE)
-        || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
-#ifdef USE_INDI
-        || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
 #endif
+        || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
@@ -98,12 +97,16 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce
-                #ifdef USE_GPS_PI
-                    && (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID)
+                && acc.isAccelUpdatedAtLeastOnce &&
+                #ifdef USE_GPS_PI 
+                    (
+#ifdef USE_THROWING_WITHOUT_POSITION
+                    !FLIGHT_MODE(POSITION_MODE) ||
+#endif
+                    ( (extPosState >= EXT_POS_STILL_VALID)
+                    && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
                 #endif
-                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
+                !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;

@@ -143,8 +143,8 @@ typedef enum {
 #ifdef HIL_BUILD
     TASK_HIL,
 #endif
-#ifdef USE_GPS_PI
-    TASK_GPS_PI,
+#ifdef USE_POS_CTL
+    TASK_LOCAL_POSITION,
 #endif
 #ifdef USE_POS_CTL
     TASK_POS_CTL,

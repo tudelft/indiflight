@@ -239,7 +239,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     UNUSED(useMag);
 #endif
 
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
     // external position transmits psi
     if (useExtPosYaw) {
         float yawI = extPosNed.att.angles.yaw;
@@ -323,7 +323,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     attitudeIsEstablished = true;
 }
 
-#if defined(USE_GPS_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
+#if defined(USE_POS_CTL) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 
@@ -564,7 +564,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     }
 
     useAcc = imuIsAccelerometerHealthy(acc.accADCf); // all smoothed accADCf values are within 20% of 1G
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
     bool useExtPosYaw = (extPosState >= EXT_POS_STILL_VALID);
 #else
     bool useExtPosYaw = false;
@@ -579,7 +579,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 
     imuUpdateEulerAngles();
 
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
     Kp *= (extPosState >= EXT_POS_STILL_VALID);
     if (deltaT < 50000) {
         // 50ms max interval

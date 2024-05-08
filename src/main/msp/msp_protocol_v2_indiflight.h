@@ -24,3 +24,4 @@
 #define MSP2_SET_INDI_PROFILE               0x4003
 #define MSP2_LEARNING_CONFIG                0x4004
 #define MSP2_SET_LEARNING_CONFIG            0x4005
+#define MSP2_SET_POSITION_SETPOINT          0x4006

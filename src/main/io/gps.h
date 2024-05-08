@@ -121,6 +121,7 @@ typedef struct gpsSolutionData_s {
     uint16_t speed3d;               // speed in 0.1m/s
     uint16_t groundSpeed;           // speed in 0.1m/s
     uint16_t groundCourse;          // degrees * 10
+    uint16_t trueYaw;
     uint8_t numSat;
 } gpsSolutionData_t;
 

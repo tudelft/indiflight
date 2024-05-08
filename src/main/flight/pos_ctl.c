@@ -11,9 +11,9 @@
 
 #ifdef USE_POS_CTL
 
-#ifndef USE_GPS_PI
-#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
-#endif
+//#ifndef USE_GPS_PI
+//#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
+//#endif
 
 #ifndef USE_INDI
 #pragma message "USE_POS_CTL currently only has any effect with USE_INDI"

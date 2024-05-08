@@ -344,8 +344,8 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_GPS_PI
-static void taskGpsPi(timeUs_t currentTimeUs)
+#ifdef USE_POS_CTL
+static void taskLocalPosition(timeUs_t currentTimeUs)
 {
     getExternalPos(currentTimeUs);
     getFakeGps(currentTimeUs);
@@ -466,8 +466,8 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_GPS_PI
-    [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#ifdef USE_POS_CTL
+    [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_POS_CTL
@@ -646,9 +646,9 @@ void tasksInit(void)
     setTaskEnabled(TASK_HIL, true);
 #endif
 
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
     // todo! CHECK OTHER FLAGS for consistency
-    setTaskEnabled(TASK_GPS_PI, true);
+    setTaskEnabled(TASK_LOCAL_POSITION, true);
 #endif
 
 #ifdef USE_POS_CTL

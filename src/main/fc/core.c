@@ -1029,8 +1029,12 @@ void processRxModes(timeUs_t currentTimeUs)
         //if (!FLIGHT_MODE(ANGLE_MODE))
         //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
 
-        if (!FLIGHT_MODE(POSITION_MODE))
+        if (!FLIGHT_MODE(POSITION_MODE)) {
+#ifdef USE_GPS
+            GPS_reset_home_position();
+#endif
             ENABLE_FLIGHT_MODE(POSITION_MODE);
+        }
     } else {
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }

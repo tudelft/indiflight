@@ -2,7 +2,7 @@
 #include "drivers/time.h"
 #include "common/maths.h"
 
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
 
 typedef enum {
     EXT_POS_NO_SIGNAL,
@@ -18,9 +18,12 @@ typedef struct __ext_pos_ned_t {
 } ext_pos_ned_t;
 
 typedef struct __pos_setpoint_ned_t {
+    uint32_t time_ms;
+    uint8_t mode;
     fp_vector_t pos;
     fp_vector_t vel;
     float psi;
+    float vel_traj;
 } pos_setpoint_ned_t;
 
 extern ext_pos_ned_t extPosNed;
