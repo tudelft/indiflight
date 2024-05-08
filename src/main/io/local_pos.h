@@ -2,8 +2,6 @@
 #include "drivers/time.h"
 #include "common/maths.h"
 
-#ifdef USE_POS_CTL
-
 typedef enum {
     LOCAL_POS_NO_SIGNAL,
     LOCAL_POS_STILL_VALID,
@@ -39,4 +37,3 @@ extern timeUs_t posLatestMsgTime;
 void getLocalPos(timeUs_t current);
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
-#endif

@@ -10,10 +10,10 @@
 #include "flight/imu.h"
 #include "io/serial.h"
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 
 #if !defined(USE_GPS) && !defined(USE_LOCAL_POSITION_PI)
-#error "USE_POS_CTL requires either USE_GPS or USE_LOCAL_POSITION_PI"
+#error "USE_LOCAL_POSITION requires either USE_GPS or USE_LOCAL_POSITION_PI"
 #endif
 
 // UGLY HACK ----------------------------------------------

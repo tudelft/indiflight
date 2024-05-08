@@ -351,10 +351,10 @@ void initActiveBoxIds(void)
 
     BME(BOXSTICKCOMMANDDISABLE);
     BME(BOXREADY);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     BME(BOXPOSCTL);
 #endif
-#ifdef USE_VEL_CTL
+#ifdef USE_LOCAL_POSITION
     BME(BOXVELCTL);
 #endif
 

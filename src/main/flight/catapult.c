@@ -18,8 +18,8 @@ catapult_state_t catapultState = CATAPULT_IDLE;
 #error "must use catapult with USE_INDI"
 #endif
 
-#ifndef USE_POS_CTL
-#error "muse use catapult with USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "muse use catapult with USE_LOCAL_POSITION"
 #endif
 
 // extern

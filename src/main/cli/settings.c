@@ -1258,7 +1258,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE,          VAR_INT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, u_pref) },
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     { PARAM_NAME_POSITION_HORIZONTAL_P,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_p) },
     { PARAM_NAME_POSITION_HORIZONTAL_I,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 2, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_i) },
     { PARAM_NAME_POSITION_HORIZONTAL_D,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_d) },

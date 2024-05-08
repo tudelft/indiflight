@@ -20,8 +20,8 @@ throwState_t throwState = THROW_STATE_IDLE;
 #error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
 
-#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_POS_CTL)
-#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_POS_CTL"
+#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_LOCAL_POSITION)
+#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_LOCAL_POSITION"
 #endif
 
 #pragma message "You are compiling with dangerous code!"
@@ -102,7 +102,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce &&
-                #ifdef USE_POS_CTL
+                #ifdef USE_LOCAL_POSITION
                     (
 #ifdef USE_THROWING_WITHOUT_POSITION
                     !FLIGHT_MODE(POSITION_MODE) ||

@@ -9,8 +9,8 @@
 
 #ifdef USE_TRAJECTORY_TRACKER
 
-#ifndef USE_POS_CTL
-#error "USE_TRAJECTORY_TRACKER only works in combination with USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "USE_TRAJECTORY_TRACKER only works in combination with USE_LOCAL_POSITION"
 #endif
 
 #ifndef USE_TELEMETRY_PI

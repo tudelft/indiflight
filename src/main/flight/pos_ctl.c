@@ -9,14 +9,14 @@
 #include "config/config.h"
 #include "flight/indi.h"
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 
 //#ifndef USE_LOCAL_POSITION_PI
-//#error "USE_POS_CTL can currently only be used with USE_LOCAL_POSITION_PI"
+//#error "USE_LOCAL_POSITION can currently only be used with USE_LOCAL_POSITION_PI"
 //#endif
 
 #ifndef USE_INDI
-#pragma message "USE_POS_CTL currently only has any effect with USE_INDI"
+#pragma message "USE_LOCAL_POSITION currently only has any effect with USE_INDI"
 #endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
@@ -321,4 +321,4 @@ void posGetRateSpBody(timeUs_t current) {
 // TODO
 // 1. velocity control..
 
-#endif // USE_POS_CTL
+#endif // USE_LOCAL_POSITION

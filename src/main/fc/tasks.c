@@ -344,7 +344,7 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static void taskLocalPosition(timeUs_t currentTimeUs)
 {
     getLocalPos(currentTimeUs);
@@ -353,7 +353,7 @@ static void taskLocalPosition(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
@@ -466,11 +466,11 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
@@ -646,12 +646,12 @@ void tasksInit(void)
     setTaskEnabled(TASK_HIL, true);
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     // todo! CHECK OTHER FLAGS for consistency
     setTaskEnabled(TASK_LOCAL_POSITION, true);
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     setTaskEnabled(TASK_POS_CTL, true);
 #endif
 

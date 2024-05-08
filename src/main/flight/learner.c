@@ -100,7 +100,7 @@ static fp_vector_t hoverThrust;
 #define LEARNER_NUM_POWER_ITERATIONS 1
 
 static indiProfile_t* indiProfileLearned;
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static positionProfile_t* positionProfileLearned;
 #else
 static positionProfile_t dummy;
@@ -113,7 +113,7 @@ void initLearner(void) {
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
 
     indiProfileLearned = indiProfilesMutable(INDI_PROFILE_COUNT-1);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     positionProfileLearned = positionProfilesMutable(POSITION_PROFILE_COUNT-1);
 #endif
     initLearnerRuntime();
@@ -749,7 +749,7 @@ doMoreMotors:
             if (learnRun.applyIndiProfileAfterQuery)
                 changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             if (learnRun.applyPositionProfileAfterQuery)
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
 #endif

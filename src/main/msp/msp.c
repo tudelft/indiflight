@@ -3619,7 +3619,9 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         (void)sbufReadU8(src);              // sec
         GPS_update |= GPS_MSP_UPDATE;        // MSP data signalisation to GPS functions
         sensorsSet(SENSOR_GPS);
+#ifdef USE_LOCAL_POSITION
         getLocalPos(0);
+#endif
         break;
 
     case MSP_SET_RAW_GPS:
@@ -4009,7 +4011,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         }
         break;
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     case MSP2_SET_POSITION_SETPOINT:
         {
             posSpNed.time_ms = sbufReadU32(src);
