@@ -73,7 +73,7 @@
 #include "io/beeper.h"
 #include "io/gps.h"
 #include "io/serial.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -1679,27 +1679,27 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
-    blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
-    blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
-    blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
+    blackboxCurrent->extPos[0] = lrintf(posMeasNed.pos.V.X * METER_TO_MM);
+    blackboxCurrent->extPos[1] = lrintf(posMeasNed.pos.V.Y * METER_TO_MM);
+    blackboxCurrent->extPos[2] = lrintf(posMeasNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->posSp[0] = lrintf(posSpNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->posSp[1] = lrintf(posSpNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->posSp[2] = lrintf(posSpNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->vel[0] = lrintf(velEstNed.V.X * METER_TO_CM);
     blackboxCurrent->vel[1] = lrintf(velEstNed.V.Y * METER_TO_CM);
     blackboxCurrent->vel[2] = lrintf(velEstNed.V.Z * METER_TO_CM);
-    blackboxCurrent->extVel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
-    blackboxCurrent->extVel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
-    blackboxCurrent->extVel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->extVel[0] = lrintf(posMeasNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->extVel[1] = lrintf(posMeasNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->extVel[2] = lrintf(posMeasNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->velSp[0] = lrintf(posSpNed.vel.V.X * METER_TO_CM);
     blackboxCurrent->velSp[1] = lrintf(posSpNed.vel.V.Y * METER_TO_CM);
     blackboxCurrent->velSp[2] = lrintf(posSpNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->accSp[0] = lrintf(accSpNedFromPos.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNedFromPos.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNedFromPos.V.Z * METER_TO_CM);
-    blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
-    blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
-    blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
+    blackboxCurrent->extAtt[0] = lrintf(posMeasNed.att.angles.roll * 1000.f); // milirad
+    blackboxCurrent->extAtt[1] = lrintf(posMeasNed.att.angles.pitch * 1000.f); // milirad
+    blackboxCurrent->extAtt[2] = lrintf(posMeasNed.att.angles.yaw * 1000.f); // milirad
 #endif
 
 #ifdef USE_EKF

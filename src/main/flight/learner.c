@@ -757,8 +757,7 @@ doMoreMotors:
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE:
             if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_WAITING_FOR_ARM))
-                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW))
-                )
+                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )
                 learningQueryState = LEARNING_QUERY_IDLE;
             break;
     }

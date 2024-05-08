@@ -1,7 +1,7 @@
 
 #include "pos_ctl.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/imu.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
@@ -11,8 +11,8 @@
 
 #ifdef USE_POS_CTL
 
-//#ifndef USE_GPS_PI
-//#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
+//#ifndef USE_LOCAL_POSITION_PI
+//#error "USE_POS_CTL can currently only be used with USE_LOCAL_POSITION_PI"
 //#endif
 
 #ifndef USE_INDI
@@ -100,7 +100,7 @@ static void resetIterms(void) {
 
 void updatePosCtl(timeUs_t current) {
 
-    if (extPosState == EXT_POS_NO_SIGNAL) {
+    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
         // panic and level craft
         resetIterms();
         accSpNedFromPos.V.X = 0.f;
@@ -125,7 +125,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // pos error = pos setpoint - pos estimate
     fp_vector_t posError = posSpNed.pos;
-    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // extPosNed.pos
+    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // posMeasNed.pos
 
     // vel setpoint = posGains * posError
     posSpNed.vel.V.X = posError.V.X * horzPCasc;
@@ -139,7 +139,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // vel error = vel setpoint - vel estimate
     fp_vector_t velError = posSpNed.vel;
-    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, extPosNed.vel);
+    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
     static bool accSpXYSaturated = true;

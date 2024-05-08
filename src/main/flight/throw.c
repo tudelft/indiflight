@@ -1,19 +1,9 @@
 
 #include "platform.h"
-
-// throwing mode
-#if defined(USE_THROW_TO_ARM)
-#ifndef USE_ACC
-#error "Can only use USE_THROW_TO_ARM with USE_ACC"
-#endif
-
-#pragma message "You are compiling with dangerous code!"
-
-
 #include "fc/runtime_config.h"
 #include "fc/rc_modes.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
@@ -21,6 +11,21 @@
 #include "pg/pg_ids.h"
 
 #include "throw.h"
+
+throwState_t throwState = THROW_STATE_IDLE;
+
+// throwing mode
+#if defined(USE_THROW_TO_ARM)
+#ifndef USE_ACC
+#error "Can only use USE_THROW_TO_ARM with USE_ACC"
+#endif
+
+#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_POS_CTL)
+#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_POS_CTL"
+#endif
+
+#pragma message "You are compiling with dangerous code!"
+
 
 // config
 PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
@@ -47,7 +52,6 @@ armingDisableFlags_e doNotTolerateDuringThrow = (
     | ARMING_DISABLED_PARALYZE
 );
 
-throwState_t throwState = THROW_STATE_IDLE;
 float momentumAtLeavingHand = 0.f;
 
 #ifdef THROW_TO_ARM_USE_FALL_LOGIC
@@ -98,13 +102,13 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce &&
-                #ifdef USE_GPS_PI 
+                #ifdef USE_POS_CTL
                     (
 #ifdef USE_THROWING_WITHOUT_POSITION
                     !FLIGHT_MODE(POSITION_MODE) ||
 #endif
-                    ( (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
+                    ( (posMeasState >= LOCAL_POS_STILL_VALID)
+                    && (posSpState >= LOCAL_POS_STILL_VALID) ) ) &&
                 #endif
                 !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 

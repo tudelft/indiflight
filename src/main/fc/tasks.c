@@ -69,7 +69,7 @@
 #include "io/beeper.h"
 #include "io/dashboard.h"
 #include "io/flashfs.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
 #include "io/piniobox.h"
@@ -347,7 +347,7 @@ static void taskHil(timeUs_t currentTimeUs)
 #ifdef USE_POS_CTL
 static void taskLocalPosition(timeUs_t currentTimeUs)
 {
-    getExternalPos(currentTimeUs);
+    getLocalPos(currentTimeUs);
     getFakeGps(currentTimeUs);
     getPosSetpoint(currentTimeUs);
 }

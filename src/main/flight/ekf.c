@@ -1,6 +1,6 @@
 #include "ekf.h"
 
-#include "io/external_pos.h"  		// for extPosNed
+#include "io/local_pos.h"  		// for extPosNed
 #include "fc/runtime_config.h"		// for FLIGHT_MODE
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
 #include "sensors/gyro.h"			// for gyro
@@ -18,8 +18,8 @@
 #error "USE_EKF requires USE_GYRO"
 #endif
 
-#ifndef USE_GPS_PI
-#error "USE_EKF requires USE_GPS_PI"
+#ifndef USE_LOCAL_POSITION_PI
+#error "USE_EKF requires USE_LOCAL_POSITION_PI"
 #endif
 
 bool ekf_initialized = false;
@@ -55,13 +55,13 @@ void initEkf(timeUs_t currentTimeUs) {
 
 	// sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
-		extPosNed.pos.V.X,
-		extPosNed.pos.V.Y,
-		extPosNed.pos.V.Z,
+		posMeasNed.pos.V.X,
+		posMeasNed.pos.V.Y,
+		posMeasNed.pos.V.Z,
 		0., 0., 0., // vel
-		extPosNed.att.angles.roll,
-		extPosNed.att.angles.pitch,
-		extPosNed.att.angles.yaw,
+		posMeasNed.att.angles.roll,
+		posMeasNed.att.angles.pitch,
+		posMeasNed.att.angles.yaw,
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
@@ -73,7 +73,7 @@ void initEkf(timeUs_t currentTimeUs) {
 		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)
 	};
 
-    ekf_Z[5] = extPosNed.att.angles.yaw;
+    ekf_Z[5] = posMeasNed.att.angles.yaw;
 	
 	// initialize ekf
 	ekf_set_Q(Q);
@@ -103,16 +103,16 @@ void runEkf(timeUs_t currentTimeUs) {
 	ekf_predict(U, dt);
 
 	// UPDATE STEP
-	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) { // only update if new data is available [TODO: make this more elegant. DONE]
-        lastUpdateTimestamp = extLatestMsgTime;
-		ekf_Z[0] = extPosNed.pos.V.X;
-		ekf_Z[1] = extPosNed.pos.V.Y;
-		ekf_Z[2] = extPosNed.pos.V.Z;
-		ekf_Z[3] = extPosNed.att.angles.roll;
-		ekf_Z[4] = extPosNed.att.angles.pitch;
+	if (cmpTimeUs(posLatestMsgTime, lastUpdateTimestamp) > 0) { // only update if new data is available [TODO: make this more elegant. DONE]
+        lastUpdateTimestamp = posLatestMsgTime;
+		ekf_Z[0] = posMeasNed.pos.V.X;
+		ekf_Z[1] = posMeasNed.pos.V.Y;
+		ekf_Z[2] = posMeasNed.pos.V.Z;
+		ekf_Z[3] = posMeasNed.att.angles.roll;
+		ekf_Z[4] = posMeasNed.att.angles.pitch;
 
 		// fix yaw discontinuity (rad)
-		float delta_psi = extPosNed.att.angles.yaw - ekf_Z[5];
+		float delta_psi = posMeasNed.att.angles.yaw - ekf_Z[5];
 		while (delta_psi > M_PI) {
 			delta_psi -= 2 * M_PI;
 		}
@@ -128,12 +128,12 @@ void runEkf(timeUs_t currentTimeUs) {
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
-	// reset ekf EXT_POS_NO_SIGNAL
-    if (extPosState == EXT_POS_NO_SIGNAL) {
+	// reset ekf LOCAL_POS_NO_SIGNAL
+    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
         ekf_initialized = false;
     } else if (!ekf_initialized) {
         // when ekf is not initialized, we need to wait for the first external position message
-        if (extPosState != EXT_POS_NO_SIGNAL) {
+        if (posMeasState != LOCAL_POS_NO_SIGNAL) {
             // INIT EKF
             initEkf(currentTimeUs);
         }
@@ -147,7 +147,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 
 #if defined(USE_EKF_ATTITUDE) || defined(USE_EKF_POSITION)
     // update system state with EKF data, if possible
-    if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
+    if (ekf_initialized && (posMeasState != LOCAL_POS_NO_SIGNAL)) {
         // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 

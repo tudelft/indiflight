@@ -46,7 +46,7 @@
 #include "flight/pid.h"
 
 #include "io/gps.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 
 #include "scheduler/scheduler.h"
 
@@ -242,7 +242,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 #ifdef USE_POS_CTL
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = extPosNed.att.angles.yaw;
+        float yawI = posMeasNed.att.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }
@@ -333,7 +333,7 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
     rotate_vector_with_rotationMatrix(&aNed, &rMat);
     aNed.V.Z += acc.dev.acc_1G; // add gravity
 
-    fp_vector_t velErrorNed = extPosNed.vel;
+    fp_vector_t velErrorNed = posMeasNed.vel;
     VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
 
     UNUSED(Ki);
@@ -341,7 +341,7 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*GRAVITYf, aNed);
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
 
-    fp_vector_t posErrorNed = extPosNed.pos;
+    fp_vector_t posErrorNed = posMeasNed.pos;
     VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posEstNed);
 
     VEC3_SCALAR_MULT_ADD(posEstNed, dt, velEstNed);
@@ -565,7 +565,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 
     useAcc = imuIsAccelerometerHealthy(acc.accADCf); // all smoothed accADCf values are within 20% of 1G
 #ifdef USE_POS_CTL
-    bool useExtPosYaw = (extPosState >= EXT_POS_STILL_VALID);
+    bool useExtPosYaw = (posMeasState >= LOCAL_POS_STILL_VALID);
 #else
     bool useExtPosYaw = false;
 #endif
@@ -580,7 +580,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     imuUpdateEulerAngles();
 
 #ifdef USE_POS_CTL
-    Kp *= (extPosState >= EXT_POS_STILL_VALID);
+    Kp *= (posMeasState >= LOCAL_POS_STILL_VALID);
     if (deltaT < 50000) {
         // 50ms max interval
         imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,

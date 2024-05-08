@@ -30,7 +30,7 @@
 #include "solveActiveSet.h"
 #include "flight/learner.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/beeper.h"
 
 #include "pg/pg.h"

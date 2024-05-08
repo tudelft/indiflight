@@ -6,6 +6,10 @@
 
 #include "platform.h"
 
+#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_TELEMETRY_PI)
+#error "USE_LOCAL_POSITION_PI requires USE_TELEMETRY_PI"
+#endif
+
 #if defined(USE_TELEMETRY_PI)
 
 #include "common/maths.h"
@@ -52,7 +56,7 @@
 #include "pi-protocol.h"
 #include "pi-messages.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 
 #ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
@@ -232,9 +236,9 @@ void processPiUplink(void)
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
             uint8_t msgId = piParse(&p_telem, serialRead(piPort));
-#ifdef USE_GPS_PI
+#if defined(USE_LOCAL_POSITION_PI) && defined(USE_POS_CTL)
             if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
-                getExternalPos(0);
+                getLocalPos(0);
             }
 #else
             UNUSED(msgId);
