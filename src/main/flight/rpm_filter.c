@@ -45,24 +45,11 @@
 #include "rpm_filter.h"
 
 
-typedef struct rpmFilter_s {
-
-    int numHarmonics;
-    float minHz;
-    float maxHz;
-    float fadeRangeHz;
-    float q;
-
-    timeUs_t looptimeUs;
-    biquadFilter_t notch[XYZ_AXIS_COUNT][MAX_SUPPORTED_MOTORS][RPM_FILTER_HARMONICS_MAX];
-
-} rpmFilter_t;
-
 // Singleton
-FAST_DATA_ZERO_INIT static rpmFilter_t rpmFilter;
+FAST_DATA_ZERO_INIT rpmFilter_t rpmFilter;
+FAST_DATA_ZERO_INIT float motorFrequencyHz[MAX_SUPPORTED_MOTORS];
 
 FAST_DATA_ZERO_INIT static pt1Filter_t motorFreqLpf[MAX_SUPPORTED_MOTORS];
-FAST_DATA_ZERO_INIT static float motorFrequencyHz[MAX_SUPPORTED_MOTORS];
 FAST_DATA_ZERO_INIT static float minMotorFrequencyHz;
 FAST_DATA_ZERO_INIT static float erpmToHz;
 

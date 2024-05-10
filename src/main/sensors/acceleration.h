@@ -24,6 +24,7 @@
 #include "pg/pg.h"
 #include "drivers/accgyro/accgyro.h"
 #include "sensors/sensors.h"
+#include "flight/rpm_filter.h"
 
 // Type of accelerometer used/detected
 typedef enum {
@@ -53,12 +54,16 @@ typedef enum {
 typedef struct acc_s {
     accDev_t dev;
     uint16_t sampleRateHz;
-    float accADC[XYZ_AXIS_COUNT];
     float accADCunfiltered[XYZ_AXIS_COUNT];
+    float accADCafterRpm[XYZ_AXIS_COUNT];
+    float accADC[XYZ_AXIS_COUNT];
     bool isAccelUpdatedAtLeastOnce;
 } acc_t;
 
 extern acc_t acc;
+#ifdef USE_ACCEL_RPM_FILTER
+extern rpmFilter_t rpmFilterAcc;
+#endif
 
 typedef struct rollAndPitchTrims_s {
     int16_t roll;
