@@ -275,8 +275,6 @@ void updateLearner(timeUs_t current) {
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
-    fxLearningConditions = true;
-
     if (fxLearningConditions) {
         //setup regressors
         float A[RLS_MAX_N];

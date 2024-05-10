@@ -27,6 +27,8 @@
 
 #include "pg/rpm_filter.h"
 
+#define SECONDS_PER_MINUTE       60.0f
+#define ERPM_PER_LSB             100.0f
 #define RPM_FILTER_HARMONICS_MAX 3
 #define RPM_FILTER_DURATION_S    0.001f  // Maximum duration allowed to update all RPM notches once
 

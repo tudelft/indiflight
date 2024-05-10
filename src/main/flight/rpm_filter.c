@@ -44,9 +44,6 @@
 
 #include "rpm_filter.h"
 
-#define SECONDS_PER_MINUTE       60.0f
-#define ERPM_PER_LSB             100.0f
-
 
 // Singleton
 FAST_DATA_ZERO_INIT rpmFilter_t rpmFilter;
