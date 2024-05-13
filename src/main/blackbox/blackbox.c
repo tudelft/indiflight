@@ -587,6 +587,11 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"learnerGains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learnerGains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learnerGains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"hoverAttitude",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 };
 
@@ -719,6 +724,7 @@ typedef struct blackboxMainState_s {
     int16_t fx_q_rls_x[BLACKBOX_LEARNER_2N];
     int16_t fx_r_rls_x[BLACKBOX_LEARNER_2N];
     uint16_t learnerGains[LEARNER_LOOP_COUNT];
+    int16_t hoverAttitude[4];
 #endif
 } blackboxMainState_t;
 
@@ -1136,6 +1142,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_q_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->learnerGains, LEARNER_LOOP_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->hoverAttitude, 4);
     }
 #endif
 
@@ -1466,6 +1473,9 @@ static void writeInterframe(void)
 
         arraySubUint16(deltas16, blackboxCurrent->learnerGains, blackboxLast->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(deltas16, LEARNER_LOOP_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->hoverAttitude, blackboxLast->hoverAttitude, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
     }
 #else
     UNUSED(deltas16);
@@ -1919,6 +1929,11 @@ static void loadMainState(timeUs_t currentTimeUs)
 
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
         blackboxCurrent->learnerGains[loop] = lrintf(10.f * learnRun.gains[loop]);
+
+    blackboxCurrent->hoverAttitude[0] = lrintf(hoverAttitude.qi * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[1] = lrintf(hoverAttitude.qx * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[2] = lrintf(hoverAttitude.qy * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[3] = lrintf(hoverAttitude.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
 #endif
 
 #else

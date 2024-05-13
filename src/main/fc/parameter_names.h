@@ -227,6 +227,7 @@
 #define PARAM_NAME_LEARNER_ZETA_POSITION "learner_zeta_position"
 #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
+#define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
 #endif
 
 #ifdef USE_NN_CONTROL

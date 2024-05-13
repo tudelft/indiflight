@@ -52,6 +52,7 @@ typedef struct learnerConfig_s {
     uint8_t actLimit;
     uint8_t applyIndiProfileAfterQuery;
     uint8_t applyPositionProfileAfterQuery;
+    uint8_t applyHoverRotationAfterQuery;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -88,6 +89,7 @@ typedef struct learningRuntime_s {
     float gains[LEARNER_LOOP_COUNT];
     bool applyIndiProfileAfterQuery;
     bool applyPositionProfileAfterQuery;
+    bool applyHoverRotationAfterQuery;
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;
@@ -96,6 +98,7 @@ extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
 extern rls_t imuRls;
 extern rls_parallel_t fxSpfRls;
 extern rls_parallel_t fxRateDotRls;
+extern fp_quaternion_t hoverAttitude;
 
 void initLearnerRuntime(void);
 
