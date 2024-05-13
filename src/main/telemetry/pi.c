@@ -184,9 +184,9 @@ void piSendIMU(void)
     piMsgImuTx.roll = gyro.gyroADCf[FD_ROLL]; // filtered with notches and lpf
     piMsgImuTx.pitch = gyro.gyroADCf[FD_PITCH]; // filtered with notches and lpf
     piMsgImuTx.yaw = gyro.gyroADCf[FD_YAW]; // filtered with notches and lpf
-    piMsgImuTx.x = acc.accADC[X];
-    piMsgImuTx.y = acc.accADC[Y];
-    piMsgImuTx.z = acc.accADC[Z];
+    piMsgImuTx.x = acc.accADCf[X];
+    piMsgImuTx.y = acc.accADCf[Y];
+    piMsgImuTx.z = acc.accADCf[Z];
     piSendMsg(&piMsgImuTx, &serialWriter);
 
     // send dummy data to test serialization escaping
@@ -202,9 +202,9 @@ void piSendIMU(void)
         test_cast.f,
         gyro.gyroADCf[FD_PITCH],
         gyro.gyroADCf[FD_YAW],
-        acc.accADC[X], // heavily filtered (25Hz?) because only used in the attitude loop, not gyro loop
-        acc.accADC[Y],
-        acc.accADC[Z]
+        acc.accADCf[X], // heavily filtered (25Hz?) because only used in the attitude loop, not gyro loop
+        acc.accADCf[Y],
+        acc.accADCf[Z]
     );
     */
 }

@@ -58,7 +58,7 @@ fallState_t fallState = FALL_STATE_IDLE
 // implementations
 float totalAccSq(void) {
     return sq(GRAVITYf) * sq(acc.dev.acc_1G_rec) * 
-        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
+        ( sq(acc.accADCf[X]) + sq(acc.accADCf[Y]) + sq(acc.accADCf[Z]) );
 }
 
 float totalGyroSq(void) {

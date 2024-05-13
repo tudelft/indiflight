@@ -532,7 +532,7 @@ typedef struct blackboxMainState_s {
     int16_t setpoint[4];
     int16_t gyroADC[XYZ_AXIS_COUNT];
     int16_t gyroADCafterRpm[XYZ_AXIS_COUNT];
-    int16_t accADC[XYZ_AXIS_COUNT];
+    int16_t accADCf[XYZ_AXIS_COUNT];
     int16_t accADCafterRpm[XYZ_AXIS_COUNT];
     int16_t debug[DEBUG16_VALUE_COUNT];
     int16_t motor[MAX_SUPPORTED_MOTORS];
@@ -930,7 +930,7 @@ static void writeIntraframe(void)
     }
 
     if (testBlackboxCondition(CONDITION(ACC))) {
-        blackboxWriteSigned16VBArray(blackboxCurrent->accADC, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->accADCf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accADCafterRpm, XYZ_AXIS_COUNT);
     }
 
@@ -1137,7 +1137,7 @@ static void writeInterframe(void)
         blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, gyroADCafterRpm),   XYZ_AXIS_COUNT);
     }
     if (testBlackboxCondition(CONDITION(ACC))) {
-        blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, accADC), XYZ_AXIS_COUNT);
+        blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, accADCf), XYZ_AXIS_COUNT);
         blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, accADCafterRpm), XYZ_AXIS_COUNT);
     }
     if (testBlackboxCondition(CONDITION(DEBUG_LOG))) {
@@ -1595,7 +1595,7 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->gyroADC[i] = lrintf(gyro.gyroADCf[i] * blackboxHighResolutionScale);
         blackboxCurrent->gyroADCafterRpm[i] = lrintf(gyro.gyroADCafterRpm[i] * blackboxHighResolutionScale);
 #if defined(USE_ACC)
-        blackboxCurrent->accADC[i] = lrintf(acc.accADC[i]);
+        blackboxCurrent->accADCf[i] = lrintf(acc.accADCf[i]);
         blackboxCurrent->accADCafterRpm[i] = lrintf(acc.accADCafterRpm[i]);
 #endif
 #ifdef USE_MAG

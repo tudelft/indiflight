@@ -89,9 +89,9 @@ void runEkf(timeUs_t currentTimeUs) {
 	// PREDICTION STEP
 	// gyro and acc transformed from FLU to FRD
 	float U[N_INPUTS] = {
-		GRAVITYf * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G),
-		GRAVITYf *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G),
-		GRAVITYf *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G),
+		GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G),
+		GRAVITYf *-((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
+		GRAVITYf *-((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
 		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
 		DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
 		DEGREES_TO_RADIANS(-gyro.gyroADCf[2])

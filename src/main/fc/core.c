@@ -1189,9 +1189,9 @@ bool isTouchingGround(void) {
         ) < sq(100.f);
 
     bool accHigh = (sq(acc.dev.acc_1G_rec) * (
-        sq(acc.accADC[X])
-        + sq(acc.accADC[Y])
-        + sq(acc.accADC[Z])
+        sq(acc.accADCf[X])
+        + sq(acc.accADCf[Y])
+        + sq(acc.accADCf[Z])
         )) > sq(0.8f);
 
     bool throttleLow = true;

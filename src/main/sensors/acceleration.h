@@ -54,9 +54,9 @@ typedef enum {
 typedef struct acc_s {
     accDev_t dev;
     uint16_t sampleRateHz;
-    float accADCunfiltered[XYZ_AXIS_COUNT];
-    float accADCafterRpm[XYZ_AXIS_COUNT];
-    float accADC[XYZ_AXIS_COUNT];
+    float accADC[XYZ_AXIS_COUNT];         // aligned, calibrated, scaled, but unfiltered data from the sensor
+    float accADCafterRpm[XYZ_AXIS_COUNT]; // rpm-filtered, if enabled
+    float accADCf[XYZ_AXIS_COUNT];        // also lowpass filtered
     bool isAccelUpdatedAtLeastOnce;
 } acc_t;
 

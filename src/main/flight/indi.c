@@ -348,7 +348,7 @@ void getMotorCommands(timeUs_t current) {
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         // rate
         indiRun.rate.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
-        indiRun.spf.A[axis] = acc.accADCunfiltered[axis] * acc.dev.acc_1G_rec * GRAVITYf;
+        indiRun.spf.A[axis] = acc.accADCafterRpm[axis] * acc.dev.acc_1G_rec * GRAVITYf;
 
         // adjust axes
         if ((axis == FD_PITCH) || (axis == FD_YAW)) {

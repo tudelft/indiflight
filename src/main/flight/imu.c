@@ -635,7 +635,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
         gyroAverage[axis] = gyroGetFilteredDownsampled(axis);
     }
 
-    useAcc = imuIsAccelerometerHealthy(acc.accADC); // all smoothed accADC values are within 20% of 1G
+    useAcc = imuIsAccelerometerHealthy(acc.accADCf); // all smoothed accADCf values are within 20% of 1G
 #ifdef USE_GPS_PI
     bool useExtPosYaw = (extPosState >= EXT_POS_STILL_VALID);
 #else
@@ -645,7 +645,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     float Kp = imuCalcKpGain(currentTimeUs, useAcc, gyroAverage);
     imuMahonyAHRSupdate(deltaT * 1e-6f,
                         DEGREES_TO_RADIANS(gyroAverage[X]), DEGREES_TO_RADIANS(gyroAverage[Y]), DEGREES_TO_RADIANS(gyroAverage[Z]),
-                        useAcc, acc.accADC[X], acc.accADC[Y], acc.accADC[Z],
+                        useAcc, acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z],
                         useMag, useExtPosYaw,
                         cogYawGain, courseOverGround, Kp);
 
@@ -656,7 +656,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     if (deltaT < 50000) {
         // 50ms max interval
         imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
-            acc.accADC[X], acc.accADC[Y], acc.accADC[Z], Kp*8.f, 0.f);
+            acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z], Kp*8.f, 0.f);
     }
 #endif
 
@@ -701,14 +701,14 @@ void imuUpdateAttitude(timeUs_t currentTimeUs)
         mixerSetThrottleAngleCorrection(throttleAngleCorrection);
 
     } else {
-        acc.accADC[X] = 0;
-        acc.accADC[Y] = 0;
-        acc.accADC[Z] = 0;
+        acc.accADCf[X] = 0;
+        acc.accADCf[Y] = 0;
+        acc.accADCf[Z] = 0;
         schedulerIgnoreTaskStateTime();
     }
 
-    DEBUG_SET(DEBUG_ATTITUDE, X, acc.accADC[X]);
-    DEBUG_SET(DEBUG_ATTITUDE, Y, acc.accADC[Y]);
+    DEBUG_SET(DEBUG_ATTITUDE, X, acc.accADCf[X]);
+    DEBUG_SET(DEBUG_ATTITUDE, Y, acc.accADCf[Y]);
 }
 #endif // USE_ACC
 

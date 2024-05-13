@@ -49,9 +49,9 @@ FAST_DATA_ZERO_INIT rpmFilter_t rpmFilterAcc;
 
 static void applyAccelerationTrims(const flightDynamicsTrims_t *accelerationTrims)
 {
-    acc.accADCunfiltered[X] -= accelerationTrims->raw[X];
-    acc.accADCunfiltered[Y] -= accelerationTrims->raw[Y];
-    acc.accADCunfiltered[Z] -= accelerationTrims->raw[Z];
+    acc.accADC[X] -= accelerationTrims->raw[X];
+    acc.accADC[Y] -= accelerationTrims->raw[Y];
+    acc.accADC[Z] -= accelerationTrims->raw[Z];
 }
 
 void accUpdate(timeUs_t currentTimeUs)
@@ -88,10 +88,6 @@ void accUpdate(timeUs_t currentTimeUs)
 
     applyAccelerationTrims(accelerationRuntime.accelerationTrims);
 
-    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
-        acc.accADCunfiltered[axis] = acc.accADC[axis];
-    }
-
 #if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
     // update rpm notches
     for (int motor = 0; motor < getMotorCount(); motor++) {
@@ -107,7 +103,7 @@ void accUpdate(timeUs_t currentTimeUs)
 
         // update notch
         biquadFilterUpdate(&rpmFilterAcc.notch[FD_ROLL][motor][0], frequencyHz, rpmFilterAcc.looptimeUs, rpmFilterAcc.q, FILTER_NOTCH, weight);
-        acc.accADC[FD_ROLL] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[FD_ROLL][motor][0], acc.accADC[FD_ROLL]);
+        acc.accADCafterRpm[FD_ROLL] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[FD_ROLL][motor][0], acc.accADC[FD_ROLL]);
 
         // copy over to other axes
         for (int axis = 1; axis < XYZ_AXIS_COUNT; axis++) {
@@ -118,19 +114,19 @@ void accUpdate(timeUs_t currentTimeUs)
             dest->a1 = rpmFilterAcc.notch[FD_ROLL][motor][0].a1;
             dest->a2 = rpmFilterAcc.notch[FD_ROLL][motor][0].a2;
             dest->weight = rpmFilterAcc.notch[FD_ROLL][motor][0].weight;
-            acc.accADC[axis] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[axis][motor][0], acc.accADC[axis]);
+            acc.accADCafterRpm[axis] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[axis][motor][0], acc.accADC[axis]);
         }
     }
-#endif
-
+#else
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
         acc.accADCafterRpm[axis] = acc.accADC[axis];
     }
+#endif
 
     // apply LP filtering
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
-        const int16_t val = acc.accADC[axis];
-        acc.accADC[axis] = accelerationRuntime.accLpfCutHz ? pt2FilterApply(&accelerationRuntime.accFilter[axis], val) : val;
+        const int16_t val = acc.accADCafterRpm[axis];
+        acc.accADCf[axis] = accelerationRuntime.accLpfCutHz ? pt2FilterApply(&accelerationRuntime.accFilter[axis], val) : val;
     }
 
 }
