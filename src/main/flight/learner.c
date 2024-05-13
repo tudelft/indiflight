@@ -38,7 +38,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -57,7 +57,8 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .zetaVelocity = 60,
     .zetaPosition = 80,
     .applyIndiProfileAfterQuery = false,
-    .applyPositionProfileAfterQuery = false
+    .applyPositionProfileAfterQuery = false,
+    .applyHoverRotationAfterQuery = false
 );
 
 // extern
@@ -70,6 +71,7 @@ void initLearnerRuntime(void) {
     learnRun.zeta[LEARNER_LOOP_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
     learnRun.applyIndiProfileAfterQuery = (bool) learnerConfig()->applyIndiProfileAfterQuery;
     learnRun.applyPositionProfileAfterQuery = (bool) learnerConfig()->applyPositionProfileAfterQuery;
+    learnRun.applyHoverRotationAfterQuery = (bool) learnerConfig()->applyHoverRotationAfterQuery;
 }
 
 // externs
@@ -79,6 +81,7 @@ rls_parallel_t motorRls[MAXU];
 rls_t imuRls;
 rls_parallel_t fxSpfRls;
 rls_parallel_t fxRateDotRls;
+fp_quaternion_t hoverAttitude = {.qi=1.f, .qx=0.f, .qy=0.f, .qz=0.f};
 
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
@@ -478,8 +481,14 @@ void updateLearner(timeUs_t current) {
         // 7. hover thrust direction
         // Bf * u
         SGEMVt(numAct, 3, BfT, uHover, hoverThrust.A);
+        VEC3_NORMALIZE(hoverThrust);
 
         // 8. verify that Br uHover == 0
+        // SKIP
+
+        // 9. compute tilt quaternion
+        t_fp_vector up = {.V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f};
+        float_quat_of_two_vectors(&hoverAttitude, &up, &hoverThrust);
     }
 panic:
     learnerTimings.hover = cmpTimeUs(micros(), learnerTimings.start);
@@ -580,6 +589,19 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // indi->wlsCondBound = ...;
     // indi->wlsNanLimit = 10;
 
+}
+
+static void updateHoverRotationMatrix(void) {
+    // todo: 
+    // 1. calculate delta-rotation matrix, potentially use some lag-factor like 0.9
+    // 2. update current attitude with delta-rotation
+    // 3. update B1, B2 with delta-rotation
+    // 4. DO NOT update gyro.dev.alignment-whatever because that is only read at init-time
+    // 5. update devices
+    //     1. acc.dev.accAlign = ALIGN_CUSTOM
+    //     2. acc.dev.rotationMatrix <-- update with delta-rotation
+    //     3. gyroSensor->gyroDev.gyroAlign = ALIGN_CUSTOM
+    //     4. gyroSensor->gyroDev.rotationMatrix <-- update with delta-rotation
 }
 
 void testLearner(void) {
@@ -753,6 +775,9 @@ doMoreMotors:
             if (learnRun.applyPositionProfileAfterQuery)
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
 #endif
+
+            if (learnRun.applyHoverRotationAfterQuery)
+                updateHoverRotationMatrix();
 
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE:
