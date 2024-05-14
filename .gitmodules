@@ -3,7 +3,7 @@
 	url = https://www.github.com/tblaha/pi-protocol.git
 [submodule "lib/main/ActiveSetCtlAlloc"]
 	path = lib/main/ActiveSetCtlAlloc
-	url = https://www.github.com:tblaha/ActiveSetCtlAlloc.git
+	url = https://www.github.com/tblaha/ActiveSetCtlAlloc.git
 [submodule "lib/main/clapack"]
 	path = lib/main/clapack
-	url = https://www.github.com:tblaha/clapack.git
+	url = https://www.github.com/tblaha/clapack.git
