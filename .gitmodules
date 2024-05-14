@@ -1,9 +1,9 @@
 [submodule "lib/main/pi-protocol"]
 	path = lib/main/pi-protocol
-	url = git@github.com:tblaha/pi-protocol
+	url = https://www.github.com/tblaha/pi-protocol.git
 [submodule "lib/main/ActiveSetCtlAlloc"]
 	path = lib/main/ActiveSetCtlAlloc
-	url = git@github.com:tblaha/ActiveSetCtlAlloc
+	url = https://www.github.com:tblaha/ActiveSetCtlAlloc.git
 [submodule "lib/main/clapack"]
 	path = lib/main/clapack
-	url = git@github.com:tblaha/clapack
+	url = https://www.github.com:tblaha/clapack.git
