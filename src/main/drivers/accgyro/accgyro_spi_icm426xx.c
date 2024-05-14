@@ -350,7 +350,7 @@ static aafConfig_t getGyroAafConfig(const mpuSensor_e gyroModel, const aafConfig
             return aafLUT42688[AAF_CONFIG_1962HZ];
 #endif
         case AAF_CONFIG_126HZ:
-            return aafLUT42605[AAF_CONFIG_126HZ];
+            return aafLUT42688[AAF_CONFIG_126HZ];
         default:
             return aafLUT42688[AAF_CONFIG_258HZ];
         }

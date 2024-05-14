@@ -90,38 +90,37 @@ void accUpdate(timeUs_t currentTimeUs)
 
 #if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
     // update rpm notches
-    for (int motor = 0; motor < getMotorCount(); motor++) {
-        // only one harmonic for speed
-        const float frequencyHz = constrainf(motorFrequencyHz[motor], rpmFilterAcc.minHz, rpmFilterAcc.maxHz);
-        const float marginHz = frequencyHz - rpmFilterAcc.minHz;
-        
-        // fade out notch when approaching minHz (turn it off)
-        float weight = 1.0f;
-        if (marginHz < rpmFilterAcc.fadeRangeHz) {
-            weight = marginHz / rpmFilterAcc.fadeRangeHz;
-        }
+    if (rpmFilterAcc.numHarmonics) {
+        for (int motor = 0; motor < getMotorCount(); motor++) {
+            // only one harmonic for speed
+            const float frequencyHz = constrainf(motorFrequencyHz[motor], rpmFilterAcc.minHz, rpmFilterAcc.maxHz);
+            const float marginHz = frequencyHz - rpmFilterAcc.minHz;
 
-        // update notch
-        biquadFilterUpdate(&rpmFilterAcc.notch[FD_ROLL][motor][0], frequencyHz, rpmFilterAcc.looptimeUs, rpmFilterAcc.q, FILTER_NOTCH, weight);
-        acc.accADCafterRpm[FD_ROLL] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[FD_ROLL][motor][0], acc.accADC[FD_ROLL]);
+            // fade out notch when approaching minHz (turn it off)
+            float weight = 1.0f;
+            if (marginHz < rpmFilterAcc.fadeRangeHz) {
+                weight = marginHz / rpmFilterAcc.fadeRangeHz;
+            }
 
-        // copy over to other axes
-        for (int axis = 1; axis < XYZ_AXIS_COUNT; axis++) {
-            biquadFilter_t *dest = &rpmFilter.notch[axis][motor][0];
-            dest->b0 = rpmFilterAcc.notch[FD_ROLL][motor][0].b0;
-            dest->b1 = rpmFilterAcc.notch[FD_ROLL][motor][0].b1;
-            dest->b2 = rpmFilterAcc.notch[FD_ROLL][motor][0].b2;
-            dest->a1 = rpmFilterAcc.notch[FD_ROLL][motor][0].a1;
-            dest->a2 = rpmFilterAcc.notch[FD_ROLL][motor][0].a2;
-            dest->weight = rpmFilterAcc.notch[FD_ROLL][motor][0].weight;
-            acc.accADCafterRpm[axis] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[axis][motor][0], acc.accADC[axis]);
+            // update notch
+            biquadFilterUpdate(&rpmFilterAcc.notch[FD_ROLL][motor][0], frequencyHz, rpmFilterAcc.looptimeUs, rpmFilterAcc.q, FILTER_NOTCH, weight);
+            acc.accADCafterRpm[FD_ROLL] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[FD_ROLL][motor][0], acc.accADC[FD_ROLL]);
+
+            // copy over to other axes
+            for (int axis = 1; axis < XYZ_AXIS_COUNT; axis++) {
+                biquadFilter_t *dest = &rpmFilterAcc.notch[axis][motor][0];
+                dest->b0 = rpmFilterAcc.notch[FD_ROLL][motor][0].b0;
+                dest->b1 = rpmFilterAcc.notch[FD_ROLL][motor][0].b1;
+                dest->b2 = rpmFilterAcc.notch[FD_ROLL][motor][0].b2;
+                dest->a1 = rpmFilterAcc.notch[FD_ROLL][motor][0].a1;
+                dest->a2 = rpmFilterAcc.notch[FD_ROLL][motor][0].a2;
+                dest->weight = rpmFilterAcc.notch[FD_ROLL][motor][0].weight;
+                acc.accADCafterRpm[axis] = biquadFilterApplyDF1Weighted(&rpmFilterAcc.notch[axis][motor][0], acc.accADC[axis]);
+            }
         }
-    }
-#else
-    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
-        acc.accADCafterRpm[axis] = acc.accADC[axis];
-    }
+    } else
 #endif
+        for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) { acc.accADCafterRpm[axis] = acc.accADC[axis]; }
 
     // apply LP filtering
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
