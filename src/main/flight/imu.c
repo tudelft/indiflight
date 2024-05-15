@@ -124,7 +124,7 @@ PG_RESET_TEMPLATE(imuConfig_t, imuConfig,
     .imu_process_denom = 2
 );
 
-STATIC_UNIT_TESTED void imuComputeRotationMatrix(void)
+void imuComputeRotationMatrix(void)
 {
     quaternionProducts_of_quaternion(&qP, &q);
     rotationMatrix_of_quaternionProducts(&rMat, &qP);
@@ -305,10 +305,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     buffer.y = q.y;
     buffer.z = q.z;
 
-    q.w += (-buffer.x * gx - buffer.y * gy - buffer.z * gz);
-    q.x += (+buffer.w * gx + buffer.y * gz - buffer.z * gy);
-    q.y += (+buffer.w * gy - buffer.x * gz + buffer.z * gx);
-    q.z += (+buffer.w * gz + buffer.x * gy - buffer.y * gx);
+    attitude_q.w += (-buffer.x * gx - buffer.y * gy - buffer.z * gz);
+    attitude_q.x += (+buffer.w * gx + buffer.y * gz - buffer.z * gy);
+    attitude_q.y += (+buffer.w * gy - buffer.x * gz + buffer.z * gx);
+    attitude_q.z += (+buffer.w * gz + buffer.x * gy - buffer.y * gx);
 
     // Normalise quaternion
     float recipNorm = invSqrt(sq(q.w) + sq(q.x) + sq(q.y) + sq(q.z));
@@ -719,10 +719,10 @@ void imuSetAttitudeQuat(float w, float x, float y, float z)
 {
     IMU_LOCK;
 
-    q.w = w;
-    q.x = x;
-    q.y = y;
-    q.z = z;
+    attitude_q.w = w;
+    attitude_q.x = x;
+    attitude_q.y = y;
+    attitude_q.z = z;
 
     imuComputeRotationMatrix();
 

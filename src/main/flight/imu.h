@@ -62,6 +62,7 @@ float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);
 void setAttitudeWithQuaternion(const fp_quaternion_t * q);
 void imuUpdateAttitude(timeUs_t currentTimeUs);
+void imuComputeRotationMatrix(void);
 
 void imuInit(void);
 

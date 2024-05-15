@@ -16,6 +16,8 @@
 
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
+#include "sensors/boardalignment.h"
+#include "flight/imu.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #include "flight/catapult.h"
@@ -96,7 +98,7 @@ static biquadFilter_t fxSpfFilter[MAX_SUPPORTED_MOTORS];
 
 static fp_vector_t hoverThrust;
 
-#define LEARNING_MAX_ACT ((int) RLS_MAX_N / 2)
+#define LEARNING_MAX_ACT ((int) RLS_MAX_N >> 1)
 #define LEARNER_OMEGADOT_SCALER 1e-5f // for numerical stability
 #define LEARNER_OMEGADOTDIFF_SCALER 10.f // for numerical stability
 #define LEARNER_NULLSPACE_THRESH 1e-3f // todo, do we need somethign relative here?
@@ -336,168 +338,186 @@ void updateLearner(timeUs_t current) {
         for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
             learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
     }
-
-    bool hoverAttitudeLearningConditions = false; // for debugging
-
-    if (hoverAttitudeLearningConditions) {
-        // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
-        // this avoids code bloat and likely the blocking will not help
-        // us anyway for our sizes of matrices
-        // for the unblocked cholesky and cholesky-solve needed for W != I
-        // use the dependency-less chol routines from maths.h
-
-        // 1. Get Nullspace of Br = indiRun.G1[3:][:]
-        //      - Qh, R = QR(Br.T)
-        //      - Qh.T, L = LQ(Br) // (sgelq2)
-        //      --> Nr = last n - 3 columns of Qh
-        //    Potentially more efficient hover solutions can be found if we use
-        //    the last n - rk(Br) columns (to take into account the extra freedom)
-        //    from not being able to satisfy Br u = 0)? This would require using 
-        //    a rank-revealing factorization, such as sgeqp3
-        // 2. form  H = Nr.T W Nr. if W == I, then H == I
-        // 3. form  A = Nr.T Bf.T Bf Nr.  Maybe this is faster without sorgr2?
-        // 4. find the only eigenvector of  Av = sigma Hv
-        //      - probably best with power iteration
-        //      - v <-- H-1 A v / sqrt(vT AT HT-1 H-1 A v)
-        //      - H-1 A v best done with cholesky solve
-        //      -- 1 / sqrt could be fast-inverse-square-root
-        // 5. scale v to satisfy  vT A v == GRAVITYf*GRAVITYf
-        // 6. find uHover = Nr v and if we need v or -v by ensuring  sum(Nr v) > 0
-        // 7. find hover thrust direction as  Bf uHover
-        // 8. verify that  Br uHover == 0
-
-        // column major
-        const uint8_t numAct = learnerConfig()->numAct;
-        float BfT[LEARNING_MAX_ACT * 3];
-        float BrT[LEARNING_MAX_ACT * LEARNING_MAX_ACT] = {0}; // waste of stack, reduce because M < N?
-        for (int col = 0; col < 3; col++) {
-            for (int row = 0; row < numAct; row++) {
-                BfT[row + col*numAct] = indiRun.actG1[col][row];
-                BrT[row + col*numAct] = indiRun.actG1[3+col][row];
-            }
-        }
-
-#define LEARNING_HOVER_D 3
-        integer M = numAct;
-        integer N = LEARNING_HOVER_D;
-        if (M < N)
-            goto panic; // not implemented, would have to adjust sorg2r inputs?
-
-        // A is BrT
-        integer LDA = numAct;
-        integer JPVT[LEARNING_MAX_ACT] = {0}; // all free columns on entry
-        real TAU[MIN(LEARNING_MAX_ACT, LEARNING_HOVER_D)];
-        real WORK[3*LEARNING_HOVER_D + 1]; 
-        integer LWORK = 3*LEARNING_HOVER_D + 1;  // see sgepq3 manual
-        integer INFO;
-        sgeqp3_(&M, &N, BrT, &LDA, JPVT, TAU, WORK, &LWORK, &INFO);
-        if (INFO < 0)
-            goto panic; // panic
-
-        int sizeNr = numAct - LEARNING_HOVER_D; // if Br full rank
-
-        // since we used sgeqp3_, the columns of the R factor are sorted so
-        // that the diagonals are non-increasing. To find if we have rank-
-        // deficiency (and this a larger nullspace), we can just find the
-        // last non-zero diagonal element of R
-        for (int row = LEARNING_HOVER_D-1; row >= 0; row--)
-            // could do bisection search, not going to
-            if (fabsf(BrT[row + row*numAct]) < LEARNER_NULLSPACE_THRESH)
-                // diagonal entry in R factor is small, Br is rank deficient
-                // TODO: do we need to check BrT[row + (row+1:numAct)*numAct]? DONE: chatGPT says no
-                sizeNr++;
-            else
-                // cannot have any more zero-diagonal entries, since R is sorted
-                break;
-
-        if (sizeNr == 0)
-            // can happen, when N = M and Br full rank
-            goto panic; // panic
-
-        // todo interpret INFO
-        integer K = numAct - sizeNr;
-        sorg2r_(&M, &M, &K, BrT, &LDA, TAU, WORK, &INFO); // K == N true? or M - sizeNr?
-        // todo interpret INFO
-
-        float *Nr = &BrT[(numAct-sizeNr)*numAct];
-
-        // 2. Generate H. allow only W = I for now.
-        //float H[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
-        //SGEMMt(sizeNr, sizeNr, numAct, Nr, Nr, H, 0.f, 1.f);
-        // jokes, this is always I, if W = I
-
-        // 3. Generate A
-        float BfNr[3*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
-        float A[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // will be a waste of stack.. allocate on the RAM!
-        SGEMMt(3, sizeNr, numAct, BfT, Nr, BfNr, 0.f, 1.f);
-        SGEMMt(sizeNr, sizeNr, 3, BfNr, BfNr, A, 0.f, 1.f);
-
-        // 4. find eigenvector. Remember H == I
-        static float v[LEARNING_MAX_ACT] = {-0.5051f,  0.3486f, -0.9154f,  0.5560f}; // can also be smaller since M < N
-        //static float v[LEARNING_MAX_ACT] = {0}; // for testing robustness, 0 makes no sense
-        float HinvAv[LEARNING_MAX_ACT]; // can be smaller
-        float HinvAvNorm2;
-        for (int i = LEARNER_NUM_POWER_ITERATIONS; i > 0; i--) {
-            SGEMVt(sizeNr, sizeNr, A, v, HinvAv); // A is symmetric, SGEMVf is faster
-            SGEVV(sizeNr, HinvAv, HinvAv, HinvAvNorm2); // guaranteed >= 0.f
-            if (HinvAvNorm2 < 1e-8f) {
-                // we picked a starting vector near orthogonal to the eigenvector
-                // we want to find. reset to a pseudorandom vector
-                for (int row = 0; row < sizeNr; row++)
-                    v[row] = rngFloat();
-                continue;
-            }
-            SGEVS(sizeNr, HinvAv, 1.f / sqrtf(HinvAvNorm2), v); // fast inverse sqrt anyone?
-        }
-
-        // 5. find length for v to cancel gravity
-        // this seems not strictly necessary if you only want the direction,
-        // now that I think about it.. but maybe it's still good to cross check
-        // the (linearized) hover thrust.
-        float Av[LEARNING_MAX_ACT];
-        float vTAv;
-        SGEMVt(sizeNr, sizeNr, A, v, Av);
-        SGEVV(sizeNr, v, Av, vTAv);
-        if (vTAv < 1e-10f)
-            goto panic; // panic
-
-        float scale = GRAVITYf * 1.f / sqrtf( vTAv ); // fast inverse sqrt?
-        SGEVS(sizeNr, v, scale, v);
-
-        // 6. find if up or down
-        float uHover[LEARNING_MAX_ACT];
-        SGEMV(numAct, sizeNr, Nr, v, uHover);
-        float uHoverSum = 0.f;
-        for (int row = 0; row < numAct; row++)
-            uHoverSum += uHover[row];
-
-        if (uHoverSum < 0.f) {
-            for (int row = 0; row < sizeNr; row++)
-                v[row] = -v[row];
-            for (int row = 0; row < numAct; row++)
-                uHover[row] = -uHover[row];
-        }
-
-        // 7. hover thrust direction
-        // Bf * u
-        SGEMVt(numAct, 3, BfT, uHover, hoverThrust.A);
-        VEC3_NORMALIZE(hoverThrust);
-
-        // 8. verify that Br uHover == 0
-        // SKIP
-
-        // 9. compute tilt quaternion
-        t_fp_vector up = {.V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f};
-        float_quat_of_two_vectors(&hoverAttitude, &up, &hoverThrust);
-    }
-panic:
-    learnerTimings.hover = cmpTimeUs(micros(), learnerTimings.start);
-
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
     if (!(++printCounter % 1000))
         cliPrintLinef("Learner Timings (us): filt %d, imu %d, fx %d, mot %d, hover %d", learnerTimings.filters, learnerTimings.imu, learnerTimings.fx, learnerTimings.motor, learnerTimings.hover);
 #endif
+}
+
+static bool calculateHoverAttitude(indiProfile_t *indi) {
+    // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
+    // this avoids code bloat and likely the blocking will not help
+    // us anyway for our sizes of matrices
+    // for the unblocked cholesky and cholesky-solve needed for W != I
+    // use the dependency-less chol routines from maths.h
+
+    // 1. Get Nullspace of Br = indiRun.G1[3:][:]
+    //      - Qh, R = QR(Br.T)
+    //      - Qh.T, L = LQ(Br) // (sgelq2)
+    //      --> Nr = last n - 3 columns of Qh
+    //    Potentially more efficient hover solutions can be found if we use
+    //    the last n - rk(Br) columns (to take into account the extra freedom)
+    //    from not being able to satisfy Br u = 0)? This would require using 
+    //    a rank-revealing factorization, such as sgeqp3
+    // 2. form  H = Nr.T W Nr. if W == I, then H == I
+    // 3. form  A = Nr.T Bf.T Bf Nr.  Maybe this is faster without sorgr2?
+    // 4. find the only eigenvector of  Av = sigma Hv
+    //      - probably best with power iteration
+    //      - v <-- H-1 A v / sqrt(vT AT HT-1 H-1 A v)
+    //      - H-1 A v best done with cholesky solve
+    //      -- 1 / sqrt could be fast-inverse-square-root
+    // 5. scale v to satisfy  vT A v == GRAVITYf*GRAVITYf
+    // 6. find uHover = Nr v and if we need v or -v by ensuring  sum(Nr v) > 0
+    // 7. find hover thrust direction as  Bf uHover
+    // 8. verify that  Br uHover == 0
+
+#ifdef USE_CLI_DEBUG_PRINT
+    timeUs_t start = micros();
+#endif
+
+    // column major
+    const uint8_t numAct = learnerConfig()->numAct;
+    float BfT[LEARNING_MAX_ACT * 3];
+    float BrT[LEARNING_MAX_ACT * LEARNING_MAX_ACT] = {0}; // waste of stack, reduce because M < N?
+    for (int motor = 0; motor < numAct; motor++) {
+        // note! BfT and BrT are the transpose of Bf/Br
+        BfT[motor + 0*numAct] = (float) indi->actG1_fx[motor];
+        BfT[motor + 1*numAct] = (float) indi->actG1_fy[motor];
+        BfT[motor + 2*numAct] = (float) indi->actG1_fz[motor];
+        BrT[motor + 0*numAct] = (float) indi->actG1_roll[motor];
+        BrT[motor + 1*numAct] = (float) indi->actG1_pitch[motor];
+        BrT[motor + 2*numAct] = (float) indi->actG1_yaw[motor];
+    }
+
+    #define LEARNING_HOVER_D 3
+    integer M = numAct;
+    integer N = LEARNING_HOVER_D;
+    if (M < N)
+        goto panic; // not implemented, would have to adjust sorg2r inputs?
+
+    // A is BrT
+    integer LDA = numAct;
+    integer JPVT[LEARNING_MAX_ACT] = {0}; // all free columns on entry
+    real TAU[LEARNING_HOVER_D];
+    real WORK[3*LEARNING_HOVER_D + 1]; 
+    integer LWORK = 3*LEARNING_HOVER_D + 1;  // see sgepq3 manual
+    integer INFO;
+    sgeqp3_(&M, &N, BrT, &LDA, JPVT, TAU, WORK, &LWORK, &INFO);
+    if (INFO < 0)
+        goto panic; // panic
+
+    int sizeNr = numAct - LEARNING_HOVER_D; // if Br full rank
+
+    // since we used sgeqp3_, the columns of the R factor are sorted so
+    // that the diagonals are non-increasing. To find if we have rank-
+    // deficiency (and this a larger nullspace), we can just find the
+    // last non-zero diagonal element of R
+    for (int row = LEARNING_HOVER_D-1; row >= 0; row--)
+        // could do bisection search, not going to
+        if (fabsf(BrT[row + row*numAct]) < LEARNER_NULLSPACE_THRESH)
+            // diagonal entry in R factor is small, Br is rank deficient
+            // TODO: do we need to check BrT[row + (row+1:numAct)*numAct]? DONE: chatGPT says no
+            sizeNr++;
+        else
+            // cannot have any more zero-diagonal entries, since R is sorted
+            break;
+
+    if (sizeNr == 0)
+        // can happen, when N = M and Br full rank
+        goto panic; // panic
+
+    // todo interpret INFO
+    integer K = numAct - sizeNr;
+    sorg2r_(&M, &M, &K, BrT, &LDA, TAU, WORK, &INFO); // K == N true? or M - sizeNr?
+    // todo interpret INFO
+
+    float *Nr = &BrT[(numAct-sizeNr)*numAct];
+
+    // 2. Generate H. allow only W = I for now.
+    //float H[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
+    //SGEMMt(sizeNr, sizeNr, numAct, Nr, Nr, H, 0.f, 1.f);
+    // jokes, this is always I, if W = I
+
+    // 3. Generate A
+    float BfNr[3*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
+    float A[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // will be a waste of stack.. allocate on the RAM!
+    SGEMMt(3, sizeNr, numAct, BfT, Nr, BfNr, 0.f, 1.f);
+    SGEMMt(sizeNr, sizeNr, 3, BfNr, BfNr, A, 0.f, 1.f);
+
+    // 4. find eigenvector. Remember H == I
+    static float v[LEARNING_MAX_ACT] = {-0.5051f,  0.3486f, -0.9154f,  0.5560f}; // can also be smaller since M < N
+    //static float v[LEARNING_MAX_ACT] = {0}; // for testing robustness, 0 makes no sense
+    float HinvAv[LEARNING_MAX_ACT]; // can be smaller
+    float HinvAvNorm2;
+    for (int i = LEARNER_NUM_POWER_ITERATIONS; i > 0; i--) {
+        SGEMVt(sizeNr, sizeNr, A, v, HinvAv); // A is symmetric, SGEMVf is faster
+        SGEVV(sizeNr, HinvAv, HinvAv, HinvAvNorm2); // guaranteed >= 0.f
+        if (HinvAvNorm2 < 1e-8f) {
+            // we picked a starting vector near orthogonal to the eigenvector
+            // we want to find. reset to a pseudorandom vector
+            for (int row = 0; row < sizeNr; row++)
+                v[row] = rngFloat();
+            continue;
+        }
+        SGEVS(sizeNr, HinvAv, 1.f / sqrtf(HinvAvNorm2), v); // fast inverse sqrt anyone?
+    }
+
+    // 5. find length for v to cancel gravity
+    // this seems not strictly necessary if you only want the direction,
+    // now that I think about it.. but maybe it's still good to cross check
+    // the (linearized) hover thrust.
+    float Av[LEARNING_MAX_ACT];
+    float vTAv;
+    SGEMVt(sizeNr, sizeNr, A, v, Av);
+    SGEVV(sizeNr, v, Av, vTAv);
+    if (vTAv < 1e-10f)
+        goto panic; // panic
+
+    float scale = GRAVITYf * 1.f / sqrtf( vTAv ); // fast inverse sqrt?
+    SGEVS(sizeNr, v, scale, v);
+
+    // 6. find if up or down
+    float uHover[LEARNING_MAX_ACT];
+    SGEMV(numAct, sizeNr, Nr, v, uHover);
+    float uHoverSum = 0.f;
+    for (int row = 0; row < numAct; row++)
+        uHoverSum += uHover[row];
+
+    if (uHoverSum < 0.f) {
+        for (int row = 0; row < sizeNr; row++)
+            v[row] = -v[row];
+        for (int row = 0; row < numAct; row++)
+            uHover[row] = -uHover[row];
+    }
+
+    // 7. hover thrust direction
+    // Bf * u
+    SGEMVt(numAct, 3, BfT, uHover, hoverThrust.A);
+    VEC3_NORMALIZE(hoverThrust);
+
+    // 8. verify that Br uHover == 0
+    // SKIP
+
+    // 9. compute tilt quaternion
+    t_fp_vector up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
+    t_fp_vector orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
+    float_quat_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
+
+#ifdef USE_CLI_DEBUG_PRINT
+        timeDelta_t time = cmpTimeUs(micros(), start);
+            cliPrintLinef("Hover Attitude timing (us): %d", time);
+#endif
+    return true;
+
+panic:
+    {
+#ifdef USE_CLI_DEBUG_PRINT
+        timeDelta_t time = cmpTimeUs(micros(), start);
+            cliPrintLinef("Hover Attitude timing (us): %d", time);
+#endif
+    }
+    return false;
 }
 
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
@@ -591,7 +611,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
 }
 
-static void updateHoverRotationMatrix(void) {
+static void updateBodyFrameToHover(indiProfile_t *indi) {
     // todo: 
     // 1. calculate delta-rotation matrix, potentially use some lag-factor like 0.9
     // 2. update current attitude with delta-rotation
@@ -602,6 +622,82 @@ static void updateHoverRotationMatrix(void) {
     //     2. acc.dev.rotationMatrix <-- update with delta-rotation
     //     3. gyroSensor->gyroDev.gyroAlign = ALIGN_CUSTOM
     //     4. gyroSensor->gyroDev.rotationMatrix <-- update with delta-rotation
+
+    // 1
+    fp_quaternion_t iHoverAttitude = hoverAttitude;
+    iHoverAttitude.qi = -iHoverAttitude.qi;
+
+    // 2
+    fp_quaternion_t attitude_q_fp_quat;
+    attitude_q_fp_quat.qi = attitude_q.w;
+    attitude_q_fp_quat.qx = attitude_q.x;
+    attitude_q_fp_quat.qy = attitude_q.y;
+    attitude_q_fp_quat.qz = attitude_q.z;
+    attitude_q_fp_quat = quatMult(&hoverAttitude, &attitude_q_fp_quat);
+    attitude_q.w = attitude_q_fp_quat.qi;
+    attitude_q.x = attitude_q_fp_quat.qx;
+    attitude_q.y = attitude_q_fp_quat.qy;
+    attitude_q.z = attitude_q_fp_quat.qz;
+
+    imuComputeRotationMatrix(); // update rotation matrix and quaternion products
+
+    // 3
+    t_fp_vector work;
+    fp_rotationMatrix_t rot;
+    for (int i = 0; i < 3; i++) {
+        work = quatRotMatCol(&iHoverAttitude, i);
+        for (int j = 0; j < 3; j++)
+            rot.m[j][i] = work.A[j];
+    }
+
+    for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
+        // rotate each column of the B1 and B2 matrix
+        float tmp[3];
+        for (int axis = 0; axis < 3; axis++) {
+            tmp[axis] = rot.m[axis][0] * indi->actG1_fx[motor]
+                + rot.m[axis][1] * indi->actG1_fy[motor]
+                + rot.m[axis][2] * indi->actG1_fz[motor];
+        }
+        indi->actG1_fx[motor] = tmp[0];
+        indi->actG1_fy[motor] = tmp[1];
+        indi->actG1_fz[motor] = tmp[2];
+
+        for (int axis = 0; axis < 3; axis++) {
+            tmp[axis] = rot.m[axis][0] * indi->actG1_roll[motor]
+                + rot.m[axis][1] * indi->actG1_pitch[motor]
+                + rot.m[axis][2] * indi->actG1_yaw[motor];
+        }
+        indi->actG1_roll[motor] = tmp[0];
+        indi->actG1_pitch[motor] = tmp[1];
+        indi->actG1_yaw[motor] = tmp[2];
+
+        for (int axis = 0; axis < 3; axis++) {
+            tmp[axis] = rot.m[axis][0] * indi->actG2_roll[motor]
+                + rot.m[axis][1] * indi->actG2_pitch[motor]
+                + rot.m[axis][2] * indi->actG2_yaw[motor];
+        }
+        indi->actG2_roll[motor] = tmp[0];
+        indi->actG2_pitch[motor] = tmp[1];
+        indi->actG2_yaw[motor] = tmp[2];
+    }
+
+    // 5a
+    // TODO: this has to happen BEFORE we learn!!
+    flightDynamicsTrims_t accelZeroBias = { .raw = { 0, 0, 0, 1 } };
+    setAccelerationTrims(&accelZeroBias);
+
+    // 5b update rotation matrix of board alignment with inverse of rot.m
+    float newAlignmentMat[3][3];
+    for (int i=0; i<3; i++)
+        for (int j=0; j<3; j++)
+            newAlignmentMat[i][j] = rot.m[0][i]*boardRotation.m[0][j]
+                + rot.m[1][i]*boardRotation.m[1][j]
+                + rot.m[2][i]*boardRotation.m[2][j];
+
+    boardAlignmentMutable()->rollDegrees = lrintf(RADIANS_TO_DEGREES(atan2_approx(newAlignmentMat[2][1], newAlignmentMat[2][2])));
+    boardAlignmentMutable()->pitchDegrees = lrintf(RADIANS_TO_DEGREES( ((0.5f * M_PIf) - acos_approx(-newAlignmentMat[2][0])) ));
+    boardAlignmentMutable()->yawDegrees = lrintf(RADIANS_TO_DEGREES( -atan2_approx(newAlignmentMat[1][0], newAlignmentMat[0][0]) ));
+    initBoardAlignment(boardAlignment());
 }
 
 void testLearner(void) {
@@ -673,6 +769,11 @@ doMore:
     switch (learningQueryState) {
         case LEARNING_QUERY_IDLE:
             if (enableConditions) {
+                // DEBUG BEUN
+                //bool success = calculateHoverAttitude(indiProfileLearned);
+                //if (learnRun.applyHoverRotationAfterQuery && success)
+                //    updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
+
                 initLearner(); // reset all RLS filters to 0 initial state, and reset lowpass filters
                 learningQueryState = LEARNING_QUERY_WAITING_FOR_LAUNCH; goto doMore;
             }
@@ -685,6 +786,30 @@ doMore:
 
             if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
                     || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
+
+                // FIXME: randomize board rotation after catapulting
+                fp_angles_t board_eulers = { .angles.roll = 23, .angles.pitch = -15, .angles.yaw = 0 };
+                boardAlignmentMutable()->rollDegrees = board_eulers.angles.roll;
+                boardAlignmentMutable()->pitchDegrees = board_eulers.angles.pitch;
+                boardAlignmentMutable()->yawDegrees = board_eulers.angles.yaw;
+                initBoardAlignment(boardAlignment());
+
+                fp_quaternion_t iboard_q;
+                float_quat_of_eulers(&iboard_q, &board_eulers);
+                iboard_q.qi = -iboard_q.qi;
+
+                fp_quaternion_t attitude_fp_q;
+                attitude_fp_q.qi = attitude_q.w;
+                attitude_fp_q.qx = attitude_q.x;
+                attitude_fp_q.qy = attitude_q.y;
+                attitude_fp_q.qz = attitude_q.z;
+                attitude_fp_q = quatMult(&iboard_q, &attitude_fp_q);
+                attitude_q.w = attitude_fp_q.qi;
+                attitude_q.x = attitude_fp_q.qi;
+                attitude_q.y = attitude_fp_q.qi;
+                attitude_q.z = attitude_fp_q.qi;
+                imuComputeRotationMatrix(); // update rotation matrix and quaternion products
+
                 learningQueryEnabledAt = current;
                 startAt = current + c->delayMs*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
@@ -768,6 +893,13 @@ doMoreMotors:
         case LEARNING_QUERY_APPLYING: 
             updateLearnedParameters(indiProfileLearned, positionProfileLearned);
 
+            // calculate most efficient hover attitude in the current IMU frame
+            // only called once for now, may be in the future this also needs
+            // to run during flight
+            bool success = calculateHoverAttitude(indiProfileLearned);
+            if (learnRun.applyHoverRotationAfterQuery && success)
+                updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
+
             if (learnRun.applyIndiProfileAfterQuery)
                 changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
 
@@ -775,9 +907,6 @@ doMoreMotors:
             if (learnRun.applyPositionProfileAfterQuery)
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
 #endif
-
-            if (learnRun.applyHoverRotationAfterQuery)
-                updateHoverRotationMatrix();
 
             learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE:
