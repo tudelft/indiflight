@@ -561,7 +561,7 @@ LAPACK_SOURCE_OPTIM += $(wildcard $(LAPACK_DIR)/SRC/i*.c)
 # and SORG2R (retrieving the explicit QR from SGEQP3 householder factors)
 # download the dependencies from netlib.org/lapack/explore-html
 # find . -name "*.f" | sed -n "s/^\.\/\([^ix].*\)\.f$/\1.c /gp" | tr -d "\n" in the src dir
-LAPACK_SOURCE_SGEQP3 := sgeqp3.c sgeqrf.c sgemm.c slarf.c snrm2.c slapy2.c scopy.c sorm2r.c lsame.c slaqps.c slarfg.c sswap.c strmm.c sger.c slarft.c slaqp2.c strmv.c sscal.c slaisnan.c sgemv.c sisnan.c slarfb.c sormqr.c sgeqr2.c
+LAPACK_SOURCE_SGEQP3 := sgeqp3.c sgeqrf.c sgemm.c slarf.c snrm2.c slapy2.c scopy.c sorm2r.c lsame.c slaqps.c slarfg.c sswap.c strmm.c sger.c slarft.c slaqp2.c strmv.c sscal.c slaisnan.c sgemv.c sisnan.c slarfb.c sormqr.c sgeqr2.c slarfp.c
 LAPACK_SOURCE_OPTIM += $(wildcard $(addprefix $(LAPACK_DIR)/SRC/, $(LAPACK_SOURCE_SGEQP3)))
 LAPACK_SOURCE_SORG2R := sorg2r.c slarf.c lsame.c sger.c sscal.c sgemv.c slarfp.c
 LAPACK_SOURCE_OPTIM += $(wildcard $(addprefix $(LAPACK_DIR)/SRC/, $(LAPACK_SOURCE_SORG2R)))
