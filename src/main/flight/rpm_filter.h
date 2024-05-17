@@ -24,6 +24,7 @@
 
 #include "common/time.h"
 #include "common/filter.h"
+#include "common/axis.h"
 
 #include "pg/rpm_filter.h"
 
