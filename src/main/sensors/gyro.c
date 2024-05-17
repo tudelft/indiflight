@@ -405,9 +405,9 @@ static FAST_CODE void gyroUpdateSensor(gyroSensor_t *gyroSensor)
 FAST_CODE void gyroUpdate(void)
 {
 #ifdef HIL_BUILD
-    gyro.gyroADC[X] = hilInput.gyro[X];
+    gyro.gyroADC[X] = -hilInput.gyro[X];
     gyro.gyroADC[Y] = hilInput.gyro[Y];
-    gyro.gyroADC[Z] = hilInput.gyro[Z];
+    gyro.gyroADC[Z] = -hilInput.gyro[Z];
     gyro.gyroSensor1.calibration.cyclesRemaining = 0;
     if (gyro.gyroSensor1.gyroDev.gyroAlign == ALIGN_CUSTOM) {
         alignSensorViaMatrix(gyro.gyroADC, &gyro.gyroSensor1.gyroDev.rotationMatrix);
