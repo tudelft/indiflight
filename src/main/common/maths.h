@@ -90,26 +90,26 @@ typedef union u_fp_vector {
 } fp_vector_t;
 
 // INT16 Euler angles in decidegrees. ZYX (yaw-pitch-roll) instrinsic rotation order.
-typedef struct i16_angles {
+typedef struct i16_euler {
     int16_t roll, pitch, yaw;
-} i16_angles_def;
+} i16_euler_def;
 
 typedef union {
     int16_t raw[3];
-    i16_angles_def angles;
-} i16_angles_t;
+    i16_euler_def angles;
+} i16_euler_t;
 
 // Floating point Euler angles.
-typedef struct fp_angles {
+typedef struct fp_euler {
     float roll,pitch,yaw;
-} fp_angles_def;
+} fp_euler_def;
 
 // always radians
 typedef union {
     float raw[3];
-    fp_angles_def angles;
-} fp_angles_t;
-#define ANGLES_INITIALIZE  { .raw = {0, 0, 0} }
+    fp_euler_def angles;
+} fp_euler_t;
+#define EULER_INITIALIZE  { .raw = {0, 0, 0} }
 
 typedef struct fp_rotationMatrix {
     float m[3][3];              // matrix
@@ -128,17 +128,21 @@ typedef struct fp_quaternionProducts {
 #define QUATERNION_PRODUCTS_INITIALIZE  {.ww=1, .wx=0, .wy=0, .wz=0, .xx=0, .xy=0, .xz=0, .yy=0, .yz=0, .zz=0}
 
 // rotation functions
-void i16_angles_of_fp_angles(i16_angles_t *ei, const fp_angles_t *ef);
-void fp_angles_of_i16_angles(fp_angles_t *ef, const i16_angles_t *ei);
+void i16_euler_of_fp_euler(i16_euler_t *ei, const fp_euler_t *ef);
+void fp_euler_of_i16_euler(fp_euler_t *ef, const i16_euler_t *ei);
+void fp_euler_of_rotationMatrix(fp_euler_t *e, const fp_rotationMatrix_t *r);
+void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternionProducts_t *qp);
 
-void rotationMatrix_of_fp_angles(fp_rotationMatrix_t *r, const fp_angles_t *e);
-void fp_angles_of_rotationMatrix(fp_angles_t *e, const fp_rotationMatrix_t *r);
+void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e);
+void rotationMatrix_of_quaternionProducts(fp_rotationMatrix_t *r, const fp_quaternionProducts_t *qP);
 void rotate_vector_with_rotationMatrix(fp_vector_t *v, const fp_rotationMatrix_t *r);
 fp_rotationMatrix_t chain_rotationMatrix(const fp_rotationMatrix_t *rA_I, const fp_rotationMatrix_t *rB_A);
 
-void quaternion_of_fp_angles(fp_quaternion_t *q, const fp_angles_t *e);
+void quaternion_of_fp_euler(fp_quaternion_t *q, const fp_euler_t *e);
+void quaternion_of_rotationMatrix(fp_quaternion_t *q, const fp_rotationMatrix_t *r);
 void quaternion_of_axis_angle(fp_quaternion_t *q, const fp_vector_t *ax, float angle);
-void fp_angles_of_quaternionProducts(fp_angles_t *e, const fp_quaternionProducts_t *qp);
+void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, const fp_quaternion_t *q);
+void rotate_vector_with_quaternion(fp_vector_t *v, const fp_quaternion_t *q);
 fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A);
 fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
 
@@ -301,7 +305,7 @@ float degreesToRadians(int16_t degrees);
 int scaleRange(int x, int srcFrom, int srcTo, int destFrom, int destTo);
 float scaleRangef(float x, float srcFrom, float srcTo, float destFrom, float destTo);
 
-void buildRotationMatrix(fp_angles_t *delta, fp_rotationMatrix_t *rotation);
+void buildRotationMatrix(fp_euler_t *delta, fp_rotationMatrix_t *rotation);
 void applyMatrixRotation(float *v, fp_rotationMatrix_t *rotationMatrix);
 
 int32_t quickMedianFilter3(int32_t * v);

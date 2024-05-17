@@ -59,10 +59,10 @@ PG_REGISTER_ARRAY(motorMixer_t, MAX_SUPPORTED_MOTORS, customMotorMixer, PG_MOTOR
 mixerMode_e currentMixerMode;
 
 static const motorMixer_t mixerQuadX[] = {
-    { 1.0f, -1.0f,  1.0f, -1.0f },          // REAR_R
-    { 1.0f, -1.0f, -1.0f,  1.0f },          // FRONT_R
-    { 1.0f,  1.0f,  1.0f,  1.0f },          // REAR_L
-    { 1.0f,  1.0f, -1.0f, -1.0f },          // FRONT_L
+    { 1.0f, -1.0f, -1.0f, +1.0f },          // REAR_R
+    { 1.0f, -1.0f, +1.0f, -1.0f },          // FRONT_R
+    { 1.0f,  1.0f, -1.0f, -1.0f },          // REAR_L
+    { 1.0f,  1.0f, +1.0f, +1.0f },          // FRONT_L
 };
 #ifndef USE_QUAD_MIXER_ONLY
 static const motorMixer_t mixerTricopter[] = {

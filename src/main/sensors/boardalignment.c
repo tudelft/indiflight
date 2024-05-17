@@ -56,7 +56,7 @@ void initBoardAlignment(const boardAlignment_t *boardAlignment)
 
     standardBoardAlignment = false;
 
-    fp_angles_t rotationAngles;
+    fp_euler_t rotationAngles;
     rotationAngles.angles.roll  = degreesToRadians(boardAlignment->rollDegrees );
     rotationAngles.angles.pitch = degreesToRadians(boardAlignment->pitchDegrees);
     rotationAngles.angles.yaw   = degreesToRadians(boardAlignment->yawDegrees  );

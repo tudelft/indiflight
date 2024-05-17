@@ -182,7 +182,7 @@ void getSetpoints(timeUs_t current) {
 
         // this is probaby the most expensive operation... can be half the cost if
         // optimized for .x = 0, .y = 0, unless compiler does that for us?
-        indiRun.attSpNed = quatMult(&yawNed, &attSpYaw);
+        indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
 
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
@@ -210,12 +210,9 @@ FAST_CODE
 void getAlphaSpBody(timeUs_t current) {
     UNUSED(current);
 
-    fp_quaternion_t attEstNed = {
-        .w = attitude_q.w,
-        .x = attitude_q.x,
-        .y = -attitude_q.y,
-        .z = -attitude_q.z,
-    };
+    fp_quaternion_t attEstNed;
+    getAttitudeQuaternion(&attEstNed);
+
     fp_quaternion_t attEstNedInv = attEstNed;
     attEstNedInv.w = -attEstNed.w;
 
@@ -235,7 +232,7 @@ void getAlphaSpBody(timeUs_t current) {
         //
         // q_yaw = (w 0 0 z)
         // q_tilt = (w x y 0)
-        indiRun.attErrBody = quatMult(&attEstNedInv, &indiRun.attSpNed);
+        indiRun.attErrBody = chain_quaternion(&attEstNedInv, &indiRun.attSpNed);
 
         // --- tilt component ---
         // get tilt as the rotation from the body z (0 0 1) to the target bodyZ 
@@ -286,7 +283,7 @@ void getAlphaSpBody(timeUs_t current) {
 
         // get q_yaw via multiplication.
         // TODO: we only need w and sign(z). Surely there is somethign faster than dense quaternion mult
-        fp_quaternion_t q_yaw = quatMult(&indiRun.attErrBody, &q_tilt_inv);
+        fp_quaternion_t q_yaw = chain_quaternion(&indiRun.attErrBody, &q_tilt_inv);
 
         q_yaw.w = constrainf(q_yaw.w, -1.f, 1.f);
         float yawErrorAngle = 2.f*acos_approx(q_yaw.w);
@@ -561,12 +558,10 @@ FAST_CODE
 #endif
 fp_vector_t coordinatedYaw(float yaw) {
     // todo: this local is defined twice.. make static somehow
-    fp_quaternion_t attEstNedInv = {
-        .w = -attitude_q.w,
-        .x = attitude_q.x,
-        .y = -attitude_q.y,
-        .z = -attitude_q.z,
-    };
+    fp_quaternion_t attEstNedInv;
+    getAttitudeQuaternion(&attEstNedInv);
+    attEstNedInv.w *= -1.0f;
+
     fp_vector_t yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
     VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 

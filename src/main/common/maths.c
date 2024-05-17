@@ -107,17 +107,17 @@ float acos_approx(float x)
 }
 #endif
 
-FAST_CODE void i16_angles_of_fp_angles(i16_angles_t *ei, const fp_angles_t *ef) {
+FAST_CODE void i16_euler_of_fp_euler(i16_euler_t *ei, const fp_euler_t *ef) {
     for (int axis=0; axis<3; axis++)
         ei->raw[axis] = lrintf(ef->raw[axis] * (1800.f / M_PIf));
 }
 
-FAST_CODE void fp_angles_of_i16_angles(fp_angles_t *ef, const i16_angles_t *ei) {
+FAST_CODE void fp_euler_of_i16_euler(fp_euler_t *ef, const i16_euler_t *ei) {
     for (int axis=0; axis<3; axis++)
         ef->raw[axis] = (M_PIf / 1800.f) * (ei->raw[axis]);
 }
 
-FAST_CODE void fp_angles_of_rotationMatrix(fp_angles_t *e, const fp_rotationMatrix_t *r) {
+FAST_CODE void fp_euler_of_rotationMatrix(fp_euler_t *e, const fp_rotationMatrix_t *r) {
     // https://www.eecs.qmul.ac.uk/~gslabaugh/publications/euler.pdf
     // to following is valid for cos(pitch) > 0, which is given for pitch on (-pi/2, +pi/2)
     if (fabsf(r->m[2][0]) < 0.9999) {
@@ -132,7 +132,7 @@ FAST_CODE void fp_angles_of_rotationMatrix(fp_angles_t *e, const fp_rotationMatr
     }
 }
 
-FAST_CODE void fp_angles_of_quaternionProducts(fp_angles_t *e, const fp_quaternionProducts_t *qp) {
+FAST_CODE void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternionProducts_t *qp) {
     // https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions#Conversion_formulae_between_formalisms
     // z-y'-x'' rotation order: intrisic rotations around yaw then pitch then roll
     e->angles.roll  = atan2_approx((2.0f * (qp->wx + qp->yz)), (1.0f - 2.0f * (qp->xx + qp->yy)));
@@ -141,7 +141,7 @@ FAST_CODE void fp_angles_of_quaternionProducts(fp_angles_t *e, const fp_quaterni
 }
 
 
-FAST_CODE void rotationMatrix_of_fp_angles(fp_rotationMatrix_t *r, const fp_angles_t *e) {
+FAST_CODE void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e) {
     float cosx, sinx, cosy, siny, cosz, sinz;
     float coszcosx, sinzcosx, coszsinx, sinzsinx;
 
@@ -214,7 +214,7 @@ FAST_CODE fp_rotationMatrix_t chain_rotationMatrix(const fp_rotationMatrix_t *rA
 }
 
 
-FAST_CODE void quaternion_of_fp_angles(fp_quaternion_t *q, const fp_angles_t *e) {
+FAST_CODE void quaternion_of_fp_euler(fp_quaternion_t *q, const fp_euler_t *e) {
     float sx2, cx2, sy2, cy2, sz2, cz2;
     sx2 = sin_approx(0.5f * e->angles.roll);
     cx2 = cos_approx(0.5f * e->angles.roll);
@@ -289,6 +289,21 @@ FAST_CODE void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, con
     qP->yy = q->y * q->y;
     qP->yz = q->y * q->z;
     qP->zz = q->z * q->z;
+}
+
+FAST_CODE void rotate_vector_with_quaternion(fp_vector_t *v, const fp_quaternion_t *q) {
+    // crazy algorithm due to Fabian Giesen (A faster quaternion-vector multiplication)
+    // https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
+    // v' = v  +  q[0] * cross(2*q[1:], v)  +  cross(q[1:], cross(2*q[1:], v))
+    // v' = v  +  q[0] * 2*cross(q[1:], v)  +  cross(q[1:], 2*cross(q[1:], v))
+    fp_vector_t t;
+    t.V.X  =  2.0f * ( q->y * v->V.Z  -  q->z * v->V.Y );
+    t.V.Y  =  2.0f * ( q->z * v->V.X  -  q->x * v->V.Z );
+    t.V.Z  =  2.0f * ( q->x * v->V.Y  -  q->y * v->V.X );
+
+    v->V.X  +=  ( q->y * t.V.Z  -  q->z * t.V.Y )  +  ( q->w * t.V.X );
+    v->V.Y  +=  ( q->z * t.V.X  -  q->x * t.V.Z )  +  ( q->w * t.V.Y );
+    v->V.Z  +=  ( q->x * t.V.Y  -  q->y * t.V.X )  +  ( q->w * t.V.Z );
 }
 
 FAST_CODE fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A) {
@@ -456,7 +471,7 @@ float scaleRangef(float x, float srcFrom, float srcTo, float destFrom, float des
     return (a / b) + destFrom;
 }
 
-void buildRotationMatrix(fp_angles_t *delta, fp_rotationMatrix_t *rotation)
+void buildRotationMatrix(fp_euler_t *delta, fp_rotationMatrix_t *rotation)
 {
     float cosx, sinx, cosy, siny, cosz, sinz;
     float coszcosx, sinzcosx, coszsinx, sinzsinx;

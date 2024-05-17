@@ -28,8 +28,7 @@
 // Exported symbols
 extern bool canUseGPSHeading;
 
-extern i16_angles_t attitude;
-extern fp_quaternion_t attitude_q;
+extern i16_euler_t attitude;
 extern fp_rotationMatrix_t rMat;
 
 typedef struct imuConfig_s {
@@ -51,7 +50,7 @@ void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correctio
 #ifdef USE_EKF
 
 #ifdef USE_EKF_ATTITUDE
-void setAttitudeState(float roll, float pitch, float yaw);
+void setAttitudeWithEuler(float roll, float pitch, float yaw);
 #endif
 #ifdef USE_EKF_POSITION
 void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
@@ -60,7 +59,8 @@ void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
 #endif //USE_EKF
 
 float getCosTiltAngle(void);
-void getQuaternion(quaternion * q);
+void getAttitudeQuaternion(fp_quaternion_t * q);
+void setAttitudeWithQuaternion(const fp_quaternion_t * q);
 void imuUpdateAttitude(timeUs_t currentTimeUs);
 
 void imuInit(void);
@@ -74,7 +74,7 @@ void imuSetHasNewData(uint32_t dt);
 #endif
 
 bool imuQuaternionHeadfreeOffsetSet(void);
-void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_def * v);
+void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_t * v);
 bool shouldInitializeGPSHeading(void);
 bool isUpright(void);
 

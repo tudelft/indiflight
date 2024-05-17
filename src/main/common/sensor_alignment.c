@@ -30,7 +30,7 @@
 
 void buildRotationMatrixFromAlignment(const sensorAlignment_t* sensorAlignment, fp_rotationMatrix_t* rm)
 {
-    fp_angles_t rotationAngles;
+    fp_euler_t rotationAngles;
     rotationAngles.angles.roll  = DECIDEGREES_TO_RADIANS(sensorAlignment->roll);
     rotationAngles.angles.pitch = DECIDEGREES_TO_RADIANS(sensorAlignment->pitch);
     rotationAngles.angles.yaw   = DECIDEGREES_TO_RADIANS(sensorAlignment->yaw);

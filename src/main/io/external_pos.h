@@ -14,7 +14,7 @@ typedef enum {
 typedef struct __ext_pos_ned_t {
     fp_vector_t pos;
     fp_vector_t vel;
-    fp_angles_t att;
+    fp_euler_t att;
 } ext_pos_ned_t;
 
 typedef struct __pos_setpoint_ned_t {

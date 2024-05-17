@@ -112,8 +112,7 @@ fp_quaternion_t headfree = QUATERNION_INITIALIZE;
 fp_quaternion_t offset = QUATERNION_INITIALIZE;
 
 // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
-i16_angles_t attitude = ANGLES_INITIALIZE;
-fp_quaternion_t attitude_q = QUATERNION_INITIALIZE;
+i16_euler_t attitude = EULER_INITIALIZE;
 fp_rotationMatrix_t rMat;
 
 PG_REGISTER_WITH_RESET_TEMPLATE(imuConfig_t, imuConfig, PG_IMU_CONFIG, 2);
@@ -125,35 +124,10 @@ PG_RESET_TEMPLATE(imuConfig_t, imuConfig,
     .imu_process_denom = 2
 );
 
-static void imuQuaternionComputeProducts(fp_quaternion_t *quat, fp_quaternionProducts_t *quatProd)
-{
-    quatProd->ww = quat->w * quat->w;
-    quatProd->wx = quat->w * quat->x;
-    quatProd->wy = quat->w * quat->y;
-    quatProd->wz = quat->w * quat->z;
-    quatProd->xx = quat->x * quat->x;
-    quatProd->xy = quat->x * quat->y;
-    quatProd->xz = quat->x * quat->z;
-    quatProd->yy = quat->y * quat->y;
-    quatProd->yz = quat->y * quat->z;
-    quatProd->zz = quat->z * quat->z;
-}
-
 STATIC_UNIT_TESTED void imuComputeRotationMatrix(void)
 {
-    imuQuaternionComputeProducts(&q, &qP);
-
-    rMat.m[0][0] = 1.0f - 2.0f * qP.yy - 2.0f * qP.zz;
-    rMat.m[0][1] = 2.0f * (qP.xy + -qP.wz);
-    rMat.m[0][2] = 2.0f * (qP.xz - -qP.wy);
-
-    rMat.m[1][0] = 2.0f * (qP.xy - -qP.wz);
-    rMat.m[1][1] = 1.0f - 2.0f * qP.xx - 2.0f * qP.zz;
-    rMat.m[1][2] = 2.0f * (qP.yz + -qP.wx);
-
-    rMat.m[2][0] = 2.0f * (qP.xz + -qP.wy);
-    rMat.m[2][1] = 2.0f * (qP.yz - -qP.wx);
-    rMat.m[2][2] = 1.0f - 2.0f * qP.xx - 2.0f * qP.yy;
+    quaternionProducts_of_quaternion(&qP, &q);
+    rotationMatrix_of_quaternionProducts(&rMat, &qP);
 
 #if defined(SIMULATOR_BUILD) && !defined(USE_IMU_CALC) && !defined(SET_IMU_FROM_EULER)
     rMat.m[1][0] = -2.0f * (qP.xy - -qP.wz);
@@ -339,9 +313,6 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     q.y *= recipNorm;
     q.z *= recipNorm;
 
-    // copy to extern
-    attitude_q = q;
-
     // Pre-compute rotation matrix from quaternion
     imuComputeRotationMatrix();
 
@@ -381,23 +352,14 @@ STATIC_UNIT_TESTED void imuUpdateEulerAngles(void)
     fp_quaternionProducts_t buffer;
 
     if (FLIGHT_MODE(HEADFREE_MODE)) {
-        imuQuaternionComputeProducts(&headfree, &buffer);
-
+        quaternionProducts_of_quaternion(&buffer, &headfree);
         i16_angles_from_quaternionProducts(&attitude, &buffer);
-
-        attitude.values.roll = lrintf(atan2_approx((+2.0f * (buffer.wx + buffer.yz)), (+1.0f - 2.0f * (buffer.xx + buffer.yy))) * (1800.0f / M_PIf));
-        attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(+2.0f * (buffer.wy - buffer.xz))) * (1800.0f / M_PIf));
-        attitude.values.yaw = lrintf((-atan2_approx((+2.0f * (buffer.wz + buffer.xy)), (+1.0f - 2.0f * (buffer.yy + buffer.zz))) * (1800.0f / M_PIf)));
     } else {
         i16_angles_from_rotationMatrix(&attitude, &rMat);
-
-       attitude.values.roll = lrintf(atan2_approx(rMat.m[2][1], rMat.m[2][2]) * (1800.0f / M_PIf));
-       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(-rMat.m[2][0])) * (1800.0f / M_PIf));
-       attitude.values.yaw = lrintf((atan2_approx(rMat.m[1][0], rMat.m[0][0]) * (1800.0f / M_PIf)));
     }
 
-    if (attitude.values.yaw < 0) {
-        attitude.values.yaw += 3600;
+    if (attitude.angles.yaw < 0) {
+        attitude.angles.yaw += 3600;
     }
 }
 
@@ -529,49 +491,6 @@ static void imuComputeQuaternionFromRPY(fp_quaternionProducts_t *quatProd, int16
 #endif
 
 #ifdef USE_EKF
-
-#if defined(USE_EKF_ATTITUDE)
-void setAttitudeState(float roll, float pitch, float yaw)
-{
-    // expecting roll pitch yaw in radians
-    while (roll > M_PIf) roll -= 2*M_PIf;
-    while (roll < -M_PIf) roll += 2*M_PIf;
-
-    while (pitch > M_PIf) pitch -= 2*M_PIf;
-    while (pitch < -M_PIf) pitch += 2*M_PIf;
-
-    while (yaw > M_PIf) yaw -= 2*M_PIf;
-    while (yaw < -M_PIf) yaw += 2*M_PIf;
-
-    attitude.values.roll = (int16_t) RADIANS_TO_DECIDEGREES(roll);
-    attitude.values.pitch = (int16_t) RADIANS_TO_DECIDEGREES(pitch);
-    attitude.values.yaw = (int16_t) RADIANS_TO_DECIDEGREES(yaw);
-
-    const float cosRoll = cos_approx(roll * 0.5f);
-    const float sinRoll = sin_approx(roll * 0.5f);
-
-    const float cosPitch = cos_approx(pitch * 0.5f);
-    const float sinPitch = sin_approx(pitch * 0.5f);
-
-    const float cosYaw = cos_approx(-yaw * 0.5f);
-    const float sinYaw = sin_approx(-yaw * 0.5f);
-
-    const float q0 = cosRoll * cosPitch * cosYaw + sinRoll * sinPitch * sinYaw;
-    const float q1 = sinRoll * cosPitch * cosYaw - cosRoll * sinPitch * sinYaw;
-    const float q2 = cosRoll * sinPitch * cosYaw + sinRoll * cosPitch * sinYaw;
-    const float q3 = cosRoll * cosPitch * sinYaw - sinRoll * sinPitch * cosYaw;
-
-    q.w = q0;
-    q.x = q1;
-    q.y = q2;
-    q.z = q3;
-    attitude_q = q;
-
-    imuComputeRotationMatrix();
-
-    attitudeIsEstablished = true;
-}
-#endif
 
 #if defined(USE_EKF_POSITION)
 void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set)
@@ -734,13 +653,48 @@ float getCosTiltAngle(void)
     return rMat.m[2][2];
 }
 
-void getQuaternion(fp_quaternion_t *quat)
+void getAttitudeQuaternion(fp_quaternion_t *quat)
 {
    quat->w = q.w;
    quat->x = q.x;
    quat->y = q.y;
    quat->z = q.z;
 }
+
+void setAttitudeWithQuaternion(const fp_quaternion_t *quat)
+{
+    q.w = quat->w;
+    q.x = quat->x;
+    q.y = quat->y;
+    q.z = quat->z;
+
+    imuComputeRotationMatrix(); // sets rotation matrix and quatenrion products
+    imuUpdateEulerAngles();
+}
+
+#if defined(USE_EKF_ATTITUDE)
+void setAttitudeWithEuler(float roll, float pitch, float yaw)
+{
+    // expecting roll pitch yaw in radians
+    while (roll > M_PIf) roll -= 2*M_PIf;
+    while (roll < -M_PIf) roll += 2*M_PIf;
+
+    while (pitch > M_PIf) pitch -= 2*M_PIf;
+    while (pitch < -M_PIf) pitch += 2*M_PIf;
+
+    while (yaw > M_PIf) yaw -= 2*M_PIf;
+    while (yaw < -M_PIf) yaw += 2*M_PIf;
+
+    attitude.angles.roll = (int16_t) RADIANS_TO_DECIDEGREES(roll);
+    attitude.angles.pitch = (int16_t) RADIANS_TO_DECIDEGREES(pitch);
+    attitude.angles.yaw = (int16_t) RADIANS_TO_DECIDEGREES(yaw);
+
+    quaternion_of_fp_euler(&q, &attitude);
+    imuComputeRotationMatrix();
+
+    attitudeIsEstablished = true;
+}
+#endif
 
 #ifdef SIMULATOR_BUILD
 void imuSetAttitudeRPY(float roll, float pitch, float yaw)
@@ -786,8 +740,8 @@ void imuSetHasNewData(uint32_t dt)
 
 bool imuQuaternionHeadfreeOffsetSet(void)
 {
-    if ((abs(attitude.values.roll) < 450)  && (abs(attitude.values.pitch) < 450)) {
-        const float yaw = -atan2_approx((+2.0f * (qP.wz + qP.xy)), (+1.0f - 2.0f * (qP.yy + qP.zz)));
+    if ((abs(attitude.angles.roll) < 450)  && (abs(attitude.angles.pitch) < 450)) {
+        const float yaw = atan2_approx((+2.0f * (qP.wz + qP.xy)), (+1.0f - 2.0f * (qP.yy + qP.zz)));
 
         offset.w = cos_approx(yaw/2);
         offset.x = 0;
@@ -800,37 +754,12 @@ bool imuQuaternionHeadfreeOffsetSet(void)
     }
 }
 
-void imuQuaternionMultiplication(quaternion *q1, quaternion *q2, quaternion *result)
+void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_t *v)
 {
-    const float A = (q1->w + q1->x) * (q2->w + q2->x);
-    const float B = (q1->z - q1->y) * (q2->y - q2->z);
-    const float C = (q1->w - q1->x) * (q2->y + q2->z);
-    const float D = (q1->y + q1->z) * (q2->w - q2->x);
-    const float E = (q1->x + q1->z) * (q2->x + q2->y);
-    const float F = (q1->x - q1->z) * (q2->x - q2->y);
-    const float G = (q1->w + q1->y) * (q2->w - q2->z);
-    const float H = (q1->w - q1->y) * (q2->w + q2->z);
-
-    result->w = B + (- E - F + G + H) / 2.0f;
-    result->x = A - (+ E + F + G + H) / 2.0f;
-    result->y = C + (+ E - F + G - H) / 2.0f;
-    result->z = D + (+ E - F - G + H) / 2.0f;
-}
-
-void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_def *v)
-{
-    fp_quaternionProducts_t buffer;
-
-    imuQuaternionMultiplication(&offset, &q, &headfree);
-    imuQuaternionComputeProducts(&headfree, &buffer);
-
-    const float x = (buffer.ww + buffer.xx - buffer.yy - buffer.zz) * v->X + 2.0f * (buffer.xy + buffer.wz) * v->Y + 2.0f * (buffer.xz - buffer.wy) * v->Z;
-    const float y = 2.0f * (buffer.xy - buffer.wz) * v->X + (buffer.ww - buffer.xx + buffer.yy - buffer.zz) * v->Y + 2.0f * (buffer.yz + buffer.wx) * v->Z;
-    const float z = 2.0f * (buffer.xz + buffer.wy) * v->X + 2.0f * (buffer.yz - buffer.wx) * v->Y + (buffer.ww - buffer.xx - buffer.yy + buffer.zz) * v->Z;
-
-    v->X = x;
-    v->Y = y;
-    v->Z = z;
+    headfree = chain_quaternion(&offset, &q);
+    headfree.w *= -1.0f; // we need inverse!
+    rotate_vector_with_quaternion(v, &headfree);
+    headfree.w *= -1.0f; // return
 }
 
 bool isUpright(void)
