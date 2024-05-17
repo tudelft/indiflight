@@ -325,11 +325,9 @@ fp_vector_t velEstNed = {0};
 
 static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp, float Ki) {
     // convert local accel measurement to NED
-    fp_vector_t aNed = {
-        .V.X =  rMat.m[0][0] * ax + rMat.m[0][1] * ay + rMat [0][2] * az,
-        .V.Y =  rMat.m[1][0] * ax + rMat.m[1][1] * ay + rMat [1][2] * az,
-        .V.Z = (rMat.m[2][0] * ax + rMat.m[2][1] * ay + rMat [2][2] * az) + acc.dev.acc_1G,
-    };
+    fp_vector_t aNed = { .A = { ax, ay, az } };
+    rotate_vector_with_rotationMatrix(&aNed, &rMat);
+    aNed.V.Z += acc.dev.acc_1G; // add gravity
 
     fp_vector_t velErrorNed = extPosNed.vel;
     VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
@@ -350,13 +348,16 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
 STATIC_UNIT_TESTED void imuUpdateEulerAngles(void)
 {
     fp_quaternionProducts_t buffer;
+    fp_euler_t eulerf;
 
     if (FLIGHT_MODE(HEADFREE_MODE)) {
         quaternionProducts_of_quaternion(&buffer, &headfree);
-        i16_angles_from_quaternionProducts(&attitude, &buffer);
+        fp_euler_of_quaternionProducts(&eulerf, &buffer);
     } else {
-        i16_angles_from_rotationMatrix(&attitude, &rMat);
+        fp_euler_of_rotationMatrix(&eulerf, &rMat);
     }
+
+    i16_euler_of_fp_euler(&attitude, &eulerf);
 
     if (attitude.angles.yaw < 0) {
         attitude.angles.yaw += 3600;
@@ -524,14 +525,14 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 #endif
 #if defined(USE_GPS)
     if (!useMag && sensors(SENSOR_GPS) && STATE(GPS_FIX) && gpsSol.numSat > GPS_MIN_SAT_COUNT && gpsSol.groundSpeed >= GPS_COG_MIN_GROUNDSPEED) {
-        // Use GPS course over ground to correct attitude.values.yaw
+        // Use GPS course over ground to correct attitude.angles.yaw
         courseOverGround = DECIDEGREES_TO_RADIANS(gpsSol.groundCourse);
         cogYawGain = (FLIGHT_MODE(GPS_RESCUE_MODE)) ? gpsRescueGetImuYawCogGain() : 1.0f;
         // normally update yaw heading with GPS data, but when in a Rescue, modify the IMU yaw gain dynamically
         if (shouldInitializeGPSHeading()) {
             // Reset our reference and reinitialize quaternion.
             // shouldInitializeGPSHeading() returns true only once.
-            imuComputeQuaternionFromRPY(&qP, attitude.values.roll, attitude.values.pitch, gpsSol.groundCourse);
+            imuComputeQuaternionFromRPY(&qP, attitude.angles.roll, attitude.angles.pitch, gpsSol.groundCourse);
             cogYawGain = 0.0f; // Don't use the COG when we first initialize
         }
     }
@@ -689,7 +690,9 @@ void setAttitudeWithEuler(float roll, float pitch, float yaw)
     attitude.angles.pitch = (int16_t) RADIANS_TO_DECIDEGREES(pitch);
     attitude.angles.yaw = (int16_t) RADIANS_TO_DECIDEGREES(yaw);
 
-    quaternion_of_fp_euler(&q, &attitude);
+    fp_euler_t eulerf;
+    fp_euler_of_i16_euler(&eulerf, &attitude);
+    quaternion_of_fp_euler(&q, &eulerf);
     imuComputeRotationMatrix();
 
     attitudeIsEstablished = true;
@@ -701,9 +704,9 @@ void imuSetAttitudeRPY(float roll, float pitch, float yaw)
 {
     IMU_LOCK;
 
-    attitude.values.roll = roll * 10;
-    attitude.values.pitch = pitch * 10;
-    attitude.values.yaw = yaw * 10;
+    attitude.angles.roll = roll * 10;
+    attitude.angles.pitch = pitch * 10;
+    attitude.angles.yaw = yaw * 10;
 
     IMU_UNLOCK;
 }

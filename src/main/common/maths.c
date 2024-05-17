@@ -172,7 +172,7 @@ FAST_CODE void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler
 }
 
 FAST_CODE void rotationMatrix_of_quaternionProducts(fp_rotationMatrix_t *r, const fp_quaternionProducts_t *qP) {
-    https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions#Rotation_matrix_%E2%86%94_quaternion
+    //https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions#Rotation_matrix_%E2%86%94_quaternion
     r->m[0][0] = 1.0f - 2.0f * qP->yy - 2.0f * qP->zz;
     r->m[0][1] = 2.0f * (qP->xy + -qP->wz);
     r->m[0][2] = 2.0f * (qP->xz - -qP->wy);
@@ -469,45 +469,6 @@ float scaleRangef(float x, float srcFrom, float srcTo, float destFrom, float des
     float a = (destTo - destFrom) * (x - srcFrom);
     float b = srcTo - srcFrom;
     return (a / b) + destFrom;
-}
-
-void buildRotationMatrix(fp_euler_t *delta, fp_rotationMatrix_t *rotation)
-{
-    float cosx, sinx, cosy, siny, cosz, sinz;
-    float coszcosx, sinzcosx, coszsinx, sinzsinx;
-
-    cosx = cos_approx(delta->angles.roll);
-    sinx = sin_approx(delta->angles.roll);
-    cosy = cos_approx(delta->angles.pitch);
-    siny = sin_approx(delta->angles.pitch);
-    cosz = cos_approx(delta->angles.yaw);
-    sinz = sin_approx(delta->angles.yaw);
-
-    coszcosx = cosz * cosx;
-    sinzcosx = sinz * cosx;
-    coszsinx = sinx * cosz;
-    sinzsinx = sinx * sinz;
-
-    rotation->m[0][X] = cosz * cosy;
-    rotation->m[0][Y] = -cosy * sinz;
-    rotation->m[0][Z] = siny;
-    rotation->m[1][X] = sinzcosx + (coszsinx * siny);
-    rotation->m[1][Y] = coszcosx - (sinzsinx * siny);
-    rotation->m[1][Z] = -sinx * cosy;
-    rotation->m[2][X] = (sinzsinx) - (coszcosx * siny);
-    rotation->m[2][Y] = (coszsinx) + (sinzcosx * siny);
-    rotation->m[2][Z] = cosy * cosx;
-}
-
-void applyMatrixRotation(float *v, fp_rotationMatrix_t *rotationMatrix)
-{
-    struct fp_vector *vDest = (struct fp_vector *)v;
-    struct fp_vector vTmp = *vDest;
-
-    // wroooong
-    vDest->X = (rotationMatrix->m[0][X] * vTmp.X + rotationMatrix->m[1][X] * vTmp.Y + rotationMatrix->m[2][X] * vTmp.Z);
-    vDest->Y = (rotationMatrix->m[0][Y] * vTmp.X + rotationMatrix->m[1][Y] * vTmp.Y + rotationMatrix->m[2][Y] * vTmp.Z);
-    vDest->Z = (rotationMatrix->m[0][Z] * vTmp.X + rotationMatrix->m[1][Z] * vTmp.Y + rotationMatrix->m[2][Z] * vTmp.Z);
 }
 
 // Quick median filter implementation

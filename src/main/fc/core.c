@@ -679,17 +679,17 @@ static void updateInflightCalibrationState(void)
 static void updateMagHold(void)
 {
     if (fabsf(rcCommand[YAW]) < 15 && FLIGHT_MODE(MAG_MODE)) {
-        int16_t dif = DECIDEGREES_TO_DEGREES(attitude.values.yaw) - magHold;
+        int16_t dif = DECIDEGREES_TO_DEGREES(attitude.angles.yaw) - magHold;
         if (dif <= -180)
             dif += 360;
         if (dif >= +180)
             dif -= 360;
-        dif *= -GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+        dif *= GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
         if (isUpright()) {
             rcCommand[YAW] -= dif * currentPidProfile->pid[PID_MAG].P / 30;    // 18 deg
         }
     } else
-        magHold = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+        magHold = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
 }
 #endif
 
@@ -1096,7 +1096,7 @@ void processRxModes(timeUs_t currentTimeUs)
         if (IS_RC_MODE_ACTIVE(BOXMAG)) {
             if (!FLIGHT_MODE(MAG_MODE)) {
                 ENABLE_FLIGHT_MODE(MAG_MODE);
-                magHold = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+                magHold = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
             }
         } else {
             DISABLE_FLIGHT_MODE(MAG_MODE);

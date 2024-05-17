@@ -186,7 +186,7 @@ void ghstFrameMagBaro(sbuf_t *dst)
 #ifdef USE_MAG
     if (sensors(SENSOR_MAG) && telemetryIsSensorEnabled(SENSOR_HEADING)) {
         flags |= MISC_FLAGS_MAGHEAD;
-        yaw = attitude.values.yaw;
+        yaw = attitude.angles.yaw;
     }
 #endif
 

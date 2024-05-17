@@ -382,7 +382,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float calcHorizonLevelStrength(void)
     float horizonLevelStrength = 1.0f - MAX(fabsf(getLevelModeRcDeflection(FD_ROLL)), fabsf(getLevelModeRcDeflection(FD_PITCH)));
 
     // 0 at level, 90 at vertical, 180 at inverted (degrees):
-    const float currentInclination = MAX(abs(attitude.values.roll), abs(attitude.values.pitch)) / 10.0f;
+    const float currentInclination = MAX(abs(attitude.angles.roll), abs(attitude.angles.pitch)) / 10.0f;
 
     // horizonTiltExpertMode:  0 = leveling always active when sticks centered,
     //                         1 = leveling can be totally off when inverted

@@ -20,6 +20,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include "common/maths.h"
 
 #include "platform.h"
 
@@ -35,7 +36,7 @@ void buildRotationMatrixFromAlignment(const sensorAlignment_t* sensorAlignment, 
     rotationAngles.angles.pitch = DECIDEGREES_TO_RADIANS(sensorAlignment->pitch);
     rotationAngles.angles.yaw   = DECIDEGREES_TO_RADIANS(sensorAlignment->yaw);
 
-    buildRotationMatrix(&rotationAngles, rm);
+    rotationMatrix_of_fp_euler(rm, &rotationAngles);
 }
 
 

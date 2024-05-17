@@ -414,7 +414,7 @@ static void setValue(uint8_t* bufferPtr, uint8_t sensorType, uint8_t length)
             break;
 #if defined(USE_TELEMETRY_IBUS_EXTENDED)
         case IBUS_SENSOR_TYPE_CMP_HEAD:
-            value.uint16 = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+            value.uint16 = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
             break;
 #ifdef USE_VARIO
         case IBUS_SENSOR_TYPE_VERTICAL_SPEED:

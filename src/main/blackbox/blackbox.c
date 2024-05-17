@@ -1645,8 +1645,8 @@ static void loadMainState(timeUs_t currentTimeUs)
 #ifdef USE_INDI
     fp_quaternion_t attitude_q;
     getAttitudeQuaternion(&attitude_q);
-    blackboxCurrent->quat[0] = lrintf(attitude_q.w  * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->quat[1] = lrintf(attitude_q.x  * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quat[0] = lrintf(attitude_q.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quat[1] = lrintf(attitude_q.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[2] = lrintf(attitude_q.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[3] = lrintf(attitude_q.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
     blackboxCurrent->alpha[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDot_fs.V.X) * 0.1f);

@@ -305,9 +305,6 @@ float degreesToRadians(int16_t degrees);
 int scaleRange(int x, int srcFrom, int srcTo, int destFrom, int destTo);
 float scaleRangef(float x, float srcFrom, float srcTo, float destFrom, float destTo);
 
-void buildRotationMatrix(fp_euler_t *delta, fp_rotationMatrix_t *rotation);
-void applyMatrixRotation(float *v, fp_rotationMatrix_t *rotationMatrix);
-
 int32_t quickMedianFilter3(int32_t * v);
 int32_t quickMedianFilter5(int32_t * v);
 int32_t quickMedianFilter7(int32_t * v);

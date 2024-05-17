@@ -152,7 +152,10 @@ void updateEkf(timeUs_t currentTimeUs) {
         float *ekf_X = ekf_get_X();
 
 #ifdef USE_EKF_ATTITUDE
-        setAttitudeState(ekf_X[6], -ekf_X[7], ekf_X[8]); // roll pitch yaw in rad
+        fp_quaternion_t q;
+        fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
+        quaternion_of_fp_euler(&q, &e);
+        setAttitudeWithQuaternion(&q);
 #endif
 #ifdef USE_EKF_POSITION
         fp_vector_t posNed_set;

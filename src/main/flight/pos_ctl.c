@@ -211,7 +211,7 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     *
     */
 
-    //float Psi = (float) DECIDEGREES_TO_RADIANS(-attitude.values.yaw);
+    //float Psi = (float) DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
     float Psi = getYawWithoutSingularity();
     float cPsi = cos_approx(Psi);
     float sPsi = sin_approx(Psi);
@@ -272,15 +272,14 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     // this is probaby the most expensive operation... can be half the cost if
     // optimized for .x = 0, .y = 0, unless compiler does that for us?
-    attSpNedFromPos = quatMult(&yawNed, &attSpYaw);
+    attSpNedFromPos = chain_quaternion(&yawNed, &attSpYaw);
 
     if (posRuntime.use_spf_attenuation) {
         // discount thrust if we have not yet reached our attitude
         fp_vector_t zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
-        float zDotProd = 
-            - zDesNed.V.X * (+rMat.m[0][2]) // negative because z points down, but rMat points up
-            - zDesNed.V.Y * (-rMat.m[1][2])
-            - zDesNed.V.Z * (-rMat.m[2][2]);
+        float zDotProd = zDesNed.V.X * (rMat.m[0][2])
+            + zDesNed.V.Y * (rMat.m[1][2])
+            + zDesNed.V.Z * (rMat.m[2][2]);
 
         spfSpBodyFromPos.V.Z *= constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
     }
@@ -308,7 +307,7 @@ void posGetRateSpBody(timeUs_t current) {
 
     yawSet = isWeathervane ? atan2_approx(velEstNed.V.Y, velEstNed.V.X) : posSpNed.psi;
 
-    float yawError = yawSet - DECIDEGREES_TO_RADIANS(attitude.values.yaw);
+    float yawError = yawSet - DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
     if (yawError > M_PIf)
         yawError -= 2.f * M_PIf;
     else if (yawError < -M_PIf)

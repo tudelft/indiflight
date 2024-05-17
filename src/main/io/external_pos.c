@@ -79,14 +79,16 @@ void getExternalPos(timeUs_t current) {
         extPosNed.vel.V.X = piMsgExternalPoseRx->enu_yd;
         extPosNed.vel.V.Y = piMsgExternalPoseRx->enu_xd;
         extPosNed.vel.V.Z = -piMsgExternalPoseRx->enu_zd;
-        fp_angles_t eulers;
+        fp_euler_t eulers;
         fp_quaternion_t quat;
         // the quaternion x,y,z are in ENU, we convert them to NED
-        quat.qi = piMsgExternalPoseRx->body_qi;
-        quat.qx = piMsgExternalPoseRx->body_qy;
-        quat.qy = piMsgExternalPoseRx->body_qx;
-        quat.qz =-piMsgExternalPoseRx->body_qz;
-        float_eulers_of_quat(&eulers, &quat);
+        quat.w = piMsgExternalPoseRx->body_qi;
+        quat.x = piMsgExternalPoseRx->body_qy;
+        quat.y = piMsgExternalPoseRx->body_qx;
+        quat.z =-piMsgExternalPoseRx->body_qz;
+        fp_quaternionProducts_t qP;
+        quaternionProducts_of_quaternion(&qP, &quat);
+        fp_euler_of_quaternionProducts (&eulers, &qP);
         extPosNed.att.angles.roll = eulers.angles.roll;
         extPosNed.att.angles.pitch = eulers.angles.pitch;
         extPosNed.att.angles.yaw = eulers.angles.yaw;

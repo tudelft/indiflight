@@ -159,7 +159,7 @@ void getSetpoints(timeUs_t current) {
         // Now combined XY input gives bigger tilt angle before limiting,
         // which results in a sort of radial deadzone past the x*y=1 circle
         float roll = getRcDeflection(ROLL);
-        float pitch = -getRcDeflection(PITCH);
+        float pitch = getRcDeflection(PITCH);
         float maxTilt = indiRun.manualMaxTilt;
 
         fp_vector_t axis = {
@@ -189,14 +189,14 @@ void getSetpoints(timeUs_t current) {
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
 
         // get yaw rate
-        indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(-getSetpointRate(YAW)));
+        indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
 
     } else {
         indiRun.controlAttitude = false;
         // acro
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
-        indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(-getSetpointRate(PITCH));
-        indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(-getSetpointRate(YAW));
+        indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
+        indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(getSetpointRate(YAW));
 
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
@@ -525,14 +525,14 @@ float getYawWithoutSingularity(void) {
 
     // first, get bodyX and bodyY in NED from the attitude DCM
     fp_vector_t bodyXNed = {
-        .V.X =  rMat.m[0][0],
-        .V.Y = -rMat.m[1][0],
-        .V.Z = -rMat.m[2][0]
+        .V.X = rMat.m[0][0],
+        .V.Y = rMat.m[1][0],
+        .V.Z = rMat.m[2][0]
     };
     fp_vector_t bodyYNed = {
-        .V.X = -rMat.m[0][1],
-        .V.Y =  rMat.m[1][1],
-        .V.Z =  rMat.m[2][1],
+        .V.X = rMat.m[0][1],
+        .V.Y = rMat.m[1][1],
+        .V.Z = rMat.m[2][1],
     };
 
     // second, find which one projects to the longest vector in the xy plane
@@ -563,6 +563,7 @@ fp_vector_t coordinatedYaw(float yaw) {
     attEstNedInv.w *= -1.0f;
 
     fp_vector_t yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
+    // todo: this doesnt need quatRotMatCol, it's simply the last col of the transpose of rMat
     VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 
     return yawRateSpBody;

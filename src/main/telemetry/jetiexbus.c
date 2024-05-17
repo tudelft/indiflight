@@ -327,15 +327,15 @@ int32_t getSensorValue(uint8_t sensor)
         break;
 
     case EX_ROLL_ANGLE:
-        return attitude.values.roll;
+        return attitude.angles.roll;
         break;
 
     case EX_PITCH_ANGLE:
-        return attitude.values.pitch;
+        return attitude.angles.pitch;
         break;
 
     case EX_HEADING:
-        return attitude.values.yaw;
+        return attitude.angles.yaw;
         break;
 
 #ifdef USE_VARIO

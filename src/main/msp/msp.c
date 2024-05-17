@@ -1331,9 +1331,9 @@ case MSP_NAME:
         break;
 
     case MSP_ATTITUDE:
-        sbufWriteU16(dst, attitude.values.roll);
-        sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+        sbufWriteU16(dst, attitude.angles.roll);
+        sbufWriteU16(dst, attitude.angles.pitch);
+        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.angles.yaw));
         break;
 
     case MSP_ALTITUDE:

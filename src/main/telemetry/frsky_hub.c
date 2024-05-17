@@ -442,7 +442,7 @@ static void sendFakeLatLongThatAllowsHeadingDisplay(void)
 
 static void sendHeading(void)
 {
-    frSkyHubWriteFrame(ID_COURSE_BP, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+    frSkyHubWriteFrame(ID_COURSE_BP, DECIDEGREES_TO_DEGREES(attitude.angles.yaw));
     frSkyHubWriteFrame(ID_COURSE_AP, 0);
 }
 #endif

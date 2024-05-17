@@ -725,16 +725,16 @@ void processSmartPortTelemetry(smartPortPayload_t *payload, volatile bool *clear
                 break;
 #endif
             case FSSP_DATAID_HEADING    :
-                smartPortSendPackage(id, attitude.values.yaw * 10); // in degrees * 100 according to SmartPort spec
+                smartPortSendPackage(id, attitude.angles.yaw * 10); // in degrees * 100 according to SmartPort spec
                 *clearToSend = false;
                 break;
 #if defined(USE_ACC)
             case FSSP_DATAID_PITCH      :
-                smartPortSendPackage(id, attitude.values.pitch); // given in 10*deg
+                smartPortSendPackage(id, attitude.angles.pitch); // given in 10*deg
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ROLL       :
-                smartPortSendPackage(id, attitude.values.roll); // given in 10*deg
+                smartPortSendPackage(id, attitude.angles.roll); // given in 10*deg
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCX       :

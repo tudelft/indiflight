@@ -101,7 +101,7 @@ void getSetpointsTrajectoryTracker(void) {
     tt_acc_sp[2] = tt_acc_ref[2] + Dgain*(vz_sp - velEstNed.V.Z);
 
     // yaw error
-    float yaw_error = tt_yaw_ref - DECIDEGREES_TO_RADIANS(attitude.values.yaw);
+    float yaw_error = tt_yaw_ref - DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
     while (yaw_error > M_PIf)
         yaw_error -= 2.f * M_PIf;
     while (yaw_error < -M_PIf)

@@ -681,7 +681,7 @@ static void osdElementAltitude(osdElementParms_t *element)
 #ifdef USE_ACC
 static void osdElementAngleRollPitch(osdElementParms_t *element)
 {
-    const float angle = ((element->item == OSD_PITCH_ANGLE) ? attitude.values.pitch : attitude.values.roll) / 10.0f;
+    const float angle = ((element->item == OSD_PITCH_ANGLE) ? attitude.angles.pitch : attitude.angles.roll) / 10.0f;
     osdPrintFloat(element->buff, (element->item == OSD_PITCH_ANGLE) ? SYM_PITCH : SYM_ROLL, fabsf(angle), ((angle < 0) ? "-%02u" : " %02u"), 1, true, SYM_NONE);
 }
 #endif
@@ -701,8 +701,8 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
     const int maxPitch = osdConfig()->ahMaxPitch * 10;
     const int maxRoll = osdConfig()->ahMaxRoll * 10;
     const int ahSign = osdConfig()->ahInvert ? -1 : 1;
-    const int rollAngle = constrain(attitude.values.roll * ahSign, -maxRoll, maxRoll);
-    int pitchAngle = constrain(attitude.values.pitch * ahSign, -maxPitch, maxPitch);
+    const int rollAngle = constrain(attitude.angles.roll * ahSign, -maxRoll, maxRoll);
+    int pitchAngle = constrain(attitude.angles.pitch * ahSign, -maxPitch, maxPitch);
     // Convert pitchAngle to y compensation value
     // (maxPitch / 25) divisor matches previous settings of fixed divisor of 8 and fixed max AHI pitch angle of 20.0 degrees
     if (maxPitch > 0) {
@@ -711,7 +711,7 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
     pitchAngle -= 41; // 41 = 4 * AH_SYMBOL_COUNT + 5
 
     for (int x = -4; x <= 4; x++) {
-        const int y = ((-rollAngle * x) / 64) - pitchAngle;
+        const int y = ((-rollAngle * x) / 64) + pitchAngle;
         if (y >= 0 && y <= 81) {
             osdDisplayWriteChar(element, element->elemPosX + x, element->elemPosY + (y / AH_SYMBOL_COUNT), DISPLAYPORT_SEVERITY_NORMAL, (SYM_AH_BAR9_0 + (y % AH_SYMBOL_COUNT)));
         }
@@ -731,7 +731,7 @@ static void osdElementUpDownReference(osdElementParms_t *element)
         char *symbol[2] = {"U", "D"}; // character buffer
         int direction;
 
-        if(attitude.values.pitch>0.0){ //nose down
+        if(attitude.angles.pitch<0.0){ //nose down
             thetaB = -earthUpinBodyFrame[2]; // get pitch w/re to nadir (use small angle approx for sine)
             psiB = -earthUpinBodyFrame[1]; // calculate the yaw w/re to nadir (use small angle approx for sine)
             direction = DOWN;
@@ -770,7 +770,7 @@ static void osdElementAverageCellVoltage(osdElementParms_t *element)
 
 static void osdElementCompassBar(osdElementParms_t *element)
 {
-    memcpy(element->buff, compassBar + osdGetHeadingIntoDiscreteDirections(DECIDEGREES_TO_DEGREES(attitude.values.yaw), 16), 9);
+    memcpy(element->buff, compassBar + osdGetHeadingIntoDiscreteDirections(DECIDEGREES_TO_DEGREES(attitude.angles.yaw), 16), 9);
     element->buff[9] = 0;
 }
 
@@ -826,15 +826,15 @@ static void osdBackgroundCraftName(osdElementParms_t *element)
 #ifdef USE_ACC
 static void osdElementCrashFlipArrow(osdElementParms_t *element)
 {
-    int rollAngle = attitude.values.roll / 10;
-    const int pitchAngle = attitude.values.pitch / 10;
+    int rollAngle = attitude.angles.roll / 10;
+    const int pitchAngle = attitude.angles.pitch / 10;
     if (abs(rollAngle) > 90) {
         rollAngle = (rollAngle < 0 ? -180 : 180) - rollAngle;
     }
 
     if ((isFlipOverAfterCrashActive() || (!ARMING_FLAG(ARMED) && !isUpright())) && !((imuConfig()->small_angle < 180 && isUpright()) || (rollAngle == 0 && pitchAngle == 0))) {
         if (abs(pitchAngle) < 2 * abs(rollAngle) && abs(rollAngle) < 2 * abs(pitchAngle)) {
-            if (pitchAngle > 0) {
+            if (pitchAngle < 0) {
                 if (rollAngle > 0) {
                     element->buff[0] = SYM_ARROW_WEST + 2;
                 } else {
@@ -849,7 +849,7 @@ static void osdElementCrashFlipArrow(osdElementParms_t *element)
             }
         } else {
             if (abs(pitchAngle) > abs(rollAngle)) {
-                if (pitchAngle > 0) {
+                if (pitchAngle < 0) {
                     element->buff[0] = SYM_ARROW_SOUTH;
                 } else {
                     element->buff[0] = SYM_ARROW_NORTH;
@@ -1040,7 +1040,7 @@ static void osdElementGpsHomeDirection(osdElementParms_t *element)
 {
     if (STATE(GPS_FIX) && STATE(GPS_FIX_HOME)) {
         if (GPS_distanceToHome > 0) {
-            const int h = DECIDEGREES_TO_DEGREES(GPS_directionToHome - attitude.values.yaw);
+            const int h = DECIDEGREES_TO_DEGREES(GPS_directionToHome - attitude.angles.yaw);
             element->buff[0] = osdGetDirectionSymbolFromHeading(h);
         } else {
             element->buff[0] = SYM_OVER_HOME;
@@ -1337,7 +1337,7 @@ static void osdElementMotorDiagnostics(osdElementParms_t *element)
 
 static void osdElementNumericalHeading(osdElementParms_t *element)
 {
-    const int heading = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+    const int heading = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
     tfp_sprintf(element->buff, "%c%03d", osdGetDirectionSymbolFromHeading(heading), heading);
 }
 
