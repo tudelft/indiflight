@@ -49,14 +49,14 @@ typedef enum learning_mode_e {
 } learner_mode_t;
 
 typedef struct learningRuntime_s {
-    t_fp_vector imuRate;
-    t_fp_vector imuRateDot;
-    t_fp_vector imuSpf;
+    fp_vector_t imuRate;
+    fp_vector_t imuRateDot;
+    fp_vector_t imuSpf;
     float fxOmega[MAX_SUPPORTED_MOTORS];
     float fxOmegaDiff[MAX_SUPPORTED_MOTORS];
     float fxOmegaDotDiff[MAX_SUPPORTED_MOTORS];
-    t_fp_vector fxRateDotDiff;
-    t_fp_vector fxSpfDiff;
+    fp_vector_t fxRateDotDiff;
+    fp_vector_t fxSpfDiff;
     float motorOmega[MAX_SUPPORTED_MOTORS];
     float motorOmegaDot[MAX_SUPPORTED_MOTORS];
     float motorD[MAX_SUPPORTED_MOTORS];

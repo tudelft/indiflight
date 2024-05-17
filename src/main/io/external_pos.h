@@ -10,16 +10,16 @@ typedef enum {
     EXT_POS_NEW_MESSAGE,
 } ext_pos_state_t;
 
-// todo: reformulate using t_fp_vector
+// todo: reformulate using fp_vector_t
 typedef struct __ext_pos_ned_t {
-    t_fp_vector pos;
-    t_fp_vector vel;
+    fp_vector_t pos;
+    fp_vector_t vel;
     fp_angles_t att;
 } ext_pos_ned_t;
 
 typedef struct __pos_setpoint_ned_t {
-    t_fp_vector pos;
-    t_fp_vector vel;
+    fp_vector_t pos;
+    fp_vector_t vel;
     float psi;
 } pos_setpoint_ned_t;
 

@@ -85,13 +85,13 @@ void changePositionProfile(uint8_t profileIndex)
 
 // --- control variables
 // externs
-t_fp_vector accSpNedFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 1. };
-fp_quaternion_t attSpNedFromPos = { .qi = 1., .qx = 0., .qy = 0., .qz = 0. };
-t_fp_vector spfSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 1. };
-t_fp_vector rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
+fp_vector_t accSpNedFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 1. };
+fp_quaternion_t attSpNedFromPos = { .w = 1., .x = 0., .y = 0., .z = 0. };
+fp_vector_t spfSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 1. };
+fp_vector_t rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
 
 // locals
-t_fp_vector velIError = {0};
+fp_vector_t velIError = {0};
 static void resetIterms(void) {
     velIError.V.X = 0.f;
     velIError.V.Y = 0.f;
@@ -124,7 +124,7 @@ void posGetAccSpNed(timeUs_t current) {
     float vertPCasc = posRuntime.vert_p / posRuntime.vert_d; // emulate parallel PD with Casc system
 
     // pos error = pos setpoint - pos estimate
-    t_fp_vector posError = posSpNed.pos;
+    fp_vector_t posError = posSpNed.pos;
     VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // extPosNed.pos
 
     // vel setpoint = posGains * posError
@@ -138,7 +138,7 @@ void posGetAccSpNed(timeUs_t current) {
     posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
 
     // vel error = vel setpoint - vel estimate
-    t_fp_vector velError = posSpNed.vel;
+    fp_vector_t velError = posSpNed.vel;
     //VEC3_SCALAR_MULT_ADD(velError, -1.0f, extPosNed.vel);
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
@@ -217,20 +217,20 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     float sPsi = sin_approx(Psi);
 
     // a^I - g^I
-    t_fp_vector aSp_min_g = {
+    fp_vector_t aSp_min_g = {
         .V.X = accSpNedFromPos.V.X,
         .V.Y = accSpNedFromPos.V.Y,
         .V.Z = accSpNedFromPos.V.Z - GRAVITYf,
     };
 
     // v^I = Rz(Psi)^(-1) @ aSp_min_g
-    t_fp_vector v = {
+    fp_vector_t v = {
         .V.X =  cPsi * aSp_min_g.V.X  +  sPsi * aSp_min_g.V.Y,
         .V.Y = -sPsi * aSp_min_g.V.X  +  cPsi * aSp_min_g.V.Y,
         .V.Z =                                                  aSp_min_g.V.Z,
     };
 
-    t_fp_vector ax = {0};
+    fp_vector_t ax = {0};
     float vx2 = v.V.X*v.V.X;
     float vy2 = v.V.Y*v.V.Y;
     float XYnorm = sqrtf( vx2  +  vy2 );
@@ -260,27 +260,27 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     // attitude setpoint in the yaw frame
     fp_quaternion_t attSpYaw;
-    float_quat_of_axang(&attSpYaw, &ax, alpha);
+    quaternion_of_axis_angle(&attSpYaw, &ax, alpha);
 
     // add in the yaw
     fp_quaternion_t yawNed = {
-        .qi = cos_approx(Psi/2.f),
-        .qx = 0.f,
-        .qy = 0.f,
-        .qz = sin_approx(Psi/2.f),
+        .w = cos_approx(Psi/2.f),
+        .x = 0.f,
+        .y = 0.f,
+        .z = sin_approx(Psi/2.f),
     };
 
     // this is probaby the most expensive operation... can be half the cost if
-    // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
+    // optimized for .x = 0, .y = 0, unless compiler does that for us?
     attSpNedFromPos = quatMult(&yawNed, &attSpYaw);
 
     if (posRuntime.use_spf_attenuation) {
         // discount thrust if we have not yet reached our attitude
-        t_fp_vector zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
+        fp_vector_t zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
         float zDotProd = 
-            - zDesNed.V.X * (+rMat[0][2]) // negative because z points down, but rMat points up
-            - zDesNed.V.Y * (-rMat[1][2])
-            - zDesNed.V.Z * (-rMat[2][2]);
+            - zDesNed.V.X * (+rMat.m[0][2]) // negative because z points down, but rMat points up
+            - zDesNed.V.Y * (-rMat.m[1][2])
+            - zDesNed.V.Z * (-rMat.m[2][2]);
 
         spfSpBodyFromPos.V.Z *= constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
     }

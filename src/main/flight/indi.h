@@ -89,8 +89,8 @@ typedef struct actLin_s {
 
 typedef struct indiRuntime_s {
     // ---- Att/Rate config
-    t_fp_vector attGains;
-    t_fp_vector rateGains;
+    fp_vector_t attGains;
+    fp_vector_t rateGains;
     float attMaxTiltRate; // rad/s
     float attMaxYawRate;  // rad/s
     uint8_t attRateDenom;
@@ -102,7 +102,7 @@ typedef struct indiRuntime_s {
     bool useConstantG2;
     bool useRpmFeedback;
     bool useRpmDotFeedback;
-    t_fp_vector maxRateSp;          // maximum rate setpoint in deg/s
+    fp_vector_t maxRateSp;          // maximum rate setpoint in deg/s
     // ---- INDI actuator config
     uint8_t actNum;
     /*
@@ -143,20 +143,20 @@ typedef struct indiRuntime_s {
     float omegaDot_fs[MAXU]; // sync-filtered motor rate rad/s/s
     float erpmToRads; // factor to move from motor erpm to rad/s
     // ---- runtime values -- axes
-    t_fp_vector attGainsCasc; // attitude gains simulating parallel PD
+    fp_vector_t attGainsCasc; // attitude gains simulating parallel PD
     fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
     fp_quaternion_t attErrBody; // attitude error in body coordinates
-    t_fp_vector rateSpBody; // rate setpoint in body coordinates
-    t_fp_vector rateSpBodyCommanded; // rate setpoint before attitude control
-    t_fp_vector rateDotSpBody; // rate derivative setpoint in body coordinates
-    t_fp_vector spfSpBody; // specific force setpoint in body coordinates
+    fp_vector_t rateSpBody; // rate setpoint in body coordinates
+    fp_vector_t rateSpBodyCommanded; // rate setpoint before attitude control
+    fp_vector_t rateDotSpBody; // rate derivative setpoint in body coordinates
+    fp_vector_t spfSpBody; // specific force setpoint in body coordinates
     float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
-    //t_fp_vector rate_fs; // sync-filtered gyro in rad/s
-    t_fp_vector rate; // unfiltered gyro in rad/s
-    t_fp_vector rateDot; // unfiltered gyro derivative in rad/s/s
-    t_fp_vector rateDot_fs; // sync-filtered gyro derivative in rad/s/s
-    t_fp_vector spf; // unfiltered accelerometer (specific force) in N/kg
-    t_fp_vector spf_fs; // sync-filterd accelerometer (specific force) in N/kg
+    //fp_vector_t rate_fs; // sync-filtered gyro in rad/s
+    fp_vector_t rate; // unfiltered gyro in rad/s
+    fp_vector_t rateDot; // unfiltered gyro derivative in rad/s/s
+    fp_vector_t rateDot_fs; // sync-filtered gyro derivative in rad/s/s
+    fp_vector_t spf; // unfiltered accelerometer (specific force) in N/kg
+    fp_vector_t spf_fs; // sync-filterd accelerometer (specific force) in N/kg
     // ---- filters
     pt1Filter_t uLagFilter[MAXU]; // to simulate spinup
     biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
@@ -185,7 +185,7 @@ float indiLinearization(actLin_t* lin, float in);
 float indiOutputCurve(actLin_t* lin, float in);
 
 float getYawWithoutSingularity(void);
-t_fp_vector coordinatedYaw(float yaw);
+fp_vector_t coordinatedYaw(float yaw);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);

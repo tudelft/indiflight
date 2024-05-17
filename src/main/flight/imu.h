@@ -28,30 +28,9 @@
 // Exported symbols
 extern bool canUseGPSHeading;
 
-typedef struct {
-    float w,x,y,z;
-} quaternion;
-#define QUATERNION_INITIALIZE  {.w=1, .x=0, .y=0,.z=0}
-
-typedef struct {
-    float ww,wx,wy,wz,xx,xy,xz,yy,yz,zz;
-} quaternionProducts;
-#define QUATERNION_PRODUCTS_INITIALIZE  {.ww=1, .wx=0, .wy=0, .wz=0, .xx=0, .xy=0, .xz=0, .yy=0, .yz=0, .zz=0}
-
-typedef union {
-    int16_t raw[XYZ_AXIS_COUNT];
-    struct {
-        // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
-        int16_t roll;
-        int16_t pitch;
-        int16_t yaw;
-    } values;
-} attitudeEulerAngles_t;
-#define EULER_INITIALIZE  { { 0, 0, 0 } }
-
-extern attitudeEulerAngles_t attitude;
-extern quaternion attitude_q;
-extern float rMat[3][3];
+extern i16_angles_t attitude;
+extern fp_quaternion_t attitude_q;
+extern fp_rotationMatrix_t rMat;
 
 typedef struct imuConfig_s {
     uint16_t dcm_kp;                        // DCM filter proportional gain ( x 10000)
@@ -75,7 +54,7 @@ void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correctio
 void setAttitudeState(float roll, float pitch, float yaw);
 #endif
 #ifdef USE_EKF_POSITION
-void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set);
+void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
 #endif
 
 #endif //USE_EKF
@@ -95,12 +74,12 @@ void imuSetHasNewData(uint32_t dt);
 #endif
 
 bool imuQuaternionHeadfreeOffsetSet(void);
-void imuQuaternionHeadfreeTransformVectorEarthToBody(t_fp_vector_def * v);
+void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_def * v);
 bool shouldInitializeGPSHeading(void);
 bool isUpright(void);
 
 #ifdef USE_GPS_PI
-extern t_fp_vector posEstNed;
-extern t_fp_vector velEstNed;
+extern fp_vector_t posEstNed;
+extern fp_vector_t velEstNed;
 //void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp);
 #endif

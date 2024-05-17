@@ -69,7 +69,7 @@ extern "C" {
     #include "sensors/acceleration.h"
 
     gyro_t gyro;
-    attitudeEulerAngles_t attitude;
+    i16_angles_t attitude;
 
     PG_REGISTER(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG, 0);
     PG_REGISTER(systemConfig_t, systemConfig, PG_SYSTEM_CONFIG, 2);

@@ -81,15 +81,66 @@ typedef struct stdev_s
 
 // Floating point 3 vector.
 typedef struct fp_vector {
-    float X;
-    float Y;
-    float Z;
-} t_fp_vector_def;
+    float X,Y,Z;
+} fp_vector_def;
 
 typedef union u_fp_vector {
     float A[3];
-    t_fp_vector_def V;
-} t_fp_vector;
+    fp_vector_def V;
+} fp_vector_t;
+
+// INT16 Euler angles in decidegrees. ZYX (yaw-pitch-roll) instrinsic rotation order.
+typedef struct i16_angles {
+    int16_t roll, pitch, yaw;
+} i16_angles_def;
+
+typedef union {
+    int16_t raw[3];
+    i16_angles_def angles;
+} i16_angles_t;
+
+// Floating point Euler angles.
+typedef struct fp_angles {
+    float roll,pitch,yaw;
+} fp_angles_def;
+
+// always radians
+typedef union {
+    float raw[3];
+    fp_angles_def angles;
+} fp_angles_t;
+#define ANGLES_INITIALIZE  { .raw = {0, 0, 0} }
+
+typedef struct fp_rotationMatrix {
+    float m[3][3];              // matrix
+} fp_rotationMatrix_t;
+#define ROTATION_MATRIX_INITIALIZE  { .m = {{1.,0.,0.}, {0.,1.,0.}, {0.,0.,1.}} }
+
+// no quaternion union, because of the different conventions
+typedef struct fp_quaternion {
+    float w,x,y,z;
+} fp_quaternion_t;
+#define QUATERNION_INITIALIZE  { .w=1.f, .x=0.f, .y=0., .z=0. }
+
+typedef struct fp_quaternionProducts {
+    float ww,wx,wy,wz,xx,xy,xz,yy,yz,zz;
+} fp_quaternionProducts_t;
+#define QUATERNION_PRODUCTS_INITIALIZE  {.ww=1, .wx=0, .wy=0, .wz=0, .xx=0, .xy=0, .xz=0, .yy=0, .yz=0, .zz=0}
+
+// rotation functions
+void i16_angles_of_fp_angles(i16_angles_t *ei, const fp_angles_t *ef);
+void fp_angles_of_i16_angles(fp_angles_t *ef, const i16_angles_t *ei);
+
+void rotationMatrix_of_fp_angles(fp_rotationMatrix_t *r, const fp_angles_t *e);
+void fp_angles_of_rotationMatrix(fp_angles_t *e, const fp_rotationMatrix_t *r);
+void rotate_vector_with_rotationMatrix(fp_vector_t *v, const fp_rotationMatrix_t *r);
+fp_rotationMatrix_t chain_rotationMatrix(const fp_rotationMatrix_t *rA_I, const fp_rotationMatrix_t *rB_A);
+
+void quaternion_of_fp_angles(fp_quaternion_t *q, const fp_angles_t *e);
+void quaternion_of_axis_angle(fp_quaternion_t *q, const fp_vector_t *ax, float angle);
+void fp_angles_of_quaternionProducts(fp_angles_t *e, const fp_quaternionProducts_t *qp);
+fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A);
+fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
 
 // vector operation primitives
 
@@ -125,18 +176,18 @@ typedef union u_fp_vector {
 }
 
 #define QUAT_SCALAR_MULT(_orig, _sc) { \
-    _orig.qi *= _sc; \
-    _orig.qx *= _sc; \
-    _orig.qy *= _sc; \
-    _orig.qz *= _sc; \
+    _orig.w *= _sc; \
+    _orig.x *= _sc; \
+    _orig.y *= _sc; \
+    _orig.z *= _sc; \
 }
 
 #define QUAT_LENGTH(_orig) \
     sqrtf( \
-        _orig.qi*_orig.qi \
-        + _orig.qx*_orig.qx \
-        + _orig.qy*_orig.qy \
-        + _orig.qz*_orig.qz \
+        _orig.w*_orig.w \
+        + _orig.x*_orig.x \
+        + _orig.y*_orig.y \
+        + _orig.z*_orig.z \
     )
 
 #define QUAT_NORMALIZE(_orig) { \
@@ -237,58 +288,6 @@ void chol(float *U, float *A, float *iDiag, int n);
 // Column major upper factor. solve A x = UT U x = b
 void chol_solve(float *U, float* iDiag, int n, float *b, float *x);
 
-// Floating point Euler angles.
-// Be carefull, could be either of degrees or radians.
-typedef struct fp_angles {
-    float roll;
-    float pitch;
-    float yaw;
-} fp_angles_def;
-
-typedef union {
-    float raw[3];
-    fp_angles_def angles;
-} fp_angles_t;
-
-typedef struct fp_rotationMatrix_s {
-    float m[3][3];              // matrix
-} fp_rotationMatrix_t;
-
-typedef struct fp_quaternion {
-    float qi;
-    float qx;
-    float qy;
-    float qz;
-} fp_quaternion_t;
-
-// no quaternion union, because of the different conventions
-
-/**
- * @brief euler rotation 'ZYX'. Taken from paparazzi!
- *
- * @param e Euler output
- * @param q Quat input
- */
-void float_eulers_of_quat(fp_angles_t *e, fp_quaternion_t *q);
-
-
-/**
- * @brief get quaternion from ax-ang rotation formalism
- * https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
- * 
- * @param q Quaternion output
- * @param ax axis to rotate about
- * @param angle to rotate about (keep within -2pi to +pi)
- * 
-*/
-void float_quat_of_axang(fp_quaternion_t *q, t_fp_vector *ax, float angle);
-
-
-// https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/arithmetic/index.htm
-fp_quaternion_t quatMult(fp_quaternion_t* ql, fp_quaternion_t* qr);
-t_fp_vector quatRotate(fp_quaternion_t* q, t_fp_vector* v);
-t_fp_vector quatRotMatCol(fp_quaternion_t* q, uint8_t axis);
-
 int gcd(int num, int denom);
 int32_t applyDeadband(int32_t value, int32_t deadband);
 float fapplyDeadband(float value, float deadband);
@@ -320,6 +319,7 @@ float sin_approx(float x);
 float cos_approx(float x);
 float atan2_approx(float y, float x);
 float acos_approx(float x);
+#define asin_approx(x)      (0.5f*M_PIf - acos_approx(x))
 #define tan_approx(x)       (sin_approx(x) / cos_approx(x))
 float exp_approx(float val);
 float log_approx(float val);
@@ -329,6 +329,7 @@ float pow_approx(float a, float b);
 #define cos_approx(x)       cosf(x)
 #define atan2_approx(y,x)   atan2f(y,x)
 #define acos_approx(x)      acosf(x)
+#define asin_approx(x)      asinf(x)
 #define tan_approx(x)       tanf(x)
 #define exp_approx(x)       expf(x)
 #define log_approx(x)       logf(x)

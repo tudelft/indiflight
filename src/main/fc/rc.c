@@ -657,7 +657,7 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
         }
     }
     if (FLIGHT_MODE(HEADFREE_MODE)) {
-        static t_fp_vector_def  rcCommandBuff;
+        static fp_vector_t_def  rcCommandBuff;
 
         rcCommandBuff.X = rcCommand[ROLL];
         rcCommandBuff.Y = rcCommand[PITCH];

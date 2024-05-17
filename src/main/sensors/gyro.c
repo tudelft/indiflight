@@ -409,6 +409,11 @@ FAST_CODE void gyroUpdate(void)
     gyro.gyroADC[Y] = hilInput.gyro[Y];
     gyro.gyroADC[Z] = hilInput.gyro[Z];
     gyro.gyroSensor1.calibration.cyclesRemaining = 0;
+    if (gyro.gyroSensor1.gyroDev.gyroAlign == ALIGN_CUSTOM) {
+        alignSensorViaMatrix(gyro.gyroADC, &gyro.gyroSensor1.gyroDev.rotationMatrix);
+    } else {
+        alignSensorViaRotation(gyro.gyroADC, gyro.gyroSensor1.gyroDev.gyroAlign);
+    }
     UNUSED(gyroUpdateSensor);
 #else
     switch (gyro.gyroToUse) {

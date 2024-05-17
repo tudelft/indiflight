@@ -57,10 +57,10 @@ extern positionRuntime_t posRuntime;
 void initPositionRuntime();
 void changePositionProfile(uint8_t profileIndex);
 
-extern t_fp_vector accSpNedFromPos;
+extern fp_vector_t accSpNedFromPos;
 extern fp_quaternion_t attSpNedFromPos;
-extern t_fp_vector spfSpBodyFromPos;
-extern t_fp_vector rateSpBodyFromPos;
+extern fp_vector_t spfSpBodyFromPos;
+extern fp_vector_t rateSpBodyFromPos;
 
 void posCtlInit(void);
 void updatePosCtl(timeUs_t current);

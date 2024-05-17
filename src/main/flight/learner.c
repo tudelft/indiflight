@@ -91,7 +91,7 @@ static biquadFilter_t fxUFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t fxRateFilter[MAX_SUPPORTED_MOTORS];
 static biquadFilter_t fxSpfFilter[MAX_SUPPORTED_MOTORS];
 
-static t_fp_vector hoverThrust;
+static fp_vector_t hoverThrust;
 
 #define LEARNING_MAX_ACT ((int) RLS_MAX_N / 2)
 #define LEARNER_OMEGADOT_SCALER 1e-5f // for numerical stability
@@ -143,9 +143,9 @@ void initLearner(void) {
 FAST_CODE
 #endif
 static void updateLearningFilters(void) {
-    static t_fp_vector imuPrevRate = {0};
-    static t_fp_vector fxPrevRateDot = {0};
-    static t_fp_vector fxPrevSpf = {0};
+    static fp_vector_t imuPrevRate = {0};
+    static fp_vector_t fxPrevRateDot = {0};
+    static fp_vector_t fxPrevSpf = {0};
 
     // IMU rls filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -246,9 +246,9 @@ void updateLearner(timeUs_t current) {
     if (imuLearningConditions) {
         // accIMU  =  accB  +  rateDot x R  +  rate x (rate x R)
         // assume accB = 0
-        t_fp_vector_def* w = &learnRun.imuRate.V;
-        t_fp_vector_def* dw = &learnRun.imuRateDot.V;
-        t_fp_vector_def* a = &learnRun.imuSpf.V;
+        fp_vector_def* w = &learnRun.imuRate.V;
+        fp_vector_def* dw = &learnRun.imuRateDot.V;
+        fp_vector_def* a = &learnRun.imuSpf.V;
 
         // regressors
 

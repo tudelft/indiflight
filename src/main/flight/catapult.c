@@ -24,8 +24,8 @@ catapult_state_t catapultState = CATAPULT_IDLE;
 
 // extern
 fp_quaternion_t attSpNedFromCat = { 1.f, 0.f, 0.f, 0.f };
-t_fp_vector spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
-t_fp_vector rateSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
+fp_vector_t spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
+fp_vector_t rateSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
 bool controlAttitudeFromCat = false;
 
 void resetCatapult(void) {
@@ -69,10 +69,10 @@ void initCatapultRuntime(void) {
     catapultRuntime.rotationTimeUs = constrainu(catapultConfig()->rotationTimeMs, 0, 1000) * 1e3;
     catapultRuntime.fireTimeUs = 0;
     catapultRuntime.upwardsAccel = (float) constrainu(catapultConfig()->upwardsAccel, 4, 100); // real thrust setting can be up to 17% higher if higher than 20m/s/s
-    catapultRuntime.attitude.qi = 1.f;
-    catapultRuntime.attitude.qx = 0.f;
-    catapultRuntime.attitude.qy = 0.f;
-    catapultRuntime.attitude.qz = 0.f;
+    catapultRuntime.attitude.w = 1.f;
+    catapultRuntime.attitude.x = 0.f;
+    catapultRuntime.attitude.y = 0.f;
+    catapultRuntime.attitude.z = 0.f;
     catapultRuntime.spfSpBodyZ = 1.f; // 1m/s/s downwards
 }
 
@@ -85,7 +85,7 @@ static bool calculateCatapult(void) {
     float a = catapultRuntime.upwardsAccel; // always greater 4 m/s/s
 
     // get axis to rotate thrust vector around
-    t_fp_vector rotationAxis = { .A = {
+    fp_vector_t rotationAxis = { .A = {
         catapultRuntime.xyNed[1] - posEstNed.V.Y,
         - (catapultRuntime.xyNed[0] - posEstNed.V.X),
         0.f,
@@ -113,7 +113,7 @@ static bool calculateCatapult(void) {
     if (distance > 0.01f) {
         rotationAxis.V.X /= distance;
         rotationAxis.V.Y /= distance;
-        float_quat_of_axang(&catapultRuntime.attitude, &rotationAxis, phi);
+        quaternion_of_axis_angle(&catapultRuntime.attitude, &rotationAxis, phi);
     }
     // else {
     //      quaternion remains "up" from initcatapultruntime
@@ -144,10 +144,10 @@ void runCatapultStateMachine(timeUs_t current) {
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);
 
-    attSpNedFromCat.qi = 1.;
-    attSpNedFromCat.qx = 0.;
-    attSpNedFromCat.qy = 0.;
-    attSpNedFromCat.qz = 0.;
+    attSpNedFromCat.w = 1.;
+    attSpNedFromCat.x = 0.;
+    attSpNedFromCat.y = 0.;
+    attSpNedFromCat.z = 0.;
 
     spfSpBodyFromCat.V.X = 0.f;
     spfSpBodyFromCat.V.Y = 0.f;

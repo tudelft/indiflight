@@ -26,7 +26,7 @@ PG_DECLARE(catapultConfig_t, catapultConfig);
 typedef struct catapultRuntime_s {
     float altitude; // m
     float xyNed[2]; // m
-    t_fp_vector rotationRate; // rad/s
+    fp_vector_t rotationRate; // rad/s
     timeDelta_t rotationTimeUs;
     timeDelta_t fireTimeUs;
     float upwardsAccel; // m/s/s
@@ -49,8 +49,8 @@ typedef enum catapult_state_s {
 extern catapult_state_t catapultState;
 
 extern fp_quaternion_t attSpNedFromCat;
-extern t_fp_vector spfSpBodyFromCat;
-extern t_fp_vector rateSpBodyFromCat;
+extern fp_vector_t spfSpBodyFromCat;
+extern fp_vector_t rateSpBodyFromCat;
 extern bool controlAttitudeFromCat;
 
 void runCatapultStateMachine(timeUs_t current);

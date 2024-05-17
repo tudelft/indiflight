@@ -90,11 +90,11 @@ void runEkf(timeUs_t currentTimeUs) {
 	// gyro and acc transformed from FLU to FRD
 	float U[N_INPUTS] = {
 		GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G),
-		GRAVITYf *-((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
-		GRAVITYf *-((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
+		GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
+		GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
 		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
-		DEGREES_TO_RADIANS(-gyro.gyroADCf[1]),
-		DEGREES_TO_RADIANS(-gyro.gyroADCf[2])
+		DEGREES_TO_RADIANS(gyro.gyroADCf[1]),
+		DEGREES_TO_RADIANS(gyro.gyroADCf[2])
 	};
 
 	// get delta t
@@ -155,12 +155,12 @@ void updateEkf(timeUs_t currentTimeUs) {
         setAttitudeState(ekf_X[6], -ekf_X[7], ekf_X[8]); // roll pitch yaw in rad
 #endif
 #ifdef USE_EKF_POSITION
-        t_fp_vector posNed_set;
+        fp_vector_t posNed_set;
         posNed_set.V.X = ekf_X[0];
         posNed_set.V.Y = ekf_X[1];
         posNed_set.V.Z = ekf_X[2];
 
-        t_fp_vector velNed_set;
+        fp_vector_t velNed_set;
         velNed_set.V.X = ekf_X[3];
         velNed_set.V.Y = ekf_X[4];
         velNed_set.V.Z = ekf_X[5];

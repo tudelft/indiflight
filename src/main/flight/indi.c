@@ -96,10 +96,10 @@ void getSetpoints(timeUs_t current) {
     UNUSED(current);
 #endif
 
-    indiRun.attSpNed.qi = 1.f;
-    indiRun.attSpNed.qx = 0.f;
-    indiRun.attSpNed.qy = 0.f;
-    indiRun.attSpNed.qz = 0.f;
+    indiRun.attSpNed.w = 1.f;
+    indiRun.attSpNed.x = 0.f;
+    indiRun.attSpNed.y = 0.f;
+    indiRun.attSpNed.z = 0.f;
 
     indiRun.spfSpBody.V.X = 0.f;
     indiRun.spfSpBody.V.Y = 0.f;
@@ -162,7 +162,7 @@ void getSetpoints(timeUs_t current) {
         float pitch = -getRcDeflection(PITCH);
         float maxTilt = indiRun.manualMaxTilt;
 
-        t_fp_vector axis = {
+        fp_vector_t axis = {
             .V.X = maxTilt*roll,
             .V.Y = maxTilt*pitch,
             .V.Z = 0.f,
@@ -171,17 +171,17 @@ void getSetpoints(timeUs_t current) {
         float angle = VEC3_XY_LENGTH(axis);
         VEC3_NORMALIZE(axis);
         fp_quaternion_t attSpYaw;
-        float_quat_of_axang(&attSpYaw, &axis, angle);
+        quaternion_of_axis_angle(&attSpYaw, &axis, angle);
 
         fp_quaternion_t yawNed = {
-            .qi = cos_approx(Psi/2.f),
-            .qx = 0.f,
-            .qy = 0.f,
-            .qz = sin_approx(Psi/2.f),
+            .w = cos_approx(Psi/2.f),
+            .x = 0.f,
+            .y = 0.f,
+            .z = sin_approx(Psi/2.f),
         };
 
         // this is probaby the most expensive operation... can be half the cost if
-        // optimized for .qx = 0, .qy = 0, unless compiler does that for us?
+        // optimized for .x = 0, .y = 0, unless compiler does that for us?
         indiRun.attSpNed = quatMult(&yawNed, &attSpYaw);
 
         // convert throttle
@@ -211,13 +211,13 @@ void getAlphaSpBody(timeUs_t current) {
     UNUSED(current);
 
     fp_quaternion_t attEstNed = {
-        .qi = attitude_q.w,
-        .qx = attitude_q.x,
-        .qy = -attitude_q.y,
-        .qz = -attitude_q.z,
+        .w = attitude_q.w,
+        .x = attitude_q.x,
+        .y = -attitude_q.y,
+        .z = -attitude_q.z,
     };
     fp_quaternion_t attEstNedInv = attEstNed;
-    attEstNedInv.qi = -attEstNed.qi;
+    attEstNedInv.w = -attEstNed.w;
 
     // get rate setpoint from the pilot. If controlAttitude == true, this
     // setpoint will be mixed with the attitude command.
@@ -227,7 +227,7 @@ void getAlphaSpBody(timeUs_t current) {
     if (indiRun.controlAttitude) {
         // for better readibility and logs, flip setpoint quaternion if needed
         // the resulting quaterion is always exactly equivalent
-        if (attEstNed.qi * indiRun.attSpNed.qi < 0.f)
+        if (attEstNed.w * indiRun.attSpNed.w < 0.f)
             QUAT_SCALAR_MULT(indiRun.attSpNed, -1.f);
 
         // we decompose the error quaternion into first tilt, then yaw
@@ -242,11 +242,11 @@ void getAlphaSpBody(timeUs_t current) {
         // which is the cross product of (0 0 1) x targetZBody:
         //
         // tiltAxis = (-targetZBody.V.Y  targetZBody.V.X  0)
-        t_fp_vector targetZBody = quatRotMatCol(&indiRun.attErrBody, 2);
+        fp_vector_t targetZBody = quatRotMatCol(&indiRun.attErrBody, 2);
         float tiltAxisNorm = hypotf(targetZBody.V.X, targetZBody.V.Y);
 
         // get tilt axis without singularity traps at 0 and pi
-        t_fp_vector tiltAxis = { .V.Z = 0.f };
+        fp_vector_t tiltAxis = { .V.Z = 0.f };
         if (tiltAxisNorm > 1e-8f) {
             // error = error_angle * unit_vector_rotation_axis
             float itiltAxisNorm = 1.f / tiltAxisNorm;
@@ -273,7 +273,7 @@ void getAlphaSpBody(timeUs_t current) {
         float tiltErrorAngle = acos_approx(constrainf(targetZBody.V.Z, -1.f, 1.f));
 
         // finalize tilt error used to generate rate setpoint
-        t_fp_vector tiltError = tiltAxis;
+        fp_vector_t tiltError = tiltAxis;
         VEC3_SCALAR_MULT(tiltError, tiltErrorAngle);
 
         // --- yaw component ---
@@ -282,20 +282,20 @@ void getAlphaSpBody(timeUs_t current) {
 
         // setup q_tilt inverse first from ax ang rotation found above
         fp_quaternion_t q_tilt_inv;
-        float_quat_of_axang(&q_tilt_inv, &tiltAxis, -tiltErrorAngle);
+        quaternion_of_axis_angle(&q_tilt_inv, &tiltAxis, -tiltErrorAngle);
 
         // get q_yaw via multiplication.
-        // TODO: we only need qi and sign(qz). Surely there is somethign faster than dense quaternion mult
+        // TODO: we only need w and sign(z). Surely there is somethign faster than dense quaternion mult
         fp_quaternion_t q_yaw = quatMult(&indiRun.attErrBody, &q_tilt_inv);
 
-        q_yaw.qi = constrainf(q_yaw.qi, -1.f, 1.f);
-        float yawErrorAngle = 2.f*acos_approx(q_yaw.qi);
+        q_yaw.w = constrainf(q_yaw.w, -1.f, 1.f);
+        float yawErrorAngle = 2.f*acos_approx(q_yaw.w);
         if (yawErrorAngle > M_PIf)
             yawErrorAngle -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
 
         // we still have to check if the vector compoenent is negative
         // this inverts the error angle
-        if (q_yaw.qz < 0.f)
+        if (q_yaw.z < 0.f)
             yawErrorAngle = -yawErrorAngle;
 
         // multiply with gains and mix existing rate setpoint
@@ -318,13 +318,13 @@ void getAlphaSpBody(timeUs_t current) {
     // --- get rotation acc setpoint simply by multiplying with gains
     // rateErr = rateSpBody - rateEstBody
     // get body rates in z-down, x-fwd frame
-    t_fp_vector rateEstBody = {
+    fp_vector_t rateEstBody = {
         .V.X = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_ROLL]), 
-        .V.Y = DEGREES_TO_RADIANS(-gyro.gyroADCf[FD_PITCH]),
-        .V.Z = DEGREES_TO_RADIANS(-gyro.gyroADCf[FD_YAW]),
+        .V.Y = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_PITCH]),
+        .V.Z = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_YAW]),
     };
 
-    t_fp_vector rateErr = indiRun.rateSpBody;
+    fp_vector_t rateErr = indiRun.rateSpBody;
     VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, rateEstBody);
 
     // alphaSpBody = rateGains * rateErr
@@ -349,12 +349,6 @@ void getMotorCommands(timeUs_t current) {
         // rate
         indiRun.rate.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
         indiRun.spf.A[axis] = acc.accADCafterRpm[axis] * acc.dev.acc_1G_rec * GRAVITYf;
-
-        // adjust axes
-        if ((axis == FD_PITCH) || (axis == FD_YAW)) {
-            indiRun.rate.A[axis] *= (-1.f);
-            indiRun.spf.A[axis]  *= (-1.f);
-        }
 
         // get gyro derivative
         indiRun.rateDot.A[axis] = indiRun.indiFrequency * (indiRun.rate.A[axis] - rate_prev[axis]);
@@ -533,15 +527,15 @@ float getYawWithoutSingularity(void) {
     // eulers, which has singularity at pitch +-pi/2
 
     // first, get bodyX and bodyY in NED from the attitude DCM
-    t_fp_vector bodyXNed = {
-        .V.X =  rMat[0][0],
-        .V.Y = -rMat[1][0],
-        .V.Z = -rMat[2][0]
+    fp_vector_t bodyXNed = {
+        .V.X =  rMat.m[0][0],
+        .V.Y = -rMat.m[1][0],
+        .V.Z = -rMat.m[2][0]
     };
-    t_fp_vector bodyYNed = {
-        .V.X = -rMat[0][1],
-        .V.Y =  rMat[1][1],
-        .V.Z =  rMat[2][1],
+    fp_vector_t bodyYNed = {
+        .V.X = -rMat.m[0][1],
+        .V.Y =  rMat.m[1][1],
+        .V.Z =  rMat.m[2][1],
     };
 
     // second, find which one projects to the longest vector in the xy plane
@@ -565,15 +559,15 @@ float getYawWithoutSingularity(void) {
 #ifdef STM32H7
 FAST_CODE
 #endif
-t_fp_vector coordinatedYaw(float yaw) {
+fp_vector_t coordinatedYaw(float yaw) {
     // todo: this local is defined twice.. make static somehow
     fp_quaternion_t attEstNedInv = {
-        .qi = -attitude_q.w,
-        .qx = attitude_q.x,
-        .qy = -attitude_q.y,
-        .qz = -attitude_q.z,
+        .w = -attitude_q.w,
+        .x = attitude_q.x,
+        .y = -attitude_q.y,
+        .z = -attitude_q.z,
     };
-    t_fp_vector yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
+    fp_vector_t yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
     VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 
     return yawRateSpBody;

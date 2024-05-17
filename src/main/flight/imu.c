@@ -31,6 +31,7 @@
 #include "build/debug.h"
 
 #include "common/axis.h"
+#include "common/maths.h"
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -99,22 +100,21 @@ static float smallAngleCosZ = 0;
 
 static imuRuntimeConfig_t imuRuntimeConfig;
 
-float rMat[3][3];
-
 #if defined(USE_ACC)
 STATIC_UNIT_TESTED bool attitudeIsEstablished = false;
 #endif
 
 // quaternion of sensor frame relative to earth frame
-STATIC_UNIT_TESTED quaternion q = QUATERNION_INITIALIZE;
-STATIC_UNIT_TESTED quaternionProducts qP = QUATERNION_PRODUCTS_INITIALIZE;
+STATIC_UNIT_TESTED fp_quaternion_t q = QUATERNION_INITIALIZE;
+STATIC_UNIT_TESTED fp_quaternionProducts_t qP = QUATERNION_PRODUCTS_INITIALIZE;
 // headfree quaternions
-quaternion headfree = QUATERNION_INITIALIZE;
-quaternion offset = QUATERNION_INITIALIZE;
+fp_quaternion_t headfree = QUATERNION_INITIALIZE;
+fp_quaternion_t offset = QUATERNION_INITIALIZE;
 
 // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
-attitudeEulerAngles_t attitude = EULER_INITIALIZE;
-quaternion attitude_q = QUATERNION_INITIALIZE;
+i16_angles_t attitude = ANGLES_INITIALIZE;
+fp_quaternion_t attitude_q = QUATERNION_INITIALIZE;
+fp_rotationMatrix_t rMat;
 
 PG_REGISTER_WITH_RESET_TEMPLATE(imuConfig_t, imuConfig, PG_IMU_CONFIG, 2);
 
@@ -125,7 +125,7 @@ PG_RESET_TEMPLATE(imuConfig_t, imuConfig,
     .imu_process_denom = 2
 );
 
-static void imuQuaternionComputeProducts(quaternion *quat, quaternionProducts *quatProd)
+static void imuQuaternionComputeProducts(fp_quaternion_t *quat, fp_quaternionProducts_t *quatProd)
 {
     quatProd->ww = quat->w * quat->w;
     quatProd->wx = quat->w * quat->x;
@@ -143,21 +143,21 @@ STATIC_UNIT_TESTED void imuComputeRotationMatrix(void)
 {
     imuQuaternionComputeProducts(&q, &qP);
 
-    rMat[0][0] = 1.0f - 2.0f * qP.yy - 2.0f * qP.zz;
-    rMat[0][1] = 2.0f * (qP.xy + -qP.wz);
-    rMat[0][2] = 2.0f * (qP.xz - -qP.wy);
+    rMat.m[0][0] = 1.0f - 2.0f * qP.yy - 2.0f * qP.zz;
+    rMat.m[0][1] = 2.0f * (qP.xy + -qP.wz);
+    rMat.m[0][2] = 2.0f * (qP.xz - -qP.wy);
 
-    rMat[1][0] = 2.0f * (qP.xy - -qP.wz);
-    rMat[1][1] = 1.0f - 2.0f * qP.xx - 2.0f * qP.zz;
-    rMat[1][2] = 2.0f * (qP.yz + -qP.wx);
+    rMat.m[1][0] = 2.0f * (qP.xy - -qP.wz);
+    rMat.m[1][1] = 1.0f - 2.0f * qP.xx - 2.0f * qP.zz;
+    rMat.m[1][2] = 2.0f * (qP.yz + -qP.wx);
 
-    rMat[2][0] = 2.0f * (qP.xz + -qP.wy);
-    rMat[2][1] = 2.0f * (qP.yz - -qP.wx);
-    rMat[2][2] = 1.0f - 2.0f * qP.xx - 2.0f * qP.yy;
+    rMat.m[2][0] = 2.0f * (qP.xz + -qP.wy);
+    rMat.m[2][1] = 2.0f * (qP.yz - -qP.wx);
+    rMat.m[2][2] = 1.0f - 2.0f * qP.xx - 2.0f * qP.yy;
 
 #if defined(SIMULATOR_BUILD) && !defined(USE_IMU_CALC) && !defined(SET_IMU_FROM_EULER)
-    rMat[1][0] = -2.0f * (qP.xy - -qP.wz);
-    rMat[2][0] = -2.0f * (qP.xz + -qP.wy);
+    rMat.m[1][0] = -2.0f * (qP.xy - -qP.wz);
+    rMat.m[2][0] = -2.0f * (qP.xz + -qP.wy);
 #endif
 }
 
@@ -221,10 +221,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
         while (courseOverGround < -M_PIf) {
             courseOverGround += (2.0f * M_PIf);
         }
-        const float ez_ef = cogYawGain * (- sin_approx(courseOverGround) * rMat[0][0] - cos_approx(courseOverGround) * rMat[1][0]);
-        ex = rMat[2][0] * ez_ef;
-        ey = rMat[2][1] * ez_ef;
-        ez = rMat[2][2] * ez_ef;
+        const float ez_ef = cogYawGain * (- sin_approx(courseOverGround) * rMat.m[0][0] + cos_approx(courseOverGround) * rMat.m[1][0]);
+        ex = rMat.m[2][0] * ez_ef;
+        ey = rMat.m[2][1] * ez_ef;
+        ez = rMat.m[2][2] * ez_ef;
     }
 
 #ifdef USE_MAG
@@ -245,17 +245,17 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 
         // (hx; hy; 0) - measured mag field vector in EF (assuming Z-component is zero)
         // (bx; 0; 0) - reference mag field vector heading due North in EF (assuming Z-component is zero)
-        const float hx = rMat[0][0] * mx + rMat[0][1] * my + rMat[0][2] * mz;
-        const float hy = rMat[1][0] * mx + rMat[1][1] * my + rMat[1][2] * mz;
+        const float hx = rMat.m[0][0] * mx + rMat.m[0][1] * my + rMat.m[0][2] * mz;
+        const float hy = rMat.m[1][0] * mx + rMat.m[1][1] * my + rMat.m[1][2] * mz;
         const float bx = sqrtf(hx * hx + hy * hy);
 
         // magnetometer error is cross product between estimated magnetic north and measured magnetic north (calculated in EF)
         const float ez_ef = -(hy * bx);
 
         // Rotate mag error vector back to BF and accumulate
-        ex += rMat[2][0] * ez_ef;
-        ey += rMat[2][1] * ez_ef;
-        ez += rMat[2][2] * ez_ef;
+        ex += rMat.m[2][0] * ez_ef;
+        ey += rMat.m[2][1] * ez_ef;
+        ez += rMat.m[2][2] * ez_ef;
     }
 #else
     UNUSED(useMag);
@@ -272,10 +272,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
             yawI += (2.0f * M_PIf);
         }
         // reduce effect of error with tilt
-        const float ez_ef = sin_approx(yawI) * rMat[0][0] - cos_approx(yawI) * rMat[1][0];
-        ex += rMat[2][0] * ez_ef;
-        ey += rMat[2][1] * ez_ef;
-        ez += rMat[2][2] * ez_ef;
+        const float ez_ef = sin_approx(yawI) * rMat.m[0][0] + cos_approx(yawI) * rMat.m[1][0];
+        ex += rMat.m[2][0] * ez_ef;
+        ey += rMat.m[2][1] * ez_ef;
+        ez += rMat.m[2][2] * ez_ef;
     }
 #else
     UNUSED(useExtPosYaw);
@@ -291,9 +291,9 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
         az *= recipAccNorm;
 
         // Error is sum of cross product between estimated direction and measured direction of gravity
-        ex += (ay * rMat[2][2] - az * rMat[2][1]);
-        ey += (az * rMat[2][0] - ax * rMat[2][2]);
-        ez += (ax * rMat[2][1] - ay * rMat[2][0]);
+        ex += (ay * rMat.m[2][2] - az * rMat.m[2][1]);
+        ey += (az * rMat.m[2][0] - ax * rMat.m[2][2]);
+        ez += (ax * rMat.m[2][1] - ay * rMat.m[2][0]);
     }
 
     // Compute and apply integral feedback if enabled
@@ -321,7 +321,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     gy *= (0.5f * dt);
     gz *= (0.5f * dt);
 
-    quaternion buffer;
+    fp_quaternion_t buffer;
     buffer.w = q.w;
     buffer.x = q.x;
     buffer.y = q.y;
@@ -349,18 +349,18 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 }
 
 #if defined(USE_GPS_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
-t_fp_vector posEstNed = {0};
-t_fp_vector velEstNed = {0};
+fp_vector_t posEstNed = {0};
+fp_vector_t velEstNed = {0};
 
 static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp, float Ki) {
     // convert local accel measurement to NED
-    t_fp_vector aNed = {
-        .V.X =    rMat[0][0] * ax + rMat[0][1] * ay + rMat [0][2] * az,
-        .V.Y = - (rMat[1][0] * ax + rMat[1][1] * ay + rMat [1][2] * az),
-        .V.Z = - (rMat[2][0] * ax + rMat[2][1] * ay + rMat [2][2] * az) + acc.dev.acc_1G,
+    fp_vector_t aNed = {
+        .V.X =  rMat.m[0][0] * ax + rMat.m[0][1] * ay + rMat [0][2] * az,
+        .V.Y =  rMat.m[1][0] * ax + rMat.m[1][1] * ay + rMat [1][2] * az,
+        .V.Z = (rMat.m[2][0] * ax + rMat.m[2][1] * ay + rMat [2][2] * az) + acc.dev.acc_1G,
     };
 
-    t_fp_vector velErrorNed = extPosNed.vel;
+    fp_vector_t velErrorNed = extPosNed.vel;
     VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
 
     UNUSED(Ki);
@@ -368,7 +368,7 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*GRAVITYf, aNed);
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
 
-    t_fp_vector posErrorNed = extPosNed.pos;
+    fp_vector_t posErrorNed = extPosNed.pos;
     VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posEstNed);
 
     VEC3_SCALAR_MULT_ADD(posEstNed, dt, velEstNed);
@@ -378,18 +378,22 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const
 
 STATIC_UNIT_TESTED void imuUpdateEulerAngles(void)
 {
-    quaternionProducts buffer;
+    fp_quaternionProducts_t buffer;
 
     if (FLIGHT_MODE(HEADFREE_MODE)) {
-       imuQuaternionComputeProducts(&headfree, &buffer);
+        imuQuaternionComputeProducts(&headfree, &buffer);
 
-       attitude.values.roll = lrintf(atan2_approx((+2.0f * (buffer.wx + buffer.yz)), (+1.0f - 2.0f * (buffer.xx + buffer.yy))) * (1800.0f / M_PIf));
-       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(+2.0f * (buffer.wy - buffer.xz))) * (1800.0f / M_PIf));
-       attitude.values.yaw = lrintf((-atan2_approx((+2.0f * (buffer.wz + buffer.xy)), (+1.0f - 2.0f * (buffer.yy + buffer.zz))) * (1800.0f / M_PIf)));
+        i16_angles_from_quaternionProducts(&attitude, &buffer);
+
+        attitude.values.roll = lrintf(atan2_approx((+2.0f * (buffer.wx + buffer.yz)), (+1.0f - 2.0f * (buffer.xx + buffer.yy))) * (1800.0f / M_PIf));
+        attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(+2.0f * (buffer.wy - buffer.xz))) * (1800.0f / M_PIf));
+        attitude.values.yaw = lrintf((-atan2_approx((+2.0f * (buffer.wz + buffer.xy)), (+1.0f - 2.0f * (buffer.yy + buffer.zz))) * (1800.0f / M_PIf)));
     } else {
-       attitude.values.roll = lrintf(atan2_approx(rMat[2][1], rMat[2][2]) * (1800.0f / M_PIf));
-       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(-rMat[2][0])) * (1800.0f / M_PIf));
-       attitude.values.yaw = lrintf((-atan2_approx(rMat[1][0], rMat[0][0]) * (1800.0f / M_PIf)));
+        i16_angles_from_rotationMatrix(&attitude, &rMat);
+
+       attitude.values.roll = lrintf(atan2_approx(rMat.m[2][1], rMat.m[2][2]) * (1800.0f / M_PIf));
+       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(-rMat.m[2][0])) * (1800.0f / M_PIf));
+       attitude.values.yaw = lrintf((atan2_approx(rMat.m[1][0], rMat.m[0][0]) * (1800.0f / M_PIf)));
     }
 
     if (attitude.values.yaw < 0) {
@@ -477,9 +481,9 @@ static float imuCalcKpGain(timeUs_t currentTimeUs, bool useAcc, float *gyroAvera
 }
 
 #if defined(USE_GPS)
-static void imuComputeQuaternionFromRPY(quaternionProducts *quatProd, int16_t initialRoll, int16_t initialPitch, int16_t initialYaw)
+static void imuComputeQuaternionFromRPY(fp_quaternionProducts_t *quatProd, int16_t initialRoll, int16_t initialPitch, int16_t initialYaw)
 {
-    // this function seems broken. It computes quaternionProducts, but they may get overriden by imuComputeRotationMatrix()
+    // this function seems broken. It computes fp_quaternionProducts_t, but they may get overriden by imuComputeRotationMatrix()
     if (initialRoll > 1800) {
         initialRoll -= 3600;
     }
@@ -570,7 +574,7 @@ void setAttitudeState(float roll, float pitch, float yaw)
 #endif
 
 #if defined(USE_EKF_POSITION)
-void setPositionState(t_fp_vector posEstNed_set, t_fp_vector velEstNed_set)
+void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set)
 {
     posEstNed = posEstNed_set;
     velEstNed = velEstNed_set;
@@ -727,10 +731,10 @@ bool shouldInitializeGPSHeading(void)
 
 float getCosTiltAngle(void)
 {
-    return rMat[2][2];
+    return rMat.m[2][2];
 }
 
-void getQuaternion(quaternion *quat)
+void getQuaternion(fp_quaternion_t *quat)
 {
    quat->w = q.w;
    quat->x = q.x;
@@ -813,9 +817,9 @@ void imuQuaternionMultiplication(quaternion *q1, quaternion *q2, quaternion *res
     result->z = D + (+ E - F - G + H) / 2.0f;
 }
 
-void imuQuaternionHeadfreeTransformVectorEarthToBody(t_fp_vector_def *v)
+void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_def *v)
 {
-    quaternionProducts buffer;
+    fp_quaternionProducts_t buffer;
 
     imuQuaternionMultiplication(&offset, &q, &headfree);
     imuQuaternionComputeProducts(&headfree, &buffer);
