@@ -407,7 +407,7 @@ FAST_CODE void gyroUpdate(void)
 #if defined(HIL_BUILD) || defined(MOCKUP)
     gyro.gyroSensor1.calibration.cyclesRemaining = 0;
 #ifdef HIL_BUILD
-    gyro.gyroADC[X] = hilInput.gyro[X];
+    gyro.gyroADC[X] = -hilInput.gyro[X];
     gyro.gyroADC[Y] = hilInput.gyro[Y];
     gyro.gyroADC[Z] = hilInput.gyro[Z];
 #endif
