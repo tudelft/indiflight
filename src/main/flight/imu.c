@@ -184,6 +184,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 
     // Calculate general spin rate (rad/s)
     const float spin_rate = sqrtf(sq(gx) + sq(gy) + sq(gz));
+    fp_vector_t zB;
+    zB.V.X = rMat.m[2][X];
+    zB.V.Y = rMat.m[2][Y];
+    zB.V.Z = rMat.m[2][Z];
 
     // Use raw heading error (from GPS or whatever else)
     float ex = 0, ey = 0, ez = 0;
@@ -195,10 +199,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
         while (courseOverGround < -M_PIf) {
             courseOverGround += (2.0f * M_PIf);
         }
-        const float ez_ef = cogYawGain * (- sin_approx(courseOverGround) * rMat.m[0][0] + cos_approx(courseOverGround) * rMat.m[1][0]);
-        ex = rMat.m[2][0] * ez_ef;
-        ey = rMat.m[2][1] * ez_ef;
-        ez = rMat.m[2][2] * ez_ef;
+        const float ez_ef = cogYawGain * ( sin_approx(courseOverGround) * rMat.m[0][0] - cos_approx(courseOverGround) * rMat.m[1][0] );
+        ex = zB.V.X * ez_ef;
+        ey = zB.V.Y * ez_ef;
+        ez = zB.V.Z * ez_ef;
     }
 
 #ifdef USE_MAG
@@ -224,12 +228,12 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
         const float bx = sqrtf(hx * hx + hy * hy);
 
         // magnetometer error is cross product between estimated magnetic north and measured magnetic north (calculated in EF)
-        const float ez_ef = -(hy * bx);
+        const float ez_ef = (hy * bx);
 
         // Rotate mag error vector back to BF and accumulate
-        ex += rMat.m[2][0] * ez_ef;
-        ey += rMat.m[2][1] * ez_ef;
-        ez += rMat.m[2][2] * ez_ef;
+        ex += zB.V.X * ez_ef;
+        ey += zB.V.Y * ez_ef;
+        ez += zB.V.Z * ez_ef;
     }
 #else
     UNUSED(useMag);
@@ -238,7 +242,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 #ifdef USE_GPS_PI
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = -extPosNed.att.angles.yaw;
+        float yawI = extPosNed.att.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }
@@ -246,10 +250,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
             yawI += (2.0f * M_PIf);
         }
         // reduce effect of error with tilt
-        const float ez_ef = sin_approx(yawI) * rMat.m[0][0] + cos_approx(yawI) * rMat.m[1][0];
-        ex += rMat.m[2][0] * ez_ef;
-        ey += rMat.m[2][1] * ez_ef;
-        ez += rMat.m[2][2] * ez_ef;
+        const float ez_ef = sin_approx(yawI) * rMat.m[0][0] - cos_approx(yawI) * rMat.m[1][0];
+        ex += zB.V.X * ez_ef;
+        ey += zB.V.Y * ez_ef;
+        ez += zB.V.Z * ez_ef;
     }
 #else
     UNUSED(useExtPosYaw);
@@ -265,9 +269,9 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
         az *= recipAccNorm;
 
         // Error is sum of cross product between estimated direction and measured direction of gravity
-        ex += (ay * rMat.m[2][2] - az * rMat.m[2][1]);
-        ey += (az * rMat.m[2][0] - ax * rMat.m[2][2]);
-        ez += (ax * rMat.m[2][1] - ay * rMat.m[2][0]);
+        ex -= (ay * zB.V.Z - az * zB.V.Y);
+        ey -= (az * zB.V.X - ax * zB.V.Z);
+        ez -= (ax * zB.V.Y - ay * zB.V.X);
     }
 
     // Compute and apply integral feedback if enabled
