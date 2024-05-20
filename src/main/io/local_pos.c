@@ -121,7 +121,6 @@ void getLocalPos(timeUs_t current) {
             fp_quaternionProducts_t qP;
             quaternionProducts_of_quaternion(&qP, &quat);
             fp_euler_of_quaternionProducts(&eulers, &qP);
-            float_eulers_of_quat(&eulers, &quat);
             posMeasNed.att.angles.roll = eulers.angles.roll;
             posMeasNed.att.angles.pitch = eulers.angles.pitch;
             posMeasNed.att.angles.yaw = eulers.angles.yaw;
@@ -134,7 +133,7 @@ void getLocalPos(timeUs_t current) {
         checkNewPosGps();
         if (posMeasState == LOCAL_POS_NO_SIGNAL) return;
         if (posMeasState == LOCAL_POS_NEW_MESSAGE) {
-            t_fp_vector newPos;
+            fp_vector_t newPos;
             newPos.V.X = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lat - GPS_home[GPS_LATITUDE]) * REARTH;
             newPos.V.Y = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lon - GPS_home[GPS_LONGITUDE]) * REARTH
                 * cosf(1e-7f * DEGREES_TO_RADIANS(GPS_home[GPS_LONGITUDE]));
