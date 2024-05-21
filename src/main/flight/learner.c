@@ -106,7 +106,7 @@ rls_parallel_t motorRls[MAXU];
 rls_t imuRls;
 rls_parallel_t fxSpfRls;
 rls_parallel_t fxRateDotRls;
-fp_quaternion_t hoverAttitude = {.qi=1.f, .qx=0.f, .qy=0.f, .qz=0.f};
+fp_quaternion_t hoverAttitude = {.w=1.f, .x=0.f, .y=0.f, .z=0.f};
 
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
@@ -523,9 +523,9 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     // SKIP
 
     // 9. compute tilt quaternion
-    t_fp_vector up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
-    t_fp_vector orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
-    float_quat_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
+    fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
+    fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
+    quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
 
 #ifdef USE_CLI_DEBUG_PRINT
         timeDelta_t time = cmpTimeUs(micros(), start);
@@ -648,79 +648,70 @@ static void updateBodyFrameToHover(indiProfile_t *indi) {
 
     // 1
     fp_quaternion_t iHoverAttitude = hoverAttitude;
-    iHoverAttitude.qi = -iHoverAttitude.qi;
+    iHoverAttitude.w = -iHoverAttitude.w;
 
     // 2
-    fp_quaternion_t attitude_q_fp_quat;
-    attitude_q_fp_quat.qi = attitude_q.w;
-    attitude_q_fp_quat.qx = attitude_q.x;
-    attitude_q_fp_quat.qy = -attitude_q.y;
-    attitude_q_fp_quat.qz = -attitude_q.z;
-    attitude_q_fp_quat = quatMult(&attitude_q_fp_quat, &hoverAttitude);
-    attitude_q.w = attitude_q_fp_quat.qi;
-    attitude_q.x = attitude_q_fp_quat.qx;
-    attitude_q.y = -attitude_q_fp_quat.qy;
-    attitude_q.z = -attitude_q_fp_quat.qz;
-
-    imuComputeRotationMatrix(); // update rotation matrix and quaternion products
+    fp_quaternion_t attitude;
+    fp_quaternion_t newAttitude;
+    getAttitudeQuaternion(&attitude);
+    newAttitude = chain_quaternion(&attitude, &hoverAttitude); // intrinsic rotation first about attitude, then hoverAttitude
+    setAttitudeWithQuaternion(&newAttitude); // also sets quaternionProducts and rotation matrix and eulers
 
     // 3
-    t_fp_vector work;
-    fp_rotationMatrix_t rot;
-    for (int i = 0; i < 3; i++) {
-        work = quatRotMatCol(&iHoverAttitude, i);
-        for (int j = 0; j < 3; j++)
-            rot.m[j][i] = work.A[j]; // FRD
-    }
+    fp_rotationMatrix_t iHoverAtt_M;
+    fp_quaternionProducts_t iHoverAttitude_qP;
+    quaternionProducts_of_quaternion(&iHoverAttitude_qP, &iHoverAttitude);
+    rotationMatrix_of_quaternionProducts(&iHoverAtt_M, &iHoverAttitude_qP);
 
     for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
         // rotate each column of the B1 and B2 matrix
         float tmp[3];
         for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = rot.m[axis][0] * indi->actG1_fx[motor]
-                + rot.m[axis][1] * indi->actG1_fy[motor]
-                + rot.m[axis][2] * indi->actG1_fz[motor];
+            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG1_fx[motor]
+                + iHoverAtt_M.m[axis][1] * indi->actG1_fy[motor]
+                + iHoverAtt_M.m[axis][2] * indi->actG1_fz[motor];
         }
         indi->actG1_fx[motor] = tmp[0];
         indi->actG1_fy[motor] = tmp[1];
         indi->actG1_fz[motor] = tmp[2];
 
         for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = rot.m[axis][0] * indi->actG1_roll[motor]
-                + rot.m[axis][1] * indi->actG1_pitch[motor]
-                + rot.m[axis][2] * indi->actG1_yaw[motor];
+            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG1_roll[motor]
+                + iHoverAtt_M.m[axis][1] * indi->actG1_pitch[motor]
+                + iHoverAtt_M.m[axis][2] * indi->actG1_yaw[motor];
         }
         indi->actG1_roll[motor] = tmp[0];
         indi->actG1_pitch[motor] = tmp[1];
         indi->actG1_yaw[motor] = tmp[2];
 
         for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = rot.m[axis][0] * indi->actG2_roll[motor]
-                + rot.m[axis][1] * indi->actG2_pitch[motor]
-                + rot.m[axis][2] * indi->actG2_yaw[motor];
+            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG2_roll[motor]
+                + iHoverAtt_M.m[axis][1] * indi->actG2_pitch[motor]
+                + iHoverAtt_M.m[axis][2] * indi->actG2_yaw[motor];
         }
         indi->actG2_roll[motor] = tmp[0];
         indi->actG2_pitch[motor] = tmp[1];
         indi->actG2_yaw[motor] = tmp[2];
     }
 
-    // 5 update board rotation matrix of board alignment with rot.m
-    // convert to FLU
-    rot.m[0][1] *= -1;
-    rot.m[0][2] *= -1;
-    rot.m[1][0] *= -1;
-    rot.m[2][0] *= -1;
-    float newAlignmentMat[3][3];
-    for (int i=0; i<3; i++)
-        for (int j=0; j<3; j++)
-            newAlignmentMat[i][j] = boardRotation.m[i][0]*rot.m[0][j]
-                + boardRotation.m[i][1]*rot.m[1][j]
-                + boardRotation.m[i][2]*rot.m[2][j];
+    // 5 update board rotation matrix of board alignment with iHoverAtt_M.m
+    fp_rotationMatrix_t newAlignmentMat;
+    newAlignmentMat = chain_rotationMatrix(&boardRotation, &iHoverAtt_M); // intrinsic is correct
 
-    // FLU
-    boardAlignmentMutable()->rollDegrees  = lrintf(RADIANS_TO_DEGREES(atan2_approx(newAlignmentMat[2][1], newAlignmentMat[2][2])));
-    boardAlignmentMutable()->pitchDegrees = lrintf(RADIANS_TO_DEGREES( ((0.5f * M_PIf) - acos_approx(-newAlignmentMat[2][0])) ));
-    boardAlignmentMutable()->yawDegrees   = lrintf(RADIANS_TO_DEGREES( atan2_approx(-newAlignmentMat[1][0], newAlignmentMat[0][0]) ));
+    // this step is a bit unnecessary, as it (should) compute the same matrix again,
+    // but we want to stick to the existing interfaces, which call for the board
+    // matrix to be defined using euler angles.
+    // This also enables direct reporting in the configurator
+    fp_euler_t boardEulers_fp;
+    i16_euler_t boardEulers_i16;
+    fp_euler_of_rotationMatrix(&boardEulers_fp, &newAlignmentMat);
+    i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
+
+    // inexplicably though, they are required in DEGREE, not DECIDEGREE as done
+    // elsewhere..
+    boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
+    boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
+    boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
     initBoardAlignment(boardAlignment());
 }
 
@@ -821,30 +812,26 @@ doMore:
                     || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
 
                 // FIXME: randomize board rotation after catapulting
-                fp_angles_t board_eulers = {  // Forward Right Down
+                fp_euler_t boardEulers_fp = {  // Forward Right Down
                     .angles.roll = DEGREES_TO_RADIANS(-17),
                     .angles.pitch = DEGREES_TO_RADIANS(33),
                     .angles.yaw = DEGREES_TO_RADIANS(0) };
-                boardAlignmentMutable()->rollDegrees  = (int32_t) RADIANS_TO_DEGREES(board_eulers.angles.roll);
-                boardAlignmentMutable()->pitchDegrees = (int32_t) RADIANS_TO_DEGREES(board_eulers.angles.pitch);
-                boardAlignmentMutable()->yawDegrees   = (int32_t) RADIANS_TO_DEGREES(board_eulers.angles.yaw);
+                i16_euler_t boardEulers_i16;
+                i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
+                boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
+                boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
+                boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
                 initBoardAlignment(boardAlignment());
 
                 fp_quaternion_t iboard_q;
-                float_quat_of_eulers(&iboard_q, &board_eulers);
-                iboard_q.qi = -iboard_q.qi;
+                quaternion_of_rotationMatrix(&iboard_q, &boardRotation);
+                iboard_q.w = -iboard_q.w;
 
-                fp_quaternion_t attitude_fp_q; // FRD
-                attitude_fp_q.qi = attitude_q.w;
-                attitude_fp_q.qx = attitude_q.x;
-                attitude_fp_q.qy = -attitude_q.y;
-                attitude_fp_q.qz = -attitude_q.z;
-                attitude_fp_q = quatMult(&attitude_fp_q, &iboard_q);
-                attitude_q.w = attitude_fp_q.qi;
-                attitude_q.x = attitude_fp_q.qx;
-                attitude_q.y = -attitude_fp_q.qy;
-                attitude_q.z = -attitude_fp_q.qz; // FLU
-                imuComputeRotationMatrix(); // update rotation matrix and quaternion products
+                fp_quaternion_t attitude; // FRD
+                fp_quaternion_t newAttitude; // FRD
+                getAttitudeQuaternion(&attitude);
+                newAttitude = chain_quaternion(&attitude, &iboard_q);
+                setAttitudeWithQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
 
                 learningQueryEnabledAt = current;
                 startAt = current + c->delayMs*1e3;

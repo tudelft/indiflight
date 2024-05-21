@@ -1930,10 +1930,10 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
         blackboxCurrent->learnerGains[loop] = lrintf(10.f * learnRun.gains[loop]);
 
-    blackboxCurrent->hoverAttitude[0] = lrintf(hoverAttitude.qi * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->hoverAttitude[1] = lrintf(hoverAttitude.qx * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->hoverAttitude[2] = lrintf(hoverAttitude.qy * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->hoverAttitude[3] = lrintf(hoverAttitude.qz * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+    blackboxCurrent->hoverAttitude[0] = lrintf(hoverAttitude.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[1] = lrintf(hoverAttitude.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[2] = lrintf(hoverAttitude.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[3] = lrintf(hoverAttitude.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
 #endif
 
 #else
