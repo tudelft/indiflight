@@ -808,10 +808,8 @@ doMore:
                 break;
             }
 
-            if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
-
-                // FIXME: randomize board rotation after catapulting
+            if ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) {
+                // randomize board rotation after catapulting with 0 0 0 board rotation
                 fp_euler_t boardEulers_fp = {  // Forward Right Down
                     .angles.roll = DEGREES_TO_RADIANS(-17),
                     .angles.pitch = DEGREES_TO_RADIANS(33),
@@ -832,6 +830,10 @@ doMore:
                 getAttitudeQuaternion(&attitude);
                 newAttitude = chain_quaternion(&attitude, &iboard_q);
                 setAttitudeWithQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
+            }
+
+            if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
 
                 learningQueryEnabledAt = current;
                 startAt = current + c->delayMs*1e3;
@@ -844,6 +846,7 @@ doMore:
 
                 learningQueryState = LEARNING_QUERY_DELAY; goto doMore;
             }
+
             break;
         case LEARNING_QUERY_DELAY:
             // wait for start. then reset motor query states and transition
