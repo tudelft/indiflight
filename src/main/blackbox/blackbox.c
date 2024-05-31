@@ -1654,7 +1654,7 @@ static void loadMainState(timeUs_t currentTimeUs)
 
 #ifdef USE_INDI
     fp_quaternion_t attitude_q;
-    getAttitudeQuaternion(&attitude_q);
+    getHoverAttitudeQuaternion(&attitude_q);
     blackboxCurrent->quat[0] = lrintf(attitude_q.w * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[1] = lrintf(attitude_q.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[2] = lrintf(attitude_q.y * UNIT_FLOAT_TO_SIGNED16VB);
