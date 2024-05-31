@@ -205,11 +205,12 @@ void initIndiRuntime(void) {
         indiRun.rateSpBody.A[axis] = 0.; // rate setpoint in body coordinates
         indiRun.rateDotSpBody.A[axis] = 0.; // rate derivative setpoint in body coordinates
         indiRun.spfSpBody.A[axis] = 0.; // specific force setpoint in body coordinates
-        indiRun.rate.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
+        indiRun.rateIMU.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
+        indiRun.rate_f.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
         //indiRun.rate_fs.A[axis] = 0.; // sync-filtered gyro in rad/s
-        indiRun.rateDot.A[axis] = 0.; // unfiltered gyro derivative in rad/s/s
+        indiRun.rateDotIMU.A[axis] = 0.; // unfiltered gyro derivative in rad/s/s
         indiRun.rateDot_fs.A[axis] = 0.; // sync-filtered gyro derivative in rad/s/s
-        indiRun.spf.A[axis] = 0.; // unfilterd accelerometer (specific force) in N/kg
+        indiRun.spfIMU.A[axis] = 0.; // unfilterd accelerometer (specific force) in N/kg
         indiRun.spf_fs.A[axis] = 0.; // sync-filterd accelerometer (specific force) in N/kg
     }
     indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };

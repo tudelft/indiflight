@@ -235,7 +235,7 @@ void getAlphaSpBody(timeUs_t current) {
     UNUSED(current);
 
     fp_quaternion_t attEstNed;
-    getAttitudeQuaternion(&attEstNed);
+    getHoverAttitudeQuaternion(&attEstNed);
 
     fp_quaternion_t attEstNedInv = attEstNed;
     attEstNedInv.w = -attEstNed.w;
@@ -338,15 +338,8 @@ void getAlphaSpBody(timeUs_t current) {
 
     // --- get rotation acc setpoint simply by multiplying with gains
     // rateErr = rateSpBody - rateEstBody
-    // get body rates in z-down, x-fwd frame
-    fp_vector_t rateEstBody = {
-        .V.X = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_ROLL]), 
-        .V.Y = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_PITCH]),
-        .V.Z = DEGREES_TO_RADIANS(gyro.gyroADCf[FD_YAW]),
-    };
-
     fp_vector_t rateErr = indiRun.rateSpBody;
-    VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, rateEstBody);
+    VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, indiRun.rate_f);
 
     // alphaSpBody = rateGains * rateErr
     indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
@@ -368,20 +361,30 @@ void getMotorCommands(timeUs_t current) {
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         // rate
-        indiRun.rate.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
-        indiRun.spf.A[axis] = acc.accADCafterRpm[axis] * acc.dev.acc_1G_rec * GRAVITYf;
+        indiRun.rateIMU.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
+        indiRun.rate_f.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCf[axis]);
+        indiRun.spfIMU.A[axis] = acc.accADCafterRpm[axis] * acc.dev.acc_1G_rec * GRAVITYf;
 
         // get gyro derivative
-        indiRun.rateDot.A[axis] = indiRun.indiFrequency * (indiRun.rate.A[axis] - rate_prev[axis]);
-        rate_prev[axis] = indiRun.rate.A[axis];
+        indiRun.rateDotIMU.A[axis] = indiRun.indiFrequency * (indiRun.rateIMU.A[axis] - rate_prev[axis]);
+        rate_prev[axis] = indiRun.rateIMU.A[axis];
 
         // filter gyro derivative
-        indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDot.A[axis]);
+        indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDotIMU.A[axis]);
 
         // get (filtered) accel
-        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spf.A[axis]);
-
+        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spfIMU.A[axis]);
     }
+
+#ifdef USE_LEARNER
+    // rotate to hover!!
+    fp_quaternion_t imu_to_hover;
+    imu_to_hover = hoverAttitude; // copy, not pointer
+    imu_to_hover.w *= -1.; // inverse
+    rotate_vector_with_quaternion(&(indiRun.rate_f), &imu_to_hover);
+    rotate_vector_with_quaternion(&(indiRun.rateDot_fs), &imu_to_hover);
+    rotate_vector_with_quaternion(&(indiRun.spf_fs), &imu_to_hover);
+#endif
 
     // get rotation speeds and accelerations from dshot, or fallback
     float omega_inv[MAXU];
@@ -584,7 +587,7 @@ FAST_CODE
 fp_vector_t coordinatedYaw(float yaw) {
     // todo: this local is defined twice.. make static somehow
     fp_quaternion_t attEstNedInv;
-    getAttitudeQuaternion(&attEstNedInv);
+    getHoverAttitudeQuaternion(&attEstNedInv);
     attEstNedInv.w *= -1.0f;
 
     fp_vector_t yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);

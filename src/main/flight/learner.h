@@ -118,7 +118,6 @@ typedef enum query_state_e {
     LEARNING_QUERY_WAITING_FOR_LAUNCH = 0,
     LEARNING_QUERY_DELAY,
     LEARNING_QUERY_ACTIVE,
-    LEARNING_QUERY_APPLYING,
     LEARNING_QUERY_DONE
 } learning_query_state_t;
 

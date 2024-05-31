@@ -182,8 +182,8 @@ static void updateLearningFilters(void) {
 
     // IMU rls filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        learnRun.imuRate.A[axis] = biquadFilterApply(&imuRateFilter[axis], indiRun.rate.A[axis]);
-        learnRun.imuSpf.A[axis] = biquadFilterApply(&imuSpfFilter[axis], indiRun.spf.A[axis]);
+        learnRun.imuRate.A[axis] = biquadFilterApply(&imuRateFilter[axis], indiRun.rateIMU.A[axis]);
+        learnRun.imuSpf.A[axis] = biquadFilterApply(&imuSpfFilter[axis], indiRun.spfIMU.A[axis]);
 
         learnRun.imuRateDot.A[axis] = indiRun.indiFrequency * (learnRun.imuRate.A[axis] - imuPrevRate.A[axis]);
         imuPrevRate.A[axis] = learnRun.imuRate.A[axis];
@@ -200,17 +200,17 @@ static void updateLearningFilters(void) {
     ry = accelerometerConfig()->acc_offset[1] * 1e-3f;
     rz = accelerometerConfig()->acc_offset[2] * 1e-3f;
 
-    dwx = indiRun.rateDot.A[0];
-    dwy = indiRun.rateDot.A[1];
-    dwz = indiRun.rateDot.A[2];
+    dwx = indiRun.rateDotIMU.A[0];
+    dwy = indiRun.rateDotIMU.A[1];
+    dwz = indiRun.rateDotIMU.A[2];
 
-    wx = indiRun.rate.A[0];
-    wy = indiRun.rate.A[1];
-    wz = indiRun.rate.A[2];
+    wx = indiRun.rateIMU.A[0];
+    wy = indiRun.rateIMU.A[1];
+    wz = indiRun.rateIMU.A[2];
 
-    ax = indiRun.spf.A[0];
-    ay = indiRun.spf.A[1];
-    az = indiRun.spf.A[2];
+    ax = indiRun.spfIMU.A[0];
+    ay = indiRun.spfIMU.A[1];
+    az = indiRun.spfIMU.A[2];
 
     float fxSpfCorrected[3];
     fxSpfCorrected[0] = ax - ( rx * (-sq(wy)-sq(wz)) + ry * (wx*wy - dwz)    + rz * (wx*wz + dwy)    );
@@ -218,7 +218,7 @@ static void updateLearningFilters(void) {
     fxSpfCorrected[2] = az - ( rx * (wx*wz - dwy)    + ry * (wy*wz + dwx)    + rz * (-sq(wx)-sq(wy)) );
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDot.A[axis]);
+        float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
         learnRun.fxRateDotDiff.A[axis] = fxRateDot - fxPrevRateDot.A[axis];
         fxPrevRateDot.A[axis] = fxRateDot;
 
@@ -251,123 +251,6 @@ static void updateLearningFilters(void) {
     }
 }
 
-static struct learnerTimings_s {
-    timeUs_t start;
-    timeDelta_t filters;
-    timeDelta_t imu;
-    timeDelta_t fx;
-    timeDelta_t motor;
-    timeDelta_t hover;
-} learnerTimings = {0};
-
-#ifdef STM32H7
-FAST_CODE
-#endif
-void updateLearner(timeUs_t current) {
-    UNUSED(current);
-
-    learnerTimings.start = micros();
-
-    // update learning sync filters
-    updateLearningFilters();
-    learnerTimings.filters = cmpTimeUs(micros(), learnerTimings.start);
-
-    // wait for motors to spool down before learning imu position
-    bool imuLearningConditions = ((learningQueryState == LEARNING_QUERY_DELAY) 
-            && (cmpTimeUs(current, learningQueryEnabledAt) > 75000));
-
-    if (imuLearningConditions) {
-        // accIMU  =  accB  +  rateDot x R  +  rate x (rate x R)
-        // assume accB = 0
-        fp_vector_def* w = &learnRun.imuRate.V;
-        fp_vector_def* dw = &learnRun.imuRateDot.V;
-        fp_vector_def* a = &learnRun.imuSpf.V;
-
-        // regressors
-
-        // remember: column major formulation!
-        float AT[3*3] = {
-            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y - dw->Z,           w->X * w->Z + dw->Y,
-             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z - dw->X,
-             w->X * w->Z - dw->Y,           w->Y * w->Z + dw->X,          -(w->X * w->X + w->Y * w->Y)
-        };
-        float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
-
-        for (int i = 0; i < 9; i++)
-            AT[i] *= 1e-2f; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
-            // it if true parameter is 30cm is logged at in 0.3*100*1000 = 30000, which is max for logging. 1mm is logged as 0.001*100*1000 = 100
-
-        // perform rls step
-        rlsNewSample(&imuRls, AT, y);
-    }
-    learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
-
-    bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
-        && (
-            (learnerConfig()->mode & LEARN_DURING_FLIGHT)
-            || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
-           );
-
-    if (fxLearningConditions) {
-        //setup regressors
-        float A[RLS_MAX_N];
-        for (int act = 0; act < learnerConfig()->numAct; act++) {
-            A[act] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
-            A[act + learnerConfig()->numAct] = 1e-3f * learnRun.fxOmegaDotDiff[act];
-        }
-        float ySpf[3];
-        float yRateDot[3];
-        for (int i = 0; i < 3; i++) {
-            ySpf[i] = learnRun.fxSpfDiff.A[i] * 10.f; // scaling likely depends on sample time..
-            yRateDot[i] = learnRun.fxRateDotDiff.A[i]; // scaling seems okay at this sample time/filtering
-        }
-
-        // perform rls step
-        rlsParallelNewSample(&fxSpfRls, A, ySpf);
-        rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
-    }
-    learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
-
-    // same for now
-    bool motorLearningConditions = fxLearningConditions;
-
-    if (motorLearningConditions) {
-        for (int act = 0; act < learnerConfig()->numAct; act++) {
-            float A[4] = {
-                learnRun.motorD[act],
-                learnRun.motorSqrtD[act],
-                1.f,
-                -1e-4f * learnRun.motorOmegaDot[act]
-            };
-            float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
-            rlsParallelNewSample(&motorRls[act], A, &y);
-        }
-    }
-    learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
-
-    bool gainTuningConditions = fxLearningConditions;
-
-    if (gainTuningConditions) {
-        // get slowest actuator
-        float maxTau = 0.f;
-        for (int act = 0; act < learnerConfig()->numAct; act++)
-            maxTau = MAX(maxTau, motorRls[act].X[3] * 0.1f);
-        maxTau = constrainf(maxTau, 0.01f, 0.2f);
-
-        // calculate gains
-        learnRun.gains[LEARNER_LOOP_RATE] = 
-            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
-
-        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
-            learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
-    }
-#ifdef USE_CLI_DEBUG_PRINT
-    static unsigned int printCounter = 0;
-    if (!(++printCounter % 1000))
-        cliPrintLinef("Learner Timings (us): filt %d, imu %d, fx %d, mot %d, hover %d", learnerTimings.filters, learnerTimings.imu, learnerTimings.fx, learnerTimings.motor, learnerTimings.hover);
-#endif
-}
-
 static bool calculateHoverAttitude(indiProfile_t *indi) {
     // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
     // this avoids code bloat and likely the blocking will not help
@@ -395,10 +278,6 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     // 7. find hover thrust direction as  Bf uHover
     // 8. verify that  Br uHover == 0
 
-#ifdef USE_CLI_DEBUG_PRINT
-    timeUs_t start = micros();
-#endif
-
     // column major
     const uint8_t numAct = learnerConfig()->numAct;
     float BfT[LEARNING_MAX_ACT * 3];
@@ -416,8 +295,7 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     #define LEARNING_HOVER_D 3
     integer M = numAct;
     integer N = LEARNING_HOVER_D;
-    if (M < N)
-        goto panic; // not implemented, would have to adjust sorg2r inputs?
+    if (M < N) return false; // not implemented, would have to adjust sorg2r inputs?
 
     // A is BrT
     integer LDA = numAct;
@@ -427,8 +305,7 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     integer LWORK = 3*LEARNING_HOVER_D + 1;  // see sgepq3 manual
     integer INFO;
     sgeqp3_(&M, &N, BrT, &LDA, JPVT, TAU, WORK, &LWORK, &INFO);
-    if (INFO < 0)
-        goto panic; // panic
+    if (INFO < 0) return false; // panic
 
     int sizeNr = numAct - LEARNING_HOVER_D; // if Br full rank
 
@@ -446,9 +323,8 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
             // cannot have any more zero-diagonal entries, since R is sorted
             break;
 
-    if (sizeNr == 0)
-        // can happen, when N = M and Br full rank
-        goto panic; // panic
+    // can happen, when N = M and Br full rank
+    if (sizeNr == 0) return false; // panic
 
     // todo interpret INFO
     integer K = numAct - sizeNr;
@@ -494,8 +370,7 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     float vTAv;
     SGEMVt(sizeNr, sizeNr, A, v, Av);
     SGEVV(sizeNr, v, Av, vTAv);
-    if (vTAv < 1e-10f)
-        goto panic; // panic
+    if (vTAv < 1e-10f) return false; // panic
 
     float scale = GRAVITYf * 1.f / sqrtf( vTAv ); // fast inverse sqrt?
     SGEVS(sizeNr, v, scale, v);
@@ -525,113 +400,11 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     // 9. compute tilt quaternion
     fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
-    quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
+    fp_quaternion_t deltaHoverAttitude;
+    quaternion_of_two_vectors(&deltaHoverAttitude, &up, &hoverThrust, &orth);
+    hoverAttitude = chain_quaternion(&hoverAttitude, &deltaHoverAttitude);
 
-#ifdef USE_CLI_DEBUG_PRINT
-        timeDelta_t time = cmpTimeUs(micros(), start);
-            cliPrintLinef("Hover Attitude timing (us): %d", time);
-#endif
     return true;
-
-panic:
-    {
-#ifdef USE_CLI_DEBUG_PRINT
-        timeDelta_t time = cmpTimeUs(micros(), start);
-            cliPrintLinef("Hover Attitude timing (us): %d", time);
-#endif
-    }
-    return false;
-}
-
-void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
-    for (int axis = 0; axis < 3; axis++) {
-        indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
-        // attGains are expected for parallel PD, but we have cascaded, so
-        indi->attGains[axis]  = (uint16_t) 10.f
-             * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
-    }
-
-    // same for position
-    pos->horz_p = (uint8_t) 10.f 
-        * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
-    pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
-    pos->horz_i = pos->horz_d / 10; // fudge factor: by lack of better option at this point
-    pos->vert_p = pos->horz_p;
-    pos->vert_i = pos->horz_i;
-    pos->vert_d = pos->horz_d;
-    // pos->horz_max_v = 250; // cm/s
-    // pos->horz_max_a = 500; // cm/s/s
-    // pos->horz_max_iterm = 200; // cm/s
-    // pos->max_tilt = 40; // conservative, like the others
-    // pos->vert_max_v_up = 100; // cm/s
-    // pos->vert_max_v_down = 100; // cm/s
-    // pos->vert_max_a_up = 1000; // cm/s/s
-    // pos->vert_max_a_down = 500; // cm/s/s
-    // pos->vert_max_iterm = 100; // cm/s/s
-    // fudge factor 0.5f, maybe try to see what happens with lower zeta_attitude
-    pos->yaw_p = (uint8_t) 10.f * .5f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
-    // pos->weathervane_p = 0;
-    // pos->weathervane_min_v = 200; // cm/s/s
-    // pos->use_spf_attenuation = 1;
-
-    // indi->manualUseCoordinatedYaw = 1;
-    // indi->manualMaxUpwardsSpf = 20; // conservative
-
-    // indi->attMaxTiltRate = 500; // reduce slightly
-    // indi->attMaxYawRate = 300; // reduce
-    for (int act = 0; act < learnerConfig()->numAct ; act++) {
-        //              inv y-scale 
-        float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
-        indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
-        indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
-        //                                            inv y-scale   a-scale     config-scale
-        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].X[3], 10.f, 200.f);
-
-        if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
-            indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
-                motorRls[act].X[0] / (motorRls[act].X[0] + motorRls[act].X[1]),
-                0.f, 1.f);
-            // todo: transform to match kappa better
-        else
-            indi->actNonlinearity[act] = 50;
-
-        // indi->actLimit[act] = 0.6;
-        //                    inv y-scale        a-scale           config scale
-        indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0*fxSpfRls.n + act];
-        indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[1*fxSpfRls.n + act];
-        indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[2*fxSpfRls.n + act];
-        indi->actG1_roll[act]  = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0*fxRateDotRls.n + act];
-        indi->actG1_pitch[act] = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[1*fxRateDotRls.n + act];
-        indi->actG1_yaw[act]   = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[2*fxRateDotRls.n + act];
-        indi->actG2_roll[act]  = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
-        indi->actG2_pitch[act] = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
-        indi->actG2_yaw[act]   = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
-
-        indi->wlsWu[act] = 1.;
-        indi->u_pref[act] = 0;
-    }
-
-    // indi->imuSyncLp2Hz = 15; // lord knows
-    // indi->wlsWv[0] = 1;
-    // indi->wlsWv[1] = 1;
-    // indi->wlsWv[2] = 50;
-    // indi->wlsWv[3] = 50;
-    // indi->wlsWv[4] = 50;
-    // indi->wlsWv[5] = 5;
-
-    // keep same:
-    // indi->useIncrement = true;
-    // indi->useRpmDotFeedback = true;
-    // indi->attRateDenom = 4; 
-    // indi->useConstantG2 = false;
-    // indi->useRpmFeedback = false;
-    // indi->maxRateSp = 1800.f for all
-    // indi->useWls = true;
-    // indi->wlsMaxIter = 1;
-    // indi->wlsAlgo = AS_QR;
-    // indi->wlsCondBound = ...;
-    // indi->wlsNanLimit = 10;
-
 }
 
 static void updateBodyFrameToHover(indiProfile_t *indi) {
@@ -713,6 +486,279 @@ static void updateBodyFrameToHover(indiProfile_t *indi) {
     boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
     boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
     initBoardAlignment(boardAlignment());
+}
+
+
+static struct learnerTimings_s {
+    timeUs_t start;
+    timeDelta_t filters;
+    timeDelta_t imu;
+    timeDelta_t fx;
+    timeDelta_t motor;
+    timeDelta_t gains;
+    timeDelta_t updating;
+    timeDelta_t hover;
+} learnerTimings = {0};
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+void updateLearner(timeUs_t current) {
+    UNUSED(current);
+
+    learnerTimings.start = micros();
+
+    // update learning sync filters
+    updateLearningFilters();
+    learnerTimings.filters = cmpTimeUs(micros(), learnerTimings.start);
+
+    // wait for motors to spool down before learning imu position
+    bool imuLearningConditions = ((learningQueryState == LEARNING_QUERY_DELAY) 
+            && (cmpTimeUs(current, learningQueryEnabledAt) > 75000));
+
+    if (imuLearningConditions) {
+        // accIMU  =  accB  +  rateDot x R  +  rate x (rate x R)
+        // assume accB = 0
+        fp_vector_def* w = &learnRun.imuRate.V;
+        fp_vector_def* dw = &learnRun.imuRateDot.V;
+        fp_vector_def* a = &learnRun.imuSpf.V;
+
+        // regressors
+
+        // remember: column major formulation!
+        float AT[3*3] = {
+            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y - dw->Z,           w->X * w->Z + dw->Y,
+             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z - dw->X,
+             w->X * w->Z - dw->Y,           w->Y * w->Z + dw->X,          -(w->X * w->X + w->Y * w->Y)
+        };
+        float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
+
+        for (int i = 0; i < 9; i++)
+            AT[i] *= 1e-2f; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
+            // it if true parameter is 30cm is logged at in 0.3*100*1000 = 30000, which is max for logging. 1mm is logged as 0.001*100*1000 = 100
+
+        // perform rls step
+        rlsNewSample(&imuRls, AT, y);
+    }
+    learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
+
+    bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
+        && (
+            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
+            || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
+           );
+
+    if (fxLearningConditions) {
+        //setup regressors
+        float A[RLS_MAX_N];
+        for (int act = 0; act < learnerConfig()->numAct; act++) {
+            A[act] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+            A[act + learnerConfig()->numAct] = 1e-3f * learnRun.fxOmegaDotDiff[act];
+        }
+        float ySpf[3];
+        float yRateDot[3];
+        for (int i = 0; i < 3; i++) {
+            ySpf[i] = learnRun.fxSpfDiff.A[i] * 10.f; // scaling likely depends on sample time..
+            yRateDot[i] = learnRun.fxRateDotDiff.A[i]; // scaling seems okay at this sample time/filtering
+        }
+
+        // perform rls step
+        rlsParallelNewSample(&fxSpfRls, A, ySpf);
+        rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
+    }
+    learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
+
+    // same for now
+    bool motorLearningConditions = fxLearningConditions;
+
+    if (motorLearningConditions) {
+        for (int act = 0; act < learnerConfig()->numAct; act++) {
+            float A[4] = {
+                learnRun.motorD[act],
+                learnRun.motorSqrtD[act],
+                1.f,
+                -1e-4f * learnRun.motorOmegaDot[act]
+            };
+            float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
+            rlsParallelNewSample(&motorRls[act], A, &y);
+        }
+    }
+    learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
+
+    bool gainTuningConditions = fxLearningConditions;
+
+    if (gainTuningConditions) {
+        // get slowest actuator
+        float maxTau = 0.f;
+        for (int act = 0; act < learnerConfig()->numAct; act++)
+            maxTau = MAX(maxTau, motorRls[act].X[3] * 0.1f);
+        maxTau = constrainf(maxTau, 0.01f, 0.2f);
+
+        // calculate gains
+        learnRun.gains[LEARNER_LOOP_RATE] = 
+            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+
+        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
+            learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+    }
+    learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
+
+    updateLearnedParameters(indiProfileLearned, positionProfileLearned);
+    learnerTimings.updating = cmpTimeUs(micros(), learnerTimings.start);
+
+
+    bool hoverAttitudeConditions = fxLearningConditions;
+
+    static bool hoverAttitudeSuccess = false;
+    UNUSED(hoverAttitudeSuccess);
+    if (hoverAttitudeConditions)
+        hoverAttitudeSuccess = calculateHoverAttitude(indiProfileLearned);
+    learnerTimings.hover = cmpTimeUs(micros(), learnerTimings.start);
+
+    static bool appliedAfterQuery = false;
+    if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
+        UNUSED(updateBodyFrameToHover);
+        //if (learnRun.applyHoverRotationAfterQuery && hoverAttitudeSuccess)
+        //    updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
+
+        if (learnRun.applyIndiProfileAfterQuery)
+            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+
+#ifdef USE_LOCAL_POSITION
+        if (learnRun.applyPositionProfileAfterQuery)
+            changePositionProfile(POSITION_PROFILE_COUNT-1); 
+#endif
+        appliedAfterQuery = true;
+    }
+
+    appliedAfterQuery = appliedAfterQuery && !(learningQueryState == LEARNING_QUERY_IDLE);
+
+#ifdef USE_CLI_DEBUG_PRINT
+    static unsigned int printCounter = 0;
+    if (!(++printCounter % 1000))
+        cliPrintLinef("Learner Timings (us): filt %d, imu %d, fx %d, mot %d, gain %d, update %d, hover %d", 
+                    learnerTimings.filters,
+                    learnerTimings.imu,
+                    learnerTimings.fx,
+                    learnerTimings.motor,
+                    learnerTimings.gains,
+                    learnerTimings.updating,
+                    learnerTimings.hover);
+#endif
+}
+
+void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+    for (int axis = 0; axis < 3; axis++) {
+        indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
+        // attGains are expected for parallel PD, but we have cascaded, so
+        indi->attGains[axis]  = (uint16_t) 10.f
+             * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
+    }
+
+    // same for position
+    pos->horz_p = (uint8_t) 10.f 
+        * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
+    pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
+    pos->horz_i = pos->horz_d / 10; // fudge factor: by lack of better option at this point
+    pos->vert_p = pos->horz_p;
+    pos->vert_i = pos->horz_i;
+    pos->vert_d = pos->horz_d;
+    // pos->horz_max_v = 250; // cm/s
+    // pos->horz_max_a = 500; // cm/s/s
+    // pos->horz_max_iterm = 200; // cm/s
+    // pos->max_tilt = 40; // conservative, like the others
+    // pos->vert_max_v_up = 100; // cm/s
+    // pos->vert_max_v_down = 100; // cm/s
+    // pos->vert_max_a_up = 1000; // cm/s/s
+    // pos->vert_max_a_down = 500; // cm/s/s
+    // pos->vert_max_iterm = 100; // cm/s/s
+    // fudge factor 0.5f, maybe try to see what happens with lower zeta_attitude
+    pos->yaw_p = (uint8_t) 10.f * .5f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
+    // pos->weathervane_p = 0;
+    // pos->weathervane_min_v = 200; // cm/s/s
+    // pos->use_spf_attenuation = 1;
+
+    // indi->manualUseCoordinatedYaw = 1;
+    // indi->manualMaxUpwardsSpf = 20; // conservative
+
+    // indi->attMaxTiltRate = 500; // reduce slightly
+    // indi->attMaxYawRate = 300; // reduce
+
+    fp_quaternion_t imu_to_hover;
+    fp_quaternionProducts_t imu_to_hoverP;
+    fp_rotationMatrix_t imu_to_hoverR;
+    imu_to_hover = hoverAttitude; // copy, not pointer
+    imu_to_hover.w *= -1.; // inverse
+    quaternionProducts_of_quaternion(&imu_to_hoverP, &imu_to_hover);
+    rotationMatrix_of_quaternionProducts(&imu_to_hoverR, &imu_to_hoverP);
+
+    for (int act = 0; act < learnerConfig()->numAct ; act++) {
+        //              inv y-scale 
+        float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
+        indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
+        indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
+        //                                            inv y-scale   a-scale     config-scale
+        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].X[3], 10.f, 200.f);
+
+        if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
+            indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
+                motorRls[act].X[0] / (motorRls[act].X[0] + motorRls[act].X[1]),
+                0.f, 1.f);
+            // todo: transform to match kappa better
+        else
+            indi->actNonlinearity[act] = 50;
+
+        // indi->actLimit[act] = 0.6;
+        //                    inv y-scale        a-scale           config scale
+        fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
+        actG1linHover.V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0*fxSpfRls.n + act];
+        actG1linHover.V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[1*fxSpfRls.n + act];
+        actG1linHover.V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[2*fxSpfRls.n + act];
+        actG1rotHover.V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0*fxRateDotRls.n + act];
+        actG1rotHover.V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[1*fxRateDotRls.n + act];
+        actG1rotHover.V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[2*fxRateDotRls.n + act];
+        actG2rotHover.V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
+        actG2rotHover.V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
+        actG2rotHover.V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
+        rotate_vector_with_rotationMatrix(&actG1linHover, &imu_to_hoverR);
+        rotate_vector_with_rotationMatrix(&actG1rotHover, &imu_to_hoverR);
+        rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
+
+        indi->actG1_fx[act]    = actG1linHover.V.X;
+        indi->actG1_fy[act]    = actG1linHover.V.Y;
+        indi->actG1_fz[act]    = actG1linHover.V.Z;
+        indi->actG1_roll[act]  = actG1rotHover.V.X;
+        indi->actG1_pitch[act] = actG1rotHover.V.Y;
+        indi->actG1_yaw[act]   = actG1rotHover.V.Z;
+        indi->actG2_roll[act]  = actG2rotHover.V.X;
+        indi->actG2_pitch[act] = actG2rotHover.V.Y;
+        indi->actG2_yaw[act]   = actG2rotHover.V.Z;
+
+        indi->wlsWu[act] = 1.;
+        indi->u_pref[act] = 0;
+    }
+
+    // indi->imuSyncLp2Hz = 15; // lord knows
+    // indi->wlsWv[0] = 1;
+    // indi->wlsWv[1] = 1;
+    // indi->wlsWv[2] = 50;
+    // indi->wlsWv[3] = 50;
+    // indi->wlsWv[4] = 50;
+    // indi->wlsWv[5] = 5;
+
+    // keep same:
+    // indi->useIncrement = true;
+    // indi->useRpmDotFeedback = true;
+    // indi->attRateDenom = 4; 
+    // indi->useConstantG2 = false;
+    // indi->useRpmFeedback = false;
+    // indi->maxRateSp = 1800.f for all
+    // indi->useWls = true;
+    // indi->wlsMaxIter = 1;
+    // indi->wlsAlgo = AS_QR;
+    // indi->wlsCondBound = ...;
+    // indi->wlsNanLimit = 10;
+
 }
 
 void testLearner(void) {
@@ -912,29 +958,10 @@ doMoreMotors:
 
             // safety cutoff even when not fully done
             if (allMotorsDone || (cmpTimeUs(micros(), safetyTimeoutUs) > 0) ) {
-                learningQueryState = LEARNING_QUERY_APPLYING; goto doMore;
+                learningQueryState = LEARNING_QUERY_DONE; goto doMore;
             }
 
             break;
-        case LEARNING_QUERY_APPLYING: 
-            updateLearnedParameters(indiProfileLearned, positionProfileLearned);
-
-            // calculate most efficient hover attitude in the current IMU frame
-            // only called once for now, may be in the future this also needs
-            // to run during flight
-            bool success = calculateHoverAttitude(indiProfileLearned);
-            if (learnRun.applyHoverRotationAfterQuery && success)
-                updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
-
-            if (learnRun.applyIndiProfileAfterQuery)
-                changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-
-#ifdef USE_LOCAL_POSITION
-            if (learnRun.applyPositionProfileAfterQuery)
-                changePositionProfile(POSITION_PROFILE_COUNT-1); 
-#endif
-
-            learningQueryState = LEARNING_QUERY_DONE; goto doMore;
         case LEARNING_QUERY_DONE:
             if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_WAITING_FOR_ARM))
                     || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )

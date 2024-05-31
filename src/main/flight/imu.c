@@ -42,6 +42,7 @@
 
 #include "flight/gps_rescue.h"
 #include "flight/imu.h"
+#include "flight/learner.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 
@@ -107,6 +108,8 @@ STATIC_UNIT_TESTED bool attitudeIsEstablished = false;
 // quaternion of sensor frame relative to earth frame
 STATIC_UNIT_TESTED fp_quaternion_t q = QUATERNION_INITIALIZE;
 STATIC_UNIT_TESTED fp_quaternionProducts_t qP = QUATERNION_PRODUCTS_INITIALIZE;
+static fp_quaternion_t qHover = QUATERNION_INITIALIZE;
+
 // headfree quaternions
 fp_quaternion_t headfree = QUATERNION_INITIALIZE;
 fp_quaternion_t offset = QUATERNION_INITIALIZE;
@@ -316,6 +319,12 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     q.x *= recipNorm;
     q.y *= recipNorm;
     q.z *= recipNorm;
+
+#ifdef USE_LEARNER
+    qHover = chain_quaternion(&q, &hoverAttitude);
+#else
+    qHover = q;
+#endif
 
     // Pre-compute rotation matrix from quaternion
     imuComputeRotationMatrix();
@@ -675,6 +684,14 @@ void getAttitudeQuaternion(fp_quaternion_t *quat)
    quat->x = q.x;
    quat->y = q.y;
    quat->z = q.z;
+}
+
+void getHoverAttitudeQuaternion(fp_quaternion_t *quat)
+{
+   quat->w = qHover.w;
+   quat->x = qHover.x;
+   quat->y = qHover.y;
+   quat->z = qHover.z;
 }
 
 void setAttitudeWithQuaternion(const fp_quaternion_t *quat)
