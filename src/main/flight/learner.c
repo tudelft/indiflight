@@ -101,8 +101,13 @@ static fp_vector_t hoverThrust;
 #define LEARNING_MAX_ACT ((int) RLS_MAX_N >> 1)
 #define LEARNER_OMEGADOT_SCALER 1e-5f // for numerical stability
 #define LEARNER_OMEGADOTDIFF_SCALER 10.f // for numerical stability
-#define LEARNER_NULLSPACE_THRESH 1e-3f // todo, do we need somethign relative here?
-#define LEARNER_NUM_POWER_ITERATIONS 1
+#define LEARNER_NULLSPACE_ABS_THRESH 5.f // fx matrix is in integer format, so 5 seems reasonable
+#define LEARNER_NULLSPACE_REL_THRESH 1e-2f // 1% of other axes
+#define LEARNER_NUM_POWER_ITERATIONS 3
+
+static fp_vector_t actG1linIMU[LEARNING_MAX_ACT] = {0}; // in IMU frame, in indiConfig units
+static fp_vector_t actG1rotIMU[LEARNING_MAX_ACT] = {0};
+static fp_vector_t actG2rotIMU[LEARNING_MAX_ACT] = {0};
 
 static indiProfile_t* indiProfileLearned;
 #ifdef USE_LOCAL_POSITION
@@ -228,7 +233,7 @@ static void updateLearningFilters(void) {
     }
 }
 
-static bool calculateHoverAttitude(indiProfile_t *indi) {
+static bool calculateHoverAttitude(void) {
     // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
     // this avoids code bloat and likely the blocking will not help
     // us anyway for our sizes of matrices
@@ -261,47 +266,45 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     float BrT[LEARNING_MAX_ACT * LEARNING_MAX_ACT] = {0}; // waste of stack, reduce because M < N?
     for (int motor = 0; motor < numAct; motor++) {
         // note! BfT and BrT are the transpose of Bf/Br
-        BfT[motor + 0*numAct] = (float) indi->actG1_fx[motor];
-        BfT[motor + 1*numAct] = (float) indi->actG1_fy[motor];
-        BfT[motor + 2*numAct] = (float) indi->actG1_fz[motor];
-        BrT[motor + 0*numAct] = (float) indi->actG1_roll[motor];
-        BrT[motor + 1*numAct] = (float) indi->actG1_pitch[motor];
-        BrT[motor + 2*numAct] = (float) indi->actG1_yaw[motor];
+        BfT[motor + 0*numAct] = actG1linIMU[motor].V.X;
+        BfT[motor + 1*numAct] = actG1linIMU[motor].V.Y;
+        BfT[motor + 2*numAct] = actG1linIMU[motor].V.Z;
+        BrT[motor + 0*numAct] = actG1rotIMU[motor].V.X;
+        BrT[motor + 1*numAct] = actG1rotIMU[motor].V.Y;
+        BrT[motor + 2*numAct] = actG1rotIMU[motor].V.Z;
     }
 
-    #define LEARNING_HOVER_D 3
     integer M = numAct;
-    integer N = LEARNING_HOVER_D;
+    integer N = XYZ_AXIS_COUNT;
     if (M < N) return false; // not implemented, would have to adjust sorg2r inputs?
 
     // A is BrT
     integer LDA = numAct;
     integer JPVT[LEARNING_MAX_ACT] = {0}; // all free columns on entry
-    real TAU[LEARNING_HOVER_D];
-    real WORK[3*LEARNING_HOVER_D + 1]; 
-    integer LWORK = 3*LEARNING_HOVER_D + 1;  // see sgepq3 manual
+    real TAU[XYZ_AXIS_COUNT];
+    real WORK[3*XYZ_AXIS_COUNT + 1]; 
+    integer LWORK = 3*XYZ_AXIS_COUNT + 1;  // see sgepq3 manual
     integer INFO;
     sgeqp3_(&M, &N, BrT, &LDA, JPVT, TAU, WORK, &LWORK, &INFO);
     if (INFO < 0) return false; // panic
 
-    int sizeNr = numAct - LEARNING_HOVER_D; // if Br full rank
+    int sizeNr = numAct - XYZ_AXIS_COUNT; // if Br full rank
 
     // since we used sgeqp3_, the columns of the R factor are sorted so
     // that the diagonals are non-increasing. To find if we have rank-
     // deficiency (and this a larger nullspace), we can just find the
     // last non-zero diagonal element of R
-    for (int row = LEARNING_HOVER_D-1; row >= 0; row--)
-        // could do bisection search, not going to
-        if (fabsf(BrT[row + row*numAct]) < LEARNER_NULLSPACE_THRESH)
-            // diagonal entry in R factor is small, Br is rank deficient
-            // TODO: do we need to check BrT[row + (row+1:numAct)*numAct]? DONE: chatGPT says no
-            sizeNr++;
-        else
-            // cannot have any more zero-diagonal entries, since R is sorted
-            break;
-
-    // can happen, when N = M and Br full rank
-    if (sizeNr == 0) return false; // panic
+    // For our context, we can be a bit stricter. The rank indicates rotational
+    // controllability: if full rank, then we can generate moments around all
+    // axes. if not full rank, we cannot. So we don't just check for 0, but 
+    // for at least 1% of the other (more controllable) axes.
+    float avgControllability = fabsf(BrT[0]);
+    if (avgControllability < LEARNER_NULLSPACE_ABS_THRESH) return false;
+    for (int dim = 1; dim < XYZ_AXIS_COUNT; dim++) {
+        float nextDim = fabsf(BrT[dim + dim*numAct]);
+        if (nextDim < LEARNER_NULLSPACE_REL_THRESH*avgControllability) return false;
+        avgControllability = ( avgControllability * dim + nextDim ) / (dim + 1);
+    }
 
     // todo interpret INFO
     integer K = numAct - sizeNr;
@@ -317,7 +320,7 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
 
     // 3. Generate A
     float BfNr[3*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
-    float A[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // will be a waste of stack.. allocate on the RAM!
+    float A[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // could also be smaller! will be a waste of stack.. allocate on the RAM?
     SGEMMt(3, sizeNr, numAct, BfT, Nr, BfNr, 0.f, 1.f);
     SGEMMt(sizeNr, sizeNr, 3, BfNr, BfNr, A, 0.f, 1.f);
 
@@ -366,6 +369,11 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
             uHover[row] = -uHover[row];
     }
 
+    for (int row = 0; row < numAct; row++) {
+        if ((uHover[row] < -2.f) || (uHover[row] > 2.f))
+            return false; // very unlikely to hover because actuator limits
+    }
+
     // 7. hover thrust direction
     // Bf * u
     SGEMVt(numAct, 3, BfT, uHover, hoverThrust.A);
@@ -377,94 +385,10 @@ static bool calculateHoverAttitude(indiProfile_t *indi) {
     // 9. compute tilt quaternion
     fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
-    fp_quaternion_t deltaHoverAttitude;
-    quaternion_of_two_vectors(&deltaHoverAttitude, &up, &hoverThrust, &orth);
-    hoverAttitude = chain_quaternion(&hoverAttitude, &deltaHoverAttitude);
+    quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
 
     return true;
 }
-
-static void updateBodyFrameToHover(indiProfile_t *indi) {
-    // todo: 
-    // 1. calculate delta-rotation matrix, potentially use some lag-factor like 0.9
-    // 2. update current attitude with delta-rotation
-    // 3. update B1, B2 with delta-rotation
-    // 4. DO NOT update gyro.dev.alignment-whatever because that is only read at init-time
-    // 5. update devices
-    //     1. acc.dev.accAlign = ALIGN_CUSTOM
-    //     2. acc.dev.rotationMatrix <-- update with delta-rotation
-    //     3. gyroSensor->gyroDev.gyroAlign = ALIGN_CUSTOM
-    //     4. gyroSensor->gyroDev.rotationMatrix <-- update with delta-rotation
-
-    // 1
-    fp_quaternion_t iHoverAttitude = hoverAttitude;
-    iHoverAttitude.w = -iHoverAttitude.w;
-
-    // 2
-    fp_quaternion_t attitude;
-    fp_quaternion_t newAttitude;
-    getAttitudeQuaternion(&attitude);
-    newAttitude = chain_quaternion(&attitude, &hoverAttitude); // intrinsic rotation first about attitude, then hoverAttitude
-    setAttitudeWithQuaternion(&newAttitude); // also sets quaternionProducts and rotation matrix and eulers
-
-    // 3
-    fp_rotationMatrix_t iHoverAtt_M;
-    fp_quaternionProducts_t iHoverAttitude_qP;
-    quaternionProducts_of_quaternion(&iHoverAttitude_qP, &iHoverAttitude);
-    rotationMatrix_of_quaternionProducts(&iHoverAtt_M, &iHoverAttitude_qP);
-
-    for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
-        // rotate each column of the B1 and B2 matrix
-        float tmp[3];
-        for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG1_fx[motor]
-                + iHoverAtt_M.m[axis][1] * indi->actG1_fy[motor]
-                + iHoverAtt_M.m[axis][2] * indi->actG1_fz[motor];
-        }
-        indi->actG1_fx[motor] = tmp[0];
-        indi->actG1_fy[motor] = tmp[1];
-        indi->actG1_fz[motor] = tmp[2];
-
-        for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG1_roll[motor]
-                + iHoverAtt_M.m[axis][1] * indi->actG1_pitch[motor]
-                + iHoverAtt_M.m[axis][2] * indi->actG1_yaw[motor];
-        }
-        indi->actG1_roll[motor] = tmp[0];
-        indi->actG1_pitch[motor] = tmp[1];
-        indi->actG1_yaw[motor] = tmp[2];
-
-        for (int axis = 0; axis < 3; axis++) {
-            tmp[axis] = iHoverAtt_M.m[axis][0] * indi->actG2_roll[motor]
-                + iHoverAtt_M.m[axis][1] * indi->actG2_pitch[motor]
-                + iHoverAtt_M.m[axis][2] * indi->actG2_yaw[motor];
-        }
-        indi->actG2_roll[motor] = tmp[0];
-        indi->actG2_pitch[motor] = tmp[1];
-        indi->actG2_yaw[motor] = tmp[2];
-    }
-
-    // 5 update board rotation matrix of board alignment with iHoverAtt_M.m
-    fp_rotationMatrix_t newAlignmentMat;
-    newAlignmentMat = chain_rotationMatrix(&boardRotation, &iHoverAtt_M); // intrinsic is correct
-
-    // this step is a bit unnecessary, as it (should) compute the same matrix again,
-    // but we want to stick to the existing interfaces, which call for the board
-    // matrix to be defined using euler angles.
-    // This also enables direct reporting in the configurator
-    fp_euler_t boardEulers_fp;
-    i16_euler_t boardEulers_i16;
-    fp_euler_of_rotationMatrix(&boardEulers_fp, &newAlignmentMat);
-    i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
-
-    // inexplicably though, they are required in DEGREE, not DECIDEGREE as done
-    // elsewhere..
-    boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
-    boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
-    boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
-    initBoardAlignment(boardAlignment());
-}
-
 
 static struct learnerTimings_s {
     timeUs_t start;
@@ -589,15 +513,11 @@ void updateLearner(timeUs_t current) {
     static bool hoverAttitudeSuccess = false;
     UNUSED(hoverAttitudeSuccess);
     if (hoverAttitudeConditions)
-        hoverAttitudeSuccess = calculateHoverAttitude(indiProfileLearned);
+        hoverAttitudeSuccess = calculateHoverAttitude();
     learnerTimings.hover = cmpTimeUs(micros(), learnerTimings.start);
 
     static bool appliedAfterQuery = false;
     if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
-        UNUSED(updateBodyFrameToHover);
-        //if (learnRun.applyHoverRotationAfterQuery && hoverAttitudeSuccess)
-        //    updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
-
         if (learnRun.applyIndiProfileAfterQuery)
             changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
 
@@ -687,18 +607,25 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         // indi->actLimit[act] = 0.6;
         //                    inv y-scale        a-scale           config scale
+        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
+        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
+        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
+        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
+        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
+        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
+        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
+        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
+        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
+
         fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
-        actG1linHover.V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
-        actG1linHover.V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
-        actG1linHover.V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
-        actG1rotHover.V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
-        actG1rotHover.V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
-        actG1rotHover.V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
-        actG2rotHover.V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
-        actG2rotHover.V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
-        actG2rotHover.V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
+
+        actG1linHover = actG1linIMU[act];
         rotate_vector_with_rotationMatrix(&actG1linHover, &imu_to_hoverR);
+
+        actG1rotHover = actG1rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG1rotHover, &imu_to_hoverR);
+
+        actG2rotHover = actG2rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
         indi->actG1_fx[act]    = actG1linHover.V.X;
@@ -941,8 +868,33 @@ doMoreMotors:
             break;
         case LEARNING_QUERY_DONE:
             if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_WAITING_FOR_ARM))
-                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )
+                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) ) {
+
+                // use current board orientation to fix attitude
+                fp_quaternion_t board_q;
+                quaternion_of_rotationMatrix(&board_q, &boardRotation);
+
+                fp_quaternion_t attitude; // FRD
+                fp_quaternion_t newAttitude; // FRD
+                getAttitudeQuaternion(&attitude);
+                newAttitude = chain_quaternion(&board_q, &attitude);
+                setAttitudeWithQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
+
+                // reset hover rotation
+                hoverAttitude.w = 1.;
+                hoverAttitude.x = 0.;
+                hoverAttitude.y = 0.;
+                hoverAttitude.z = 0.;
+
+                // reset board rotation to 0
+                boardAlignmentMutable()->rollDegrees  = 0;
+                boardAlignmentMutable()->pitchDegrees = 0;
+                boardAlignmentMutable()->yawDegrees   = 0;
+                initBoardAlignment(boardAlignment());
+
+                // reset learning query
                 learningQueryState = LEARNING_QUERY_IDLE;
+            }
             break;
     }
 
