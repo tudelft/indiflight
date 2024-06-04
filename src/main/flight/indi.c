@@ -527,16 +527,21 @@ float getYawWithoutSingularity(void) {
     // eulers, which has singularity at pitch +-pi/2
 
     // first, get bodyX and bodyY in NED from the attitude DCM
-    fp_vector_t bodyXNed = {
-        .V.X = rMat.m[0][0],
-        .V.Y = rMat.m[1][0],
-        .V.Z = rMat.m[2][0]
-    };
-    fp_vector_t bodyYNed = {
-        .V.X = rMat.m[0][1],
-        .V.Y = rMat.m[1][1],
-        .V.Z = rMat.m[2][1],
-    };
+    //fp_vector_t bodyXNed = {
+    //    .V.X = rMat.m[0][0],
+    //    .V.Y = rMat.m[1][0],
+    //    .V.Z = rMat.m[2][0]
+    //};
+    //fp_vector_t bodyYNed = {
+    //    .V.X = rMat.m[0][1],
+    //    .V.Y = rMat.m[1][1],
+    //    .V.Z = rMat.m[2][1],
+    //};
+    fp_vector_t bodyXNed, bodyYNed;
+    fp_quaternion_t qHover;
+    getHoverAttitudeQuaternion(&qHover);
+    bodyXNed = quatRotMatCol(&qHover, 0);
+    bodyYNed = quatRotMatCol(&qHover, 1);
 
     // second, find which one projects to the longest vector in the xy plane
     float bodyXProjLen = VEC3_XY_LENGTH(bodyXNed);

@@ -81,9 +81,11 @@ float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
 static timeUs_t learningQueryEnabledAt = 0;
 rls_parallel_t motorRls[MAXU];
 rls_t imuRls;
-rls_parallel_t fxSpfRls;
-rls_parallel_t fxRateDotRls;
+//rls_parallel_t fxSpfRls;
+//rls_parallel_t fxRateDotRls;
+rls_t fxRls[6];
 fp_quaternion_t hoverAttitude = {.w=1.f, .x=0.f, .y=0.f, .z=0.f};
+learnerTimings_t learnerTimings = {0};
 
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
@@ -128,13 +130,22 @@ void initLearner(void) {
 #endif
     initLearnerRuntime();
 
-    rlsInit(&imuRls, 3, 3, 1e2f, 0.995f);
-
-    // init filters and other rls
     float dT = indiRun.dT;
     float Tchar = 10.f*0.025f; // 10 times act constant
-    rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
-    rlsParallelInit(&fxRateDotRls, 2.f*learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // rotations need twice the parameters
+    rlsInit(&imuRls, 3, 3, 1e2f, dT, Tchar);
+
+    // init filters and other rls
+    //rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
+    //rlsParallelInit(&fxRateDotRls, 2*learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // rotations need twice the parameters
+
+    // Spf
+    for (int i = 0; i < 3; i++)
+        rlsInit( &fxRls[i], learnerConfig()->numAct, 1, 1e2f, dT, Tchar );
+
+    // RateDot
+    for (int i = 3; i < 6; i++)
+        rlsInit( &fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, dT, Tchar );
+
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
         //rlsParallelInit(&fxRls[axis+3], 2*learnerConfig()->numAct, 1, 1e0f, 0.997f); // rotational
@@ -390,17 +401,6 @@ static bool calculateHoverAttitude(void) {
     return true;
 }
 
-static struct learnerTimings_s {
-    timeUs_t start;
-    timeDelta_t filters;
-    timeDelta_t imu;
-    timeDelta_t fx;
-    timeDelta_t motor;
-    timeDelta_t gains;
-    timeDelta_t updating;
-    timeDelta_t hover;
-} learnerTimings = {0};
-
 #ifdef STM32H7
 FAST_CODE
 #endif
@@ -443,9 +443,11 @@ void updateLearner(timeUs_t current) {
     }
     learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
 
+    timeDelta_t timeSinceQueryStart = cmpTimeUs(current, learningQueryEnabledAt);
+
     bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
         && (
-            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
+            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE) && (timeSinceQueryStart < 3000000))
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
@@ -464,8 +466,14 @@ void updateLearner(timeUs_t current) {
         }
 
         // perform rls step
-        rlsParallelNewSample(&fxSpfRls, A, ySpf);
-        rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
+        //rlsParallelNewSample(&fxSpfRls, A, ySpf);
+        //rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
+
+        // perform rls step in new single filters
+        for (int i = 0; i < 3; i++) {
+            rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
+            rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
+        }
     }
     learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -607,15 +615,24 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         // indi->actLimit[act] = 0.6;
         //                    inv y-scale        a-scale           config scale
-        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
-        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
-        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
-        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
-        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
-        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
-        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
-        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
-        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
+        //actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
+        //actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
+        //actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
+        //actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
+        //actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
+        //actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
+        //actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
+        //actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
+        //actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
+        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[act];
+        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[act];
+        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[act];
+        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[act];
+        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[act];
+        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[act];
+        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[learnerConfig()->numAct + act];
+        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[learnerConfig()->numAct + act];
+        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[learnerConfig()->numAct + act];
 
         fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
 

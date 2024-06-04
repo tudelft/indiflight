@@ -8,7 +8,7 @@
 #include "rls.h"
 
 // --- helpers
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float Ts, float Tchar) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -31,10 +31,11 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float lambda) {
         rls->P[i*n + i] = gamma;
 
     // initalize forgetting factor
-    if ((lambda <= 0.f) || (lambda > 1.0f)) {
+    if ((Ts <= 0.f) || (Tchar <= 2.f*Ts)) {
         return RLS_FAIL;
     }
-    rls->lambda = lambda;
+
+    rls->lambdaBase = rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
 
     return RLS_SUCCESS;
 }
@@ -66,7 +67,6 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
         return RLS_FAIL;
     }
 
-    //rls->baseLambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
     rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
 
     return RLS_SUCCESS;
@@ -255,8 +255,7 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
 rls_exit_code_t rlsTest(void) {
     rls_t rls;
     float gamma = 1e3f;
-    float lambda = 0.9f;
-    rlsInit(&rls, 3, 2, gamma, lambda);
+    rlsInit(&rls, 3, 2, gamma, 0.005f, 0.011212807f);
     rls.x[0] = 1.;
     rls.x[1] = 2.;
     rls.x[2] = 3.;

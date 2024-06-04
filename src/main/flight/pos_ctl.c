@@ -277,9 +277,11 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     if (posRuntime.use_spf_attenuation) {
         // discount thrust if we have not yet reached our attitude
         fp_vector_t zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
-        float zDotProd = zDesNed.V.X * (rMat.m[0][2])
-            + zDesNed.V.Y * (rMat.m[1][2])
-            + zDesNed.V.Z * (rMat.m[2][2]);
+        fp_quaternion_t qHover;
+        getHoverAttitudeQuaternion(&qHover);
+        fp_vector_t zHoverFrame = quatRotMatCol(&qHover, 2);
+        float zDotProd;
+        zDotProd = VEC3_DOT(zDesNed, zHoverFrame);
 
         spfSpBodyFromPos.V.Z *= constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
     }
