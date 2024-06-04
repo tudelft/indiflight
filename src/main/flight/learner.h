@@ -96,8 +96,9 @@ extern learnerRuntime_t learnRun;
 
 extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
 extern rls_t imuRls;
-extern rls_parallel_t fxSpfRls;
-extern rls_parallel_t fxRateDotRls;
+//extern rls_parallel_t fxSpfRls;
+//extern rls_parallel_t fxRateDotRls;
+extern rls_t fxRls[6];
 extern fp_quaternion_t hoverAttitude;
 
 void initLearnerRuntime(void);
@@ -106,10 +107,23 @@ void initLearnerRuntime(void);
 // --- states and functions
 
 // learning stuff
+#define LEARNER_TIMINGS_NUM 7
+typedef struct learnerTimings_s {
+    timeUs_t start;
+    timeDelta_t filters;
+    timeDelta_t imu;
+    timeDelta_t fx;
+    timeDelta_t motor;
+    timeDelta_t gains;
+    timeDelta_t updating;
+    timeDelta_t hover;
+} learnerTimings_t;
+
+extern learnerTimings_t learnerTimings;
+
 void initLearner(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
-void updateGains(void);
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
 
 // query stuff

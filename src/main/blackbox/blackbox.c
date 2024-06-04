@@ -592,6 +592,14 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"hoverAttitude",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"hoverAttitude",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"hoverAttitude",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"learnerTimings",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 };
 
@@ -725,6 +733,7 @@ typedef struct blackboxMainState_s {
     int16_t fx_r_rls_x[BLACKBOX_LEARNER_2N];
     uint16_t learnerGains[LEARNER_LOOP_COUNT];
     int16_t hoverAttitude[4];
+    int32_t learnerTimings[LEARNER_TIMINGS_NUM];
 #endif
 } blackboxMainState_t;
 
@@ -1143,6 +1152,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->hoverAttitude, 4);
+        blackboxWriteSignedVBArray(blackboxCurrent->learnerTimings, LEARNER_TIMINGS_NUM);
     }
 #endif
 
@@ -1476,6 +1486,9 @@ static void writeInterframe(void)
 
         arraySubInt16(deltas16, blackboxCurrent->hoverAttitude, blackboxLast->hoverAttitude, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+
+        arraySubInt32(deltas, blackboxCurrent->learnerTimings, blackboxLast->learnerTimings, LEARNER_TIMINGS_NUM);
+        blackboxWriteSignedVBArray(deltas, LEARNER_TIMINGS_NUM);
     }
 #else
     UNUSED(deltas16);
@@ -1910,21 +1923,23 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int i = 0; i < 3; i++) {
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
     }
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxSpfRls.n); i++) {
-        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0*fxSpfRls.n + i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[1*fxSpfRls.n + i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[2*fxSpfRls.n + i]);
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[0].n); i++) {
+        // specific force setpoints (fxRls 0, 1, 2)
+        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
     }
     // two for loops for the rate, because we need to ensure that the omega_dot
     // regressors start at BLACKBOX_LEARNER_N and not fxRateDotRls.n which is unknown
     // in the logs
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRateDotRls.n >> 1); i++) {
-        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
-        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
-        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[3].n >> 1); i++) {
+        // rateDot (fxRls 3, 4, 5)
+        blackboxCurrent->fx_p_rls_x[i]                    = lrintf(1e3f*fxRls[3].x[i]);
+        blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[i]);
+        blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[i]);
+        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[(fxRls[3].n >> 1) + i]);
+        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[(fxRls[3].n >> 1) + i]);
+        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[(fxRls[3].n >> 1) + i]);
     }
 
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
@@ -1934,6 +1949,14 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->hoverAttitude[1] = lrintf(hoverAttitude.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->hoverAttitude[2] = lrintf(hoverAttitude.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->hoverAttitude[3] = lrintf(hoverAttitude.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+
+    blackboxCurrent->learnerTimings[0] = learnerTimings.filters;
+    blackboxCurrent->learnerTimings[1] = learnerTimings.imu;
+    blackboxCurrent->learnerTimings[2] = learnerTimings.fx;
+    blackboxCurrent->learnerTimings[3] = learnerTimings.motor;
+    blackboxCurrent->learnerTimings[4] = learnerTimings.gains;
+    blackboxCurrent->learnerTimings[5] = learnerTimings.updating;
+    blackboxCurrent->learnerTimings[6] = learnerTimings.hover;
 #endif
 
 #else
