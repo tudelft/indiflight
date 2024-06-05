@@ -2,6 +2,7 @@
 #pragma once
 
 #include "platform.h"
+#include "common/filter.h"
 
 typedef enum rls_exit_code_e {
     RLS_SUCCESS = 0,
@@ -19,6 +20,23 @@ typedef enum rls_exit_code_e {
 // todo: finally give in and use VLA or some malloc in order for this not to
 // blow up when RLS_MAX_N rises?
 
+// https://fanf2.user.srcf.net/hermes/doc/antiforgery/stats.pdf
+typedef struct movvar_s {
+    float lambda;
+    float mean;
+    float variance;
+} emwv_t;
+
+typedef struct fortescue_tuning_s {
+    biquadFilter_t errorLP;
+    emwv_t errorMV;
+} fortescue_tuning_t;
+
+void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoff, uint32_t sampleTime);
+float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTimesGains);
+void emwvInit(emwv_t* m, float halflifeTime, uint32_t sampleTimeUs);
+float emwvApply(emwv_t* m, float sample);
+
 // supports matrix valued regressors (ie multiple-output targets)
 // y = A x
 //
@@ -32,6 +50,7 @@ typedef struct rls_s {
     float P[RLS_MAX_N*RLS_MAX_N]; // column major!!
     float lambdaBase;
     float lambda;
+    fortescue_tuning_t fortescue;
     uint32_t samples;
 } rls_t; // 4 * ( N + N^2 + 1 ) + 2 bytes
 
@@ -53,7 +72,7 @@ typedef struct rls_parallel_s {
 
 // we likely need to allocate 6 + 1 + 4 RLS's for a quad, thats 3.2KB
 
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float Ts, float Tchar);
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz);
 rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y);
 rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float Tchar);
 

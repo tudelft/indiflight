@@ -71,7 +71,7 @@ typedef struct learningRuntime_s {
 
 extern learnerRuntime_t learnRun;
 
-extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
+extern rls_t motorRls[MAX_SUPPORTED_MOTORS];
 extern rls_t imuRls;
 //extern rls_parallel_t fxSpfRls;
 //extern rls_parallel_t fxRateDotRls;

@@ -402,21 +402,25 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"motor_0_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_0_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_1_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_1_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_2_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_2_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_3_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_3_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"imu_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"imu_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -426,16 +430,19 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_x_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_x_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_x_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_x_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_y_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_y_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_y_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_y_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_y_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_z_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_z_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_z_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_z_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_z_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_p_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
@@ -445,6 +452,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_p_rls_x",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
+    {"fx_p_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_q_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_q_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
@@ -454,6 +462,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_q_rls_x",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_q_rls_x",   6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_q_rls_x",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
+    {"fx_q_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_r_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_r_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
@@ -463,6 +472,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_r_rls_x",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_r_rls_x",   6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_r_rls_x",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
+    {"fx_r_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"learnerGains",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learnerGains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -607,6 +617,7 @@ typedef struct blackboxMainState_s {
     int16_t fx_p_rls_x[2*4];
     int16_t fx_q_rls_x[2*4];
     int16_t fx_r_rls_x[2*4];
+    uint16_t lambdas[10];
     uint16_t learnerGains[LEARNER_LOOP_COUNT];
     int16_t hoverAttitude[4];
     int32_t learnerTimings[LEARNER_TIMINGS_NUM];
@@ -1009,16 +1020,26 @@ static void writeIntraframe(void)
 #ifdef USE_LEARNER
     if (testBlackboxCondition(CONDITION(LEARNER))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->motor_0_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[0]);
         blackboxWriteSigned16VBArray(blackboxCurrent->motor_1_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[1]);
         blackboxWriteSigned16VBArray(blackboxCurrent->motor_2_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[2]);
         blackboxWriteSigned16VBArray(blackboxCurrent->motor_3_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[3]);
         blackboxWriteSigned16VBArray(blackboxCurrent->imu_rls_x, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_x_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[4]);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_y_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[5]);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_z_rls_x, 4);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[6]);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_p_rls_x, 8);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[7]);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_q_rls_x, 8);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[8]);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, 8);
+        blackboxWriteUnsignedVB(blackboxCurrent->lambdas[9]);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->hoverAttitude, 4);
         blackboxWriteSignedVBArray(blackboxCurrent->learnerTimings, LEARNER_TIMINGS_NUM);
@@ -1292,44 +1313,57 @@ static void writeInterframe(void)
 
 #ifdef USE_LEARNER
     if (testBlackboxCondition(CONDITION(LEARNER))) {
+        int16_t dlambdas[10];
+        arraySubUint16(dlambdas, blackboxCurrent->lambdas, blackboxLast->lambdas, 10);
+
         arraySubInt16(deltas16, blackboxCurrent->motor_0_rls_x, blackboxLast->motor_0_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[0]);
 
         arraySubInt16(deltas16, blackboxCurrent->motor_1_rls_x, blackboxLast->motor_1_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[1]);
 
         arraySubInt16(deltas16, blackboxCurrent->motor_2_rls_x, blackboxLast->motor_2_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[2]);
 
         arraySubInt16(deltas16, blackboxCurrent->motor_3_rls_x, blackboxLast->motor_3_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[3]);
 
         arraySubInt16(deltas16, blackboxCurrent->imu_rls_x, blackboxLast->imu_rls_x, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, 3);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_x_rls_x, blackboxLast->fx_x_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[4]);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_y_rls_x, blackboxLast->fx_y_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[5]);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_z_rls_x, blackboxLast->fx_z_rls_x, 4);
         blackboxWriteSigned16VBArray(deltas16, 4);
+        blackboxWriteSignedVB(dlambdas[6]);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_p_rls_x, blackboxLast->fx_p_rls_x, 2*4);
         for (int i=0; i < 4*2; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
+        blackboxWriteSignedVB(dlambdas[7]);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_q_rls_x, blackboxLast->fx_q_rls_x, 2*4);
         for (int i=0; i < 4*2; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
+        blackboxWriteSignedVB(dlambdas[8]);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_r_rls_x, blackboxLast->fx_r_rls_x, 2*4);
         for (int i=0; i < 4*2; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, 2*4);
+        blackboxWriteSignedVB(dlambdas[9]);
 
         arraySubUint16(deltas16, blackboxCurrent->learnerGains, blackboxLast->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(deltas16, LEARNER_LOOP_COUNT);
@@ -1746,10 +1780,10 @@ static void loadMainState(timeUs_t currentTimeUs)
 
 #ifdef USE_LEARNER
     for (int i = 0; i < 4; i++) {
-        blackboxCurrent->motor_0_rls_x[i] = lrintf(1e3f*motorRls[0].X[i]);
-        blackboxCurrent->motor_1_rls_x[i] = lrintf(1e3f*motorRls[1].X[i]);
-        blackboxCurrent->motor_2_rls_x[i] = lrintf(1e3f*motorRls[2].X[i]);
-        blackboxCurrent->motor_3_rls_x[i] = lrintf(1e3f*motorRls[3].X[i]);
+        blackboxCurrent->motor_0_rls_x[i] = lrintf(1e3f*motorRls[0].x[i]);
+        blackboxCurrent->motor_1_rls_x[i] = lrintf(1e3f*motorRls[1].x[i]);
+        blackboxCurrent->motor_2_rls_x[i] = lrintf(1e3f*motorRls[2].x[i]);
+        blackboxCurrent->motor_3_rls_x[i] = lrintf(1e3f*motorRls[3].x[i]);
     }
     for (int i = 0; i < 3; i++) {
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
@@ -1770,6 +1804,12 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRls[4].x[i]);
         blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRls[5].x[i]);
     }
+
+    for (int motor = 0; motor < 4; motor++)
+        blackboxCurrent->lambdas[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * motorRls[motor].lambda;
+
+    for (int axis = 0; axis < 6; axis++)
+        blackboxCurrent->lambdas[axis+4] = UNIT_FLOAT_TO_UNSIGNED16VB * fxRls[axis].lambda;
 
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
         blackboxCurrent->learnerGains[loop] = lrintf(10.f * learnRun.gains[loop]);
