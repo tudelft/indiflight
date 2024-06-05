@@ -102,7 +102,7 @@ void initLearnerRuntime(void) {
 // externs
 float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
 static timeUs_t learningQueryEnabledAt = 0;
-rls_parallel_t motorRls[MAXU];
+rls_t motorRls[MAXU];
 rls_t imuRls;
 //rls_parallel_t fxSpfRls;
 //rls_parallel_t fxRateDotRls;
@@ -153,9 +153,8 @@ void initLearner(void) {
 #endif
     initLearnerRuntime();
 
-    float dT = indiRun.dT;
-    float Tchar = 10.f*0.025f; // 10 times act constant
-    rlsInit(&imuRls, 3, 3, 1e2f, dT, Tchar);
+    float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // init filters and other rls
     //rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
@@ -163,11 +162,11 @@ void initLearner(void) {
 
     // Spf
     for (int i = 0; i < 3; i++)
-        rlsInit( &fxRls[i], learnerConfig()->numAct, 1, 1e2f, dT, Tchar );
+        rlsInit( &fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // RateDot
     for (int i = 3; i < 6; i++)
-        rlsInit( &fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, dT, Tchar );
+        rlsInit( &fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
@@ -179,7 +178,7 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsParallelInit(&motorRls[act], 4, 1, 1e2f, dT, Tchar);
+        rlsInit( &motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
@@ -322,8 +321,6 @@ static bool calculateHoverAttitude(void) {
     sgeqp3_(&M, &N, BrT, &LDA, JPVT, TAU, WORK, &LWORK, &INFO);
     if (INFO < 0) return false; // panic
 
-    int sizeNr = numAct - XYZ_AXIS_COUNT; // if Br full rank
-
     // since we used sgeqp3_, the columns of the R factor are sorted so
     // that the diagonals are non-increasing. To find if we have rank-
     // deficiency (and this a larger nullspace), we can just find the
@@ -341,11 +338,11 @@ static bool calculateHoverAttitude(void) {
     }
 
     // todo interpret INFO
-    integer K = numAct - sizeNr;
+    int sizeNr = numAct - XYZ_AXIS_COUNT; // Br is now assumed full rank
+    integer K = XYZ_AXIS_COUNT; // Br is now assumed full rank
     sorg2r_(&M, &M, &K, BrT, &LDA, TAU, WORK, &INFO); // K == N true? or M - sizeNr?
-    // todo interpret INFO
 
-    float *Nr = &BrT[(numAct-sizeNr)*numAct];
+    float *Nr = &BrT[K*numAct];
 
     // 2. Generate H. allow only W = I for now.
     //float H[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
@@ -466,11 +463,9 @@ void updateLearner(timeUs_t current) {
     }
     learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
 
-    timeDelta_t timeSinceQueryStart = cmpTimeUs(current, learningQueryEnabledAt);
-
     bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
         && (
-            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE) && (timeSinceQueryStart < 3000000))
+            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
@@ -500,8 +495,7 @@ void updateLearner(timeUs_t current) {
     }
     learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
 
-    // same for now
-    bool motorLearningConditions = fxLearningConditions;
+    bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
     if (motorLearningConditions) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
@@ -512,7 +506,7 @@ void updateLearner(timeUs_t current) {
                 -1e-4f * learnRun.motorOmegaDot[act]
             };
             float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
-            rlsParallelNewSample(&motorRls[act], A, &y);
+            rlsNewSample( &motorRls[act], A, &y );
         }
     }
     learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
@@ -523,7 +517,7 @@ void updateLearner(timeUs_t current) {
         // get slowest actuator
         float maxTau = 0.f;
         for (int act = 0; act < learnerConfig()->numAct; act++)
-            maxTau = MAX(maxTau, motorRls[act].X[3] * 0.1f);
+            maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
 
         // calculate gains
@@ -622,15 +616,15 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
     for (int act = 0; act < learnerConfig()->numAct ; act++) {
         //              inv y-scale 
-        float maxOmega =   1e3f  *  (motorRls[act].X[0] + motorRls[act].X[1]);
+        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale
-        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].X[3], 10.f, 200.f);
+        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].x[3], 10.f, 200.f);
 
-        if ((motorRls[act].X[0] > 0.f) && (motorRls[act].X[1] > 0.f))
+        if ((motorRls[act].x[0] > 0.f) && (motorRls[act].x[1] > 0.f))
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
-                motorRls[act].X[0] / (motorRls[act].X[0] + motorRls[act].X[1]),
+                motorRls[act].x[0] / (motorRls[act].x[0] + motorRls[act].x[1]),
                 0.f, 1.f);
             // todo: transform to match kappa better
         else

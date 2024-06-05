@@ -29,9 +29,49 @@
 #include <math.h>
 
 #include "rls.h"
+#include "common/filter.h"
+
+void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoffFreqHz, uint32_t sampleTimeUs) {
+    biquadFilterInitLPF( &(fortescue->errorLP), cutoffFreqHz, sampleTimeUs );
+    emwvInit( &(fortescue->errorMV), 1. / ( 2.f * M_PIf * cutoffFreqHz ), sampleTimeUs );
+    fortescue->errorMV.variance = 0.01f;
+}
+
+float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTimesGains) {
+    float errorLP = biquadFilterApply( &(fortescue->errorLP), error );
+    float errorHP = error - errorLP;
+    float errorVar = emwvApply( &(fortescue->errorMV), errorHP );
+
+    // lam = 1 - ( 1 - AT K ) * (e**2) / Sigma0
+    float lambda;
+    if (errorVar < 1e-6)
+        lambda = 1.;
+    else
+        lambda = 1.f - ( 1.f - regressTimesGains ) * error * error / (10000.*errorVar);
+
+    if (lambda != lambda)
+        __asm("BKPT #0\n") ; // Break into the debugger
+
+    return lambda;
+}
+
+void emwvInit(emwv_t* m, float cutoffFreqHz, uint32_t sampleTimeUs) {
+    m->lambda = powf( 1.f - (float) _M_LN2, (2.f * M_PIf * cutoffFreqHz * 1e-6f * ((float) sampleTimeUs)) );
+    m->mean = 0.f;
+    m->variance = 0.f;
+}
+
+float emwvApply(emwv_t* m, float sample) {
+    float diff = sample - m->mean;
+    float incr = ( 1 - m->lambda ) * diff;
+    m->mean += incr;
+    m->variance = m->lambda * ( m->variance  +  diff * incr );
+
+    return m->variance;
+}
 
 // --- helpers
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float Ts, float Tchar) {
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -54,16 +94,19 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, float Ts, float T
         rls->P[i*n + i] = gamma;
 
     // initalize forgetting factor
-    if ((Ts <= 0.f) || (Tchar <= 2.f*Ts)) {
+    float sampleFreqHz = 1e6f / ((float) sampleTimeUs);
+    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45 * sampleFreqHz))
         return RLS_FAIL;
-    }
 
-    rls->lambdaBase = rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
+    rls->lambdaBase = rls->lambda = powf(1.f - (float) _M_LN2, (2. * M_PIf * actionBandwidthHz) / (sampleFreqHz));
+
+    // initialize fortescue tuner
+    fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
 
     return RLS_SUCCESS;
 }
 
-rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float Tchar) {
+rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float actMinBandwidthHz) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -86,11 +129,11 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
         rls->P[i*n + i] = gamma;
 
     // initalize forgetting factor
-    if ((Ts <= 0.f) || (Tchar <= 2.f*Ts)) {
+    if ((Ts <= 0.f) || (actMinBandwidthHz <= 2.f*Ts)) {
         return RLS_FAIL;
     }
 
-    rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
+    rls->lambda = powf(1.f - (float) _M_LN2, Ts / actMinBandwidthHz);
 
     return RLS_SUCCESS;
 }
@@ -101,15 +144,10 @@ FAST_CODE
 rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     rls->samples++;
 
-    float lam = rls->lambda;
-    float traceP = 0.f;
-    for (int row = 0; row < rls->n; row++) {
-        traceP += rls->P[row + row*rls->n];
-        if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
-            lam = 1.f + 0.1f * (1.f - rls->lambda); // attempt return to lower P
-            // break; // still need to compute trace
-        }
-    }
+    // re-symmetrize P by copying upper tri to lower tri
+    for (int col = 0; col < rls->n; col++)
+        for (int row = col+1; row < rls->n; row++)
+            rls->P[col*rls->n + row] = rls->P[row*rls->n + col];
 
     // M = lambda I  +  A P A**T
     // K = P A**T * inv(M)
@@ -121,9 +159,11 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     // M = lambda I  +  A (P A**T)  = lambda I  +  (P A**T)**T AT
     float M[RLS_MAX_D*RLS_MAX_D] = {0};
     for (int row = 0; row < rls->d; row++)
-        M[row + row*rls->d] = lam;
+        M[row + row*rls->d] = rls->lambda;
 
     SGEMMt(rls->d, rls->d, rls->n, PAT, AT, M, 1.f, 1.f);
+    if (M[0] <= 0.f)
+        __asm("BKPT #0\n") ; // Break into the debugger
 
     // solve K = P A**T inv(M)
     // solve K**T = inv(M) A P
@@ -141,6 +181,30 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     for (int col = 0; col < rls->n; col++)
         chol_solve(U, iDiag, rls->d, &AP[col*rls->d], &KT[col*rls->d]);
 
+    // e = y - A x
+    // e**T = y**T - x**T A**T
+    float e[RLS_MAX_D];
+    SGEMVt(rls->n, rls->d, AT, rls->x, e);
+    for (int row = 0; row < rls->d; row++)
+        e[row] = y[row] - e[row];
+
+    if (rls->d == 1) {
+        // adaptive forgetting only implemented for MISO systems
+        float ATK;
+        SGEVV(rls->n, AT, KT, ATK);
+        float lamFortescue = fortescueApply( &(rls->fortescue), e[0], ATK );
+        rls->lambda = constrainf(lamFortescue, rls->lambdaBase, 1.);
+    }
+
+    float traceP = 0.f;
+    for (int row = 0; row < rls->n; row++) {
+        traceP += rls->P[row + row*rls->n];
+        if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
+            rls->lambda = 1.f + 0.1f * (1.f - rls->lambdaBase); // attempt return to lower P
+            // break; // still need to compute trace
+        }
+    }
+
     // in the subtraction below numerical inaccuracies can creep in.
     // limit the order reduction
     float traceKAP = 0.f;
@@ -154,15 +218,22 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
 
     // K A P  =  (A P)**T K**T  =  (P A**T) K**T
     // lambda**(-1) (P  -  K A P)  =  ilam (P  - KAPmult * (P A**T) K**T)
+    // =  ilam*KAPmult (iKAPmult * P  - (P A**T) K**T)
+    // P  <--  -ilam*KAPmult * (-iKAPmult * P  +  (P A**T) K**T)
 
     // select KAPmult to ensure that traceP - trace(KAP * KAPmult) > 0.1 traceP
     // to maintain numerical accuracy
     float KAPmult = 1.f;
     if (traceKAP > RLS_COV_MIN)
-        KAPmult = MIN((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1.f);
+        KAPmult = constrainf((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1e-6f, 1.f);
 
-    float ilam = 1.f / lam;
-    SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -KAPmult, -ilam);
+    float ilam = 1.f / rls->lambda;
+    float ilamKAPmult = ilam * KAPmult;
+    float iKAPmult = 1.f / KAPmult;
+
+    SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -iKAPmult, -ilamKAPmult);
+    if (rls->P[0] < 0.)
+        __asm("BKPT #0\n") ; // Break into the debugger
 
     // ensure positive definiteness (of at least the upper/lower factor)
     // we potentially need to re-symmetrize every couple of iterations in order
@@ -171,13 +242,6 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     //for (int row = 0; row < rls->n; row++)
     //    rls->P[row + row*rls->n] = MAX(RLS_COV_MIN, rls->P[row + row*rls->n]);
     // can never happen now, since we have KAPmult. Re-symmetrizing is a good idea though
-
-    // e = y - A x
-    // e**T = y**T - x**T A**T
-    float e[RLS_MAX_D];
-    SGEMVt(rls->n, rls->d, AT, rls->x, e);
-    for (int row = 0; row < rls->d; row++)
-        e[row] = y[row] - e[row];
 
     // x = x + K * e
     // x**T = x**T  +  e**T K**T
@@ -278,7 +342,7 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
 rls_exit_code_t rlsTest(void) {
     rls_t rls;
     float gamma = 1e3f;
-    rlsInit(&rls, 3, 2, gamma, 0.005f, 0.011212807f);
+    rlsInit(&rls, 3, 2, gamma, 5000, 1.f / (2.f * M_PIf * 0.011212807f));
     rls.x[0] = 1.;
     rls.x[1] = 2.;
     rls.x[2] = 3.;
