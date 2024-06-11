@@ -1269,8 +1269,9 @@ bool isTouchingGround(void) {
     // this breaks down for fixed wings, and probably "3D" thrust ESCs
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE) 
-        && (learningQueryState >= LEARNING_QUERY_DELAY)
-        && (learningQueryState != LEARNING_QUERY_DONE))
+        && ( ( (learningQueryState >= LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE) )
+            || ( (nullexState > LEARNER_NULLEX_STATE_IDLE) && (nullexState != LEARNER_NULLEX_STATE_DONE) ) )
+        )
         return false; // never touching ground here
 #endif
 #ifdef USE_CATAPULT

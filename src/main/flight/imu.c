@@ -191,6 +191,8 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     zB.V.X = rMat.m[2][X];
     zB.V.Y = rMat.m[2][Y];
     zB.V.Z = rMat.m[2][Z];
+    //if (zB.V.Z != zB.V.Z)
+    //    __asm("BKPT #0\n");
 
     // Use raw heading error (from GPS or whatever else)
     float ex = 0, ey = 0, ez = 0;

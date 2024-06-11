@@ -153,3 +153,21 @@ typedef struct motor_state_s {
 } motor_state_t;
 
 void runLearningQueryStateMachine(timeUs_t current);
+
+#define LEARNER_NULLEX_STEP_AMP 0.3f
+#define LEARNER_NULLEX_STEP_TIME 100000
+#define LEARNER_NULLEX_ARREST_TIME 200000
+#define LEARNER_NULLEX_SAFETY_TIMEOUT 400000
+
+typedef enum nullex_state_e {
+    LEARNER_NULLEX_STATE_IDLE = -1,
+    LEARNER_NULLEX_STATE_ARREST = 0,
+    LEARNER_NULLEX_STATE_ACTIVE,
+    LEARNER_NULLEX_STATE_DONE
+} nullex_state_t;
+
+extern nullex_state_t nullexState;
+extern float uDeltaFromNullex[MAX_SUPPORTED_MOTORS];
+extern fp_vector_t spfBodyDeltaFromNullex;
+
+void runRotNullspaceExcitation(timeUs_t current);

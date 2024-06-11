@@ -211,9 +211,19 @@ static void updateLearningFilters(void) {
     float ax, ay, az;
 
     //rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
-    rx = accelerometerConfig()->acc_offset[0] * 1e-3f;
-    ry = accelerometerConfig()->acc_offset[1] * 1e-3f;
-    rz = accelerometerConfig()->acc_offset[2] * 1e-3f;
+    fp_vector_t r;
+    r.V.X = accelerometerConfig()->acc_offset[0] * 1e-3f;
+    r.V.Y = accelerometerConfig()->acc_offset[1] * 1e-3f;
+    r.V.Z = accelerometerConfig()->acc_offset[2] * 1e-3f;
+
+    fp_quaternion_t iBoard_q;
+    getAttitudeQuaternion( &iBoard_q );
+    iBoard_q.w *= -1.f;
+    rotate_vector_with_quaternion( &r, &iBoard_q );
+
+    rx = r.V.X;
+    ry = r.V.Y;
+    rz = r.V.Z;
 
     dwx = indiRun.rateDotIMU.A[0];
     dwy = indiRun.rateDotIMU.A[1];
@@ -265,6 +275,9 @@ static void updateLearningFilters(void) {
         learnRun.motorSqrtD[act] = biquadFilterApply(&motorSqrtDFilter[act], sqrtf(dConstr));
     }
 }
+
+static float rotNull[LEARNING_MAX_ACT*(LEARNING_MAX_ACT - 3)];
+static int sizeRotNull = 0;
 
 static bool calculateHoverAttitude(void) {
     // for QR: call sgegr2 and sorgr2 instead of sgeqrf and sorgrf.
@@ -338,22 +351,30 @@ static bool calculateHoverAttitude(void) {
     }
 
     // todo interpret INFO
-    int sizeNr = numAct - XYZ_AXIS_COUNT; // Br is now assumed full rank
+    sizeRotNull = numAct - XYZ_AXIS_COUNT; // Br is now assumed full rank
     integer K = XYZ_AXIS_COUNT; // Br is now assumed full rank
-    sorg2r_(&M, &M, &K, BrT, &LDA, TAU, WORK, &INFO); // K == N true? or M - sizeNr?
+    sorg2r_(&M, &M, &K, BrT, &LDA, TAU, WORK, &INFO); // K == N true? or M - sizeRotNull?
 
     float *Nr = &BrT[K*numAct];
 
+    // save nullspace
+    for (int col = 0; col < sizeRotNull; col++)
+        for (int row = 0; row < numAct; row++ ) {
+            if (Nr[col*numAct + row] != Nr[col*numAct + row])
+                return false;
+            rotNull[col*numAct + row] = Nr[col*numAct + row];
+        }
+
     // 2. Generate H. allow only W = I for now.
     //float H[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
-    //SGEMMt(sizeNr, sizeNr, numAct, Nr, Nr, H, 0.f, 1.f);
+    //SGEMMt(sizeRotNull, sizeRotNull, numAct, Nr, Nr, H, 0.f, 1.f);
     // jokes, this is always I, if W = I
 
     // 3. Generate A
     float BfNr[3*LEARNING_MAX_ACT]; // todo could be smaller since we disallow M < N?
     float A[LEARNING_MAX_ACT*LEARNING_MAX_ACT]; // could also be smaller! will be a waste of stack.. allocate on the RAM?
-    SGEMMt(3, sizeNr, numAct, BfT, Nr, BfNr, 0.f, 1.f);
-    SGEMMt(sizeNr, sizeNr, 3, BfNr, BfNr, A, 0.f, 1.f);
+    SGEMMt(3, sizeRotNull, numAct, BfT, Nr, BfNr, 0.f, 1.f);
+    SGEMMt(sizeRotNull, sizeRotNull, 3, BfNr, BfNr, A, 0.f, 1.f);
 
     // 4. find eigenvector. Remember H == I
     static float v[LEARNING_MAX_ACT] = {-0.5051f,  0.3486f, -0.9154f,  0.5560f}; // can also be smaller since M < N
@@ -361,16 +382,16 @@ static bool calculateHoverAttitude(void) {
     float HinvAv[LEARNING_MAX_ACT]; // can be smaller
     float HinvAvNorm2;
     for (int i = LEARNER_NUM_POWER_ITERATIONS; i > 0; i--) {
-        SGEMVt(sizeNr, sizeNr, A, v, HinvAv); // A is symmetric, SGEMVf is faster
-        SGEVV(sizeNr, HinvAv, HinvAv, HinvAvNorm2); // guaranteed >= 0.f
+        SGEMVt(sizeRotNull, sizeRotNull, A, v, HinvAv); // A is symmetric, SGEMVf is faster
+        SGEVV(sizeRotNull, HinvAv, HinvAv, HinvAvNorm2); // guaranteed >= 0.f
         if (HinvAvNorm2 < 1e-8f) {
             // we picked a starting vector near orthogonal to the eigenvector
             // we want to find. reset to a pseudorandom vector
-            for (int row = 0; row < sizeNr; row++)
+            for (int row = 0; row < sizeRotNull; row++)
                 v[row] = rngFloat();
             continue;
         }
-        SGEVS(sizeNr, HinvAv, 1.f / sqrtf(HinvAvNorm2), v); // fast inverse sqrt anyone?
+        SGEVS(sizeRotNull, HinvAv, 1.f / sqrtf(HinvAvNorm2), v); // fast inverse sqrt anyone?
     }
 
     // 5. find length for v to cancel gravity
@@ -379,22 +400,22 @@ static bool calculateHoverAttitude(void) {
     // the (linearized) hover thrust.
     float Av[LEARNING_MAX_ACT];
     float vTAv;
-    SGEMVt(sizeNr, sizeNr, A, v, Av);
-    SGEVV(sizeNr, v, Av, vTAv);
+    SGEMVt(sizeRotNull, sizeRotNull, A, v, Av);
+    SGEVV(sizeRotNull, v, Av, vTAv);
     if (vTAv < 1e-10f) return false; // panic
 
     float scale = GRAVITYf * 1.f / sqrtf( vTAv ); // fast inverse sqrt?
-    SGEVS(sizeNr, v, scale, v);
+    SGEVS(sizeRotNull, v, scale, v);
 
     // 6. find if up or down
     float uHover[LEARNING_MAX_ACT];
-    SGEMV(numAct, sizeNr, Nr, v, uHover);
+    SGEMV(numAct, sizeRotNull, Nr, v, uHover);
     float uHoverSum = 0.f;
     for (int row = 0; row < numAct; row++)
         uHoverSum += uHover[row];
 
     if (uHoverSum < 0.f) {
-        for (int row = 0; row < sizeNr; row++)
+        for (int row = 0; row < sizeRotNull; row++)
             v[row] = -v[row];
         for (int row = 0; row < numAct; row++)
             uHover[row] = -uHover[row];
@@ -417,6 +438,8 @@ static bool calculateHoverAttitude(void) {
     fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
     quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
+    if (hoverAttitude.w != hoverAttitude.w)
+        __asm("BKPT #1\n");
 
     return true;
 }
@@ -448,9 +471,9 @@ void updateLearner(timeUs_t current) {
 
         // remember: column major formulation!
         float AT[3*3] = {
-            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y - dw->Z,           w->X * w->Z + dw->Y,
-             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z - dw->X,
-             w->X * w->Z - dw->Y,           w->Y * w->Z + dw->X,          -(w->X * w->X + w->Y * w->Y)
+            -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y + dw->Z,           w->X * w->Z - dw->Y,
+             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z + dw->X,
+             w->X * w->Z + dw->Y,           w->Y * w->Z - dw->X,          -(w->X * w->X + w->Y * w->Y)
         };
         float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
 
@@ -467,6 +490,7 @@ void updateLearner(timeUs_t current) {
         && (
             ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
+            || ((nullexState > LEARNER_NULLEX_STATE_IDLE) && (nullexState != LEARNER_NULLEX_STATE_DONE))
            );
 
     if (fxLearningConditions) {
@@ -489,7 +513,8 @@ void updateLearner(timeUs_t current) {
 
         // perform rls step in new single filters
         for (int i = 0; i < 3; i++) {
-            rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
+            if (nullexState != LEARNER_NULLEX_STATE_ARREST)
+                rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
             rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
         }
     }
@@ -534,6 +559,7 @@ void updateLearner(timeUs_t current) {
 
 
     bool hoverAttitudeConditions = fxLearningConditions;
+        //&& (nullexState != LEARNER_NULLEX_STATE_ARREST);
 
     static bool hoverAttitudeSuccess = false;
     UNUSED(hoverAttitudeSuccess);
@@ -795,8 +821,8 @@ doMore:
             if ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) {
                 // randomize board rotation after catapulting with 0 0 0 board rotation
                 fp_euler_t boardEulers_fp = {  // Forward Right Down
-                    .angles.roll = DEGREES_TO_RADIANS(-17),
-                    .angles.pitch = DEGREES_TO_RADIANS(33),
+                    .angles.roll = DEGREES_TO_RADIANS(0),
+                    .angles.pitch = DEGREES_TO_RADIANS(0),
                     .angles.yaw = DEGREES_TO_RADIANS(0) };
                 i16_euler_t boardEulers_i16;
                 i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
@@ -934,6 +960,84 @@ doMoreMotors:
 
     for (int motor = 0; motor < c->numAct; motor++) {
         outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
+    }
+}
+
+nullex_state_t nullexState = LEARNER_NULLEX_STATE_IDLE;
+float uDeltaFromNullex[MAX_SUPPORTED_MOTORS] = {0};
+fp_vector_t spfBodyDeltaFromNullex = {0};
+
+void runRotNullspaceExcitation(timeUs_t current) {
+    static int nullspaceCounter = 0;
+    static timeUs_t nextNullspaceAt = 0;
+    static timeUs_t activateAt = 0;
+    static timeUs_t safetyTimeoutAt = 0;
+    static bool activateConditions = false;
+
+    activateConditions = ARMING_FLAG(ARMED)
+        && FLIGHT_MODE(LEARNER_MODE)
+        && (learningQueryState == LEARNING_QUERY_DONE);
+    // todo: instead of delay, check attitude error low, rateDotSp low
+
+    for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++)
+        uDeltaFromNullex[i] = 0.f;
+    for (int i = 0; i < 3; i++)
+        spfBodyDeltaFromNullex.A[i] = 0.f;
+
+    if ((nullexState > LEARNER_NULLEX_STATE_IDLE) && cmpTimeUs(current, safetyTimeoutAt) > 0)
+        nullexState = LEARNER_NULLEX_STATE_DONE;
+
+    switch (nullexState) {
+        case LEARNER_NULLEX_STATE_IDLE:
+            if (!activateConditions) break;
+
+            nullspaceCounter = sizeRotNull-1;
+            activateAt = current + LEARNER_NULLEX_ARREST_TIME;
+            safetyTimeoutAt = current + LEARNER_NULLEX_SAFETY_TIMEOUT;
+            nullexState = LEARNER_NULLEX_STATE_ARREST; // fallthrough
+
+        case LEARNER_NULLEX_STATE_ARREST:
+            if (cmpTimeUs(current, activateAt) < 0) break;
+
+            nextNullspaceAt = current + LEARNER_NULLEX_STEP_TIME;
+            nullexState = LEARNER_NULLEX_STATE_ACTIVE; // fallthrough
+
+        case LEARNER_NULLEX_STATE_ACTIVE:
+            if (nullspaceCounter < sizeRotNull) {
+                if (cmpTimeUs( current, nextNullspaceAt - 0.5f*LEARNER_NULLEX_STEP_TIME ) < 0) {
+                    float nullSum = 0.f;
+                    for (int i = 0; i < learnerConfig()->numAct; i++) {
+                        uDeltaFromNullex[i] = LEARNER_NULLEX_STEP_AMP 
+                            * rotNull[nullspaceCounter*learnerConfig()->numAct + i];
+                        nullSum += uDeltaFromNullex[i];
+                    }
+
+                    // make positive in thrust direction by checking nullSum
+                    // and make every other nullspace give opposite delta action
+                    if ((nullSum < 0.f) ^ (nullspaceCounter % 2))
+                        for (int i = 0; i < learnerConfig()->numAct; i++)
+                            uDeltaFromNullex[i] = -uDeltaFromNullex[i];
+
+                    // calculate expected impact on spf, not sure if eventually needed
+                    // do some filtering because effect isnt instant?
+                    for (int row = 0; row < 3; row++)
+                        for (int act = 0; act < learnerConfig()->numAct; act++)
+                            spfBodyDeltaFromNullex.A[row] += indiRun.actG1[row][act] * uDeltaFromNullex[act];
+                }
+
+                if (cmpTimeUs(current, nextNullspaceAt) > 0) {
+                    nullspaceCounter++;
+                    nextNullspaceAt += LEARNER_NULLEX_STEP_TIME;
+                }
+                break;
+            }
+
+            nullexState = LEARNER_NULLEX_STATE_DONE; // fallthrough
+
+        case LEARNER_NULLEX_STATE_DONE:
+            if (learningQueryState == LEARNING_QUERY_IDLE)
+                nullexState = LEARNER_NULLEX_STATE_IDLE;
+            break;
     }
 }
 
