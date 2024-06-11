@@ -30,6 +30,7 @@ typedef struct movvar_s {
 typedef struct fortescue_tuning_s {
     biquadFilter_t errorLP;
     emwv_t errorMV;
+    float sampleFreqHz;
 } fortescue_tuning_t;
 
 void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoff, uint32_t sampleTime);

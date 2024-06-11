@@ -12,19 +12,17 @@ void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoffFreqHz, uint
     biquadFilterInitLPF( &(fortescue->errorLP), cutoffFreqHz, sampleTimeUs );
     emwvInit( &(fortescue->errorMV), 1. / ( 2.f * M_PIf * cutoffFreqHz ), sampleTimeUs );
     fortescue->errorMV.variance = 0.01f;
+    fortescue->sampleFreqHz = 1e6f / ((float) sampleTimeUs);
 }
 
 float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTimesGains) {
     float errorLP = biquadFilterApply( &(fortescue->errorLP), error );
     float errorHP = error - errorLP;
-    float errorVar = emwvApply( &(fortescue->errorMV), errorHP );
+    float errorVar = MAX(1e-4, emwvApply( &(fortescue->errorMV), errorHP ));
 
     // lam = 1 - ( 1 - AT K ) * (e**2) / Sigma0
-    float lambda;
-    if (errorVar < 1e-6)
-        lambda = 1.;
-    else
-        lambda = 1.f - ( 1.f - regressTimesGains ) * error * error / (10000.*errorVar);
+    float e2 = error * error;
+    float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5. * fortescue->sampleFreqHz * errorVar );
 
     if (lambda != lambda)
         __asm("BKPT #0\n") ; // Break into the debugger

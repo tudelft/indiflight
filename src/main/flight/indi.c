@@ -119,6 +119,8 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LEARNER
     runLearningQueryStateMachine(current);
+    //runRotNullspaceExcitation(current);
+    UNUSED(runRotNullspaceExcitation);
 #endif
 
     // flight mode handling for setpoints
@@ -134,12 +136,32 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
-            && (learningQueryState < LEARNING_QUERY_DONE)) {
+        && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
+        && (learningQueryState < LEARNING_QUERY_DONE))
+    {
         indiRun.bypassControl = true;
-        for (int i=0; i < indiRun.actNum; i++) {
+        for (int i=0; i < indiRun.actNum; i++)
             indiRun.d[i] = outputFromLearningQuery[i];
-        }
+    }
+    else if (FLIGHT_MODE(LEARNER_MODE) && (nullexState == LEARNER_NULLEX_STATE_ARREST))
+    {
+        indiRun.bypassControl = false;
+        indiRun.controlAttitude = true;
+        indiRun.attSpNed.w = 1.;
+        indiRun.attSpNed.x = 0.;
+        indiRun.attSpNed.y = 0.;
+        indiRun.attSpNed.z = 0.;
+        indiRun.rateSpBodyCommanded.V.X = 0.;
+        indiRun.rateSpBodyCommanded.V.Y = 0.;
+        indiRun.rateSpBodyCommanded.V.Z = 0.;
+    }
+    else if (FLIGHT_MODE(LEARNER_MODE) && (nullexState == LEARNER_NULLEX_STATE_ACTIVE))
+    {
+        indiRun.bypassControl = false;
+        indiRun.controlAttitude = false;
+        indiRun.rateSpBodyCommanded.V.X = 0.;
+        indiRun.rateSpBodyCommanded.V.Y = 0.;
+        indiRun.rateSpBodyCommanded.V.Z = 0.;
     } else
 #endif
 #ifdef USE_LOCAL_POSITION
@@ -403,7 +425,6 @@ void getMotorCommands(timeUs_t current) {
     // horrible code! Fixme todo
     if (indiRun.bypassControl) { return; }
 
-
     // use INDI only when in the air, solve linearized global problem otherwise
     bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
@@ -411,6 +432,9 @@ void getMotorCommands(timeUs_t current) {
     indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
+    //indiRun.dv[0] = spfBodyDeltaFromNullex.V.X;
+    //indiRun.dv[1] = spfBodyDeltaFromNullex.V.Y;
+    //indiRun.dv[2] = indiRun.spfSpBody.V.Z + spfBodyDeltaFromNullex.V.Z - doIndi * indiRun.spf_fs.V.Z;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
@@ -497,8 +521,12 @@ void getMotorCommands(timeUs_t current) {
         //float accumulate = G1G2_inv[i][0] * dv[0];
         //for (int j=1; j < nv; j++)
         //    accumulate += G1G2_inv[i][j] * dv[j];
-        if (as_exit_code < AS_NAN_FOUND_Q)
-            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+        if (as_exit_code < AS_NAN_FOUND_Q) {
+            indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
+            indiRun.u[i] = constrainf(indiRun.u[i] + uDeltaFromNullex[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+        }
+
+        // todo: uDeltaFromNullex isnt correctly used?
 
         // apply lag filter to simulate spinup dynamics
         if (ARMING_FLAG(ARMED) || true) {

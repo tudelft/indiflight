@@ -96,6 +96,11 @@ void f2a (double dbl, unsigned int base, char *bf)
         dbl = -dbl;
     }
 
+    if (dbl != dbl) {
+        memcpy(bf, "nan\0", 4);
+        return;
+    }
+
     if ((float) dbl < 1e-38F) {
         // assume 0
         memcpy (bf, "+0.000e+0\0", 10);
