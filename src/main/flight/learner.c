@@ -58,6 +58,10 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .zetaAttitude = 80,
     .zetaVelocity = 60,
     .zetaPosition = 80,
+    .rollMisalignment = 0,
+    .pitchMisalignment = 0,
+    .yawMisalignment = 0,
+    .randomizeMisalignment = false,
     .applyIndiProfileAfterQuery = false,
     .applyPositionProfileAfterQuery = false,
     .applyHoverRotationAfterQuery = false
@@ -194,8 +198,8 @@ static void updateLearningFilters(void) {
     r.V.Z = accelerometerConfig()->acc_offset[2] * 1e-3f;
 
     fp_quaternion_t iBoard_q;
-    getAttitudeQuaternion( &iBoard_q );
-    iBoard_q.w *= -1.f;
+    quaternion_of_rotationMatrix( &iBoard_q, &boardRotation );
+    //iBoard_q.w *= -1.f;
     rotate_vector_with_quaternion( &r, &iBoard_q );
 
     rx = r.V.X;
@@ -415,8 +419,8 @@ static bool calculateHoverAttitude(void) {
     fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
     quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
-    if (hoverAttitude.w != hoverAttitude.w)
-        __asm("BKPT #1\n");
+    //if (hoverAttitude.w != hoverAttitude.w)
+    //    __asm("BKPT #1\n");
 
     return true;
 }
@@ -435,7 +439,7 @@ void updateLearner(timeUs_t current) {
 
     // wait for motors to spool down before learning imu position
     bool imuLearningConditions = ((learningQueryState == LEARNING_QUERY_DELAY) 
-            && (cmpTimeUs(current, learningQueryEnabledAt) > 75000));
+            && (cmpTimeUs(current, learningQueryEnabledAt) > 100000));
 
     if (imuLearningConditions) {
         // accIMU  =  accB  +  rateDot x R  +  rate x (rate x R)
@@ -449,7 +453,7 @@ void updateLearner(timeUs_t current) {
         // remember: column major formulation!
         float AT[3*3] = {
             -(w->Y * w->Y + w->Z * w->Z),   w->X * w->Y + dw->Z,           w->X * w->Z - dw->Y,
-             w->X * w->Y + dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z + dw->X,
+             w->X * w->Y - dw->Z,          -(w->X * w->X + w->Z * w->Z),   w->Y * w->Z + dw->X,
              w->X * w->Z + dw->Y,           w->Y * w->Z - dw->X,          -(w->X * w->X + w->Y * w->Y)
         };
         float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
@@ -797,10 +801,17 @@ doMore:
 
             if ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) {
                 // randomize board rotation after catapulting with 0 0 0 board rotation
-                fp_euler_t boardEulers_fp = {  // Forward Right Down
-                    .angles.roll = DEGREES_TO_RADIANS(0),
-                    .angles.pitch = DEGREES_TO_RADIANS(0),
-                    .angles.yaw = DEGREES_TO_RADIANS(0) };
+                fp_euler_t boardEulers_fp = { 0 };
+                if (learnerConfig()->randomizeMisalignment) {
+                    // Forward Right Down
+                    boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(ABS(learnerConfig()->rollMisalignment)) * rngFloat();
+                    boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(ABS(learnerConfig()->pitchMisalignment)) * rngFloat();
+                    boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(ABS(learnerConfig()->yawMisalignment)) * rngFloat();
+                } else {
+                    boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(learnerConfig()->rollMisalignment);
+                    boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(learnerConfig()->pitchMisalignment);
+                    boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(learnerConfig()->yawMisalignment);
+                }
                 i16_euler_t boardEulers_i16;
                 i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
                 boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
@@ -823,7 +834,7 @@ doMore:
                     || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
 
                 learningQueryEnabledAt = current;
-                startAt = current + c->delayMs*1e3;
+                startAt = current + MAX(c->delayMs, 1)*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine
                 safetyTimeoutUs = 10000 + c->delayMs*1e3 +
                     + 1e3 * c->numAct * (c->stepMs + c->rampMs)

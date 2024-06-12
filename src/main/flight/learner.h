@@ -27,6 +27,10 @@ typedef struct learnerConfig_s {
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
     uint8_t actLimit;
+    int16_t rollMisalignment;
+    int16_t pitchMisalignment;
+    int16_t yawMisalignment;
+    uint8_t randomizeMisalignment;
     uint8_t applyIndiProfileAfterQuery;
     uint8_t applyPositionProfileAfterQuery;
     uint8_t applyHoverRotationAfterQuery;

@@ -24,8 +24,8 @@ float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTi
     float e2 = error * error;
     float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5. * fortescue->sampleFreqHz * errorVar );
 
-    if (lambda != lambda)
-        __asm("BKPT #0\n") ; // Break into the debugger
+    //if (lambda != lambda)
+    //    __asm("BKPT #0\n") ; // Break into the debugger
 
     return lambda;
 }
@@ -137,8 +137,8 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
         M[row + row*rls->d] = rls->lambda;
 
     SGEMMt(rls->d, rls->d, rls->n, PAT, AT, M, 1.f, 1.f);
-    if (M[0] <= 0.f)
-        __asm("BKPT #0\n") ; // Break into the debugger
+    ///if (M[0] <= 0.f)
+    ///    __asm("BKPT #0\n") ; // Break into the debugger
 
     // solve K = P A**T inv(M)
     // solve K**T = inv(M) A P
@@ -169,6 +169,7 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
         SGEVV(rls->n, AT, KT, ATK);
         float lamFortescue = fortescueApply( &(rls->fortescue), e[0], ATK );
         rls->lambda = constrainf(lamFortescue, rls->lambdaBase, 1.);
+        rls->lambda = rls->lambdaBase;
     }
 
     float traceP = 0.f;
@@ -207,8 +208,8 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     float iKAPmult = 1.f / KAPmult;
 
     SGEMM(rls->n, rls->n, rls->d, PAT, KT, rls->P, -iKAPmult, -ilamKAPmult);
-    if (rls->P[0] < 0.)
-        __asm("BKPT #0\n") ; // Break into the debugger
+    ///if (rls->P[0] < 0.)
+    ///    __asm("BKPT #0\n") ; // Break into the debugger
 
     // ensure positive definiteness (of at least the upper/lower factor)
     // we potentially need to re-symmetrize every couple of iterations in order
