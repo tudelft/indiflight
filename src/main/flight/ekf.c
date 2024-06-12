@@ -156,11 +156,11 @@ void runEkf(timeUs_t currentTimeUs) {
 	ekf_U[5] = DEGREES_TO_RADIANS(-gyro.gyroADCf[2]);
 
 	// add to history (will be used in the update step)
-	ekf_add_to_history(currentTimeUs * 1e-6);
+	// ekf_add_to_history(currentTimeUs * 1e-6);
 
 	// PREDICTION STEP
-	// float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-	// ekf_predict(ekf_U, dt);
+	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+	ekf_predict(ekf_U, dt);
 
 	// UPDATE STEP 			(only when new measurement is available)
 	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
@@ -183,18 +183,18 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_Z[5] += delta_psi;
 
 		// old update:
-		// ekf_update(ekf_Z);
+		ekf_update(ekf_Z);
 
 		// new update that takes into account the time delay:
 		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
-		float delay = 0.008;
-		ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
+		// float delay = 0.008;
+		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
 	} 
-	else {
-		// no new measurement available, only predict
-		float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-		ekf_predict(ekf_U, dt);
-	}
+	// else {
+	// 	// no new measurement available, only predict
+	// 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+	// 	ekf_predict(ekf_U, dt);
+	// }
 	lastTimeUs = currentTimeUs;
 }
 
