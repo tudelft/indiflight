@@ -92,6 +92,9 @@ void stopTrajectoryTracker(void) {
     tt_speed_factor = 0.0f;
     getRefsTrajectoryTracker(tt_progress);
     tt_active = false;
+
+    // reset I terms
+    resetIterms();
 }
 
 void updateTrajectoryTracker(timeUs_t current) {

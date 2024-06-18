@@ -14,5 +14,6 @@
 extern t_fp_vector accSpNed;
 extern float yawRateSpFromOuter;
 
+void resetIterms(void);
 void updatePosCtl(timeUs_t current);
 void getAccSpNed(timeUs_t current);

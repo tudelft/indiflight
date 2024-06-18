@@ -34,14 +34,14 @@ float velHGainI = 0.2;
 float posVGainP = 3.0;
 float posVGainD = 5.;
 float velVGainI = 0.2;
-float velSpLimitXY = 5.;
-float velSpLimitZ  = 2.;
+float velSpLimitXY = 10; //5.;
+float velSpLimitZ  = 5; //2.;
 float yawGainP = 8.;
 float weathervaneP = 0.;
 
 t_fp_vector velIError = {0};
 
-static void resetIterms(void) { velIError.V.X=0.f; velIError.V.Y=0.f; velIError.V.Z=0.f; }
+void resetIterms(void) { velIError.V.X=0.f; velIError.V.Y=0.f; velIError.V.Z=0.f; }
 
 void updatePosCtl(timeUs_t current) {
 
@@ -63,7 +63,7 @@ void updatePosCtl(timeUs_t current) {
 
 void getAccSpNed(timeUs_t current) {
     // precalculations
-    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 40.f ) );
+    float accMax = 9.80665f * tan_approx( DEGREES_TO_RADIANS( 80.f) ); //40.f ) );
     float posHGainPCasc = posHGainP / posHGainD; // emulate parallel PD with Casc system
     float posVGainPCasc = posVGainP / posVGainD;
 

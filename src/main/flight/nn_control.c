@@ -3,6 +3,7 @@
 #include "sensors/gyro.h"		// for gyro
 #include "flight/att_ctl.h"		// for omega
 #include "io/external_pos.h"	// for setpoints
+#include "pos_ctl.h"			// for resetIterms
 
 #include "flight/neural_controllers/nn_controller.h"
 
@@ -21,15 +22,26 @@ void nn_init(void) {
 
 void nn_activate(void) {
 	nn_active = true;
+
+	// initialize the neural network controller
+	nn_reset();
 }
 
 void nn_deactivate(void) {
 	nn_active = false;
 	// current pos, yaw becomes the setpoint
-	posSetpointNed.pos.V.X = ekf_get_X()[0];
-	posSetpointNed.pos.V.Y = ekf_get_X()[1];
-	posSetpointNed.pos.V.Z = ekf_get_X()[2];
+	posSetpointNed.pos.V.X =  0.0f; //ekf_get_X()[0];
+	posSetpointNed.pos.V.Y =  0.0f; //ekf_get_X()[1];
+	posSetpointNed.pos.V.Z = -1.5f; //ekf_get_X()[2];
 	posSetpointNed.psi = ekf_get_X()[8];
+
+	// posSetpointNed.pos.V.X = gate_pos[target_gate_index+1][0];
+	// posSetpointNed.pos.V.Y = gate_pos[target_gate_index+1][1];
+	// posSetpointNed.pos.V.Z = gate_pos[target_gate_index+1][2];
+	// posSetpointNed.psi = gate_yaw[target_gate_index+1];
+
+    // reset I terms
+    resetIterms();
 }
 
 bool nn_is_active(void) {
