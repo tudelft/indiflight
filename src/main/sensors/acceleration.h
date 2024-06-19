@@ -54,6 +54,7 @@ typedef struct acc_s {
     accDev_t dev;
     uint16_t sampleRateHz;
     float accADC[XYZ_AXIS_COUNT];
+    float accADCunfiltered[XYZ_AXIS_COUNT];
     bool isAccelUpdatedAtLeastOnce;
 } acc_t;
 
@@ -73,7 +74,7 @@ typedef union rollAndPitchTrims_u {
 typedef struct accelerometerConfig_s {
     uint16_t acc_lpf_hz;                    // cutoff frequency for the low pass filter used on the acc z-axis for althold in Hz
     uint8_t acc_hardware;                   // Which acc hardware to use on boards with more than one device
-    bool acc_high_fsr;
+        bool acc_high_fsr;
     flightDynamicsTrims_t accZero;
     rollAndPitchTrims_t accelerometerTrims;
 } accelerometerConfig_t;
