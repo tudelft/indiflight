@@ -25,10 +25,11 @@ float* ekf_get_P(void);     // get covariance matrix (lower diagonal)
 #define ekf_X_index(i) ekf_get_X()[i]
 
 // setters
-void ekf_set_Q(float Q[N_INPUTS]);             // set process noise covariance matrix diagonal
-void ekf_set_R(float R[N_MEASUREMENTS]);       // set measurement noise covariance matrix diagonal
-void ekf_set_X(float X0[N_STATES]);            // set state vector
-void ekf_set_P_diag(float P_diag[N_STATES]);   // set covariance matrix diagonal
+void ekf_set_Q(float Q[N_INPUTS]);                  // set process noise covariance matrix diagonal
+void ekf_set_R(float R[N_MEASUREMENTS]);            // set measurement noise covariance matrix diagonal
+void ekf_set_X(float X0[N_STATES]);                 // set state vector
+void ekf_set_P_diag(float P_diag[N_STATES]);        // set covariance matrix diagonal
+void ekf_set_P(float P0[N_STATES*(N_STATES+1)/2]);   // set covariance matrix (lower diagonal
 
 // prediction and update functions
 void ekf_predict(float U[N_INPUTS], float dt);

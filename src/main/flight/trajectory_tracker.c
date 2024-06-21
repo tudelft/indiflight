@@ -18,7 +18,7 @@ bool tt_active = false;
 
 // acceleration and yaw rate setpoints
 float tt_acc_sp[3];
-float tt_yaw_rate_sp;
+// float tt_yaw_rate_sp;
 
 // reference trajectory
 float tt_pos_ref[3];
@@ -33,12 +33,16 @@ float tt_progress = 0.0f;
 timeUs_t last = 0;
 
 // gains
-//float tt_pos_gain = 1.5;
-//float tt_vel_gain = 2.5;
-//float tt_yaw_gain = 1.0;
+float tt_pos_gain = 2.0; //1.5;
+float tt_vel_gain = 3.0; //2.5;
+// float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 1.0f;
+float tt_R = 3.0f;
+
+bool isActiveTrajectoryTracker(void) {
+    return tt_active;
+}
 
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
@@ -49,80 +53,35 @@ void getRefsTrajectoryTracker(float p) {
     // where:
     // dp/dt  = speed_factor (piecewise constant)
 
-    //tt_pos_ref[0] = tt_R*cosf(p);
-    //tt_pos_ref[1] = tt_R*sinf(p);
-    //tt_pos_ref[2] = -1.5f;
+    tt_pos_ref[0] = tt_R*cosf(p);
+    tt_pos_ref[1] = tt_R*sinf(p);
+    tt_pos_ref[2] = -1.5f;
 
-    //tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    //tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
-    //tt_vel_ref[2] = 0.0f;
+    tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
+    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
+    tt_vel_ref[2] = 0.0f;
 
-    //tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    //tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
-    //tt_acc_ref[2] = 0.0f;
+    tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
+    tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
+    tt_acc_ref[2] = 0.0f;
 
     //tt_yaw_ref = p + M_PIf/2.0f;
     //tt_yaw_rate_ref = tt_speed_factor;
 
-    // Lissajou trajectory from https://arxiv.org/pdf/2311.13081.pdf
-    // cos(2πt/T ) sin(4πt/T )/2 const
-    tt_pos_ref[0] = tt_R*cosf(p);
-    tt_pos_ref[1] = tt_R*sinf(2.f*p)/2.f;
-    tt_pos_ref[2] = -1.5f;
-
-    tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(2.f*p);
-    tt_vel_ref[2] = 0.0f;
-
-    tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    tt_acc_ref[1] = -tt_R*2.f*tt_speed_factor*tt_speed_factor*sinf(2.f*p);
-    tt_acc_ref[2] = 0.0f;
-
-    tt_yaw_ref = 0.f;
-    tt_yaw_rate_ref = 0.f;
-}
-
-void getSetpointsTrajectoryTracker(void) {
-    // pos error
-    float x_error = tt_pos_ref[0] - posEstNed.V.X;
-    float y_error = tt_pos_ref[1] - posEstNed.V.Y;
-    float z_error = tt_pos_ref[2] - posEstNed.V.Z;
-
-    // vel setpoint
-    float Dgain = posRuntime.horz_d > 1.f  ?  posRuntime.horz_d  :  1.f;
-    float Pgain = posRuntime.horz_p / Dgain;
-    float vx_sp = tt_vel_ref[0] + Pgain*x_error;
-    float vy_sp = tt_vel_ref[1] + Pgain*y_error;
-    float vz_sp = tt_vel_ref[2] + Pgain*z_error;
-
-    // acc setpoint
-    tt_acc_sp[0] = tt_acc_ref[0] + Dgain*(vx_sp - velEstNed.V.X);
-    tt_acc_sp[1] = tt_acc_ref[1] + Dgain*(vy_sp - velEstNed.V.Y);
-    tt_acc_sp[2] = tt_acc_ref[2] + Dgain*(vz_sp - velEstNed.V.Z);
-
-    // yaw error
-    float yaw_error = tt_yaw_ref - DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
-    while (yaw_error > M_PIf)
-        yaw_error -= 2.f * M_PIf;
-    while (yaw_error < -M_PIf)
-        yaw_error += 2.f * M_PIf;
-
-    // yaw rate setpoint
-    tt_yaw_rate_sp = tt_yaw_rate_ref + posRuntime.yaw_p*yaw_error;
 }
 
 void initTrajectoryTracker(void) {
     // reset everything
     tt_progress = 0.0f;
     tt_speed_factor = 0.0f;
-    tt_active = false;
+    //tt_active = true; //dont activate yet, just go the starting point with default controller
 
     // setpoint = starting point of trajectory
     getRefsTrajectoryTracker(0.0f);
     posSpNed.pos.V.X = tt_pos_ref[0];
     posSpNed.pos.V.Y = tt_pos_ref[1];
     posSpNed.pos.V.Z = tt_pos_ref[2];
-    posSpNed.psi = tt_yaw_ref;
+    // posSpNed.psi = tt_yaw_ref;
 }
 
 void setSpeedTrajectoryTracker(float speed) {
@@ -134,8 +93,10 @@ void stopTrajectoryTracker(void) {
     // set speed factor to zero, get new setpoints, and deactivate
     tt_speed_factor = 0.0f;
     getRefsTrajectoryTracker(tt_progress);
-    getSetpointsTrajectoryTracker();
     tt_active = false;
+
+    // reset I terms
+    resetIterms();
 }
 
 void updateTrajectoryTracker(timeUs_t current) {
@@ -148,16 +109,37 @@ void updateTrajectoryTracker(timeUs_t current) {
 
         // update references
         getRefsTrajectoryTracker(tt_progress);
+        
+        // if speed_factor is zero, we forward posSetpointNed to tt_pos_ref
+        // if (tt_speed_factor == 0.0f) {
+        //     tt_pos_ref[0] = posSetpointNed.pos.V.X;
+        //     tt_pos_ref[1] = posSetpointNed.pos.V.Y;
+        //     tt_pos_ref[2] = posSetpointNed.pos.V.Z;
+        // }
 
-        // update acceleration and yaw rate setpoints
-        getSetpointsTrajectoryTracker();
+        // update setpoints
+        // pos error
+        float x_error = tt_pos_ref[0] - posEstNed.V.X;
+        float y_error = tt_pos_ref[1] - posEstNed.V.Y;
+        float z_error = tt_pos_ref[2] - posEstNed.V.Z;
+
+        // vel setpoint
+        float vx_sp = tt_vel_ref[0] + tt_pos_gain*x_error;
+        float vy_sp = tt_vel_ref[1] + tt_pos_gain*y_error;
+        float vz_sp = tt_vel_ref[2] + tt_pos_gain*z_error;
+
+        // acc setpoint
+        tt_acc_sp[0] = tt_acc_ref[0] + tt_vel_gain*(vx_sp - velEstNed.V.X);
+        tt_acc_sp[1] = tt_acc_ref[1] + tt_vel_gain*(vy_sp - velEstNed.V.Y);
+        tt_acc_sp[2] = tt_acc_ref[2] + tt_vel_gain*(vz_sp - velEstNed.V.Z);
 
         // overwrite accSpNedFromPos and rateSpBodyFromPos (from pos_ctl.c)
         accSpNedFromPos.V.X = tt_acc_sp[0];
         accSpNedFromPos.V.Y = tt_acc_sp[1];
         accSpNedFromPos.V.Z = tt_acc_sp[2];
 
-        rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_sp);
+        // rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_sp);
+        rateSpBodyFromPos = 0;
 
         // overwrite posSpNed (from pos_ctl.c)
         posSpNed.pos.V.X = tt_pos_ref[0];
@@ -165,16 +147,17 @@ void updateTrajectoryTracker(timeUs_t current) {
         posSpNed.pos.V.Z = tt_pos_ref[2];
 
         // overwrite velSetpointNed (from pos_ctl.c)
-        posSpNed.vel.V.X = tt_vel_ref[0];
-        posSpNed.vel.V.Y = tt_vel_ref[1];
-        posSpNed.vel.V.Z = tt_vel_ref[2];
+        posSpNed.vel.V.X = vx_sp;
+        posSpNed.vel.V.Y = vy_sp; //random comment
+        posSpNed.vel.V.Z = vz_sp;
 
         // overwrite yawSetpoint (from pos_ctl.c)
-        posSpNed.psi = tt_yaw_ref;
+        // posSpNed.psi = tt_yaw_ref;
     }
 
     // update last
     last = current;
 }
+
 
 #endif

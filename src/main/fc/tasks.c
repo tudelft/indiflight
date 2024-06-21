@@ -63,6 +63,7 @@
 #include "flight/indi.h"
 #include "flight/ekf.h"
 #include "flight/throw.h"
+#include "flight/nn_control.h"
 
 
 #include "io/asyncfatfs/asyncfatfs.h"
@@ -370,6 +371,14 @@ static void taskEkf(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_NN_CONTROL
+static void taskNnControl(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    nn_compute_motor_cmds();
+}
+#endif
+
 #ifdef USE_CAMERA_CONTROL
 static void taskCameraControl(uint32_t currentTime)
 {
@@ -476,6 +485,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_EKF
     [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
+#endif
+
+#ifdef USE_NN_CONTROL
+    [TASK_NN_CONTROL] = DEFINE_TASK("NN_CONTROL", NULL, NULL, taskNnControl, TASK_PERIOD_HZ(100), TASK_PRIORITY_HIGH),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -657,6 +670,10 @@ void tasksInit(void)
 
 #ifdef USE_EKF
     setTaskEnabled(TASK_EKF, true);
+#endif
+
+#ifdef USE_NN_CONTROL
+    setTaskEnabled(TASK_NN_CONTROL, true);
 #endif
 
 #ifdef USE_LED_STRIP

@@ -152,6 +152,9 @@ typedef enum {
 #ifdef USE_EKF
     TASK_EKF,
 #endif
+#ifdef USE_NN_CONTROL
+    TASK_NN_CONTROL,
+#endif
 #ifdef USE_LED_STRIP
     TASK_LEDSTRIP,
 #endif

@@ -18,6 +18,11 @@
 #include "flight/trajectory_tracker.h"
 #include "fc/core.h"
 // --------------------------------------------------------
+// ALSO UGLY HACK -----------------------------------------
+#ifdef USE_NN_CONTROL
+#include "flight/nn_control.h"
+#endif
+// --------------------------------------------------------
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -145,6 +150,11 @@ void getPosSetpoint(timeUs_t current) {
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);
         bool newMsg = (deltaMsgs != 0);
         if (newMsg) {
+            latestSetpointTime = currentSetpointTime;
+            posSetpointNed.pos.V.X = piMsgPosSetpointRx->enu_y;
+            posSetpointNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
+            posSetpointNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
+
 #ifdef USE_TRAJECTORY_TRACKER
             // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------
             
@@ -172,7 +182,24 @@ void getPosSetpoint(timeUs_t current) {
                 return;
             }
 #endif
+#ifdef USE_NN_CONTROL
+            // UGLY HACK: velocity setpoint is used for communication with the neural network controller -----------------
             
+            // init when piMsgPosSetpointRx->enu_xd == 4
+            if (piMsgPosSetpointRx->enu_xd == 4) {
+                nn_init();
+                return;
+            }
+
+            // activate/deactivate when piMsgPosSetpointRx->enu_xd == 5
+            if (piMsgPosSetpointRx->enu_xd == 5) {
+                if (nn_is_active()) {
+                    nn_deactivate();
+                } else {
+                    nn_activate();
+                }
+            }
+#endif
             // -----------------------------------------------------------------------------------------------
             latestSetpointTime = currentSetpointTime;
             posSpNed.pos.V.X = piMsgPosSetpointRx->enu_y;

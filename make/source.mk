@@ -116,6 +116,9 @@ COMMON_SRC = \
             flight/ekf.c \
             flight/ekf_calc.c \
             flight/trajectory_tracker.c \
+            flight/nn_control.c \
+            flight/neural_controllers/nn_controller.c \
+            flight/neural_controllers/neural_network.c \
             io/serial_4way.c \
             io/serial_4way_avrootloader.c \
             io/serial_4way_stk500v2.c \
@@ -291,6 +294,9 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/ekf.c \
             flight/ekf_calc.c \
             flight/trajectory_tracker.c \
+            flight/nn_control.c \
+            flight/neural_controllers/nn_controller.c \
+            flight/neural_controllers/neural_network.c \
 			io/external_pos.c \
             rx/ibus.c \
             rx/rx.c \
