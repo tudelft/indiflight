@@ -146,14 +146,14 @@ void initEkf(timeUs_t currentTimeUs) {
 void runEkf(timeUs_t currentTimeUs) {
     static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
-    // U is expected as FLU frame. We have FRD frame now
+    // FRD frame's, which we have now everywhere in INDIFlight
 	float U[N_INPUTS] = {
 		GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G),
-		-GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
-		-GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
+		GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
+		GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
 		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
-		-DEGREES_TO_RADIANS(gyro.gyroADCf[1]),
-		-DEGREES_TO_RADIANS(gyro.gyroADCf[2])
+		DEGREES_TO_RADIANS(gyro.gyroADCf[1]),
+		DEGREES_TO_RADIANS(gyro.gyroADCf[2])
 	};
 
 	// add to history (will be used in the update step)

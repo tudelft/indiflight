@@ -50,11 +50,7 @@ static bool isBoardAlignmentStandard(const boardAlignment_t *boardAlignment)
 
 void initBoardAlignment(const boardAlignment_t *boardAlignment)
 {
-    if (isBoardAlignmentStandard(boardAlignment)) {
-        return;
-    }
-
-    standardBoardAlignment = false;
+    standardBoardAlignment = isBoardAlignmentStandard(boardAlignment);
 
     fp_euler_t rotationAngles;
     rotationAngles.angles.roll  = degreesToRadians(boardAlignment->rollDegrees );

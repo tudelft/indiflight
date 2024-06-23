@@ -1,11 +1,13 @@
 #include "nn_control.h"
 #include "ekf_calc.h"			// FOR NOW: hard coded to use ekf states
 #include "sensors/gyro.h"		// for gyro
-#include "flight/att_ctl.h"		// for omega
+#include "flight/indi.h"		// for omega
 #include "io/external_pos.h"	// for setpoints
 #include "pos_ctl.h"			// for resetIterms
 
 #include "flight/neural_controllers/nn_controller.h"
+
+#ifdef USE_NN_CONTROL
 
 float nn_motor_cmds[4] = {0.};
 bool nn_active = false;
@@ -91,3 +93,5 @@ void nn_compute_motor_cmds(void) {
 float* nn_get_motor_cmds(void) {
 	return nn_motor_cmds;
 }
+
+#endif

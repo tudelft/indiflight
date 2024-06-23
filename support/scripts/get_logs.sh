@@ -16,17 +16,15 @@ DEST_PATH=$2
 
 # betaflight specific: fucntion to reset flight controller in non MSC mode without reconnecting power.
 reset () {
+    echo ""
     sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 '/usr/bin/openocd -f /opt/openocd/openocd.cfg -c "init; reset; exit"'
 }
 
 # check if disk available
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo lsblk -p | grep ${DEV}"
-# check if disk available
-sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo lsblk -p | grep ${DEV}"
 if [[ $? -gt 0 ]]; then
     # not yet available
     echo "MSC Device not (yet) available on remote."
-
 
     echo -n "Sending reboot-to-MSC signal to FC... "
 
@@ -46,14 +44,6 @@ sleep 3
 
 echo
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo findmnt ${DEV}"
-if [[ $? -gt 0 ]]; then
-    # try to find blk device
-    i=3
-    while 
-        sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo lsblk -p | grep ${DEV}"
-        [[ $? -gt 0  ]] && [[ $i -gt 0 ]]
-    do
-        echo "MSC device not (yet) available on remote. Waiting..."
     # try to find blk device
     i=3
     while 
@@ -69,7 +59,6 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Failed to bring up MSC device. Resetting FC..."
-        echo
         reset
         exit 1
     fi
@@ -93,7 +82,6 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Mounting failed! Resetting FC..."
-        echo
         reset
         exit 1
     fi
@@ -101,7 +89,6 @@ fi
 
 exit_code=0
 
-echo "Mounting succesful! Starting rsync..."
 echo "Mounting succesful! Starting rsync..."
 rsync -a --rsh "sshpass -p pi ssh -o StrictHostKeyChecking=no -l pi" --timeout=3 --delete pi@10.0.0.1:/mnt/LOGS/ "$DEST_PATH"
 if [[ $? -eq 0 ]]; then
@@ -116,7 +103,5 @@ sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "s
 
 # always reset
 echo "Resetting FC..."
-echo
-echo
 reset
 exit ${exit_code}

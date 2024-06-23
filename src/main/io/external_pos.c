@@ -151,9 +151,9 @@ void getPosSetpoint(timeUs_t current) {
         bool newMsg = (deltaMsgs != 0);
         if (newMsg) {
             latestSetpointTime = currentSetpointTime;
-            posSetpointNed.pos.V.X = piMsgPosSetpointRx->enu_y;
-            posSetpointNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
-            posSetpointNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
+            posSpNed.pos.V.X = piMsgPosSetpointRx->enu_y;
+            posSpNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
+            posSpNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
 
 #ifdef USE_TRAJECTORY_TRACKER
             // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------

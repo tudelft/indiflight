@@ -22,6 +22,21 @@
 
 #include "throw.h"
 
+throwState_t throwState = THROW_STATE_IDLE;
+
+// throwing mode
+#if defined(USE_THROW_TO_ARM)
+#ifndef USE_ACC
+#error "Can only use USE_THROW_TO_ARM with USE_ACC"
+#endif
+
+#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_GPS_PI)
+#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_GPS_PI"
+#endif
+
+#pragma message "You are compiling with dangerous code!"
+
+
 // config
 PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
 PG_RESET_TEMPLATE(throwConfig_t, throwConfig,
@@ -47,7 +62,6 @@ armingDisableFlags_e doNotTolerateDuringThrow = (
     | ARMING_DISABLED_PARALYZE
 );
 
-throwState_t throwState = THROW_STATE_IDLE;
 float momentumAtLeavingHand = 0.f;
 
 #ifdef THROW_TO_ARM_USE_FALL_LOGIC
@@ -77,7 +91,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // disable state machines (and possibly abort throw/fall if in progress)
     bool disableConditions = ARMING_FLAG(ARMED)
+#ifndef USE_THROWING_WITHOUT_POSITION
         || !FLIGHT_MODE(POSITION_MODE)
+#endif
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
 #ifdef USE_INDI
         || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
@@ -98,12 +114,16 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce
+                && acc.isAccelUpdatedAtLeastOnce &&
                 #ifdef USE_GPS_PI
-                    && (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID)
+                    (
+#ifdef USE_THROWING_WITHOUT_POSITION
+                    !FLIGHT_MODE(POSITION_MODE) ||
+#endif
+                    ( (posMeasState >= LOCAL_POS_STILL_VALID)
+                    && (posSpState >= LOCAL_POS_STILL_VALID) ) ) &&
                 #endif
-                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
+                !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
