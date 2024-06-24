@@ -176,6 +176,17 @@
 #define PARAM_NAME_POSITION_THRUST_ATTENUATION "position_use_thrust_attenuation"
 #endif
 
+#ifdef USE_EKF
+#define PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE  "ekf_use_attitude_estimate"
+#define PARAM_NAME_EKF_USE_POSITION_ESTIMATE  "ekf_use_position_estimate"
+#define PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS "ekf_use_angles"
+#define PARAM_NAME_EKF_PROC_NOISE_ACC         "ekf_proc_noise_acc"
+#define PARAM_NAME_EKF_PROC_NOISE_GYRO        "ekf_proc_noise_gyro"
+#define PARAM_NAME_EKF_MEAS_NOISE_POSITION    "ekf_meas_noise_position"
+#define PARAM_NAME_EKF_MEAS_NOISE_ATTITUDE    "ekf_meas_noise_angles"
+#define PARAM_NAME_EKF_MEAS_DELAY             "ekf_meas_delay"
+#endif
+
 #ifdef USE_CATAPULT
 #define PARAM_NAME_CATAPULT_TARGET_ALTITUDE "catapult_target_altitude"
 #define PARAM_NAME_CATAPULT_TARGET_X_NED "catapult_target_x_ned"

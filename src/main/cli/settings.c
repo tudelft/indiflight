@@ -68,6 +68,7 @@
 #include "flight/catapult.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
+#include "flight/ekf.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1276,6 +1277,17 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_POSITION_WEATHERVANE_P,          VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_p) },
     { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 25, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
     { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
+#endif
+
+#ifdef USE_EKF
+    { PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_attitude_estimate) },
+    { PARAM_NAME_EKF_USE_POSITION_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_position_estimate) },
+    { PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS,      VAR_UINT8 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_angle_measurements) },
+    { PARAM_NAME_EKF_PROC_NOISE_ACC,              VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc) },
+    { PARAM_NAME_EKF_PROC_NOISE_GYRO,             VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro) },
+    { PARAM_NAME_EKF_MEAS_NOISE_POSITION,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
+    { PARAM_NAME_EKF_MEAS_NOISE_ATTITUDE,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_angles) },
+    { PARAM_NAME_EKF_MEAS_DELAY,                  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
 #endif
 
 #ifdef USE_CATAPULT

@@ -62,6 +62,7 @@ extern fp_quaternion_t attSpNedFromPos;
 extern fp_vector_t spfSpBodyFromPos;
 extern fp_vector_t rateSpBodyFromPos;
 
+void resetIterms();
 void posCtlInit(void);
 void updatePosCtl(timeUs_t current);
 void posGetAccSpNed(timeUs_t current);

@@ -8,6 +8,8 @@
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
 
+#include "pg/pg_ids.h"              // for config
+
 #ifdef USE_EKF
 
 #ifndef USE_ACC
@@ -21,6 +23,18 @@
 #ifndef USE_GPS_PI
 #error "USE_EKF requires USE_GPS_PI"
 #endif
+
+PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
+PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
+    .use_attitude_estimate = 0,
+    .use_position_estimate = 0,
+    .use_angle_measurements = { 1, 1, 1 },
+    .proc_noise_acc = { 5000, 5000, 5000 },
+    .proc_noise_gyro = { 1000, 1000, 1000 },
+    .meas_noise_position = { 10, 10, 10 },
+    .meas_noise_angles = { 100, 100, 100 },
+    .meas_delay = 0,
+); 
 
 bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
@@ -87,30 +101,29 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 
 void initEkf(timeUs_t currentTimeUs) {
 	// set ekf parameters
-	ekf_use_phi = 1;
-	ekf_use_theta = 1;
-	ekf_use_psi = 1;
+	ekf_use_phi = ekfConfig()->use_angle_measurements[0];
+	ekf_use_theta = ekfConfig()->use_angle_measurements[1];
+	ekf_use_psi = ekfConfig()->use_angle_measurements[2];
 
 	// process noise covariance
 	float Q[N_STATES] = {
-		0.5, // ax
-		0.5, // ay
-		0.5, // az
-		0.1, // p
-		0.1, // q
-		0.1, // r
+		((float) ekfConfig()->proc_noise_acc[0]) * 1e-4f, // ax
+		((float) ekfConfig()->proc_noise_acc[1]) * 1e-4f, // ay
+		((float) ekfConfig()->proc_noise_acc[2]) * 1e-4f, // az
+		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-4f, // p
+		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-4f, // q
+		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-4f // r
 	};
 
 	// measurement noise covariance
 	float R[N_MEASUREMENTS] = {
-		0.001, // posN
-		0.001, // posE
-		0.001, // posD
-		0.01,  // phi
-		0.01,  // theta
-		0.01,  // psi
+		((float) ekfConfig()->meas_noise_position[0]) * 1e-4f, // posN
+		((float) ekfConfig()->meas_noise_position[1]) * 1e-4f, // posE
+		((float) ekfConfig()->meas_noise_position[2]) * 1e-4f, // posD
+		((float) ekfConfig()->meas_noise_angles[0]) * 1e-4f, // phi
+		((float) ekfConfig()->meas_noise_angles[1]) * 1e-4f, // theta
+		((float) ekfConfig()->meas_noise_angles[2]) * 1e-4f, // psi
 	};
-
 
 	// sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
@@ -147,14 +160,12 @@ void runEkf(timeUs_t currentTimeUs) {
     static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
     // FRD frame's, which we have now everywhere in INDIFlight
-	float U[N_INPUTS] = {
-		GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G),
-		GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G),
-		GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G),
-		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
-		DEGREES_TO_RADIANS(gyro.gyroADCf[1]),
-		DEGREES_TO_RADIANS(gyro.gyroADCf[2])
-	};
+	ekf_U[0] = GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G);
+	ekf_U[1] = GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G);
+	ekf_U[2] = GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G);
+	ekf_U[3] = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
+	ekf_U[4] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
+	ekf_U[5] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
 
 	// add to history (will be used in the update step)
 	// ekf_add_to_history(currentTimeUs * 1e-6);
@@ -188,7 +199,7 @@ void runEkf(timeUs_t currentTimeUs) {
 
 		// new update that takes into account the time delay:
 		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
-		// float delay = 0.008;
+		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
 		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
 	} 
 	// else {
@@ -217,33 +228,32 @@ void updateEkf(timeUs_t currentTimeUs) {
     // run fallback in advance so it doesnt lose sync
     imuUpdateAttitude(currentTimeUs);
 
-#if defined(USE_EKF_ATTITUDE) || defined(USE_EKF_POSITION)
-    // update system state with EKF data, if possible
+    // update system state with EKF data, if possible and configured
     if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
         // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 
-#ifdef USE_EKF_ATTITUDE
-        fp_quaternion_t q;
-        fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
-        quaternion_of_fp_euler(&q, &e);
-        setAttitudeWithQuaternion(&q);
-#endif
-#ifdef USE_EKF_POSITION
-        fp_vector_t posNed_set;
-        posNed_set.V.X = ekf_X[0];
-        posNed_set.V.Y = ekf_X[1];
-        posNed_set.V.Z = ekf_X[2];
+        if (ekfConfig()->use_attitude_estimate) {
+            fp_quaternion_t q;
+            fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
+            quaternion_of_fp_euler(&q, &e);
+            setAttitudeWithQuaternion(&q);
+        }
 
-        fp_vector_t velNed_set;
-        velNed_set.V.X = ekf_X[3];
-        velNed_set.V.Y = ekf_X[4];
-        velNed_set.V.Z = ekf_X[5];
+        if (ekfConfig()->use_position_estimate) {
+            fp_vector_t posNed_set;
+            posNed_set.V.X = ekf_X[0];
+            posNed_set.V.Y = ekf_X[1];
+            posNed_set.V.Z = ekf_X[2];
 
-        setPositionState(posNed_set, velNed_set);
-#endif
+            fp_vector_t velNed_set;
+            velNed_set.V.X = ekf_X[3];
+            velNed_set.V.Y = ekf_X[4];
+            velNed_set.V.Z = ekf_X[5];
+
+            setPositionState(posNed_set, velNed_set);
+        }
     }
-#endif // defined(USE_EKF_ATTITUDE) || defined(USE_EKF_POSITION)
 }
 
 #endif // USE_EKF

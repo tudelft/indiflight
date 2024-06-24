@@ -16,7 +16,7 @@
 #endif
 
 #ifndef USE_INDI
-#pragma message "USE_POS_CTL currently only has any effect with USE_INDI"
+#error "USE_POS_CTL requires the use of USE_INDI"
 #endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
@@ -92,7 +92,7 @@ fp_vector_t rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
 
 // locals
 fp_vector_t velIError = {0};
-static void resetIterms(void) {
+void resetIterms(void) {
     velIError.V.X = 0.f;
     velIError.V.Y = 0.f;
     velIError.V.Z = 0.f;

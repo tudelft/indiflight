@@ -47,16 +47,8 @@ typedef struct imuRuntimeConfig_s {
 
 void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
 
-#ifdef USE_EKF
-
-#ifdef USE_EKF_ATTITUDE
 void setAttitudeWithEuler(float roll, float pitch, float yaw);
-#endif
-#ifdef USE_EKF_POSITION
 void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
-#endif
-
-#endif //USE_EKF
 
 float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);

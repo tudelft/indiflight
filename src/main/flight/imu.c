@@ -496,15 +496,11 @@ static void imuComputeQuaternionFromRPY(fp_quaternionProducts_t *quatProd, int16
 #endif
 
 #ifdef USE_EKF
-
-#if defined(USE_EKF_POSITION)
 void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set)
 {
     posEstNed = posEstNed_set;
     velEstNed = velEstNed_set;
 }
-#endif
-
 #endif // USE_EKF
 
 static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
@@ -677,7 +673,7 @@ void setAttitudeWithQuaternion(const fp_quaternion_t *quat)
     imuUpdateEulerAngles();
 }
 
-#if defined(USE_EKF_ATTITUDE)
+#ifdef USE_EKF
 void setAttitudeWithEuler(float roll, float pitch, float yaw)
 {
     // expecting roll pitch yaw in radians

@@ -110,11 +110,11 @@ void updateTrajectoryTracker(timeUs_t current) {
         // update references
         getRefsTrajectoryTracker(tt_progress);
         
-        // if speed_factor is zero, we forward posSetpointNed to tt_pos_ref
+        // if speed_factor is zero, we forward posSpNed to tt_pos_ref
         // if (tt_speed_factor == 0.0f) {
-        //     tt_pos_ref[0] = posSetpointNed.pos.V.X;
-        //     tt_pos_ref[1] = posSetpointNed.pos.V.Y;
-        //     tt_pos_ref[2] = posSetpointNed.pos.V.Z;
+        //     tt_pos_ref[0] = posSpNed.pos.V.X;
+        //     tt_pos_ref[1] = posSpNed.pos.V.Y;
+        //     tt_pos_ref[2] = posSpNed.pos.V.Z;
         // }
 
         // update setpoints
@@ -139,7 +139,9 @@ void updateTrajectoryTracker(timeUs_t current) {
         accSpNedFromPos.V.Z = tt_acc_sp[2];
 
         // rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_sp);
-        rateSpBodyFromPos = 0;
+        rateSpBodyFromPos.V.X = 0;
+        rateSpBodyFromPos.V.Y = 0;
+        rateSpBodyFromPos.V.Z = 0;
 
         // overwrite posSpNed (from pos_ctl.c)
         posSpNed.pos.V.X = tt_pos_ref[0];
