@@ -87,7 +87,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 #endif
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
 #ifdef USE_INDI
-        || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
+        || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
 #endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
@@ -102,7 +102,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
-            // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
+            // enable if we dont disable, have accel, and no disable flags than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce &&
@@ -114,7 +114,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                     ( (extPosState >= EXT_POS_STILL_VALID)
                     && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
                 #endif
-                !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
+                !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_NOPREARM));
 
             if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
@@ -166,7 +166,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 throwState = THROW_STATE_IDLE;
             break;
         case THROW_STATE_ARMED_AFTER_THROW:
-            if (!ARMING_FLAG(ARMED) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM))
+            if (!ARMING_FLAG(ARMED))
                 throwState = THROW_STATE_IDLE;
             break;
     }

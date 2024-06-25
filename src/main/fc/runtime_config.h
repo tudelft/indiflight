@@ -66,7 +66,10 @@ typedef enum {
     ARMING_DISABLED_DSHOT_BITBANG   = (1 << 22),
     ARMING_DISABLED_ACC_CALIBRATION = (1 << 23),
     ARMING_DISABLED_MOTOR_PROTOCOL  = (1 << 24),
-    ARMING_DISABLED_ARM_SWITCH      = (1 << 25), // Needs to be the last element, since it's always activated if one of the others is active when arming
+    ARMING_DISABLED_WAITING_FOR_THROW = (1 << 25),
+    ARMING_DISABLED_CATAPULT        = (1 << 26),
+    ARMING_DISABLED_NN_MODE         = (1 << 27),
+    ARMING_DISABLED_ARM_SWITCH      = (1 << 28), // Needs to be the last element, since it's always activated if one of the others is active when arming
 } armingDisableFlags_e;
 
 #define ARMING_DISABLE_FLAGS_COUNT (LOG2(ARMING_DISABLED_ARM_SWITCH) + 1)
@@ -94,7 +97,9 @@ typedef enum {
     VELOCITY_MODE    = (1 << 12),
     POSITION_MODE    = (1 << 13),
     CATAPULT_MODE    = (1 << 14),
-    LEARNER_MODE    = (1 << 15)
+    LEARNER_MODE     = (1 << 15),
+    PID_MODE         = (1 << 16),
+    NN_MODE          = (1 << 17),
 } flightModeFlags_e;
 
 extern flightModeFlags_e flightModeFlags;
@@ -116,7 +121,9 @@ extern flightModeFlags_e flightModeFlags;
    [BOXVELCTL]      = LOG2(VELOCITY_MODE),               \
    [BOXPOSCTL]      = LOG2(POSITION_MODE),               \
    [BOXCATAPULT]    = LOG2(CATAPULT_MODE),               \
-   [BOXLEARNER]    = LOG2(LEARNER_MODE),               \
+   [BOXLEARNER]     = LOG2(LEARNER_MODE),                \
+   [BOXPIDCTL]      = LOG2(PID_MODE),                   \
+   [BOXNNCTL]       = LOG2(NN_MODE),                     \
 }                                                        \
 /**/
 
@@ -132,8 +139,8 @@ typedef enum {
 
 extern uint8_t stateFlags;
 
-uint16_t enableFlightMode(flightModeFlags_e mask);
-uint16_t disableFlightMode(flightModeFlags_e mask);
+flightModeFlags_e enableFlightMode(flightModeFlags_e mask);
+flightModeFlags_e disableFlightMode(flightModeFlags_e mask);
 
 bool sensors(uint32_t mask);
 void sensorsSet(uint32_t mask);

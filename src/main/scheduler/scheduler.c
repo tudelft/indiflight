@@ -500,12 +500,8 @@ FAST_CODE void scheduler(void)
             if (gyroFilterReady()) {
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_FILTER), currentTimeUs);
             }
-            if (pidLoopReady()) {
-#ifdef USE_INDI
-                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_INDI), currentTimeUs);
-#else
-                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_PID), currentTimeUs);
-#endif
+            if (innerLoopReady()) {
+                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_INNER_LOOP), currentTimeUs);
             }
 
             // Check for incoming RX data. Don't do this in the checker as that is called repeatedly within

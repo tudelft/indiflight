@@ -45,7 +45,7 @@ void nn_activate(void) {
 		
 		// initialize the neural network controller
 		nn_reset();
-	}	
+	} 
 }
 
 void nn_deactivate(void) {

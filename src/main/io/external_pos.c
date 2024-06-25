@@ -192,13 +192,15 @@ void getPosSetpoint(timeUs_t current) {
             }
 
             // activate/deactivate when piMsgPosSetpointRx->enu_xd == 5
-            if (piMsgPosSetpointRx->enu_xd == 5) {
-                if (nn_is_active()) {
-                    nn_deactivate();
-                } else {
-                    nn_activate();
-                }
-            }
+            //if (piMsgPosSetpointRx->enu_xd == 5) {
+            //    if (nn_is_active()) {
+            //        nn_deactivate();
+            //    } else {
+            //        nn_activate();
+            //    }
+            //}
+            //
+            // THIS IS NOW A FLIGHT MODE ACTIAVTED FROM RC and managed in core.c
 #endif
             // -----------------------------------------------------------------------------------------------
             latestSetpointTime = currentSetpointTime;

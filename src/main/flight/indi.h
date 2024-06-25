@@ -189,3 +189,4 @@ fp_vector_t coordinatedYaw(float yaw);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);
+void indiUpdateActuatorState( float* motor_normalized );

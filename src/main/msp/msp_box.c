@@ -105,7 +105,9 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55},
     { .boxId = BOXTHROWTOARM, .boxName = "THROWTOARM", .permanentId = 56 },
     { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 },
-    { .boxId = BOXLEARNER, .boxName = "LEARNER", .permanentId = 58 }
+    { .boxId = BOXLEARNER, .boxName = "LEARNER", .permanentId = 58 },
+    { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 59 },
+    { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 }
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -200,6 +202,12 @@ void initActiveBoxIds(void)
 #endif
 #ifdef USE_LEARNER
     BME(BOXLEARNER);
+#endif
+#ifdef USE_NN_CONTROL
+    BME(BOXNNCTL);
+#endif
+#ifdef USE_INDI
+    BME(BOXPIDCTL); // looks funny, but if USE_INDI not set, then legacy pid is always active
 #endif
     if (!featureIsEnabled(FEATURE_AIRMODE)) {
         BME(BOXAIRMODE);

@@ -363,7 +363,7 @@ void getMotorCommands(timeUs_t current) {
     float omega_inv[MAXU];
     for (int i = 0; i < indiRun.actNum; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive()){ // || false) {
+        if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
             omega_prev[i] = indiRun.omega_fs[i];
 
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
@@ -491,27 +491,28 @@ void getMotorCommands(timeUs_t current) {
 
     // du = Ginv * dv and then constrain between 0 and 1
     for (int i=0; i < indiRun.actNum; i++) {
-        //float accumulate = G1G2_inv[i][0] * dv[0];
-        //for (int j=1; j < nv; j++)
-        //    accumulate += G1G2_inv[i][j] * dv[j];
-        if (as_exit_code < AS_NAN_FOUND_Q)
-            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
-
-        // apply lag filter to simulate spinup dynamics
-        if (ARMING_FLAG(ARMED) || true) {
-            du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
-            indiRun.uState[i] = pt1FilterApply(&indiRun.uLagFilter[i], indiRun.u[i]);
-        } else {
-            du[i] = 0.f; // because we actually dont spin. if we don't do this, G2 term gets confused
-            indiRun.uState[i] = 0.f;
-        }
-
-        indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
-
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
         indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+
+        if (as_exit_code < AS_NAN_FOUND_Q)
+            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+
+        // apply lag filter to simulate spinup dynamics
+        du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
+
+        indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
+    }
+}
+
+// NB: this function MUST be invoked with the actual normalized motor commands
+//     at the same rate as getMotorCommands would be called. EVEN IF NOT IN 
+//     INDI MODE. Otherwise switching to INDI may result in a super high jerk.
+void indiUpdateActuatorState( float* d ) {
+    for (int i=0; i < indiRun.actNum; i++) {
+        float u = indiOutputCurve( &indiRun.lin[i], d[i] );
+        indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
     }
 }
 

@@ -82,10 +82,9 @@ void updateArmingStatus(void);
 
 void taskGyroSample(timeUs_t currentTimeUs);
 bool gyroFilterReady(void);
-bool pidLoopReady(void);
+bool innerLoopReady(void);
 void taskFiltering(timeUs_t currentTimeUs);
-void taskMainPidLoop(timeUs_t currentTimeUs);
-void taskMainIndiLoop(timeUs_t currentTimeUs);
+void taskMainInnerLoop(timeUs_t currentTimeUs);
 
 bool isTouchingGround(void);
 bool isFlipOverAfterCrashActive(void);

@@ -371,14 +371,6 @@ static void taskEkf(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_NN_CONTROL
-static void taskNnControl(timeUs_t currentTimeUs)
-{
-    UNUSED(currentTimeUs);
-    nn_compute_motor_cmds();
-}
-#endif
-
 #ifdef USE_CAMERA_CONTROL
 static void taskCameraControl(uint32_t currentTime)
 {
@@ -422,10 +414,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
     [TASK_GYRO] = DEFINE_TASK("GYRO", NULL, NULL, taskGyroSample, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
     [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_PID] = DEFINE_TASK("PID", NULL, NULL, taskMainPidLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-#ifdef USE_INDI
-    [TASK_INDI] = DEFINE_TASK("INDI", NULL, NULL, taskMainIndiLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-#endif
+    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 
 #ifdef USE_ACC
     [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
@@ -485,10 +474,6 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_EKF
     [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_NN_CONTROL
-    [TASK_NN_CONTROL] = DEFINE_TASK("NN_CONTROL", NULL, NULL, taskNnControl, TASK_PERIOD_HZ(100), TASK_PRIORITY_HIGH),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -580,14 +565,10 @@ void tasksInit(void)
     if (sensors(SENSOR_GYRO)) {
         rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
-        rescheduleTask(TASK_PID, gyro.targetLooptime);
+        rescheduleTask(TASK_INNER_LOOP, gyro.targetLooptime);
         setTaskEnabled(TASK_GYRO, true);
         setTaskEnabled(TASK_FILTER, true);
-        setTaskEnabled(TASK_PID, true);
-#ifdef USE_INDI
-        rescheduleTask(TASK_INDI, gyro.targetLooptime);
-        setTaskEnabled(TASK_INDI, true);
-#endif
+        setTaskEnabled(TASK_INNER_LOOP, true);
         schedulerEnableGyro();
     }
 
@@ -670,10 +651,6 @@ void tasksInit(void)
 
 #ifdef USE_EKF
     setTaskEnabled(TASK_EKF, true);
-#endif
-
-#ifdef USE_NN_CONTROL
-    setTaskEnabled(TASK_NN_CONTROL, true);
 #endif
 
 #ifdef USE_LED_STRIP

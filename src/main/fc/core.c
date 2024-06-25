@@ -78,6 +78,7 @@
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "flight/nn_control.h"
 
 #include "io/beeper.h"
 #include "io/external_pos.h"
@@ -216,10 +217,6 @@ bool canUseLaunchControl(void)
     }
     return false;
 }
-#endif
-
-#ifdef USE_NN_CONTROL
-#include "flight/nn_control.h"
 #endif
 
 void resetArmingDisabled(void)
@@ -406,6 +403,22 @@ void updateArmingStatus(void)
             setArmingDisabled(ARMING_DISABLED_MOTOR_PROTOCOL);
         }
 
+#ifdef USE_NN_CONTROL
+        if (FLIGHT_MODE(NN_MODE)) {
+            setArmingDisabled(ARMING_DISABLED_NN_MODE);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_NN_MODE);
+        }
+#endif
+
+#ifdef USE_CATAPULT
+        if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_WAITING_FOR_ARM)) {
+            setArmingDisabled(ARMING_DISABLED_CATAPULT);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_CATAPULT);
+        }
+#endif
+
         if (!isUsingSticksForArming()) {
             if (!IS_RC_MODE_ACTIVE(BOXARM)) {
 #ifdef USE_RUNAWAY_TAKEOFF
@@ -436,18 +449,20 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if (throwState == THROW_STATE_THROWN) {
-            // unset all but doNotTolerate.
+        if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+            // Intended behaviour: display "WAITING_FOR_THROW" if an only if 
+            //                     directly ready to be thrown.
+            //                     Also, do not allow arming in any other way
+            //                     (switch or sticks) if throw to arm switch
+            //                     enabled
             unsetArmingDisabled(~doNotTolerateDuringThrow);
-        } else if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
-            // do not allow arming in any other way (switch or sticks) if throw to arm switch enabled
-            setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
-        }
-#endif
-
-#ifdef USE_CATAPULT
-        if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_WAITING_FOR_ARM)) {
-            setArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
+            if (throwState == THROW_STATE_THROWN) {
+                unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+            } else {
+                setArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+            }
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
         }
 #endif
 
@@ -1057,7 +1072,8 @@ void processRxModes(timeUs_t currentTimeUs)
 
 #ifdef USE_CATAPULT
     if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
-        ENABLE_FLIGHT_MODE(CATAPULT_MODE);
+        if (!FLIGHT_MODE(CATAPULT_MODE))
+            ENABLE_FLIGHT_MODE(CATAPULT_MODE);
     } else {
         DISABLE_FLIGHT_MODE(CATAPULT_MODE);
     }
@@ -1078,6 +1094,45 @@ void processRxModes(timeUs_t currentTimeUs)
         }
 
         DISABLE_FLIGHT_MODE(LEARNER_MODE);
+    }
+#endif
+
+#ifdef USE_INDI
+    // if we have INDI support compiled in, then we allow an RC switch to enable
+    // legacy PIDs
+    if (IS_RC_MODE_ACTIVE(BOXPIDCTL)) {
+        if (!FLIGHT_MODE(PID_MODE))
+            ENABLE_FLIGHT_MODE(PID_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(PID_MODE);
+    }
+#endif
+
+#ifdef USE_NN_CONTROL
+    // intended behaviour: try to activate NN once when switch is flipped.
+    // If that fails, requrie that switch is cycled to retry.
+    // additionally, if nn_is_active is ever false for some other reason while NN_MODE is active:
+    //     --> disable and require cycling of the switch
+    static bool hasNNActivationBeenTried = false;
+    if (IS_RC_MODE_ACTIVE(BOXNNCTL)) {
+        // try enable neural net once
+        if (!hasNNActivationBeenTried) {
+            nn_activate();
+            hasNNActivationBeenTried = true;
+        }
+
+        if (nn_is_active()) {
+            if (!FLIGHT_MODE(NN_MODE))
+                ENABLE_FLIGHT_MODE(NN_MODE);
+        } else {
+            DISABLE_FLIGHT_MODE(NN_MODE);
+        }
+    } else {
+        if (nn_is_active())
+            nn_deactivate();
+
+        hasNNActivationBeenTried = false;
+        DISABLE_FLIGHT_MODE(NN_MODE);
     }
 #endif
 
@@ -1216,74 +1271,6 @@ bool isTouchingGround(void) {
     return (accHigh && throttleLow && gyroLow);
 }
 
-#ifdef USE_INDI
-static FAST_CODE_NOINLINE void subTaskIndiController(timeUs_t currentTimeUs) {
-    indiController(currentTimeUs);
-}
-
-static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeUs) {
-    UNUSED(currentTimeUs);
-
-    uint8_t numMotors = motorDeviceCount();
-
-    //static timeUs_t firstArmed = 0;
-
-    if (!ARMING_FLAG(ARMED)) {
-        for (int i = 0; i < numMotors; i++) {
-            //motor[i] = mixerRuntime.disarmMotorOutput;
-            motor[i] = motor_disarmed[i];
-        }
-        //firstArmed = 0;
-    } else {
-        /* test program for motor test bench. Use with care. Won't ask, just blast.
-        if (firstArmed == 0)
-            firstArmed = currentTimeUs;
-
-        u[0] = 0.;
-        int maxu = 7;
-        timeDelta_t interv = 1e6;
-        for (int i = 0; i <= maxu; i++) {
-            if (cmpTimeUs(currentTimeUs, firstArmed) > i*interv)
-                u[0] = i * 0.1f;
-        }
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+1)*interv)
-            u[0] = 0.0f;
-
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+5)*interv)
-            u[0] = 0.8f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+6)*interv)
-            u[0] = 0.9f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+7)*interv)
-            u[0] = 0.0f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+11)*interv)
-            u[0] = 1.0f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+12)*interv)
-            u[0] = 0.0f;
-        */
-
-        for (int i = 0; i < numMotors; i++) {
-            motor[i] = scaleRangef(indiRun.d[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
-        }
-
-        #ifdef USE_NN_CONTROL
-        if (nn_is_active()) {
-            float* nn_output = nn_get_motor_cmds();
-            for (int i = 0; i < numMotors; i++) {
-                motor[i] = scaleRangef(nn_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
-            }
-        }
-        #endif
-    }
-
-#ifdef HIL_BUILD
-    hilSendActuators();
-#else
-    writeMotors();
-#endif
-
-}
-#endif
-
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 {
     uint32_t startTime = 0;
@@ -1338,30 +1325,6 @@ static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 #endif
 }
 
-static FAST_CODE_NOINLINE void subTaskPidSubprocesses(timeUs_t currentTimeUs)
-{
-    uint32_t startTime = 0;
-    if (debugMode == DEBUG_PIDLOOP) {
-        startTime = micros();
-    }
-
-#if defined(USE_GPS) || defined(USE_MAG)
-    if (sensors(SENSOR_GPS) || sensors(SENSOR_MAG)) {
-        updateMagHold();
-    }
-#endif
-
-#ifdef USE_BLACKBOX
-    if (!cliMode && blackboxConfig()->device) {
-        blackboxUpdate(currentTimeUs);
-    }
-#else
-    UNUSED(currentTimeUs);
-#endif
-
-    DEBUG_SET(DEBUG_PIDLOOP, 3, micros() - startTime);
-}
-
 #ifdef USE_TELEMETRY
 #define GYRO_TEMP_READ_DELAY_US 3e6    // Only read the gyro temp every 3 seconds
 void subTaskTelemetryPollSensors(timeUs_t currentTimeUs)
@@ -1376,7 +1339,7 @@ void subTaskTelemetryPollSensors(timeUs_t currentTimeUs)
 }
 #endif
 
-static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
+static FAST_CODE void subTaskPidMixing(timeUs_t currentTimeUs)
 {
     uint32_t startTime = 0;
     if (debugMode == DEBUG_CYCLETIME) {
@@ -1391,24 +1354,6 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
     }
 
     mixTable(currentTimeUs);
-
-#ifdef USE_SERVOS
-    // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
-    if (isMixerUsingServos()) {
-        writeServos();
-    }
-#endif
-
-    writeMotors();
-
-#ifdef USE_DSHOT_TELEMETRY_STATS
-    if (debugMode == DEBUG_DSHOT_RPM_ERRORS && useDshotTelemetry) {
-        const uint8_t motorCount = MIN(getMotorCount(), 4);
-        for (uint8_t i = 0; i < motorCount; i++) {
-            debug[i] = getDshotTelemetryMotorInvalidPercent(i);
-        }
-    }
-#endif
 
     DEBUG_SET(DEBUG_PIDLOOP, 2, micros() - startTime);
 }
@@ -1455,7 +1400,7 @@ FAST_CODE bool gyroFilterReady(void)
     }
 }
 
-FAST_CODE bool pidLoopReady(void)
+FAST_CODE bool innerLoopReady(void)
 {
     if ((pidUpdateCounter % activePidLoopDenom) == (activePidLoopDenom / 2)) {
         return true;
@@ -1467,30 +1412,73 @@ FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
 
-}
-
-#ifdef USE_INDI
-FAST_CODE void taskMainIndiLoop(timeUs_t currentTimeUs)
-{
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();
 #endif
+}
 
-    subTaskRcCommand(currentTimeUs);
-    subTaskIndiController(currentTimeUs);
-    subTaskIndiApplyToActuators(currentTimeUs);
+static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t currentTimeUs) {
+    UNUSED(currentTimeUs);
+
+    // this is the disarm safety!
+    if (!ARMING_FLAG(ARMED)) {
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++)
+            motor[i] = motor_disarmed[i];
+    }
+
+#ifdef HIL_BUILD
+    hilSendActuators();
+#else
+
+#ifdef USE_SERVOS
+    // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
+    if (isMixerUsingServos()) {
+        writeServos();
+    }
+#endif
+    writeMotors();
+
+#endif
+
+#ifdef USE_DSHOT_TELEMETRY_STATS
+    if (debugMode == DEBUG_DSHOT_RPM_ERRORS && useDshotTelemetry) {
+        const uint8_t motorCount = MIN(getMotorCount(), 4);
+        for (uint8_t i = 0; i < motorCount; i++) {
+            debug[i] = getDshotTelemetryMotorInvalidPercent(i);
+        }
+    }
+#endif
+}
+
+
+static FAST_CODE_NOINLINE void subTaskInnerLoopTailEnd(timeUs_t currentTimeUs) {
+    uint32_t startTime = 0;
+    if (debugMode == DEBUG_PIDLOOP) {
+        startTime = micros();
+    }
+
+#if defined(USE_GPS) || defined(USE_MAG)
+    if (sensors(SENSOR_GPS) || sensors(SENSOR_MAG)) {
+        updateMagHold();
+    }
+#endif
+
 #ifdef USE_BLACKBOX
     if (!cliMode && blackboxConfig()->device) {
         blackboxUpdate(currentTimeUs);
     }
+#else
+    UNUSED(currentTimeUs);
 #endif
+
+    DEBUG_SET(DEBUG_PIDLOOP, 3, micros() - startTime);
 }
-#endif
 
-// Function for loop trigger
-FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
+
+// generates motor[i] commands according to the selected controller
+// does not handle arm/disarm logic, that's only done at the last step
+FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 {
-
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_GYROPID_SYNC)
     if (lockMainPID() != 0) return;
 #endif
@@ -1503,9 +1491,55 @@ FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
     DEBUG_SET(DEBUG_PIDLOOP, 0, micros() - currentTimeUs);
 
     subTaskRcCommand(currentTimeUs);
-    subTaskPidController(currentTimeUs);
-    subTaskMotorUpdate(currentTimeUs);
-    subTaskPidSubprocesses(currentTimeUs);
+
+    uint8_t numMotors = getMotorCount();
+    float motor_normalized[MAX_SUPPORTED_MOTORS] = { 0 };
+
+#ifdef USE_NN_CONTROL
+    static uint8_t innerLoopCounter = 0;
+    if (FLIGHT_MODE(NN_MODE)) {
+        if (++innerLoopCounter % 20) {
+            // run neural network when its time has come
+            nn_compute_motor_cmds();
+            innerLoopCounter = 0;
+        }
+
+        float* nn_output = nn_get_motor_cmds();
+        for (int i = 0; i < numMotors; i++) 
+            motor_normalized[i] = constrainf(nn_output[i], 0., 1.);
+
+    } else
+#endif
+#ifdef USE_INDI
+    if (!FLIGHT_MODE(PID_MODE)) {
+        indiController(currentTimeUs);
+
+        for (int i = 0; i < numMotors; i++)
+            motor_normalized[i] = constrainf(indiRun.d[i], 0., 1.);
+
+    } else
+#endif 
+    {
+        // PID 
+        subTaskPidController(currentTimeUs);
+        subTaskPidMixing(currentTimeUs);
+
+        for (int i = 0; i < numMotors; i++)
+            motor_normalized[i] = scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+    }
+
+#ifdef USE_INDI
+    indiUpdateActuatorState( motor_normalized );
+#endif
+
+    for (int i = 0; i < numMotors; i++)
+        motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+
+    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++)
+        motor[i] = motor_disarmed[i];
+
+    subTaskInnerLoopApplyToActuators(currentTimeUs);
+    subTaskInnerLoopTailEnd(currentTimeUs);
 
     DEBUG_SET(DEBUG_CYCLETIME, 0, getTaskDeltaTimeUs(TASK_SELF));
     DEBUG_SET(DEBUG_CYCLETIME, 1, getAverageSystemLoadPercent());

@@ -101,10 +101,7 @@ typedef enum {
     TASK_MAIN,
     TASK_GYRO,
     TASK_FILTER,
-    TASK_PID,
-#ifdef USE_INDI
-    TASK_INDI,
-#endif
+    TASK_INNER_LOOP,
     TASK_ACCEL,
     TASK_ATTITUDE,
     TASK_RX,
@@ -151,9 +148,6 @@ typedef enum {
 #endif
 #ifdef USE_EKF
     TASK_EKF,
-#endif
-#ifdef USE_NN_CONTROL
-    TASK_NN_CONTROL,
 #endif
 #ifdef USE_LED_STRIP
     TASK_LEDSTRIP,
