@@ -1,9 +1,10 @@
 #include "nn_control.h"
-#include "ekf_calc.h"			// FOR NOW: hard coded to use ekf states
-#include "sensors/gyro.h"		// for gyro
-#include "flight/att_ctl.h"		// for omega
-#include "io/external_pos.h"	// for setpoints
-#include "pos_ctl.h"			// for resetIterms
+#include "ekf_calc.h"					// FOR NOW: hard coded to use ekf states
+#include "sensors/gyro.h"				// for gyro
+#include "flight/att_ctl.h"				// for omega
+#include "io/external_pos.h"			// for setpoints
+#include "pos_ctl.h"					// for resetIterms
+#include "flight/trajectory_tracker.h"	// for initRecoveryMode
 
 #include "flight/neural_controllers/nn_controller.h"
 
@@ -21,6 +22,9 @@ void nn_init(void) {
 }
 
 void nn_activate(void) {
+	// just in case
+	nn_init();
+
 	// only activate when the drone is at start point (within 0.5 meters)
 	if ((fabsf(ekf_get_X()[0] - start_pos[0]) < 0.5f) &&
 		(fabsf(ekf_get_X()[1] - start_pos[1]) < 0.5f) &&
@@ -34,16 +38,9 @@ void nn_activate(void) {
 
 void nn_deactivate(void) {
 	nn_active = false;
-	// current pos, yaw becomes the setpoint
-	posSetpointNed.pos.V.X =  0.0f; //ekf_get_X()[0];
-	posSetpointNed.pos.V.Y =  0.0f; //ekf_get_X()[1];
-	posSetpointNed.pos.V.Z = -1.5f; //ekf_get_X()[2];
-	posSetpointNed.psi = ekf_get_X()[8];
 
-	// posSetpointNed.pos.V.X = gate_pos[target_gate_index+1][0];
-	// posSetpointNed.pos.V.Y = gate_pos[target_gate_index+1][1];
-	// posSetpointNed.pos.V.Z = gate_pos[target_gate_index+1][2];
-	// posSetpointNed.psi = gate_yaw[target_gate_index+1];
+	// recovery mode
+	initRecoveryMode();
 
     // reset I terms
     resetIterms();
