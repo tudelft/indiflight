@@ -2,6 +2,7 @@
 #include "ekf_calc.h"			// FOR NOW: hard coded to use ekf states
 #include "sensors/gyro.h"		// for gyro
 #include "flight/indi.h"		// for omega
+#include "flight/trajectory_tracker.h"		// for recovery mode
 #include "io/external_pos.h"	// for setpoints
 #include "pos_ctl.h"			// for resetIterms
 
@@ -37,6 +38,9 @@ void nn_init(void) {
 }
 
 void nn_activate(void) {
+	// just in case
+	nn_init();
+
 	// only activate when the drone is at start point (within 0.5 meters)
 	if ((fabsf(ekf_get_X()[0] - start_pos[0]) < 0.5f) &&
 		(fabsf(ekf_get_X()[1] - start_pos[1]) < 0.5f) &&
@@ -50,16 +54,9 @@ void nn_activate(void) {
 
 void nn_deactivate(void) {
 	nn_active = false;
-	// current pos, yaw becomes the setpoint
-	posSpNed.pos.V.X =  0.0f; //ekf_get_X()[0];
-	posSpNed.pos.V.Y =  0.0f; //ekf_get_X()[1];
-	posSpNed.pos.V.Z = -1.5f; //ekf_get_X()[2];
-	posSpNed.psi = ekf_get_X()[8];
 
-	// posSpNed.pos.V.X = gate_pos[target_gate_index+1][0];
-	// posSpNed.pos.V.Y = gate_pos[target_gate_index+1][1];
-	// posSpNed.pos.V.Z = gate_pos[target_gate_index+1][2];
-	// posSpNed.psi = gate_yaw[target_gate_index+1];
+	// recovery mode
+	initRecoveryMode();
 
     // reset I terms
     resetIterms();
@@ -90,10 +87,14 @@ void nn_compute_motor_cmds(void) {
 	world_state[10] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
 	world_state[11] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
 	// motorspeeds
-	world_state[12] = (float) indiRun.omega[0];
-	world_state[13] = (float) indiRun.omega[1];
-	world_state[14] = (float) indiRun.omega[2];
-	world_state[15] = (float) indiRun.omega[3];
+	// world_state[12] = (float) indiRun.omega_fs[0];
+	// world_state[13] = (float) indiRun.omega_fs[1];
+	// world_state[14] = (float) indiRun.omega_fs[2];
+	// world_state[15] = (float) indiRun.omega_fs[3];
+	world_state[12] = indiRun.actHoverOmega[0];
+	world_state[13] = indiRun.actHoverOmega[1];
+	world_state[14] = indiRun.actHoverOmega[2];
+	world_state[15] = indiRun.actHoverOmega[3];
 
 	// call the neural network controller (output is in range [0,1])
 	nn_control(world_state, nn_motor_cmds);

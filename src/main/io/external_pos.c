@@ -181,6 +181,12 @@ void getPosSetpoint(timeUs_t current) {
                 setSpeedTrajectoryTracker(piMsgPosSetpointRx->enu_yd);
                 return;
             }
+
+            // call initRecoveryMode when piMsgPosSetpointRx->enu_xd == 6
+            if (piMsgPosSetpointRx->enu_xd == 6) {
+                initRecoveryMode();
+                return;
+            }
 #endif
 #ifdef USE_NN_CONTROL
             // UGLY HACK: velocity setpoint is used for communication with the neural network controller -----------------

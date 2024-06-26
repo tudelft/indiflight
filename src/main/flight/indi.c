@@ -362,22 +362,6 @@ void getMotorCommands(timeUs_t current) {
     // get rotation speeds and accelerations from dshot, or fallback
     float omega_inv[MAXU];
     for (int i = 0; i < indiRun.actNum; i++) {
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
-        if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
-            omega_prev[i] = indiRun.omega_fs[i];
-
-            // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
-            indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
-            indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
-        } else
-#endif
-        {
-            // fallback option 1: fixed omega_hover
-            indiRun.omega[i] = indiRun.actHoverOmega[i];
-            indiRun.omega_fs[i] = indiRun.actHoverOmega[i];
-
-            // fallback option 2: use actLag filter. TODO
-        }
 
         // needed later as well, not just for fallback
         float invThresh = 0.1f * indiRun.actMaxOmega[i];
@@ -389,6 +373,7 @@ void getMotorCommands(timeUs_t current) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
         if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback ) {
             indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
+            omega_prev[i] = indiRun.omega_fs[i];
             // probably do some limiting here
         } else
 #endif
@@ -513,6 +498,21 @@ void indiUpdateActuatorState( float* d ) {
     for (int i=0; i < indiRun.actNum; i++) {
         float u = indiOutputCurve( &indiRun.lin[i], d[i] );
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
+
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
+        if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
+            // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
+            indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
+            indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
+        } else
+#endif
+        {
+            // fallback option 1: fixed omega_hover
+            indiRun.omega[i] = indiRun.actHoverOmega[i];
+            indiRun.omega_fs[i] = indiRun.actHoverOmega[i];
+
+            // fallback option 2: use actLag filter. TODO
+        }
     }
 }
 

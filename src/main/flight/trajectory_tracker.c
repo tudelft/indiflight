@@ -30,6 +30,7 @@ float tt_yaw_rate_ref;
 // time stuff
 float tt_speed_factor = 0.0f;
 float tt_progress = 0.0f;
+float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
@@ -39,6 +40,78 @@ float tt_vel_gain = 3.0; //2.5;
 
 // radius of circular trajectory
 float tt_R = 3.0f;
+
+// recovery algorithm
+bool tt_recovery_active = false;
+
+struct recovery_problem {
+    float R;         // radius of circular trajectory for recovery
+    float theta0;    // starting angle along the cicle
+    float omega0;    // starting angular velocity
+    float tf;        // time when recovery should be finished
+} tt_recovery_problem;
+
+void initRecoveryMode(void) {
+    // check current position to determine the radius of the recovery trajectory
+    float x = posEstNed.V.X;
+    float y = posEstNed.V.Y;
+    tt_recovery_problem.R = sqrtf(x*x + y*y);
+
+    // make sure radius is less then 4
+    if (tt_recovery_problem.R > 4.0f) {
+        tt_recovery_problem.R = 4.0f;
+    }
+
+    // get starting angle
+    tt_recovery_problem.theta0 = atan2f(y, x);
+
+    // get starting angular velocity
+    float vx = velEstNed.V.X;
+    float vy = velEstNed.V.Y;
+    float v_perp = (-y*vx + x*vy)/tt_recovery_problem.R;
+    tt_recovery_problem.omega0 = v_perp/tt_recovery_problem.R;
+
+    // final time hardcoded to 4 seconds
+    tt_recovery_problem.tf = 4.0f;
+
+    // set time to zero
+    tt_time = 0.0f;
+
+    // set active to true
+    tt_active = true;
+    tt_recovery_active = true;
+}
+
+void getRefsRecoveryTrajectory(float t) {
+    // get stuff from recovery problem into floats (for readability)
+    float R = tt_recovery_problem.R;
+    float theta0 = tt_recovery_problem.theta0;
+    float omega0 = tt_recovery_problem.omega0;
+    float tf = tt_recovery_problem.tf;
+
+    // safety check
+    if (t > tf) {
+        t = tf;
+    }
+
+    float omega = omega0*(1.0f - t/tf);                 // angular velocity
+    float theta = theta0 + omega0*(t - 0.5f*t*t/tf);    // angle along the circle
+
+    // position refs
+    tt_pos_ref[0] = R*cosf(theta);
+    tt_pos_ref[1] = R*sinf(theta);
+    tt_pos_ref[2] = -1.5f;
+
+    // velocity refs
+    tt_vel_ref[0] = -R*sinf(theta)*omega;
+    tt_vel_ref[1] = R*cosf(theta)*omega;
+    tt_vel_ref[2] = 0.0f;
+
+    // acceleration refs
+    tt_acc_ref[0] = -R*cosf(theta)*omega*omega -R*sinf(theta)*(-omega0/tf);
+    tt_acc_ref[1] = -R*sinf(theta)*omega*omega +R*cosf(theta)*(-omega0/tf);
+    tt_acc_ref[2] = 0.0f;
+}
 
 bool isActiveTrajectoryTracker(void) {
     return tt_active;
@@ -65,9 +138,8 @@ void getRefsTrajectoryTracker(float p) {
     tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
     tt_acc_ref[2] = 0.0f;
 
-    //tt_yaw_ref = p + M_PIf/2.0f;
-    //tt_yaw_rate_ref = tt_speed_factor;
-
+    // tt_yaw_ref = p + M_PIf/2.0f;
+    // tt_yaw_rate_ref = tt_speed_factor;
 }
 
 void initTrajectoryTracker(void) {
@@ -94,6 +166,7 @@ void stopTrajectoryTracker(void) {
     tt_speed_factor = 0.0f;
     getRefsTrajectoryTracker(tt_progress);
     tt_active = false;
+    tt_recovery_active = false;
 
     // reset I terms
     resetIterms();
@@ -109,14 +182,22 @@ void updateTrajectoryTracker(timeUs_t current) {
 
         // update references
         getRefsTrajectoryTracker(tt_progress);
-        
-        // if speed_factor is zero, we forward posSpNed to tt_pos_ref
-        // if (tt_speed_factor == 0.0f) {
-        //     tt_pos_ref[0] = posSpNed.pos.V.X;
-        //     tt_pos_ref[1] = posSpNed.pos.V.Y;
-        //     tt_pos_ref[2] = posSpNed.pos.V.Z;
-        // }
 
+        // recovery mode
+        if (tt_recovery_active) {
+            // update time
+            tt_time += (current - last)*1e-6f;
+
+            // get references
+            getRefsRecoveryTrajectory(tt_time);
+
+            // check if recovery is finished
+            if (tt_time >= tt_recovery_problem.tf) {
+                tt_recovery_active = false;
+                tt_active = false;
+            }
+        }
+        
         // update setpoints
         // pos error
         float x_error = tt_pos_ref[0] - posEstNed.V.X;
