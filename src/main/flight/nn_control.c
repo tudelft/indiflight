@@ -5,6 +5,7 @@
 #include "flight/trajectory_tracker.h"		// for recovery mode
 #include "io/external_pos.h"	// for setpoints
 #include "pos_ctl.h"			// for resetIterms
+#include "pg/pg_ids.h"              // for config
 
 #include "flight/neural_controllers/nn_controller.h"
 
@@ -23,6 +24,11 @@
 #endif
 
 #pragma message "You are compiling with dangerous code!"
+
+PG_REGISTER_WITH_RESET_TEMPLATE(nnConfig_t, nnConfig, PG_NN_CONFIG, 0);
+PG_RESET_TEMPLATE(nnConfig_t, nnConfig, 
+    .rate_denom = 20,
+); 
 
 float nn_motor_cmds[4] = {0.};
 bool nn_active = false;

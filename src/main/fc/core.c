@@ -1498,7 +1498,8 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 #ifdef USE_NN_CONTROL
     static uint8_t innerLoopCounter = 0;
     if (FLIGHT_MODE(NN_MODE)) {
-        if (++innerLoopCounter % 20) {
+        uint8_t rate_denom = MAX(1, nnConfig()->rate_denom);
+        if (!(++innerLoopCounter % rate_denom)) {
             // run neural network when its time has come
             nn_compute_motor_cmds();
             innerLoopCounter = 0;

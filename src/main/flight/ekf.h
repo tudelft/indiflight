@@ -1,12 +1,10 @@
-
-
 #ifndef EKF_H
 #define EKF_H
 
 #include "common/time.h"			// for timeUs_t
 #include "ekf_calc.h"
 
-#include "config/config.h"
+#include "pg/pg.h"
 
 // useful macros
 // #define getEkfPosNed() (ekf_get_X()[0])

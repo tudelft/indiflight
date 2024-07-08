@@ -229,6 +229,10 @@
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
 #endif
 
+#ifdef USE_NN_CONTROL
+#define PARAM_NAME_NN_RATE_DENOM "nn_rate_denom"
+#endif
+
 #ifdef USE_GPS
 #define PARAM_NAME_GPS_PROVIDER "gps_provider"
 #define PARAM_NAME_GPS_SBAS_MODE "gps_sbas_mode"

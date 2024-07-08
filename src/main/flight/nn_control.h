@@ -2,6 +2,14 @@
 #define NN_CONTROL_H
 
 #include <stdbool.h>
+#include <stdint.h>
+#include "pg/pg.h"
+
+typedef struct nnConfig_s {
+    uint8_t rate_denom;     // run net every rate_denom times the inner loop is run
+} nnConfig_t;
+
+PG_DECLARE(nnConfig_t, nnConfig);
 
 void nn_init(void);                             // initializes controller and sets a starting point
 

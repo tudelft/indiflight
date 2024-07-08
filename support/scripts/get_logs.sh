@@ -44,6 +44,7 @@ sleep 3
 
 echo
 sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo findmnt ${DEV}"
+if [[ $? -gt 0 ]]; then
     # try to find blk device
     i=3
     while 

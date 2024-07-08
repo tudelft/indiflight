@@ -69,6 +69,7 @@
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/ekf.h"
+#include "flight/nn_control.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1330,6 +1331,10 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_ZETA_POSITION,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPosition) },
     { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
     { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
+#endif
+
+#ifdef USE_NN_CONTROL
+    { PARAM_NAME_NN_RATE_DENOM,             VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 255 }, PG_NN_CONFIG, offsetof(nnConfig_t, rate_denom) },
 #endif
 
 // PG_TELEMETRY_CONFIG
