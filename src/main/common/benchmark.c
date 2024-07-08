@@ -5,6 +5,7 @@
 
 #include "common/time.h"    // cmpTimeCycles
 #include "drivers/system.h" // getCycleCounter
+#include "drivers/io.h"
 #include "benchmark.h"
 
 #define CONCAT_P(a, b) a.b

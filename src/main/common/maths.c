@@ -120,15 +120,15 @@ FAST_CODE void fp_euler_of_i16_euler(fp_euler_t *ef, const i16_euler_t *ei) {
 FAST_CODE void fp_euler_of_rotationMatrix(fp_euler_t *e, const fp_rotationMatrix_t *r) {
     // https://www.eecs.qmul.ac.uk/~gslabaugh/publications/euler.pdf
     // to following is valid for cos(pitch) > 0, which is given for pitch on (-pi/2, +pi/2)
-    if (fabsf(r->m[2][0]) < 0.9999) {
+    if (fabsf(r->m[2][0]) < 0.9999f) {
         e->angles.pitch = -asin_approx(r->m[2][0]); // or +pi, but we want the interval [-pi/2, +pi/2]
         e->angles.roll = atan2_approx(r->m[2][1], r->m[2][2]);
         e->angles.yaw = atan2_approx(r->m[1][0], r->m[0][0]);
     } else {
         // handle gimbal lock
-        e->angles.pitch = (r->m[2][0] < 0.) ? (0.5*M_PIf) : (-0.5*M_PIf);
+        e->angles.pitch = (r->m[2][0] < 0.f) ? (0.5f*M_PIf) : (-0.5f*M_PIf);
         e->angles.yaw = 0.f; // choice
-        e->angles.roll = (r->m[2][0] < 0.) ? (atan2_approx(r->m[0][1], r->m[0][2])) : (atan2_approx(-r->m[0][1], -r->m[0][2])); // +- yaw, if non0
+        e->angles.roll = (r->m[2][0] < 0.f) ? (atan2_approx(r->m[0][1], r->m[0][2])) : (atan2_approx(-r->m[0][1], -r->m[0][2])); // +- yaw, if non0
     }
 }
 
@@ -233,8 +233,8 @@ FAST_CODE void quaternion_of_rotationMatrix(fp_quaternion_t *q, const fp_rotatio
     // https://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
     float trace = r->m[0][0] + r->m[1][1] + r->m[2][2];
     float s, si;
-    if (trace > 1e-6) {
-        s = 0.5 * sqrtf( 1.0f + trace );
+    if (trace > 1e-6f) {
+        s = 0.5f * sqrtf( 1.0f + trace );
         si = 0.25f / s;
         q->w = s;
         q->x = si * ( r->m[2][1] - r->m[1][2] );

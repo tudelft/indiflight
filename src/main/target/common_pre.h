@@ -49,7 +49,7 @@
 // -Wpadded can be turned on to check padding of structs
 //#pragma GCC diagnostic warning "-Wpadded"
 
-#if !defined(CLOUD_BUILD) && !defined(SITL)
+#if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD)
 #define USE_DSHOT
 #endif
 
@@ -255,7 +255,7 @@ extern uint8_t _dmaram_end__;
 //#define USE_IMU_CALC
 
 // all the settings for classic build
-#if !defined(CLOUD_BUILD) && !defined(SITL)
+#if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD)
 
 #define USE_MAG
 

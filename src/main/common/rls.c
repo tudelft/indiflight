@@ -67,7 +67,7 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
     }
 
     //rls->baseLambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
-    rls->lambda = powf(1.f - (float) _M_LN2, Ts / Tchar);
+    rls->lambda = powf(1.f - (float) M_LN2, Ts / Tchar);
 
     return RLS_SUCCESS;
 }

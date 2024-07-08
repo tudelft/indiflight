@@ -36,6 +36,8 @@
 
 // Use floating point M_PI instead explicitly.
 #define M_PIf       3.14159265358979323846f
+#undef M_LN2f
+#define M_LN2f      0.693147180559945309417f
 #define M_EULERf    2.71828182845904523536f
 
 #define GRAVITYf 9.80665f
