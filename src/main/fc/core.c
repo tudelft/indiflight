@@ -1101,10 +1101,13 @@ void processRxModes(timeUs_t currentTimeUs)
     // if we have INDI support compiled in, then we allow an RC switch to enable
     // legacy PIDs
     if (IS_RC_MODE_ACTIVE(BOXPIDCTL)) {
-        if (!FLIGHT_MODE(PID_MODE))
+        if (!FLIGHT_MODE(PID_MODE)) {
             ENABLE_FLIGHT_MODE(PID_MODE);
+            initEscEndpoints(); // to use or not use output limit in mixer
+        }
     } else {
         DISABLE_FLIGHT_MODE(PID_MODE);
+        initEscEndpoints();
     }
 #endif
 

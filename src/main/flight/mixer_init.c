@@ -284,11 +284,14 @@ bool mixerIsTricopter(void)
 // DSHOT scaling is done to the actual dshot range
 void initEscEndpoints(void)
 {
-    float motorOutputLimit = 1.0f;
-    //if (currentPidProfile->motor_output_limit < 100) {
-    //    motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
-    //}
-    // this now gets managed in indi, so the controller is aware
+    float motorOutputLimit = 1.;
+    if ((currentPidProfile->motor_output_limit < 100)
+#ifdef USE_INDI
+        && (FLIGHT_MODE(PID_MODE))
+#endif
+        ) {
+        motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
+    }
     motorInitEndpoints(motorConfig(), motorOutputLimit, &mixerRuntime.motorOutputLow, &mixerRuntime.motorOutputHigh, &mixerRuntime.disarmMotorOutput, &mixerRuntime.deadbandMotor3dHigh, &mixerRuntime.deadbandMotor3dLow);
 }
 

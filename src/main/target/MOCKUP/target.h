@@ -3,8 +3,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #include "common/utils.h"
+#include "target/common_defaults_post.h"
 
 #define TARGET_BOARD_IDENTIFIER "MCUP"
 
@@ -245,4 +247,9 @@ uint32_t micros(void);
 
 int lockMainPID(void);
 
+// dshot motor feedback emulation
+extern float motorOmegaValues[MAX_SUPPORTED_MOTORS];
+bool isDshotTelemetryActive(void);
+//uint16_t getDshotTelemetry(uint8_t motor); // defined in drivers/dshot.h
 
+void mockupInitEndpoints(float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow);

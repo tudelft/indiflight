@@ -3594,7 +3594,9 @@ static void cliRebootEx(rebootTarget_e rebootTarget)
 {
     cliPrint("\r\nRebooting");
     cliWriterFlush();
+#ifndef SIMULATOR_BUILD
     waitForSerialPortToFinishTransmitting(cliPort);
+#endif
     motorShutdown();
 
     switch (rebootTarget) {
@@ -4807,7 +4809,10 @@ STATIC_UNIT_TESTED void cliSet(const char *cmdName, char *cmdline)
                     }
 
                     // find next comma (or end of string)
-                    valPtr = strchr(valPtr, ',') + 1;
+                    valPtr = strchr(valPtr, ',');
+                    if (valPtr != NULL) {
+                        valPtr += 1;
+                    }
 
                     i++;
                 }
@@ -6938,7 +6943,7 @@ static void processCharacter(const char c)
     }
 }
 
-static void processCharacterInteractive(const char c)
+void processCharacterInteractive(const char c)
 {
     if (c == '\t' || c == '?') {
         // do tab completion

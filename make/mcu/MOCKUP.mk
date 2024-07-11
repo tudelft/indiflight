@@ -23,6 +23,7 @@ MCU_EXCLUDES = \
             drivers/bus_spi_config.c \
             drivers/bus_spi_pinconfig.c \
             drivers/dma.c \
+			drivers/dma_common.c \
             drivers/pwm_output.c \
             drivers/timer.c \
             drivers/system.c \
@@ -43,6 +44,9 @@ MCU_EXCLUDES = \
 
 TARGET_MAP  = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET).map
 
+CFLAGS += -fPIC \
+			-ffunction-sections
+
 LD_FLAGS    := \
               -lm \
               -lpthread \
@@ -54,13 +58,14 @@ LD_FLAGS    := \
               -Wl,-gc-sections,-Map,$(TARGET_MAP) \
               -Wl,-L$(LINKER_DIR) \
               -Wl,--cref \
+			  -Wl,--no-undefined \
               -T$(LD_SCRIPT)
 
-ifneq ($(filter SITL_STATIC,$(OPTIONS)),)
-LD_FLAGS     += \
-              -static \
-              -static-libgcc
-endif
+#ifneq ($(filter SITL_STATIC,$(OPTIONS)),)
+#LD_FLAGS     += \
+#              -static \
+#              -static-libgcc
+#endif
 
 ifneq ($(DEBUG),GDB)
 OPTIMISE_DEFAULT    := -Ofast

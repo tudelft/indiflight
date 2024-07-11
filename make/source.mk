@@ -561,16 +561,16 @@ LAPACK_SOURCE_OPTIM += $(wildcard $(LAPACK_DIR)/SRC/i*.c)
 # find . -name "*.f" | sed -n "s/^\.\/\([^ix].*\)\.f$/\1.c /gp" | tr -d "\n" in the src dir
 LAPACK_SOURCE_SGEQP3 := sgeqp3.c sgeqrf.c sgemm.c slarf.c snrm2.c slapy2.c scopy.c sorm2r.c lsame.c slaqps.c slarfg.c sswap.c strmm.c sger.c slarft.c slaqp2.c strmv.c sscal.c slaisnan.c sgemv.c sisnan.c slarfb.c sormqr.c sgeqr2.c
 LAPACK_SOURCE_OPTIM += $(wildcard $(addprefix $(LAPACK_DIR)/SRC/, $(LAPACK_SOURCE_SGEQP3)))
-LAPACK_SOURCE_SORG2R := sorg2r.c slarf.c lsame.c sger.c sscal.c sgemv.c
+LAPACK_SOURCE_SORG2R := sorg2r.c slarf.c lsame.c sger.c sscal.c sgemv.c slarfp.c
 LAPACK_SOURCE_OPTIM += $(wildcard $(addprefix $(LAPACK_DIR)/SRC/, $(LAPACK_SOURCE_SORG2R)))
 
 ### AUX PROGRAMS, NOT OPTIMIZED
-LAPACK_FILTER_OUT := arithchk.c main.c uninit.c backspac.c
+LAPACK_FILTER_OUT := arithchk.c main.c uninit.c backspac.c getarg_.c iargc_.c
 LAPACK_SOURCE_F2CLIB = $(filter-out $(addprefix $(LAPACK_DIR)/F2CLIBS/libf2c/, $(LAPACK_FILTER_OUT)), $(wildcard $(LAPACK_DIR)/F2CLIBS/libf2c/*.c))
 LAPACK_SOURCE_NO_OPTIM += $(LAPACK_SOURCE_F2CLIB)
 
 LAPACK_SOURCE_INSTALL = dlamch.c dsecnd.c second.c slamch.c
-#LAPACK_SOURCE_NO_OPTIM += $(addprefix $(LAPACK_DIR)/INSTALL/, $(LAPACK_SOURCE_INSTALL))
+LAPACK_SOURCE_NO_OPTIM += $(addprefix $(LAPACK_DIR)/INSTALL/, $(LAPACK_SOURCE_INSTALL))
 
 ### ADD SOURCES
 LAPACK_SOURCE += $(LAPACK_SOURCE_OPTIM) $(LAPACK_SOURCE_NO_OPTIM)

@@ -1,0 +1,367 @@
+defaults nosave
+
+
+# version
+# Indiflight / STM32H743 (SH74) 5.0.0 Feb 27 2024 / 18:33:14 (norevision) MSP API: 1.45
+
+# config: YES
+
+# start the command batch
+batch start
+
+# reset configuration to default settings
+defaults nosave
+
+board_name MATEKH743
+manufacturer_id MTKS
+mcu_id 0023003d3330511736353839
+signature 
+
+# feature
+feature GPS
+feature TELEMETRY
+
+# serial
+serial 0 64 115200 57600 0 115200
+serial 1 262144 115200 57600 0 115200
+serial 5 0 115200 57600 0 115200
+serial 6 524288 115200 57600 0 115200
+
+# beeper
+beeper -GYRO_CALIBRATED
+beeper -RX_LOST_LANDING
+beeper -DISARMING
+beeper -ARMING
+beeper -ARMING_GPS_FIX
+beeper -GPS_STATUS
+beeper -RX_SET
+beeper -ACC_CALIBRATION
+beeper -ACC_CALIBRATION_FAIL
+beeper -DISARM_REPEAT
+beeper -ARMED
+beeper -SYSTEM_INIT
+beeper -ON_USB
+beeper -BLACKBOX_ERASE
+beeper -CRASH_FLIP
+beeper -CAM_CONNECTION_OPEN
+beeper -CAM_CONNECTION_CLOSE
+beeper -RC_SMOOTHING_INIT_FAIL
+
+# aux -- learning
+# aux 0 0 1 1700 2100 0 0
+# aux 1 1 3 900 2100 0 0
+# aux 2 55 0 1700 2100 0 0
+# aux 3 57 6 1300 1700 0 0
+# aux 4 58 3 1700 2100 0 0
+# aux 5 36 2 1700 2100 0 0
+# aux 6 56 6 1700 2100 0 0
+
+# aux -- neural net
+aux 0 0 1 1700 2100 0 0
+aux 1 1 3 900 2100 0 0
+aux 2 55 0 1700 2100 0 0
+aux 3 57 6 1300 1700 0 0
+aux 4 59 3 1700 2100 0 0
+aux 5 60 3 1300 1700 0 0
+aux 6 36 2 1700 2100 0 0
+aux 7 56 6 1700 2100 0 0
+
+# master
+set gyro_lpf1_static_hz = 100
+set gyro_lpf2_static_hz = 0
+set dyn_notch_count = 0
+set dyn_notch_q = 500
+set gyro_lpf1_dyn_min_hz = 0
+set gyro_lpf1_dyn_max_hz = 250
+set acc_calibration = 0,0,0,1
+#set acc_offset = -10, -10, 15
+set acc_offset = -10, -12, 8
+#set acc_offset = 0,0,0
+set blackbox_disable_pids = ON
+set blackbox_disable_setpoint = ON
+set blackbox_disable_bat = ON
+set blackbox_disable_rssi = ON
+set blackbox_disable_debug = ON
+set blackbox_high_resolution = ON
+set dshot_bidir = ON
+set motor_pwm_protocol = DSHOT600
+set motor_poles = 12
+set failsafe_delay = 5
+set ibata_scale = 280
+set pid_process_denom = 4
+set simplified_gyro_filter_multiplier = 40
+set osd_rssi_pos = 2080
+set osd_ah_sbar_pos = 2286
+set osd_ah_pos = 2158
+set osd_mah_drawn_pos = 2528
+set osd_avg_cell_voltage_pos = 2552
+set osd_rtc_date_time_pos = 2091
+set osd_log_status_pos = 2540
+set osd_canvas_width = 30
+set osd_canvas_height = 13
+set gyro_1_sensor_align = CW180
+set gyro_1_align_pitch = 0
+set gyro_1_align_yaw = 1800
+set rpm_filter_min_hz = 60
+
+# ekf (these are the defaults)
+#set ekf_use_attitude_estimate = 0
+#set ekf_use_position_estimate = 0
+#set ekf_use_angles = 1, 1, 1
+#set ekf_proc_noise_acc = 5000, 5000, 5000
+#set ekf_proc_noise_gyro = 1000, 1000, 1000
+#set ekf_meas_noise_position = 10, 10, 10
+#set ekf_meas_noise_angles = 100, 100, 100
+#set ekf_meas_delay = 0
+
+set catapult_target_altitude = 350
+set catapult_target_x_ned = 0
+set catapult_target_y_ned = 0
+set catapult_rotation_roll = 300
+set catapult_rotation_pitch = 300
+set catapult_rotation_yaw = 100
+set catapult_rotation_randomize = 0
+set catapult_rotation_time = 150
+set catapult_upwards_accel = 20
+
+set throw_to_arm_acc_high = 20
+set throw_to_arm_acc_clip = 45
+set throw_to_arm_acc_low = 20
+set throw_to_arm_gyro_high = 600
+set throw_to_arm_momentum_thresh = 400
+set throw_to_arm_release_delay_ms = 250
+
+# 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
+set learner_mode = 6
+set learner_num_actuators = 4
+set learner_delay_time_ms = 150
+set learner_step_time_ms = 50
+set learner_ramp_time_ms = 100
+set learner_overlap_time_ms = 50
+set learner_step_amplitude = 35
+set learner_ramp_amplitude = 70
+set learner_gyro_max = 1150
+set learner_imu_lowpass_hz = 10
+set learner_fx_lowpass_hz = 20
+set learner_motor_lowpass_hz = 40
+set learner_zeta_rate = 90
+set learner_zeta_attitude = 80
+set learner_zeta_velocity = 70
+set learner_zeta_position = 90
+# new stuff
+set learner_roll_misalignment = -64
+set learner_pitch_misalignment = 24
+set learner_yaw_misalignment = -15
+set learner_randomize_misalignment = 0
+
+set learner_apply_indi_profile = 1
+set learner_apply_position_profile = 1
+set learner_apply_hover_rotation = 1
+
+# Neural Nets
+set nn_rate_denom = 20
+
+profile 0
+
+# profile 0
+set dterm_lpf1_dyn_min_hz = 0
+set dterm_lpf1_dyn_max_hz = 75
+set dterm_lpf1_static_hz = 0
+set dterm_lpf2_static_hz = 0
+set yaw_lowpass_hz = 0
+set thrust_linear = 55
+set simplified_dterm_filter = OFF
+
+profile 1
+
+profile 2
+
+profile 3
+
+rateprofile 0
+
+rateprofile 1
+
+rateprofile 2
+
+rateprofile 3
+
+indiprofile 0
+
+# indiprofile 0
+# --- attitude control config and limits ---
+# Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
+set indi_attitude_gains = 3000, 3000, 3000
+set indi_rate_gains     =  230,  230,  230
+
+# deg/s
+set indi_attitude_max_tilt_rate = 800
+set indi_attitude_max_yaw_rate = 500
+
+# --- manual flight config and limits ---
+# N/kg
+set indi_manual_max_upwards_accel = 30
+
+# deg
+set indi_manual_max_tilt = 45
+
+set indi_manual_use_coordinated_yaw = 1
+
+# --- indi config ---
+set indi_use_increment = 1
+set indi_use_rpm_dot_feedback = 1
+set indi_act_num = 4
+set indi_sync_lowpass_hz = 15
+
+# fx, fy, fz, roll, pitch, yaw
+set indi_wls_axes_weights = 1,1,50,50,50,5
+
+# actuators (1 to 4, could be up to 8)
+set indi_wls_act_penalties = 1,1,1,1
+set indi_wls_act_preferred_state = 0,0,0,0
+
+# --- actuators: fields can have up to 8 elements ---
+# rpm
+set indi_act_time_constant_ms = 25, 25, 25, 25
+set indi_act_max_rpm = 40000, 40000, 40000, 40000
+set indi_act_hover_rpm = 20000, 20000, 20000, 20000
+
+# %
+set indi_act_nonlinearity = 50, 50, 50, 50
+
+# in %. upper bounded by motor_output_limit
+set indi_act_limit = 80, 80, 80, 80
+
+# fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
+set indi_act_g1_fx = 0,0,0,0
+set indi_act_g1_fy = 0,0,0,0
+set indi_act_g1_fz = -1050, -1050, -1050, -1050
+set indi_act_g1_roll = -4000, -4000, 4000, 4000
+set indi_act_g1_pitch = -2600, 2600, -2600, 2600
+set indi_act_g1_yaw = -510, 510, 510, -510
+
+# Nm / (kgm^2) / (rad/s/s) * 1e5
+set indi_act_g2_roll = 0,0,0,0
+set indi_act_g2_pitch = 0,0,0,0
+set indi_act_g2_yaw = -100, 100, 100, -100
+
+indiprofile 1
+
+indiprofile 2
+
+# indiprofile 2 --> these are the settings for the learned profile
+# commented will be overwritten by the learner, so they dont need to be set
+# as the initial condition is currently always zero. This may be changed in the future.
+# the default values (values not set here) are the same as for all other profiles
+
+# these values are slightly more conservative than indiprofile 0
+
+# set indi_attitude_gains = 1552,1552,1552
+# set indi_rate_gains = 174,174,174
+set indi_attitude_max_tilt_rate = 500
+set indi_attitude_max_yaw_rate = 300
+set indi_manual_use_coordinated_yaw = 1
+set indi_manual_max_upwards_accel = 20
+# set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
+# set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
+# set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000
+set indi_act_limit = 60,60,60,60,100,100,100,100
+
+# -- from an actual flight, 0, 0, 0 rotation
+# set indi_act_g1_fx = 123,-74,126,-163,0,0,0,0
+# set indi_act_g1_fy = -49,11,-87,-77,0,0,0,0
+# set indi_act_g1_fz = -727,-533,-1091,-1067,0,0,0,0
+# set indi_act_g1_roll = -3191,-2663,4370,3552,0,0,0,0
+# set indi_act_g1_pitch = -2328,2176,-2009,2646,0,0,0,0
+# set indi_act_g1_yaw = -793,242,1006,-340,0,0,0,0
+# set indi_act_g2_roll = 5,10,9,-10,0,0,0,0
+# set indi_act_g2_pitch = 7,-6,23,8,0,0,0,0
+# set indi_act_g2_yaw = -92,94,108,-94,0,0,0,0
+
+# -- 30 deg roll
+# set indi_act_g1_fx = 0,0,0,0
+# set indi_act_g1_fy = 524, 524, 524, 524
+# set indi_act_g1_fz = -909, -909, -909, -909
+# set indi_act_g1_roll = -4000, -4000, 4000, 4000
+# set indi_act_g1_pitch = -1996, 1996, -2506, 2506
+# set indi_act_g1_yaw = -1741, 1741, -858, 858
+# set indi_act_g2_roll = 0,0,0,0
+# set indi_act_g2_pitch = 49, -49, -49, 49
+# set indi_act_g2_yaw = -86, 86, 86, -86
+
+# -- roll -56, pitch 81, yaw 170
+set indi_act_g1_fx = -1037, -1037, -1037, -1037
+set indi_act_g1_fy = -136, -136, -136, -136
+set indi_act_g1_fz = -91, -91, -91, -91
+set indi_act_g1_roll = 183, 1049, -41, -1190
+set indi_act_g1_pitch = -2617, -4609, 4742, 2485
+set indi_act_g1_yaw = -4016, 816, -727, 3927
+set indi_act_g2_roll = -98, 98, 98, -98
+set indi_act_g2_pitch = -12, 12, 12, -12
+set indi_act_g2_yaw = -8, 8, 8, -8
+
+set indi_sync_lowpass_hz = 15
+set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
+set indi_wls_act_penalties = 1,1,1,1
+
+
+positionprofile 0
+
+# positionprofile 0
+set position_horizontal_p = 70
+set position_horizontal_i = 5
+set position_horizontal_d = 50
+set position_max_horizontal_speed = 2000
+set position_max_horizontal_accel = 10000
+set position_max_tilt = 180
+set position_vertical_p = 50
+set position_vertical_i = 5
+set position_vertical_d = 40
+set position_max_upwards_speed = 250
+set position_max_downwards_speed = 250
+set position_max_upwards_accel = 1500
+set position_max_downwards_accel = 800
+set position_yaw_p = 50
+
+positionprofile 1
+
+positionprofile 2
+
+# positionprofile 2 --> these are the settings for the learned profile
+# commented will be overwritten by the learner, so they dont need to be set
+# as the initial condition is currently always zero. This may be changed in the future.
+# the default values (values not set here) are the same as for all other profiles
+
+# these values are more conservative than positionprofile 0
+
+# set position_horizontal_p = 63
+# set position_horizontal_i = 4
+# set position_horizontal_d = 45
+set position_max_horizontal_speed = 500
+set position_max_horizontal_accel = 500
+set position_max_tilt = 40
+# set position_vertical_p = 63
+# set position_vertical_i = 4
+# set position_vertical_d = 45
+set position_max_upwards_speed = 100
+set position_max_downwards_speed = 100
+set position_max_upwards_accel = 1500
+set position_max_downwards_accel = 500
+# set position_yaw_p = 44
+set position_weathervane_p = 0
+set position_use_thrust_attenuation = 1
+
+
+# restore original profile selection
+profile 0
+
+# restore original rateprofile selection
+rateprofile 0
+
+# restore original indi profile selection
+indiprofile 0
+
+# restore original position profile selection
+positionprofile 0
+
+# save configuration

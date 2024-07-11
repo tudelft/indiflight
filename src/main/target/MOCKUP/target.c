@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <math.h>
 #include <string.h>
 
@@ -56,6 +57,9 @@ const timerHardware_t timerHardware[1]; // unused
 
 #include "dyad.h"
 #include "target/SITL/udplink.h"
+#include "flight/indi_init.h"
+
+float motorOmegaValues[MAX_SUPPORTED_MOTORS] = {0};
 
 uint32_t SystemCoreClock;
 
@@ -257,7 +261,7 @@ void systemReset(void)
     workerRunning = false;
     pthread_join(tcpWorker, NULL);
     pthread_join(udpWorker, NULL);
-    exit(0);
+    //exit(0);
 }
 void systemResetToBootloader(bootloaderRequestType_e requestType)
 {
@@ -645,4 +649,28 @@ void spektrumBind(rxConfig_t *rxConfig)
 void unusedPinsInit(void)
 {
     printf("unusedPinsInit\n");
+}
+
+bool isDshotTelemetryActive(void)
+{ 
+    return true;
+}
+
+uint16_t getDshotTelemetry(uint8_t motor)
+{
+    return (uint16_t) (indiRun.erpmToRads * motorOmegaValues[motor]);
+}
+
+void mockupInitEndpoints(float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow)
+{
+    *disarm = 0;
+    if (featureIsEnabled(FEATURE_3D)) {
+        *outputLow = -outputLimit;
+        *outputHigh = outputLimit;
+        *deadbandMotor3dHigh = 0.;
+        *deadbandMotor3dLow = 0.;
+    } else {
+        *outputLow = 0.;
+        *outputHigh = outputLimit;
+    }
 }

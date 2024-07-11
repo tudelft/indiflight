@@ -24,6 +24,8 @@
 
 #include "platform.h"
 
+#ifdef USE_PID_AUDIO
+
 #include "common/axis.h"
 #include "common/maths.h"
 
@@ -108,3 +110,5 @@ void FAST_CODE_NOINLINE pidAudioUpdate(void)
 
     audioPlayTone(tone);
 }
+
+#endif // USE_PID_AUDIO

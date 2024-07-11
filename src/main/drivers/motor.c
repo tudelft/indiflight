@@ -178,6 +178,10 @@ static void checkMotorProtocol(const motorDevConfig_t *motorDevConfig)
 // End point initialization is called from mixerInit before motorDevInit; can't use vtable...
 void motorInitEndpoints(const motorConfig_t *motorConfig, float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow)
 {
+#ifdef MOCKUP
+    mockupInitEndpoints(outputLimit, outputLow, outputHigh, disarm, deadbandMotor3dHigh, deadbandMotor3dLow);
+    return;
+#endif
     checkMotorProtocol(&motorConfig->dev);
 
     if (isMotorProtocolEnabled()) {

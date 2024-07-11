@@ -64,10 +64,10 @@ FAST_CODE
 void indiController(timeUs_t current) {
     if (flightModeFlags & ~(CATAPULT_MODE | LEARNER_MODE)) {
         // any flight mode active other than catapult, learner or acro (acro is all off)?
-        if ( !((++indiRun.attExecCounter)%indiRun.attRateDenom) ) {
+        if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 ) {
             // rate limit attitude control
             getSetpoints(current);
-            indiRun.attExecCounter = 0;
+            indiRun.attExecCounter = 1;
         }
     } else {
         // function is cheap, let's do it an all iterations
