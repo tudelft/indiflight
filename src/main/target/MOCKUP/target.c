@@ -253,6 +253,8 @@ void systemInit(void)
 //        exit(1);
 //    }
 
+    setbuf(stdout, NULL); // disable printf buffering, so we dont have to wait for linefeeds
+
 }
 
 void systemReset(void)

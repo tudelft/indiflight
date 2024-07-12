@@ -58,9 +58,11 @@ void accUpdate(timeUs_t currentTimeUs)
 {
     UNUSED(currentTimeUs);
 
+#ifndef MOCKUP
     if (!acc.dev.readFn(&acc.dev)) {
         return;
     }
+#endif
     acc.isAccelUpdatedAtLeastOnce = true;
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {

@@ -60,7 +60,7 @@
             "request": "launch",
             "program": "/home/tmblaha/.venv/bin/python3",
             //"args": ["--eval-command='run ${workspaceFolder}/mockup.py'"],
-            "args": ["${workspaceFolder}/mockup.py"],
+            "args": ["${workspaceFolder}/src/utils/indiflight_mockup_interface.py"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

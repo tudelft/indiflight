@@ -25,6 +25,9 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#ifdef MOCKUP
+#include <stdio.h>
+#endif
 
 #include "platform.h"
 
@@ -366,7 +369,11 @@ static void cliWriterFlush(void)
 
 void cliPrint(const char *str)
 {
+#ifdef MOCKUP
+    printf("%s", str);
+#else
     cliPrintInternal(cliWriter, str);
+#endif
 }
 
 void cliPrintLinefeed(void)
@@ -397,10 +404,14 @@ static void cliPutp(void *p, char ch)
 
 static void cliPrintfva(const char *format, va_list va)
 {
+#ifdef MOCKUP
+    vprintf(format, va);
+#else
     if (cliWriter) {
         tfp_format(cliWriter, cliPutp, format, va);
         cliWriterFlush();
     }
+#endif
 }
 
 static bool cliDumpPrintLinef(dumpFlags_t dumpMask, bool equalsDefault, const char *format, ...)

@@ -22,11 +22,8 @@
 void setImu(const float *g, const float *a) {
     // g in rad/s, a in N/kg
 
-    gyro.sampleCount = 1; // if using mean-downsampling, this needs to be set
     for (int axis = 0; axis < 3; axis++) {
         gyro.gyroADC[axis]   = RADIANS_TO_DEGREES(g[axis]); // shouldnt be used
-        gyro.sampleSum[axis] = RADIANS_TO_DEGREES(g[axis]); // this will be used to generate ADCf, and rpmFiltered
-
         acc.dev.ADCRaw[axis] = a[axis] / 9.81f * acc.dev.acc_1G; // input is in g
     }
 }
@@ -77,6 +74,7 @@ void getMotorOutputCommands(float *cmd, int n) {
 void tick(const timeUs_t currentTimeUs)
 {
     static uint8_t counter = 0;
+    gyroUpdate(); // rotate and pretend to downsample
     getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
     if (++counter % 2 == 1) {
         // todo: make this demon nicer

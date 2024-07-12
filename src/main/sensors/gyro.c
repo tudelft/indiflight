@@ -404,11 +404,13 @@ static FAST_CODE void gyroUpdateSensor(gyroSensor_t *gyroSensor)
 
 FAST_CODE void gyroUpdate(void)
 {
+#if defined(HIL_BUILD) || defined(MOCKUP)
+    gyro.gyroSensor1.calibration.cyclesRemaining = 0;
 #ifdef HIL_BUILD
     gyro.gyroADC[X] = hilInput.gyro[X];
     gyro.gyroADC[Y] = hilInput.gyro[Y];
     gyro.gyroADC[Z] = hilInput.gyro[Z];
-    gyro.gyroSensor1.calibration.cyclesRemaining = 0;
+#endif
     if (gyro.gyroSensor1.gyroDev.gyroAlign == ALIGN_CUSTOM) {
         alignSensorViaMatrix(gyro.gyroADC, &gyro.gyroSensor1.gyroDev.rotationMatrix);
     } else {
@@ -445,7 +447,7 @@ FAST_CODE void gyroUpdate(void)
         break;
 #endif // defined (USE_MULTI_GYRO)
     }
-#endif // defined(HIL_BUILD)
+#endif // defined(HIL_BUILD) || defined(MOCKUP)
 
     if (gyro.downsampleFilterEnabled) {
         // using gyro lowpass 2 filter for downsampling
