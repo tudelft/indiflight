@@ -602,13 +602,13 @@ void testLearner(void) {
 // query
 #define LEARNING_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
 
-static void resetMotorQueryState(motor_state_t* motorStates, int motor, bool enable) {
+static void resetMotorQueryState(timeUs_t current, motor_state_t* motorStates, int motor, bool enable) {
     const learnerConfig_t* c = learnerConfig();
     if ( motor >= c->numAct ) return;
 
     motor_state_t* p = motorStates + motor;
     if (enable) {
-        p->startTime = micros();
+        p->startTime = current;
         p->queryState = MOTOR_QUERY_STEP;
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
             p->minGyro[axis] = gyro.gyroADCf[axis]
@@ -673,9 +673,9 @@ doMore:
         case LEARNING_QUERY_DELAY:
             // wait for start. then reset motor query states and transition
             if (cmpTimeUs(current, startAt) > 0) {
-                resetMotorQueryState(motorStates, 0, true);
+                resetMotorQueryState(current, motorStates, 0, true);
                 for (int motor = 1; motor < c->numAct; motor++)
-                    resetMotorQueryState(motorStates, motor, false);
+                    resetMotorQueryState(current, motorStates, motor, false);
 
                 learningQueryState = LEARNING_QUERY_ACTIVE; goto doMore;
             }
@@ -691,7 +691,7 @@ doMore:
                 if ( (motor+1 < c->numAct)
                         && (motorStates[motor+1].queryState == MOTOR_QUERY_ZERO)
                         && ( (time_in_query + 1e3 * c->overlapMs) > 1e3 * (c->stepMs + c->rampMs) ) ) {
-                    resetMotorQueryState(motorStates, motor + 1, true);
+                    resetMotorQueryState(current, motorStates, motor + 1, true);
                     // FIXME
                     //uint8_t* p = NULL;
                     //*p = 0; // generate crash

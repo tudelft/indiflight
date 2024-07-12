@@ -146,8 +146,8 @@ class IndiflightSITLMockup(object):
     def disableFlightMode(self, mode):
         self.flightModeFlags.value &= ~mode
 
-    def tick(self, currentTimeUs):
-        self.lib.tick( currentTimeUs )
+    def tick(self, dtUs):
+        self.lib.tick( dtUs )
 
 
 if __name__=="__main__":

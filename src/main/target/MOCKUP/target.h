@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "common/utils.h"
+#include "common/time.h"
 #include "target/common_defaults_post.h"
 
 #define TARGET_BOARD_IDENTIFIER "MCUP"
@@ -237,13 +238,10 @@ void FLASH_Lock(void);
 FLASH_Status FLASH_ErasePage(uintptr_t Page_Address);
 FLASH_Status FLASH_ProgramWord(uintptr_t addr, uint32_t Data);
 
-uint64_t nanos64_real(void);
-uint64_t micros64_real(void);
-uint64_t millis64_real(void);
+void clock_tick(int32_t dtUs);
 void delayMicroseconds_real(uint32_t us);
-uint64_t micros64(void);
-uint64_t millis64(void);
-uint32_t micros(void);
+//timeMs_t millis(void);
+//timeUs_t micros(void);
 
 int lockMainPID(void);
 

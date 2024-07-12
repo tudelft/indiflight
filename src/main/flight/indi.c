@@ -499,7 +499,7 @@ void indiUpdateActuatorState( float* d ) {
         float u = indiOutputCurve( &indiRun.lin[i], d[i] );
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
         if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
             indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);

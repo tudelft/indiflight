@@ -299,61 +299,68 @@ void indicateFailure(failureMode_e mode, int repeatCount)
 
 // Time part
 // Thanks ArduPilot
-uint64_t nanos64_real(void)
+//uint64_t nanos64_real(void)
+//{
+//    struct timespec ts;
+//    clock_gettime(CLOCK_MONOTONIC, &ts);
+//    return (ts.tv_sec*1e9 + ts.tv_nsec) - (start_time.tv_sec*1e9 + start_time.tv_nsec);
+//}
+//
+//uint64_t micros64_real(void)
+//{
+//    struct timespec ts;
+//    clock_gettime(CLOCK_MONOTONIC, &ts);
+//    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
+//}
+//
+//uint64_t millis64_real(void)
+//{
+//    struct timespec ts;
+//    clock_gettime(CLOCK_MONOTONIC, &ts);
+//    return 1.0e3*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
+//}
+
+//uint64_t micros64(void)
+//{
+//    static uint64_t last = 0;
+//    static uint64_t out = 0;
+//    uint64_t now = nanos64_real();
+//
+//    out += (now - last) * simRate;
+//    last = now;
+//
+//    return out*1e-3;
+////    return micros64_real();
+//}
+
+//uint64_t millis64(void)
+//{
+//    static uint64_t last = 0;
+//    static uint64_t out = 0;
+//    uint64_t now = nanos64_real();
+//
+//    out += (now - last) * simRate;
+//    last = now;
+//
+//    return out*1e-6;
+////    return millis64_real();
+//}
+
+static timeUs_t currentTimeUs = 0;
+
+void clock_tick(int32_t dtUs)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (ts.tv_sec*1e9 + ts.tv_nsec) - (start_time.tv_sec*1e9 + start_time.tv_nsec);
-}
-
-uint64_t micros64_real(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
-}
-
-uint64_t millis64_real(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return 1.0e3*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
-}
-
-uint64_t micros64(void)
-{
-    static uint64_t last = 0;
-    static uint64_t out = 0;
-    uint64_t now = nanos64_real();
-
-    out += (now - last) * simRate;
-    last = now;
-
-    return out*1e-3;
-//    return micros64_real();
-}
-
-uint64_t millis64(void)
-{
-    static uint64_t last = 0;
-    static uint64_t out = 0;
-    uint64_t now = nanos64_real();
-
-    out += (now - last) * simRate;
-    last = now;
-
-    return out*1e-6;
-//    return millis64_real();
+    currentTimeUs += dtUs; // will overflow, but thats fine
 }
 
 uint32_t micros(void)
 {
-    return micros64() & 0xFFFFFFFF;
+    return currentTimeUs;
 }
 
 uint32_t millis(void)
 {
-    return millis64() & 0xFFFFFFFF;
+    return (uint32_t) (1e-3f * currentTimeUs);
 }
 
 int32_t clockCyclesToMicros(int32_t clockCycles)
@@ -372,7 +379,7 @@ uint32_t clockMicrosToCycles(uint32_t micros)
 }
 uint32_t getCycleCounter(void)
 {
-    return (uint32_t) (micros64() & 0xFFFFFFFF);
+    return currentTimeUs;
 }
 
 void microsleep(uint32_t usec)
@@ -395,11 +402,13 @@ void delayMicroseconds_real(uint32_t us)
 
 void delay(uint32_t ms)
 {
-    uint64_t start = millis64();
+    UNUSED(ms);
+    //uint64_t start = millis64();
 
-    while ((millis64() - start) < ms) {
-        microsleep(1000);
-    }
+    //while ((millis64() - start) < ms) {
+    //    microsleep(1000);
+    //}
+    return;
 }
 
 // Subtract the ‘struct timespec’ values X and Y,  storing the result in RESULT.

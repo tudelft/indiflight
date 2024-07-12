@@ -36,6 +36,8 @@ void setMotorSpeed(const float *omega) {
 }
 
 void setMocap(const float *pos, const float *vel, const float *q) {
+    extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    extLatestMsgTime = micros();
     for (int axis = 0; axis < 3; axis++) {
         extPosNed.pos.A[axis] = pos[axis];
         extPosNed.vel.A[axis] = vel[axis];
@@ -56,8 +58,8 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {
+    posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
     // meters, NED. rad
-    extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];
 
@@ -71,8 +73,11 @@ void getMotorOutputCommands(float *cmd, int n) {
     }
 }
 
-void tick(const timeUs_t currentTimeUs)
+void tick(const timeDelta_t dtUs)
 {
+    clock_tick( dtUs );
+    timeUs_t currentTimeUs = micros();
+
     static uint8_t counter = 0;
     gyroUpdate(); // rotate and pretend to downsample
     getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
