@@ -9,7 +9,7 @@
 #include "common/time.h"
 #include "target/common_defaults_post.h"
 
-#define TARGET_BOARD_IDENTIFIER "MCUP"
+#define TARGET_BOARD_IDENTIFIER "SITL" // same as SITL to ensure eeprom compatibility
 
 #define SIMULATOR_MULTITHREAD
 

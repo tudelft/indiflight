@@ -538,7 +538,12 @@ binary:
 	$(V0) $(MAKE) -j $(TARGET_BIN)
 
 hex:
+ifeq ($(TARGET),MOCKUP)
+# generate shared library instead
+	$(V0) $(MAKE) -j $(TARGET_SO)
+else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
+endif
 
 so:
 	$(V0) $(MAKE) -j $(TARGET_SO)

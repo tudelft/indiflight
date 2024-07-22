@@ -56,7 +56,7 @@ typedef enum {
     DISARM_REASON_GPS_RESCUE        = 7,
     DISARM_REASON_SERIAL_COMMAND    = 8,
     DISARM_REASON_ALLOC_FAILURE     = 9,
-#ifdef UNIT_TEST
+#if defined(UNIT_TEST) || defined(SITL) || defined(MOCKUP)
     DISARM_REASON_SYSTEM            = 255,
 #endif
 } flightLogDisarmReason_e;

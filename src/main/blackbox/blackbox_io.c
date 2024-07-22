@@ -59,6 +59,16 @@
 #include "drivers/sdcard.h"
 #endif
 
+#if defined(SITL) || defined(MOCKUP)
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <linux/limits.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#endif
+
 #define BLACKBOX_SERIAL_PORT_MODE MODE_TX
 
 // How many bytes can we transmit per loop iteration when writing headers?
@@ -93,6 +103,73 @@ static struct {
 
 #endif // USE_SDCARD
 
+#if defined(SITL) || defined(MOCKUP)
+
+#define LOGFILE_SITL_BUFFER_MAX 4096
+
+static struct {
+    int fd;
+    char filename[PATH_MAX];
+    uint8_t buf[LOGFILE_SITL_BUFFER_MAX];
+    uint16_t buf_fill;
+    int32_t largestLogFileNumber;
+    enum {
+        BLACKBOX_SITL_INITIAL,
+        BLACKBOX_SITL_WAITING,
+        BLACKBOX_SITL_ENUMERATE_FILES,
+        BLACKBOX_SITL_CHANGE_INTO_LOG_DIRECTORY,
+        BLACKBOX_SITL_READY_TO_CREATE_LOG,
+        BLACKBOX_SITL_READY_TO_LOG
+    } state;
+} blackboxSITLFile;
+
+#define LOGFILE_DIR "./logs"
+#define LOGFILE_PREFIX "LOG"
+#define LOGFILE_SUFFIX ".BFL"
+
+#define LOGFILE_NAME_LENGTH 12  // LOGxxxxx.BFL
+#define LOGFILE_MAX_NUMBER 99999
+
+
+void blackboxSITLBufferWrite(const uint8_t *new, const int len)
+{
+    if (blackboxSITLFile.buf_fill + len > LOGFILE_SITL_BUFFER_MAX) {
+        // new buffer will not fit --> write out current buffer, then write 
+        // LOGFILE_SITL_BUFFER_MAX bytes from new until new is smaller than
+        // LOGFILE_SITL_BUFFER_MAX. This is not the optimal way, but oh well
+        int bytes_written = write(
+            blackboxSITLFile.fd, 
+            blackboxSITLFile.buf,
+            blackboxSITLFile.buf_fill);
+        UNUSED(bytes_written);
+        blackboxSITLFile.buf_fill = 0;
+
+        int togo = len;
+        const uint8_t *mutable = new;
+        while (togo >= LOGFILE_SITL_BUFFER_MAX) {
+            int bytes_written = write(
+                blackboxSITLFile.fd,
+                mutable,
+                LOGFILE_SITL_BUFFER_MAX);
+            UNUSED(bytes_written);
+            togo -= LOGFILE_SITL_BUFFER_MAX;
+            mutable += LOGFILE_SITL_BUFFER_MAX;
+        }
+
+        // write the leftovers in the buffer
+        if (togo > 0) {
+            memcpy(blackboxSITLFile.buf, mutable, togo);
+            blackboxSITLFile.buf_fill = togo;
+        }
+    } else {
+        // buffer fits, just append
+        memcpy(blackboxSITLFile.buf + blackboxSITLFile.buf_fill, new, len);
+        blackboxSITLFile.buf_fill += len;
+    }
+}
+
+#endif
+
 void blackboxOpen(void)
 {
     serialPort_t *sharedBlackboxAndMspPort = findSharedSerialPort(FUNCTION_BLACKBOX, FUNCTION_MSP);
@@ -123,6 +200,11 @@ void blackboxWrite(uint8_t value)
 #ifdef USE_SDCARD
     case BLACKBOX_DEVICE_SDCARD:
         afatfs_fputc(blackboxSDCard.logFile, value);
+        break;
+#endif
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        blackboxSITLBufferWrite(&value, 1);
         break;
 #endif
     case BLACKBOX_DEVICE_SERIAL:
@@ -184,6 +266,13 @@ int blackboxWriteString(const char *s)
         afatfs_fwrite(blackboxSDCard.logFile, (const uint8_t*) s, length); // Ignore failures due to buffers filling up
         break;
 #endif // USE_SDCARD
+
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        length = strlen(s);
+        blackboxSITLBufferWrite((const uint8_t*) s, length);
+        break;
+#endif
 
     case BLACKBOX_DEVICE_SERIAL:
     default:
@@ -249,6 +338,20 @@ bool blackboxDeviceFlushForce(void)
         // been physically written to the SD card yet.
         return afatfs_flush();
 #endif // USE_SDCARD
+
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL: {
+        // first, write out and reset buffer
+        int bytes_written = write(
+            blackboxSITLFile.fd, 
+            blackboxSITLFile.buf,
+            blackboxSITLFile.buf_fill);
+        UNUSED(bytes_written);
+        blackboxSITLFile.buf_fill = 0;
+
+        return fsync(blackboxSITLFile.fd) != -1;
+    }
+#endif
 
     default:
         return false;
@@ -361,6 +464,55 @@ bool blackboxDeviceOpen(void)
         return true;
         break;
 #endif // USE_SDCARD
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL: {
+        // create dir
+        struct stat st = { 0 };
+        if (stat(LOGFILE_DIR, &st) == -1) {
+            // directory doesnt exist yet, create it, and false if error
+            if (mkdir(LOGFILE_DIR, 0755) == -1) {
+                return false;
+            }
+        }
+
+        // open log file directory
+        DIR *dir;
+        struct dirent *entry;
+        int maxLogNumber = 0;
+
+        dir = opendir(LOGFILE_DIR);
+        if (!dir) {
+            return false;
+        }
+
+        // go over each file and find the one matching "LOGxxxxx.BFL" with the highest number xxxxx
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG && 
+                strncmp(entry->d_name, LOGFILE_PREFIX, strlen(LOGFILE_PREFIX)) == 0 &&
+                strcmp(entry->d_name + LOGFILE_NAME_LENGTH - strlen(LOGFILE_SUFFIX), LOGFILE_SUFFIX) == 0) {
+                    int number = atoi(entry->d_name + strlen(LOGFILE_PREFIX));
+                    maxLogNumber = MAX(maxLogNumber, number);
+                }
+        }
+
+        closedir(dir);
+
+        if (maxLogNumber == LOGFILE_MAX_NUMBER) {
+            return false;
+        }
+
+        snprintf(blackboxSITLFile.filename, sizeof(blackboxSITLFile.filename), "%s/%s%05d%s", LOGFILE_DIR, LOGFILE_PREFIX, maxLogNumber + 1, LOGFILE_SUFFIX);
+
+        blackboxSITLFile.fd = open(blackboxSITLFile.filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if (blackboxSITLFile.fd != -1) {
+            blackboxMaxHeaderBytesPerIteration = BLACKBOX_TARGET_HEADER_BUDGET_PER_ITERATION;
+            return true;
+        } else {
+            return false;
+        }
+        break;
+    }
+#endif
     default:
         return false;
     }
@@ -430,6 +582,13 @@ void blackboxDeviceClose(void)
         flashfsClose();
         break;
 #endif
+
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        close(blackboxSITLFile.fd);
+        break;
+#endif
+
     default:
         ;
     }
@@ -620,6 +779,10 @@ bool isBlackboxDeviceFull(void)
         return afatfs_isFull();
 #endif // USE_SDCARD
 
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+#endif
+
     default:
         return false;
     }
@@ -641,6 +804,10 @@ bool isBlackboxDeviceWorking(void)
         return flashfsIsReady();
 #endif
 
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        return blackboxSITLFile.fd >= -1;
+#endif
     default:
         return false;
     }
@@ -679,6 +846,11 @@ void blackboxReplenishHeaderBudget(void)
 #ifdef USE_SDCARD
     case BLACKBOX_DEVICE_SDCARD:
         freeSpace = afatfs_getFreeBufferSpace();
+        break;
+#endif
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        freeSpace = 0x3FF; // assume 1023 always. should be fine
         break;
 #endif
     default:
@@ -745,6 +917,11 @@ blackboxBufferReserveStatus_e blackboxDeviceReserveBufferSpace(int32_t bytes)
         // Assume that all writes will fit in the SDCard's buffers
         return BLACKBOX_RESERVE_TEMPORARY_FAILURE;
 #endif // USE_SDCARD
+
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        return BLACKBOX_RESERVE_TEMPORARY_FAILURE;
+#endif // SITL
 
     default:
         return BLACKBOX_RESERVE_PERMANENT_FAILURE;

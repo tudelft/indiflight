@@ -1405,6 +1405,9 @@ void blackboxValidateConfig(void)
 #ifdef USE_SDCARD
     case BLACKBOX_DEVICE_SDCARD:
 #endif
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+#endif
     case BLACKBOX_DEVICE_SERIAL:
         // Device supported, leave the setting alone
         break;

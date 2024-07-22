@@ -4,11 +4,10 @@ import ctypes as ct
 import os
 import numpy as np
 
-# ctypes stuff
-float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
-timeUs_t = ct.c_uint32
-
-class IndiflightSITLMockup(object):
+# these "enum" classes are a big limitation currently, as they need to be 
+# updated manually if things are appended/inserted in Indiflight
+# similar problem with the configurator on a few things.. but yeah.. this is what it will be
+class flightModeFlags():
     ANGLE_MODE       = (1 << 0)
     HORIZON_MODE     = (1 << 1)
     MAG_MODE         = (1 << 2)
@@ -23,15 +22,23 @@ class IndiflightSITLMockup(object):
     PID_MODE         = (1 << 16)
     NN_MODE          = (1 << 17)
 
-    def __init__(self, libfile, profile_txt=None, N=4):
+class flightLogDisarmReason():
+    DISARM_REASON_SWITCH = 4
+    DISARM_REASON_SYSTEM = 255
+
+class boxId():
+    # not for flight modes
+    BOXPREARM = (1 << 34)
+    BOXTHROWTOARM = (1 << 35)
+
+# ctypes stuff
+float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
+timeUs_t = ct.c_uint32
+
+class IndiflightSITLMockup():
+    def __init__(self, libfile, N=4):
         self.libfile = libfile
         self.N = N
-
-        # delete eeprom and init to create a clean eeprom
-        try:
-            os.remove('eeprom.bin')
-        except FileNotFoundError:
-            pass
 
         # arrays
         self.gyro = np.zeros(3, dtype=ct.c_float)
@@ -48,8 +55,10 @@ class IndiflightSITLMockup(object):
 
         self._loadLibAndInit()
 
-        if profile_txt is not None:
-            self._load_profile(profile_txt)
+    def __del__(self):
+        print("IndiflightSITLMockup destroyed: ensure disarmed to flush blackbox logs... ", end="")
+        self.disarm( reason = flightLogDisarmReason.DISARM_REASON_SYSTEM )
+        print("done.")
 
     def _loadLibAndInit(self):
         self.lib = ct.CDLL( self.libfile )
@@ -63,12 +72,20 @@ class IndiflightSITLMockup(object):
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.tick.argtypes = [timeUs_t]
         self.lib.processCharacterInteractive.argtypes = [ct.c_char]
+        self.lib.disarm.argtypes = [ct.c_uint8]
 
         # most important states
         self.armingFlags = self.getVariableReference(ct.c_uint8, "armingFlags")
         self.flightModeFlags = self.getVariableReference(ct.c_uint32, "flightModeFlags")
+        # misnomer. this is the boxes, not the flight modes.
+        # also, this actually is a packed struct of multiple uint32.
+        # ain't nobody got time for that. we support first 64 rc boxes
+        self.rcModeActivationMask = self.getVariableReference(ct.c_uint64, "rcModeActivationMask") 
 
-    def _load_profile(self, profile_txt):
+        # disable logging by default
+        self.setLogging( False )
+
+    def load_profile(self, profile_txt):
         # upload profile, must not end with batch end\n save\n
         with open(profile_txt, 'r') as file:
             while True:
@@ -137,8 +154,11 @@ class IndiflightSITLMockup(object):
     def arm(self):
         self.armingFlags.value = 1
 
-    def disarm(self):
-        self.armingFlags.value = 0
+    def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SWITCH):
+        self.lib.disarm(reason) # also marks blackbox finished
+        self.lib.blackboxUpdate()
+        self.lib.blackboxUpdate() # call twice to flush all blackbox state changes
+        self.armingFlags.value = 0 # make extra sure
 
     def enableFlightMode(self, mode):
         self.flightModeFlags.value |= mode
@@ -146,33 +166,58 @@ class IndiflightSITLMockup(object):
     def disableFlightMode(self, mode):
         self.flightModeFlags.value &= ~mode
 
+    def getCurrentFlightModes(self):
+        raise NotImplementedError("ToDo")
+
+    def enableRxBox(self, box):
+        self.rcModeActivationMask.value |= box
+
+    def disableRxBox(self, box):
+        self.rcModeActivationMask.value &= ~box
+
+    def getCurrentRxBoxes(self):
+        raise NotImplementedError("ToDo")
+
+    def setLogging(self, enabled):
+        self.issueCliCommand(f"set blackbox_device = {'SITL' if enabled else 'NONE'}")
+        print()
+
     def tick(self, dtUs):
         self.lib.tick( dtUs )
 
 
 if __name__=="__main__":
-    mockup = IndiflightSITLMockup(
-        "./obj/main/indiflight_MOCKUP.so",
-        "./src/utils/BTFL_cli_20240314_MATEKH743_CineRat_HoverAtt_NN.txt",
-        )
+    # init the Mockup with the "./eeprom.bin", if it exists. If not, generate one with default settings
+    mockup = IndiflightSITLMockup( "./obj/main/indiflight_MOCKUP.so" )
 
-    # send data 
-    mockup.sendImu( [0., 1., 0.], [0., 0., -9.81] )
-    mockup.sendMocap( [0., 1., 0.], [0., 0., 0.], [1., 0., 0., 0.] )
-    mockup.sendMotorSpeeds( [0., 0., 0., 100.] )
+    # load settings from a profile exported from the configurator. this overwrites the eeprom.bin
+    #mockup.load_profile( "./src/utils/BTFL_cli_20240314_MATEKH743_CineRat_HoverAtt_NN.txt" )
 
     # send setpoint
     mockup.sendPositionSetpoint( [0., 1., -1.], np.pi )
 
     # set armed and correct flight modes
-    mockup.enableFlightMode(mockup.ANGLE_MODE)
-    mockup.enableFlightMode(mockup.POSITION_MODE)
+    mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | 
+                            flightModeFlags.POSITION_MODE)
+
+    mockup.setLogging( True )
+    #mockup.enableRxBox(boxId.BOXTHROWTOARM)
     mockup.arm()
 
-    # run system
-    currentTimeUs = 0 # flight controller time in microseconds
-    mockup.tick( currentTimeUs )
+    dtUs = 500 # 2000 Hz PID frequency
+    mockup.tick( dtUs )
+    for i in range( 20000 ):
+        # send (some) data 
+        mockup.sendImu( [0., 1., 0.], [0., 0., -9.81] )
+        mockup.sendMocap( [0., 1., 0.], [0., 0., 0.], [1., 0., 0., 0.] )
+        mockup.sendMotorSpeeds( [0., 0., 0., 100.] )
 
-    # get outputs
-    cmd = mockup.getMotorCommands()
-    print(cmd)
+        # run system
+        mockup.tick( dtUs )
+
+        # get (some) outputs
+        cmd = mockup.getMotorCommands()
+        if not i % 100:
+            print(cmd)
+
+    mockup.disarm() # not strictly needed, just makes the logfile terminate nicer

@@ -58,3 +58,6 @@ eeprom.bin
 
 make/local.mk
 __pycache__
+
+# logs
+logs/

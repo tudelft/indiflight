@@ -85,6 +85,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 #ifndef USE_THROWING_WITHOUT_POSITION
         || !FLIGHT_MODE(POSITION_MODE)
 #endif
+        || FLIGHT_MODE(CATAPULT_MODE) // downright dangerous to accidentally throw with catapult?
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
 #ifdef USE_INDI
         || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
