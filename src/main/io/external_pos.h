@@ -12,6 +12,7 @@ typedef enum {
 
 // todo: reformulate using t_fp_vector
 typedef struct __ext_pos_ned_t {
+    uint32_t time_ms;
     t_fp_vector pos;
     t_fp_vector vel;
     fp_angles_t att;

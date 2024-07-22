@@ -77,6 +77,8 @@ void getExternalPos(timeUs_t current) {
         return;
 
     if (extPosState == EXT_POS_NEW_MESSAGE) {
+        // time stamp
+        extPosNed.time_ms = piMsgExternalPoseRx->time_ms;
         // process new message into NED
         extPosNed.pos.V.X = piMsgExternalPoseRx->enu_y;
         extPosNed.pos.V.Y = piMsgExternalPoseRx->enu_x;

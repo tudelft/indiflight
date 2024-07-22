@@ -334,6 +334,8 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
+    {"extTime",     -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+
     {"extPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -479,6 +481,7 @@ typedef struct blackboxMainState_s {
 #endif
 #ifdef USE_POS_CTL
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    uint32_t extTime; // will be in ms, so must be more than 32bit
     int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
@@ -862,6 +865,7 @@ static void writeIntraframe(void)
 #ifdef USE_POS_CTL
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
+        blackboxWriteUnsignedVB(blackboxCurrent->extTime);
         blackboxWriteSignedVBArray(blackboxCurrent->extPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
@@ -1092,6 +1096,8 @@ static void writeInterframe(void)
     if (testBlackboxCondition(CONDITION(POS))) {
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
+
+        blackboxWriteUnsignedVB(blackboxCurrent->extTime - blackboxLast->extTime);
 
         arraySubInt32(deltas, blackboxCurrent->extPos, blackboxLast->extPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
@@ -1493,6 +1499,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
+    blackboxCurrent->extTime = lrintf(extPosNed.time_ms);
     blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
