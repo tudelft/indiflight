@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import ctypes as ct
-import os
 import numpy as np
 
 # these "enum" classes are a big limitation currently, as they need to be 
@@ -60,6 +59,7 @@ class IndiflightSITLMockup():
         self.disarm( reason = flightLogDisarmReason.DISARM_REASON_SYSTEM )
         print("done.")
 
+#%% loading and config
     def _loadLibAndInit(self):
         self.lib = ct.CDLL( self.libfile )
         self.lib.init()
@@ -84,6 +84,9 @@ class IndiflightSITLMockup():
 
         # disable logging by default
         self.setLogging( False )
+
+    def getVariableReference(self, type, variable):
+        return type.in_dll(self.lib, variable)
 
     def load_profile(self, profile_txt):
         # upload profile, must not end with batch end\n save\n
@@ -120,9 +123,7 @@ class IndiflightSITLMockup():
 
         self._loadLibAndInit()
 
-    def getVariableReference(self, type, variable):
-        return type.in_dll(self.lib, variable)
-
+#%% sending and receiving sensor data / flight control outputs
     def sendImu(self, gyro, acc):
         self.gyro[:] = gyro
         self.acc[:] = acc
@@ -151,15 +152,7 @@ class IndiflightSITLMockup():
         self.lib.getMotorOutputCommands(self.motorCommands, self.N)
         return np.array(self.motorCommands, dtype=float)
 
-    def arm(self):
-        self.armingFlags.value = 1
-
-    def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SWITCH):
-        self.lib.disarm(reason) # also marks blackbox finished
-        self.lib.blackboxUpdate()
-        self.lib.blackboxUpdate() # call twice to flush all blackbox state changes
-        self.armingFlags.value = 0 # make extra sure
-
+#%% managing modes and states
     def enableFlightMode(self, mode):
         self.flightModeFlags.value |= mode
 
@@ -182,7 +175,18 @@ class IndiflightSITLMockup():
         self.issueCliCommand(f"set blackbox_device = {'SITL' if enabled else 'NONE'}")
         print()
 
+    def arm(self):
+        self.armingFlags.value = 1
+
+    def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SWITCH):
+        self.lib.disarm(reason) # also marks blackbox finished
+        self.lib.blackboxUpdate()
+        self.lib.blackboxUpdate() # call twice to flush all blackbox state changes
+        self.armingFlags.value = 0 # make extra sure
+
+#%% finally: tick the inner loop controls
     def tick(self, dtUs):
+        # ToDo: timing of IMU and EKF stuff is now really hardcoded
         self.lib.tick( dtUs )
 
 
@@ -190,22 +194,25 @@ if __name__=="__main__":
     # init the Mockup with the "./eeprom.bin", if it exists. If not, generate one with default settings
     mockup = IndiflightSITLMockup( "./obj/main/indiflight_MOCKUP.so" )
 
-    # load settings from a profile exported from the configurator. this overwrites the eeprom.bin
+    # load settings from a profile exported from the configurator ontop of the 
+    # "./eeprom.bin", if it exists. On exit, the "./eeprom.bin" is overwritten 
+    # with this combined result.
     #mockup.load_profile( "./src/utils/BTFL_cli_20240314_MATEKH743_CineRat_HoverAtt_NN.txt" )
 
-    # send setpoint
-    mockup.sendPositionSetpoint( [0., 1., -1.], np.pi )
-
-    # set armed and correct flight modes
+    # set flight modes and rc switch positions
     mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | 
                             flightModeFlags.POSITION_MODE)
-
-    mockup.setLogging( True )
     #mockup.enableRxBox(boxId.BOXTHROWTOARM)
+
+    # enable logging
+    mockup.setLogging( True )
+
+    # send a position setpoint
+    mockup.sendPositionSetpoint( [0., 1., -1.], np.pi )
+
+    # arm
     mockup.arm()
 
-    dtUs = 500 # 2000 Hz PID frequency
-    mockup.tick( dtUs )
     for i in range( 20000 ):
         # send (some) data 
         mockup.sendImu( [0., 1., 0.], [0., 0., -9.81] )
@@ -213,11 +220,11 @@ if __name__=="__main__":
         mockup.sendMotorSpeeds( [0., 0., 0., 100.] )
 
         # run system
-        mockup.tick( dtUs )
+        mockup.tick( 500 ) # 2000 Hz PID Frequency
 
         # get (some) outputs
         cmd = mockup.getMotorCommands()
-        if not i % 100:
+        if not i % 2000:
             print(cmd)
 
     mockup.disarm() # not strictly needed, just makes the logfile terminate nicer
