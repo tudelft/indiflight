@@ -24,19 +24,37 @@ typedef struct __pos_setpoint_ned_t {
     float psi;
 } pos_setpoint_ned_t;
 
+// structs used for EXTERNAL_POSE message
 extern ext_pos_ned_t extPosNed;
 extern ext_pos_state_t extPosState;
+extern timeUs_t extLatestMsgTime;
+
+// structs used for VIO_POSE message
+#ifdef USE_VIO_POSE
+extern ext_pos_ned_t vioPosNed;
+extern ext_pos_state_t vioPosState;
+extern timeUs_t vioLatestMsgTime;
+#endif
+
+// structs used for POS_SETPOINT message
 extern pos_setpoint_ned_t posSetpointNed;
 extern ext_pos_state_t posSetpointState;
-extern timeUs_t extLatestMsgTime;
 
 #define EXT_POS_FREQ 50
 #define EXT_POS_TIMEOUT_US 300000
+
+#ifdef USE_VIO_POSE
+#define VIO_POS_TIMEOUT_US 300000
+#endif
 
 #define POS_SETPOINT_OUTDATED_US 1000000
 
 void checkNewPos(void);
 void getExternalPos(timeUs_t current);
+#ifdef USE_VIO_POSE
+void checkNewVioPos(void);
+void getVioPos(timeUs_t current);
+#endif
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
 #endif

@@ -27,9 +27,15 @@
 //extern
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
+timeUs_t extLatestMsgTime = 0;
+
+ext_pos_ned_t vioPosNed;
+ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
+timeUs_t vioLatestMsgTime = 0;
+
 pos_setpoint_ned_t posSetpointNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
-timeUs_t extLatestMsgTime = 0;
+
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
@@ -37,20 +43,9 @@ void checkNewPos(void) {
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_ms*1e3;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
         if (deltaMsgs != 0) {
-        //if (deltaMsgs > 0) {
             // new message available
-            // todo: how to catch stuck values? Like new messages comming in,
-            // but the values are frozed, which is also basically signal loss
             extPosState = EXT_POS_NEW_MESSAGE;
             extLatestMsgTime = currentMsgTime;
-        //} else if (deltaMsgs) < 0) {
-            // I think this may happen if there is a 35 to 70min delay between
-            // messages (or multiples of that). This will cause the difference 
-            // calculations to roll-over (expected behaviour)
-            // panic for one call, but update extLatestMsgTime
-        //    extPosState = EXT_POS_NO_SIGMAL;
-        //    extLatestMsgTime = currentMsgTime;
-        //    return;
         } else {
             // assume still valid for now
             extPosState = EXT_POS_STILL_VALID;
@@ -98,21 +93,67 @@ void getExternalPos(timeUs_t current) {
         extPosNed.att.angles.pitch = eulers.angles.pitch;
         extPosNed.att.angles.yaw = eulers.angles.yaw;
     }
-
-    // extrapolate position with speed info
-    /* removed, because now we include this info the observer in imu.h
-    static timeUs_t latestExtrapolationTime = 0;
-    timeUs_t currentExtrapolationTime = micros();
-    timeDelta_t delta = cmpTimeUs(currentExtrapolationTime, latestExtrapolationTime);
-    if ((latestExtrapolationTime > 0) && (delta > 0)) {
-        extPosNed.pos.V.X += ((float) delta) * 1e-6f * extPosNed.vel.V.X;
-        extPosNed.pos.V.Y += ((float) delta) * 1e-6f * extPosNed.vel.V.Y;
-        extPosNed.pos.V.Z += ((float) delta) * 1e-6f * extPosNed.vel.V.Z;
-    }
-    latestExtrapolationTime = currentExtrapolationTime;
-    */
-        // todo: DONE in imu.c extrapolate psi from body rates somehow using the quat
 }
+
+#ifdef USE_VIO_POSE
+void checkNewVioPos(void) {
+    return;
+    // if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
+    //     // data (already) message available
+    //     timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
+    //     timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
+    //     if (deltaMsgs != 0) {
+    //         // new message available
+    //         vioPosState = EXT_POS_NEW_MESSAGE;
+    //         vioLatestMsgTime = currentMsgTime;
+    //     } else {
+    //         // assume still valid for now
+    //         vioPosState = EXT_POS_STILL_VALID;
+    //     }
+
+    //     // regardless of new or old message, we may have timeout
+    //     timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
+    //     if (delta > VIO_POS_TIMEOUT_US) {
+    //         // signal lost
+    //         vioPosState = EXT_POS_NO_SIGNAL;
+    //     }
+    // } else {
+    //     // data (noy yet) message available
+    //     vioPosState = EXT_POS_NO_SIGNAL;
+    // }
+}
+
+void getVioPos(timeUs_t current) {
+    UNUSED(current);
+
+    checkNewVioPos();
+    if (vioPosState == EXT_POS_NO_SIGNAL)
+        return;
+
+    if (vioPosState == EXT_POS_NEW_MESSAGE) {
+        // time stamp
+        vioPosNed.time_ms = 0.f; //piMsgVioPoseRx->time_ms;
+        // process new message into NED
+        vioPosNed.pos.V.X = 0.f; //piMsgVioPoseRx->enu_y;
+        vioPosNed.pos.V.Y = 0.f; //piMsgVioPoseRx->enu_x;
+        vioPosNed.pos.V.Z = 0.f; //-piMsgVioPoseRx->enu_z;
+        vioPosNed.vel.V.X = 0.f; //piMsgVioPoseRx->enu_yd;
+        vioPosNed.vel.V.Y = 0.f; //piMsgVioPoseRx->enu_xd;
+        vioPosNed.vel.V.Z = 0.f; //-piMsgVioPoseRx->enu_zd;
+        // fp_angles_t eulers;
+        // fp_quaternion_t quat;
+        // the quaternion x,y,z are in ENU, we convert them to NED
+        // quat.qi = piMsgVioPoseRx->body_qi;
+        // quat.qx = piMsgVioPoseRx->body_qy;
+        // quat.qy = piMsgVioPoseRx->body_qx;
+        // quat.qz =-piMsgVioPoseRx->body_qz;
+        // float_eulers_of_quat(&eulers, &quat);
+        vioPosNed.att.angles.roll  = 0.f; //eulers.angles.roll;
+        vioPosNed.att.angles.pitch = 0.f; //eulers.angles.pitch;
+        vioPosNed.att.angles.yaw   = 0.f; //eulers.angles.yaw;
+    }
+}
+#endif
 
 void getFakeGps(timeUs_t current) {
     // not that critical, because this is only for display purposes
