@@ -97,30 +97,29 @@ void getExternalPos(timeUs_t current) {
 
 #ifdef USE_VIO_POSE
 void checkNewVioPos(void) {
-    return;
-    // if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
-    //     // data (already) message available
-    //     timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
-    //     timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
-    //     if (deltaMsgs != 0) {
-    //         // new message available
-    //         vioPosState = EXT_POS_NEW_MESSAGE;
-    //         vioLatestMsgTime = currentMsgTime;
-    //     } else {
-    //         // assume still valid for now
-    //         vioPosState = EXT_POS_STILL_VALID;
-    //     }
+    if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
+        // data (already) message available
+        timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
+        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
+        if (deltaMsgs != 0) {
+            // new message available
+            vioPosState = EXT_POS_NEW_MESSAGE;
+            vioLatestMsgTime = currentMsgTime;
+        } else {
+            // assume still valid for now
+            vioPosState = EXT_POS_STILL_VALID;
+        }
 
-    //     // regardless of new or old message, we may have timeout
-    //     timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
-    //     if (delta > VIO_POS_TIMEOUT_US) {
-    //         // signal lost
-    //         vioPosState = EXT_POS_NO_SIGNAL;
-    //     }
-    // } else {
-    //     // data (noy yet) message available
-    //     vioPosState = EXT_POS_NO_SIGNAL;
-    // }
+        // regardless of new or old message, we may have timeout
+        timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
+        if (delta > VIO_POS_TIMEOUT_US) {
+            // signal lost
+            vioPosState = EXT_POS_NO_SIGNAL;
+        }
+    } else {
+        // data (noy yet) message available
+        vioPosState = EXT_POS_NO_SIGNAL;
+    }
 }
 
 void getVioPos(timeUs_t current) {
@@ -132,25 +131,17 @@ void getVioPos(timeUs_t current) {
 
     if (vioPosState == EXT_POS_NEW_MESSAGE) {
         // time stamp
-        vioPosNed.time_ms = 0.f; //piMsgVioPoseRx->time_ms;
-        // process new message into NED
-        vioPosNed.pos.V.X = 0.f; //piMsgVioPoseRx->enu_y;
-        vioPosNed.pos.V.Y = 0.f; //piMsgVioPoseRx->enu_x;
-        vioPosNed.pos.V.Z = 0.f; //-piMsgVioPoseRx->enu_z;
-        vioPosNed.vel.V.X = 0.f; //piMsgVioPoseRx->enu_yd;
-        vioPosNed.vel.V.Y = 0.f; //piMsgVioPoseRx->enu_xd;
-        vioPosNed.vel.V.Z = 0.f; //-piMsgVioPoseRx->enu_zd;
-        // fp_angles_t eulers;
-        // fp_quaternion_t quat;
-        // the quaternion x,y,z are in ENU, we convert them to NED
-        // quat.qi = piMsgVioPoseRx->body_qi;
-        // quat.qx = piMsgVioPoseRx->body_qy;
-        // quat.qy = piMsgVioPoseRx->body_qx;
-        // quat.qz =-piMsgVioPoseRx->body_qz;
-        // float_eulers_of_quat(&eulers, &quat);
-        vioPosNed.att.angles.roll  = 0.f; //eulers.angles.roll;
-        vioPosNed.att.angles.pitch = 0.f; //eulers.angles.pitch;
-        vioPosNed.att.angles.yaw   = 0.f; //eulers.angles.yaw;
+        vioPosNed.time_ms = piMsgVioPoseRx->time_ms;
+        // process new message from ENU?? (were not sure yet) to NED
+        vioPosNed.pos.V.X = piMsgVioPoseRx->enu_x_vio;
+        vioPosNed.pos.V.Y = piMsgVioPoseRx->enu_y_vio;
+        vioPosNed.pos.V.Z = piMsgVioPoseRx->enu_z_vio;
+        vioPosNed.vel.V.X = piMsgVioPoseRx->enu_xd_vio;
+        vioPosNed.vel.V.Y = piMsgVioPoseRx->enu_yd_vio;
+        vioPosNed.vel.V.Z = piMsgVioPoseRx->enu_zd_vio;
+        vioPosNed.att.angles.roll  = piMsgVioPoseRx->body_roll_vio;
+        vioPosNed.att.angles.pitch = piMsgVioPoseRx->body_pitch_vio;
+        vioPosNed.att.angles.yaw   = piMsgVioPoseRx->body_yaw_vio;
     }
 }
 #endif
