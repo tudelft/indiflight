@@ -18,6 +18,23 @@ typedef struct __ext_pos_ned_t {
     fp_angles_t att;
 } ext_pos_ned_t;
 
+typedef struct __vio_pos_ned_t {
+    uint32_t time_ms;
+    float x;
+    float y;
+    float z;
+    float vx;
+    float vy;
+    float vz;
+    float p;
+    float q;
+    float r;
+    float qw;
+    float qx;
+    float qy;
+    float qz;
+} vio_pos_ned_t;
+
 typedef struct __pos_setpoint_ned_t {
     t_fp_vector pos;
     t_fp_vector vel;
@@ -31,7 +48,7 @@ extern timeUs_t extLatestMsgTime;
 
 // structs used for VIO_POSE message
 #ifdef USE_VIO_POSE
-extern ext_pos_ned_t vioPosNed;
+extern vio_pos_ned_t vioPosNed;
 extern ext_pos_state_t vioPosState;
 extern timeUs_t vioLatestMsgTime;
 #endif

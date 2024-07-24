@@ -29,7 +29,7 @@ ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
 timeUs_t extLatestMsgTime = 0;
 
-ext_pos_ned_t vioPosNed;
+vio_pos_ned_t vioPosNed;
 ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
 timeUs_t vioLatestMsgTime = 0;
 
@@ -132,16 +132,20 @@ void getVioPos(timeUs_t current) {
     if (vioPosState == EXT_POS_NEW_MESSAGE) {
         // time stamp
         vioPosNed.time_ms = piMsgVioPoseRx->time_ms;
-        // process new message from ENU?? (were not sure yet) to NED
-        vioPosNed.pos.V.X = piMsgVioPoseRx->enu_x_vio;
-        vioPosNed.pos.V.Y = piMsgVioPoseRx->enu_y_vio;
-        vioPosNed.pos.V.Z = piMsgVioPoseRx->enu_z_vio;
-        vioPosNed.vel.V.X = piMsgVioPoseRx->enu_xd_vio;
-        vioPosNed.vel.V.Y = piMsgVioPoseRx->enu_yd_vio;
-        vioPosNed.vel.V.Z = piMsgVioPoseRx->enu_zd_vio;
-        vioPosNed.att.angles.roll  = piMsgVioPoseRx->body_roll_vio;
-        vioPosNed.att.angles.pitch = piMsgVioPoseRx->body_pitch_vio;
-        vioPosNed.att.angles.yaw   = piMsgVioPoseRx->body_yaw_vio;
+        // process new message from UNKNOWN REFERENCE FRAME to NED
+        vioPosNed.x = piMsgVioPoseRx->x;
+        vioPosNed.y = piMsgVioPoseRx->y;
+        vioPosNed.z = -piMsgVioPoseRx->z;
+        vioPosNed.vx = piMsgVioPoseRx->vx;
+        vioPosNed.vy = piMsgVioPoseRx->vy;
+        vioPosNed.vz = -piMsgVioPoseRx->vz;
+        vioPosNed.p = piMsgVioPoseRx->p;
+        vioPosNed.q = piMsgVioPoseRx->q;
+        vioPosNed.r = piMsgVioPoseRx->r;
+        vioPosNed.qw = piMsgVioPoseRx->qw;
+        vioPosNed.qx = piMsgVioPoseRx->qx;
+        vioPosNed.qy = piMsgVioPoseRx->qy;
+        vioPosNed.qz = piMsgVioPoseRx->qz;
     }
 }
 #endif
