@@ -27,6 +27,7 @@ class flightLogDisarmReason():
 
 class boxId():
     # not for flight modes
+    BOXARM = (1 << 0)
     BOXPREARM = (1 << 34)
     BOXTHROWTOARM = (1 << 35)
 
