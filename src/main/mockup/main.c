@@ -6,9 +6,11 @@
 #include "common/maths.h"
 #include "common/time.h"
 #include "flight/learner.h"
+#include "flight/throw.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #include "fc/init.h"
+#include "fc/runtime_config.h"
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
 
@@ -78,6 +80,8 @@ void tick(const timeDelta_t dtUs)
     clock_tick( dtUs );
     timeUs_t currentTimeUs = micros();
 
+    unsetArmingDisabled(0xffffffff); // disable all, always
+
     static uint8_t counter = 0;
     gyroUpdate(); // rotate and pretend to downsample
     getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
@@ -85,6 +89,10 @@ void tick(const timeDelta_t dtUs)
         // todo: make this demon nicer
         counter = 1;
         getTask(TASK_ACCEL)->attribute->taskFunc( currentTimeUs );
+        if (throwState == THROW_STATE_THROWN) {
+            // because we bypass updateArmingStatus, we need to do this here manually
+            armingFlags = 1;
+        }
         getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
         getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
