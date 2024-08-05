@@ -93,7 +93,7 @@ static biquadFilter_t fxSpfFilter[MAX_SUPPORTED_MOTORS];
 
 static fp_vector_t hoverThrust;
 
-#define LEARNING_MAX_ACT ((int) RLS_MAX_N / 2)
+#define LEARNING_MAX_ACT (RLS_MAX_N >> 1) // divide by 2
 #define LEARNER_OMEGADOT_SCALER 1e-5f // for numerical stability
 #define LEARNER_OMEGADOTDIFF_SCALER 10.f // for numerical stability
 #define LEARNER_NULLSPACE_THRESH 1e-3f // todo, do we need somethign relative here?
@@ -163,9 +163,9 @@ static void updateLearningFilters(void) {
     float ax, ay, az;
 
     //rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
-    rx =  accelerometerConfig()->acc_offset[0] * 1e-3f;
-    ry = -accelerometerConfig()->acc_offset[1] * 1e-3f;
-    rz = -accelerometerConfig()->acc_offset[2] * 1e-3f;
+    rx = accelerometerConfig()->acc_offset[0] * 1e-3f;
+    ry = accelerometerConfig()->acc_offset[1] * 1e-3f;
+    rz = accelerometerConfig()->acc_offset[2] * 1e-3f;
 
     dwx = indiRun.rateDot.A[0];
     dwy = indiRun.rateDot.A[1];
@@ -540,18 +540,18 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         // indi->actLimit[act] = 0.6;
         //                    inv y-scale        a-scale           config scale
-        indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
-        indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
-        indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
-        indi->actG1_roll[act]  = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
-        indi->actG1_pitch[act] = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
-        indi->actG1_yaw[act]   = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
-        indi->actG2_roll[act]  = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
-        indi->actG2_pitch[act] = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
-        indi->actG2_yaw[act]   = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
+        indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0*fxSpfRls.n + act];
+        indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[1*fxSpfRls.n + act];
+        indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[2*fxSpfRls.n + act];
+        indi->actG1_roll[act]  = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0*fxRateDotRls.n + act];
+        indi->actG1_pitch[act] = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[1*fxRateDotRls.n + act];
+        indi->actG1_yaw[act]   = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[2*fxRateDotRls.n + act];
+        indi->actG2_roll[act]  = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
+        indi->actG2_pitch[act] = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
+        indi->actG2_yaw[act]   = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + act];
 
-        // indi->wlsWu[act] = 1;
-        // indi->u_pref[act] = 0;
+        indi->wlsWu[act] = 1.;
+        indi->u_pref[act] = 0;
     }
 
     // indi->imuSyncLp2Hz = 15; // lord knows

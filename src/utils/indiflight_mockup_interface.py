@@ -2,6 +2,7 @@
 
 import ctypes as ct
 import numpy as np
+import os
 
 # these "enum" classes are a big limitation currently, as they need to be 
 # updated manually if things are appended/inserted in Indiflight
@@ -48,17 +49,22 @@ class IndiflightSITLMockup():
 
         self.pos = np.zeros(3, dtype=ct.c_float)
         self.vel = np.zeros(3, dtype=ct.c_float)
-        self.quat = np.zeros(self.N, dtype=ct.c_float)
+        self.quat = np.zeros(4, dtype=ct.c_float)
 
         self.posSp = np.zeros(3, dtype=ct.c_float)
         self.yawSp = 0.
 
+        try:
+            os.remove("./eeprom.bin")
+        except OSError:
+            pass
+
         self._loadLibAndInit()
 
     def __del__(self):
-        print("IndiflightSITLMockup destroyed: ensure disarmed to flush blackbox logs... ", end="")
+        #print("IndiflightSITLMockup destroyed: ensure disarmed to flush blackbox logs... ", end="")
         self.disarm( reason = flightLogDisarmReason.DISARM_REASON_SYSTEM )
-        print("done.")
+        #print("done.")
 
 #%% loading and config
     def _loadLibAndInit(self):
@@ -67,7 +73,7 @@ class IndiflightSITLMockup():
 
         # argtypes
         self.lib.setImu.argtypes = [float_ptr, float_ptr]
-        self.lib.setMotorSpeed.argtypes = [float_ptr]
+        self.lib.setMotorSpeed.argtypes = [float_ptr, ct.c_int]
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
@@ -136,7 +142,7 @@ class IndiflightSITLMockup():
             raise TypeError("too many elements in omega. Must be at most self.N")
 
         self.motorOmega[:n] = omega
-        self.lib.setMotorSpeed(self.motorOmega)
+        self.lib.setMotorSpeed(self.motorOmega, n)
 
     def sendMocap(self, pos, vel, quat):
         self.pos[:] = pos
@@ -192,13 +198,13 @@ class IndiflightSITLMockup():
 
 
 if __name__=="__main__":
-    # init the Mockup with the "./eeprom.bin", if it exists. If not, generate one with default settings
+    # init the Mockup. This deletes any existing "./eeprom.bin" and generates one with default settings
     mockup = IndiflightSITLMockup( "./obj/main/indiflight_MOCKUP.so" )
 
-    # load settings from a profile exported from the configurator ontop of the 
-    # "./eeprom.bin", if it exists. On exit, the "./eeprom.bin" is overwritten 
+    # load settings from a profile exported from the configurator ontop of this 
+    # default "./eeprom.bin". On exit, the "./eeprom.bin" is overwritten 
     # with this combined result.
-    #mockup.load_profile( "./src/utils/BTFL_cli_20240314_MATEKH743_CineRat_HoverAtt_NN.txt" )
+    mockup.load_profile( "./src/utils/SIL.txt" )
 
     # set flight modes and rc switch positions
     mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | 

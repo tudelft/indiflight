@@ -103,10 +103,12 @@ endif
 
 include $(ROOT)/make/targets.mk
 
-REVISION := norevision
-ifeq ($(shell git diff --shortstat),)
-REVISION := $(shell git log -1 --format="%h")
+GITHASH := $(shell git log -1 --format="%h")
+DIRTYFLAG =
+ifneq ($(shell git diff --shortstat),)
+DIRTYFLAG = +dirty
 endif
+REVISION := $(GITHASH)$(DIRTYFLAG)
 
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )

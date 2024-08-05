@@ -1725,6 +1725,7 @@ static void loadMainState(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_LEARNER
+    // only log first 4 motors
     for (int i = 0; i < 4; i++) {
         blackboxCurrent->motor_0_rls_x[i] = lrintf(1e3f*motorRls[0].X[i]);
         blackboxCurrent->motor_1_rls_x[i] = lrintf(1e3f*motorRls[1].X[i]);
@@ -1735,14 +1736,19 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
     }
     for (int i = 0; i < 4; i++) {
-        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0 + i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[4 + i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[8 + i]);
+        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0*fxSpfRls.n + i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[1*fxSpfRls.n + i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[2*fxSpfRls.n + i]);
     }
-    for (int i = 0; i < 2*4; i++) {
-        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0 + i]);
-        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[8 + i]);
-        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[16 + i]);
+    for (int i = 0; i < 4; i++) {
+        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + i]);
+        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + i]);
+        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + i]);
+    }
+    for (int i = 0; i < 4; i++) {
+        blackboxCurrent->fx_p_rls_x[4+i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
+        blackboxCurrent->fx_q_rls_x[4+i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
+        blackboxCurrent->fx_r_rls_x[4+i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
     }
 
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)

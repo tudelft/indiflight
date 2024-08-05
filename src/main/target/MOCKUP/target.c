@@ -59,6 +59,9 @@ const timerHardware_t timerHardware[1]; // unused
 #include "target/SITL/udplink.h"
 #include "flight/indi_init.h"
 
+// to print output of the flash "programming"
+//#define DEBUG_SITL_FLASH
+
 float motorOmegaValues[MAX_SUPPORTED_MOTORS] = {0};
 
 uint32_t SystemCoreClock;
@@ -637,7 +640,9 @@ FLASH_Status FLASH_ProgramWord(uintptr_t addr, uint32_t value)
 {
     if ((addr >= (uintptr_t)eepromData) && (addr < (uintptr_t)ARRAYEND(eepromData))) {
         *((uint32_t*)addr) = value;
+#ifdef DEBUG_SITL_FLASH
         printf("[FLASH_ProgramWord]%p = %08x\n", (void*)addr, *((uint32_t*)addr));
+#endif
     } else {
             printf("[FLASH_ProgramWord]%p out of range!\n", (void*)addr);
     }

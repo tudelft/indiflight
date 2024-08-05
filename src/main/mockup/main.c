@@ -30,9 +30,10 @@ void setImu(const float *g, const float *a) {
     }
 }
 
-void setMotorSpeed(const float *omega) {
+void setMotorSpeed(const float *omega, const int n) {
     // in rad/s
-    for (int motor = 0; motor < getMotorCount(); motor++) {
+    int lim = MIN(n, getMotorCount());
+    for (int motor = 0; motor < lim; motor++) {
         motorOmegaValues[motor] = omega[motor];
     }
 }
