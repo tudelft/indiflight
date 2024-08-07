@@ -8,14 +8,14 @@ typedef enum rls_exit_code_e {
     RLS_FAIL, // TODO fine grained error handliing
 } rls_exit_code_t;
 
-#define RLS_MAX_N 16
+#define RLS_MAX_N (MAX_SUPPORTED_MOTORS * 2) // need twice, lots of memory...
 #define RLS_MAX_D 3
 #define RLS_MAX_P 3
 #define RLS_COV_MAX 1e+10f
 #define RLS_COV_MIN 1e-10f
 #define RLS_MAX_P_ORDER_DECREMENT 0.1f // one order
-#define RLS_FORGET_PER_VAR_PER_DT 4.
-#define RLS_FORGET_MAX_VAR (4*4)
+//#define RLS_FORGET_PER_VAR_PER_DT 4. // unused
+//#define RLS_FORGET_MAX_VAR (4*4)
 // todo: finally give in and use VLA or some malloc in order for this not to
 // blow up when RLS_MAX_N rises?
 
