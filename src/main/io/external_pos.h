@@ -12,14 +12,14 @@ typedef enum {
 
 // todo: reformulate using fp_vector_t
 typedef struct __ext_pos_ned_t {
-    uint32_t time_ms;
+    uint32_t time_us;
     fp_vector_t pos;
     fp_vector_t vel;
     fp_euler_t att;
 } ext_pos_ned_t;
 
 typedef struct __vio_pos_ned_t {
-    uint32_t time_ms;
+    uint32_t time_us;
     float x;
     float y;
     float z;
