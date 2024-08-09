@@ -40,7 +40,7 @@ ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
-        timeUs_t currentMsgTime = piMsgExternalPoseRx->time_ms*1e3;
+        timeUs_t currentMsgTime = piMsgExternalPoseRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
@@ -73,21 +73,21 @@ void getExternalPos(timeUs_t current) {
 
     if (extPosState == EXT_POS_NEW_MESSAGE) {
         // time stamp
-        extPosNed.time_ms = piMsgExternalPoseRx->time_ms;
-        // process new message into NED
-        extPosNed.pos.V.X = piMsgExternalPoseRx->enu_y;
-        extPosNed.pos.V.Y = piMsgExternalPoseRx->enu_x;
-        extPosNed.pos.V.Z = -piMsgExternalPoseRx->enu_z;
-        extPosNed.vel.V.X = piMsgExternalPoseRx->enu_yd;
-        extPosNed.vel.V.Y = piMsgExternalPoseRx->enu_xd;
-        extPosNed.vel.V.Z = -piMsgExternalPoseRx->enu_zd;
+        extPosNed.time_us = piMsgExternalPoseRx->time_us;
+        // process new message (should be NED)
+        extPosNed.pos.V.X = piMsgExternalPoseRx->ned_x;
+        extPosNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
+        extPosNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
+        extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
+        extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
+        extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
         fp_euler_t eulers;
         fp_quaternion_t quat;
-        // the quaternion x,y,z are in ENU, we convert them to NED
+        // the quaternion x,y,z should be NED
         quat.w = piMsgExternalPoseRx->body_qi;
-        quat.x = piMsgExternalPoseRx->body_qy;
-        quat.y = piMsgExternalPoseRx->body_qx;
-        quat.z =-piMsgExternalPoseRx->body_qz;
+        quat.x = piMsgExternalPoseRx->body_qx;
+        quat.y = piMsgExternalPoseRx->body_qy;
+        quat.z = piMsgExternalPoseRx->body_qz;
         fp_quaternionProducts_t qP;
         quaternionProducts_of_quaternion(&qP, &quat);
         fp_euler_of_quaternionProducts (&eulers, &qP);
@@ -101,7 +101,7 @@ void getExternalPos(timeUs_t current) {
 void checkNewVioPos(void) {
     if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
-        timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
+        timeUs_t currentMsgTime = piMsgVioPoseRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
@@ -133,7 +133,7 @@ void getVioPos(timeUs_t current) {
 
     if (vioPosState == EXT_POS_NEW_MESSAGE) {
         // time stamp
-        vioPosNed.time_ms = piMsgVioPoseRx->time_ms;
+        vioPosNed.time_us = piMsgVioPoseRx->time_us;
         // process new message from UNKNOWN REFERENCE FRAME to NED
         vioPosNed.x = piMsgVioPoseRx->x;
         vioPosNed.y = piMsgVioPoseRx->y;
@@ -184,44 +184,44 @@ void getPosSetpoint(timeUs_t current) {
     static timeUs_t latestSetpointTime = 0;
 
     if (piMsgPosSetpointRx) {
-        timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_ms * 1e3;
+        timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);
         bool newMsg = (deltaMsgs != 0);
         if (newMsg) {
             latestSetpointTime = currentSetpointTime;
-            posSpNed.pos.V.X = piMsgPosSetpointRx->enu_y;
-            posSpNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
-            posSpNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
+            posSpNed.pos.V.X = piMsgPosSetpointRx->ned_x;
+            posSpNed.pos.V.Y = piMsgPosSetpointRx->ned_y;
+            posSpNed.pos.V.Z = piMsgPosSetpointRx->ned_z;
 
 #ifdef USE_TRAJECTORY_TRACKER
             // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------
             
             // call initTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 1
-            if (piMsgPosSetpointRx->enu_xd == 1) {
+            if (piMsgPosSetpointRx->ned_xd == 1) {
                 initTrajectoryTracker();
                 return;
             }
 
             // call stopTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 2
-            if (piMsgPosSetpointRx->enu_xd == 2) {
+            if (piMsgPosSetpointRx->ned_xd == 2) {
                 stopTrajectoryTracker();
                 return;
             }
 
             // disarm when piMsgPosSetpointRx->enu_xd == 3
-            if (piMsgPosSetpointRx->enu_xd == 3) {
+            if (piMsgPosSetpointRx->ned_xd == 3) {
                 disarm(DISARM_REASON_SWITCH);
                 return;
             }
 
             // call setSpeedTrajectoryTracker when piMsgPosSetpointRx->enu_yd > 0 and use piMsgPosSetpointRx->enu_yd as speed
-            if (piMsgPosSetpointRx->enu_yd > 0) {
-                setSpeedTrajectoryTracker(piMsgPosSetpointRx->enu_yd);
+            if (piMsgPosSetpointRx->ned_yd > 0) {
+                setSpeedTrajectoryTracker(piMsgPosSetpointRx->ned_yd);
                 return;
             }
 
             // call initRecoveryMode when piMsgPosSetpointRx->enu_xd == 6
-            if (piMsgPosSetpointRx->enu_xd == 6) {
+            if (piMsgPosSetpointRx->ned_xd == 6) {
                 initRecoveryMode();
                 return;
             }
@@ -230,7 +230,7 @@ void getPosSetpoint(timeUs_t current) {
             // UGLY HACK: velocity setpoint is used for communication with the neural network controller -----------------
             
             // init when piMsgPosSetpointRx->enu_xd == 4
-            if (piMsgPosSetpointRx->enu_xd == 4) {
+            if (piMsgPosSetpointRx->ned_xd == 4) {
                 nn_init();
                 return;
             }
@@ -250,7 +250,7 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
             posSpNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
             posSpNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
-            posSpNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
+            posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
             posSetpointState = EXT_POS_NEW_MESSAGE;
         } else {
             posSetpointState = EXT_POS_STILL_VALID;

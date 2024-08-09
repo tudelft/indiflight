@@ -1829,7 +1829,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
-    blackboxCurrent->extTime = lrintf(extPosNed.time_ms);
+    blackboxCurrent->extTime = lrintf(extPosNed.time_us);
     blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
@@ -1852,7 +1852,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
     blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
 #ifdef USE_VIO_POSE
-    blackboxCurrent->vioTime = lrintf(vioPosNed.time_ms);
+    blackboxCurrent->vioTime = lrintf(vioPosNed.time_us);
     blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
     blackboxCurrent->vioPos[1] = lrintf(vioPosNed.y * METER_TO_MM);
     blackboxCurrent->vioPos[2] = lrintf(vioPosNed.z * METER_TO_MM);

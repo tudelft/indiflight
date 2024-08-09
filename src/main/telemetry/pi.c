@@ -127,7 +127,7 @@ void checkPiTelemetryState(void)
 
 void piSendIMU(void)
 {
-    piMsgImuTx.time_ms = millis();
+    piMsgImuTx.time_us = micros();
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
     piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
     piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
