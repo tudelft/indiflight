@@ -115,9 +115,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                     ( (extPosState >= EXT_POS_STILL_VALID)
                     && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
                 #endif
-                !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_NOPREARM));
+                true;
 
-            if (enableConditions && timingValid) { 
+           if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
             }
             break;

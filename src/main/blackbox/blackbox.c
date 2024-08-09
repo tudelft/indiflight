@@ -1386,19 +1386,25 @@ static void writeInterframe(void)
         for (int i=0; i < BLACKBOX_LEARNER_2N; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, BLACKBOX_LEARNER_N);
+#ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
         blackboxWriteTag8_8SVB(deltas+8, BLACKBOX_LEARNER_N);
+#endif
 
         arraySubInt16(deltas16, blackboxCurrent->fx_q_rls_x, blackboxLast->fx_q_rls_x, BLACKBOX_LEARNER_2N);
         for (int i=0; i < BLACKBOX_LEARNER_2N; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, BLACKBOX_LEARNER_N);
+#ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
         blackboxWriteTag8_8SVB(deltas+8, BLACKBOX_LEARNER_N);
+#endif
 
         arraySubInt16(deltas16, blackboxCurrent->fx_r_rls_x, blackboxLast->fx_r_rls_x, BLACKBOX_LEARNER_2N);
         for (int i=0; i < BLACKBOX_LEARNER_2N; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, BLACKBOX_LEARNER_N);
+#ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
         blackboxWriteTag8_8SVB(deltas+8, BLACKBOX_LEARNER_N);
+#endif
 
         arraySubUint16(deltas16, blackboxCurrent->learnerGains, blackboxLast->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(deltas16, LEARNER_LOOP_COUNT);
@@ -2470,13 +2476,14 @@ STATIC_UNIT_TESTED void blackboxLogIteration(timeUs_t currentTimeUs)
 /**
  * Call each flight loop iteration to perform blackbox logging.
  */
+#include "flight/throw.h"
 void blackboxUpdate(timeUs_t currentTimeUs)
 {
     static BlackboxState cacheFlushNextState;
 
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
-        if (ARMING_FLAG(ARMED) || (IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
+        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW)) {
             blackboxOpen();
             blackboxStart();
         }
@@ -2594,7 +2601,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
         if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
-        } else if ((!ARMING_FLAG(ARMED)) && isModeActivationConditionPresent(BOXTHROWTOARM) && !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && !startedLoggingInTestMode) {
+        } else if ((!ARMING_FLAG(ARMED)) && (throwState == THROW_STATE_IDLE) && !startedLoggingInTestMode) {
             blackboxFinish();
         } else {
             blackboxLogIteration(currentTimeUs);

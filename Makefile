@@ -547,6 +547,9 @@ else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
 endif
 
+dfu:
+	$(V0) $(MAKE) -j $(TARGET_DFU)
+
 so:
 	$(V0) $(MAKE) -j $(TARGET_SO)
 

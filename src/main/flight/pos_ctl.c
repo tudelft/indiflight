@@ -100,22 +100,29 @@ void resetIterms(void) {
 
 void updatePosCtl(timeUs_t current) {
 
-    if (extPosState == EXT_POS_NO_SIGNAL) {
-        // panic and level craft
-        resetIterms();
-        accSpNedFromPos.V.X = 0.f;
-        accSpNedFromPos.V.Y = 0.f;
-        accSpNedFromPos.V.Z = 1.f; // also command slight downwards acceleration
-        return;
-    }
+    if (extPosState >= EXT_POS_STILL_VALID) {
+        if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
+            resetIterms();
+        }
 
-    if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
-        resetIterms();
-    }
+        posGetAccSpNed(current);
+        posGetAttSpNedAndSpfSpBody(current);
+        posGetRateSpBody(current);
 
-    posGetAccSpNed(current);
-    posGetAttSpNedAndSpfSpBody(current);
-    posGetRateSpBody(current);
+    } else {
+        // panic and level craft in slight downwards motion
+        resetIterms();
+        attSpNedFromPos.w = 1.f;
+        attSpNedFromPos.x = 0.f;
+        attSpNedFromPos.y = 0.f;
+        attSpNedFromPos.z = 0.f;
+        spfSpBodyFromPos.V.X = 0.f;
+        spfSpBodyFromPos.V.Y = 0.f;
+        spfSpBodyFromPos.V.Z = -(GRAVITYf - 2.f); // also command slight downwards acceleration
+        rateSpBodyFromPos.V.X = 0.f;
+        rateSpBodyFromPos.V.Y = 0.f;
+        rateSpBodyFromPos.V.Z = 0.f;
+    }
 }
 
 void posGetAccSpNed(timeUs_t current) {

@@ -413,9 +413,9 @@ void updateArmingStatus(void)
 
 #ifdef USE_CATAPULT
         if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_WAITING_FOR_ARM)) {
-            setArmingDisabled(ARMING_DISABLED_CATAPULT);
+            setArmingDisabled(ARMING_DISABLED_CATAPULT_NOT_READY);
         } else {
-            unsetArmingDisabled(ARMING_DISABLED_CATAPULT);
+            unsetArmingDisabled(ARMING_DISABLED_CATAPULT_NOT_READY);
         }
 #endif
 
@@ -449,19 +449,26 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
-            // Intended behaviour: display "WAITING_FOR_THROW" if an only if 
-            //                     directly ready to be thrown.
-            //                     Also, do not allow arming in any other way
-            //                     (switch or sticks) if throw to arm switch
-            //                     enabled
-            unsetArmingDisabled(~doNotTolerateDuringThrow);
-            if (throwState == THROW_STATE_THROWN) {
-                unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+            // Intended behaviour: 
+            // 1. display "THROW_NOT_READY" when RC throwtoarm switch selected, 
+            //    but conditions not met (throwState == IDLE). This is intended
+            //    to disable ANY kind of arming when the switch is selected
+            // 2. display "WAITING_FOR_THROW" if and only if directly ready 
+            //    to throw (and also sound the buzzer)
+            if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+                unsetArmingDisabled(~doNotTolerateDuringThrow);
+                if (throwState == THROW_STATE_THROWN) {
+                    unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                } else {
+                    setArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                }
             } else {
-                setArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                setArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
             }
         } else {
+            unsetArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
             unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
         }
 #endif
@@ -1496,7 +1503,9 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     subTaskRcCommand(currentTimeUs);
 
     uint8_t numMotors = getMotorCount();
-    float motor_normalized[MAX_SUPPORTED_MOTORS] = { 0 };
+    for (int motor = 0; motor < MAX_SUPPORTED_MOTORS; motor++) {
+        motor_normalized[motor] = 0.;
+    }
 
 #ifdef USE_NN_CONTROL
     static uint8_t innerLoopCounter = 0;

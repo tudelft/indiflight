@@ -677,16 +677,19 @@ uint16_t getDshotTelemetry(uint8_t motor)
     return (uint16_t) (indiRun.erpmToRads * motorOmegaValues[motor]);
 }
 
+#include "drivers/dshot.h"
+#include "drivers/dshot_command.h"
 void mockupInitEndpoints(float outputLimit, float *outputLow, float *outputHigh, float *disarm, float *deadbandMotor3dHigh, float *deadbandMotor3dLow)
 {
-    *disarm = 0;
+    float outputLimitOffset = DSHOT_RANGE * (1 - outputLimit);
+    *disarm = DSHOT_CMD_MOTOR_STOP;
     if (featureIsEnabled(FEATURE_3D)) {
-        *outputLow = -outputLimit;
-        *outputHigh = outputLimit;
-        *deadbandMotor3dHigh = 0.;
-        *deadbandMotor3dLow = 0.;
+        *outputLow = DSHOT_MIN_THROTTLE;
+        *outputHigh = DSHOT_MAX_THROTTLE - outputLimitOffset / 2;
+        *deadbandMotor3dHigh = DSHOT_3D_FORWARD_MIN_THROTTLE;
+        *deadbandMotor3dLow = DSHOT_3D_FORWARD_MIN_THROTTLE - 1 - outputLimitOffset / 2;
     } else {
-        *outputLow = 0.;
-        *outputHigh = outputLimit;
+        *outputLow = DSHOT_MIN_THROTTLE;
+        *outputHigh = DSHOT_MAX_THROTTLE - outputLimitOffset;
     }
 }

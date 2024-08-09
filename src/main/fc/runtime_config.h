@@ -66,10 +66,11 @@ typedef enum {
     ARMING_DISABLED_DSHOT_BITBANG   = (1 << 22),
     ARMING_DISABLED_ACC_CALIBRATION = (1 << 23),
     ARMING_DISABLED_MOTOR_PROTOCOL  = (1 << 24),
-    ARMING_DISABLED_WAITING_FOR_THROW = (1 << 25),
-    ARMING_DISABLED_CATAPULT        = (1 << 26),
-    ARMING_DISABLED_NN_MODE         = (1 << 27),
-    ARMING_DISABLED_ARM_SWITCH      = (1 << 28), // Needs to be the last element, since it's always activated if one of the others is active when arming
+    ARMING_DISABLED_WAITING_FOR_THROW  = (1 << 25),
+    ARMING_DISABLED_THROW_NOT_READY    = (1 << 26),
+    ARMING_DISABLED_CATAPULT_NOT_READY = (1 << 27),
+    ARMING_DISABLED_NN_MODE         = (1 << 28),
+    ARMING_DISABLED_ARM_SWITCH      = (1 << 29), // Needs to be the last element, since it's always activated if one of the others is active when arming
 } armingDisableFlags_e;
 
 #define ARMING_DISABLE_FLAGS_COUNT (LOG2(ARMING_DISABLED_ARM_SWITCH) + 1)

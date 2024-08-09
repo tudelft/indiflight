@@ -72,7 +72,7 @@ void setPosSetpoint(const float *pos, const float yaw) {
 void getMotorOutputCommands(float *cmd, int n) {
     int lim = MIN(n, getMotorCount());
     for (int m = 0; m < lim; m++) {
-        cmd[m] = motor[m];
+        cmd[m] = motor_normalized[m];
     }
 }
 
