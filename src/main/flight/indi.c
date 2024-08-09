@@ -1,7 +1,9 @@
 
 #include <string.h>
 #include <stdbool.h>
-
+#ifdef USE_CLI_DEBUG_PRINT
+#include "cli/cli_debug_print.h"
+#endif
 #include "platform.h"
 
 #ifdef USE_INDI
@@ -41,6 +43,10 @@
 #include "indi.h"
 
 
+#include "common/signal_generator.h" // Include the signal generator header
+
+// bool debug_statements = true;
+
 #ifndef USE_ACC
 #error "Must use accelerometer (USE_ACC) to USE_INDI"
 #endif
@@ -52,6 +58,8 @@ FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
 #define RC_SCALE_THROTTLE 0.001f
 #define RC_OFFSET_THROTTLE 1000.f
+
+#define ATTITUDE_INJECTION_STATUS 0
 
 // refurbish this code somehow
 #if (MAXU > AS_N_U) || (MAXV > AS_N_V)
@@ -144,9 +152,48 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_POS_CTL
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
+
+        //     // ERIN:
+        //     /*
+        //     roll, pitch, yaw = EulFromQuat(current attitude) 
+        //     roll+30degrees
+        //     x,y,z,w = new_attitude= quatfromEul(roll,pitch,yaw) 
+        //     */
+        
         indiRun.attSpNed = attSpNedFromPos;
         indiRun.spfSpBody = spfSpBodyFromPos;
         indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
+
+        // J -- Add Attiude setpoints here:
+        
+        
+
+        // Inject the signal into the roll axis based on the current mode
+         #ifdef USE_CLI_DEBUG_PRINT
+         int local_signal_mode = current_signal_mode;
+            static int i = 0;
+            if (++i%100 == 0) {
+                i = 0;
+                cliPrintLinef("Debug: Signal Mode = %d\n", local_signal_mode);
+            }
+        #endif
+        
+        if (current_signal_mode != 0) {
+
+            #ifdef USE_CLI_DEBUG_PRINT
+            static int i = 0;
+            if (++i%100 == 0) {
+                i = 0;
+                cliPrintLinef("Injecting");
+            }
+            #endif
+
+            float roll_signal = generate_signal(current);
+            fp_quaternion_t signal_quat = create_step_quaternion(roll_signal, 'x');
+            indiRun.attSpNed = multiply_quaternions(&indiRun.attSpNed, &signal_quat);
+            normalize_quaternion(&indiRun.attSpNed);
+
+    }
     } else
 #endif
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
@@ -305,6 +352,11 @@ void getAlphaSpBody(timeUs_t current) {
         // constrain to be safe
         VEC3_CONSTRAIN_XY_LENGTH(indiRun.rateSpBody, indiRun.attMaxTiltRate);
         indiRun.rateSpBody.V.Z = constrainf(indiRun.rateSpBody.V.Z, -indiRun.attMaxYawRate, indiRun.attMaxYawRate);
+
+        // J -- Add rate setpoints here:
+        // indiRun.rateSpBody.V.X += 
+        // indiRun.rateSpBody.V.Y += 
+        // indiRun.rateSpBody.V.Z += 
     }
 
     // limit to absolute max values
@@ -603,6 +655,10 @@ float indiOutputCurve(actLin_t* lin, float in) {
 }
 
 #endif // def USE_INDI
+
+
+
+
 
 // TODO;
 /* 

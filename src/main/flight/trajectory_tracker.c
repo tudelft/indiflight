@@ -14,7 +14,7 @@
 #endif
 
 // state of trajectory tracker:
-bool tt_active = false;
+bool tt_active = true;
 
 // acceleration and yaw rate setpoints
 float tt_acc_sp[3];
@@ -64,22 +64,47 @@ void getRefsTrajectoryTracker(float p) {
     //tt_yaw_ref = p + M_PIf/2.0f;
     //tt_yaw_rate_ref = tt_speed_factor;
 
-    // Lissajou trajectory from https://arxiv.org/pdf/2311.13081.pdf
-    // cos(2πt/T ) sin(4πt/T )/2 const
-    tt_pos_ref[0] = tt_R*cosf(p);
-    tt_pos_ref[1] = tt_R*sinf(2.f*p)/2.f;
-    tt_pos_ref[2] = -1.5f;
+// Set the radius and altitude for the circular trajectory
+    tt_R = 2.5f; // Use the existing tt_R variable for the radius of the circle
+    float altitude = -1.5f; // Constant altitude in NED coordinates (negative for downward)
 
-    tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(2.f*p);
-    tt_vel_ref[2] = 0.0f;
+    // Position reference (circular trajectory)
+    tt_pos_ref[0] = tt_R * cosf(p);  // X = R * cos(p)
+    tt_pos_ref[1] = tt_R * sinf(p);  // Y = R * sin(p)
+    tt_pos_ref[2] = altitude;        // Z = constant altitude
 
-    tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    tt_acc_ref[1] = -tt_R*2.f*tt_speed_factor*tt_speed_factor*sinf(2.f*p);
-    tt_acc_ref[2] = 0.0f;
+    // Velocity reference (first derivative of position)
+    tt_vel_ref[0] = -tt_R * tt_speed_factor * sinf(p); // Vx = -R * omega * sin(p)
+    tt_vel_ref[1] = tt_R * tt_speed_factor * cosf(p);  // Vy = R * omega * cos(p)
+    tt_vel_ref[2] = 0.0f;                              // Vz = 0 (no vertical movement)
 
-    tt_yaw_ref = 0.f;
-    tt_yaw_rate_ref = 0.f;
+    // Acceleration reference (second derivative of position)
+    tt_acc_ref[0] = -tt_R * tt_speed_factor * tt_speed_factor * cosf(p); // Ax = -R * omega^2 * cos(p)
+    tt_acc_ref[1] = -tt_R * tt_speed_factor * tt_speed_factor * sinf(p); // Ay = -R * omega^2 * sin(p)
+    tt_acc_ref[2] = 0.0f;                                                // Az = 0 (no vertical acceleration)
+
+    // Yaw reference (optional: can keep fixed or rotate with the circle)
+    tt_yaw_ref = 0.0f;       // Fixed yaw
+    tt_yaw_rate_ref = 0.0f;  // Fixed yaw rate
+
+
+
+    // // Lissajou trajectory from https://arxiv.org/pdf/2311.13081.pdf
+    // // cos(2πt/T ) sin(4πt/T )/2 const
+    // tt_pos_ref[0] = tt_R*cosf(p);
+    // tt_pos_ref[1] = tt_R*sinf(2.f*p)/2.f;
+    // tt_pos_ref[2] = -1.5f;
+
+    // tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
+    // tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(2.f*p);
+    // tt_vel_ref[2] = 0.0f;
+
+    // tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
+    // tt_acc_ref[1] = -tt_R*2.f*tt_speed_factor*tt_speed_factor*sinf(2.f*p);
+    // tt_acc_ref[2] = 0.0f;
+
+    // tt_yaw_ref = 0.f;
+    // tt_yaw_rate_ref = 0.f;
 }
 
 void getSetpointsTrajectoryTracker(void) {

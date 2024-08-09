@@ -19,6 +19,13 @@
 #include "fc/core.h"
 // --------------------------------------------------------
 
+// Jagadish: -------------------------------------------
+
+#include "common/signal_generator.h"
+
+// -----------------------------------------------------
+
+
 //extern
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
@@ -151,26 +158,38 @@ void getPosSetpoint(timeUs_t current) {
             // call initTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 1
             if (piMsgPosSetpointRx->enu_xd == 1) {
                 initTrajectoryTracker();
-                return;
+                // return;
             }
 
             // call stopTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 2
             if (piMsgPosSetpointRx->enu_xd == 2) {
                 stopTrajectoryTracker();
-                return;
+                // return;
             }
 
             // disarm when piMsgPosSetpointRx->enu_xd == 3
             if (piMsgPosSetpointRx->enu_xd == 3) {
                 disarm(DISARM_REASON_SWITCH);
-                return;
+                // return;
             }
 
             // call setSpeedTrajectoryTracker when piMsgPosSetpointRx->enu_yd > 0 and use piMsgPosSetpointRx->enu_yd as speed
             if (piMsgPosSetpointRx->enu_yd > 0) {
                 setSpeedTrajectoryTracker(piMsgPosSetpointRx->enu_yd);
-                return;
+                // return;
             }
+
+             // New logic for setting signal mode based on enu_zd
+            if (piMsgPosSetpointRx->enu_zd == 1) {
+                set_signal_mode(SIGNAL_MODE_IMPULSE, current);
+            } else if (piMsgPosSetpointRx->enu_zd == 2) {
+                set_signal_mode(SIGNAL_MODE_DOUBLET, current);
+            } else {
+                set_signal_mode(SIGNAL_MODE_OFF, current);
+            }
+
+
+
 #endif
             
             // -----------------------------------------------------------------------------------------------
