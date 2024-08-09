@@ -81,6 +81,7 @@
 #include "io/usb_cdc_hid.h"
 #include "io/vtx.h"
 #include "io/hil.h"
+#include "io/keyboard.h"
 
 #include "msp/msp.h"
 #include "msp/msp_serial.h"
@@ -354,6 +355,14 @@ static void taskGpsPi(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_TELEMETRY_PI
+static void taskKeyboard(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    processKeyboard();
+}
+#endif
+
 #ifdef USE_POS_CTL
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
@@ -466,6 +475,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_GPS_PI
     [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#endif
+
+#ifdef USE_TELEMETRY_PI
+    [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_POS_CTL
@@ -643,6 +656,10 @@ void tasksInit(void)
 #ifdef USE_GPS_PI
     // todo! CHECK OTHER FLAGS for consistency
     setTaskEnabled(TASK_GPS_PI, true);
+#endif
+
+#ifdef USE_TELEMETRY_PI
+    setTaskEnabled(TASK_KEYBOARD, true);
 #endif
 
 #ifdef USE_POS_CTL

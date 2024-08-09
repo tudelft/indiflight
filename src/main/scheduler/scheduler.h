@@ -143,6 +143,9 @@ typedef enum {
 #ifdef USE_GPS_PI
     TASK_GPS_PI,
 #endif
+#ifdef USE_TELEMETRY_PI
+    TASK_KEYBOARD,
+#endif
 #ifdef USE_POS_CTL
     TASK_POS_CTL,
 #endif

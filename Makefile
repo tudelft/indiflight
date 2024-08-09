@@ -677,7 +677,7 @@ $(TARGET_EF_HASH_FILE):
 	$(V1) touch $(TARGET_EF_HASH_FILE)
 
 # pi-protocol make script
-$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../messages/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
+$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
 	@echo "generating pi protocol headers"
 	cd lib/main/pi-protocol/ && make generate CONFIG=config.yaml
 	@echo "done"

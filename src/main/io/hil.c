@@ -146,7 +146,7 @@ void hilSendActuators(void)
     if ((!hilPort) || (!hilEnabled))
         return;
 
-    piMsgHilOutTx.time_ms = millis();
+    piMsgHilOutTx.time_us = micros();
 #define MOTOR_TO_HIL 32767
     piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[0], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
     piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[1], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
