@@ -357,6 +357,8 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
+    {"extTime",     -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+
     {"extPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -384,6 +386,26 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"extAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+#endif
+#ifdef USE_VIO_POSE
+    {"vioTime",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+    
+    {"vioPos",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioPos",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioPos",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"vioVel",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioVel",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioVel",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"vioQuat",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioQuat",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioQuat",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioQuat",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+    {"vioRate",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioRate",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"vioRate",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
 #ifdef USE_EKF
     {"ekf_pos",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -661,6 +683,7 @@ typedef struct blackboxMainState_s {
 #endif
 #ifdef USE_POS_CTL
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    uint32_t extTime; // will be in ms, so must be more than 32bit
     int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
@@ -668,6 +691,13 @@ typedef struct blackboxMainState_s {
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
     int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
+#ifdef USE_VIO_POSE
+    uint32_t vioTime;           // will be in ms, so must be more than 32bit
+    int32_t vioPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int16_t vioVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t vioQuat[4];
+    int16_t vioRate[XYZ_AXIS_COUNT]; // will be degrees/1000
+#endif
 #endif
 #ifdef USE_EKF
     int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
@@ -1064,6 +1094,7 @@ static void writeIntraframe(void)
 #ifdef USE_POS_CTL
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
+        blackboxWriteUnsignedVB(blackboxCurrent->extTime);
         blackboxWriteSignedVBArray(blackboxCurrent->extPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
@@ -1071,6 +1102,13 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
+#ifdef USE_VIO_POSE
+        blackboxWriteUnsignedVB(blackboxCurrent->vioTime);
+        blackboxWriteSignedVBArray(blackboxCurrent->vioPos, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->vioVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->vioQuat, 4);
+        blackboxWriteSigned16VBArray(blackboxCurrent->vioRate, XYZ_AXIS_COUNT);
+#endif
     }
 #endif
 #ifdef USE_EKF
@@ -1317,6 +1355,8 @@ static void writeInterframe(void)
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
+        blackboxWriteUnsignedVB(blackboxCurrent->extTime - blackboxLast->extTime);
+
         arraySubInt32(deltas, blackboxCurrent->extPos, blackboxLast->extPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
@@ -1337,6 +1377,21 @@ static void writeInterframe(void)
 
         arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+#ifdef USE_VIO_POSE
+        blackboxWriteUnsignedVB(blackboxCurrent->vioTime - blackboxLast->vioTime);
+
+        arraySubInt32(deltas, blackboxCurrent->vioPos, blackboxLast->vioPos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->vioVel, blackboxLast->vioVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->vioQuat, blackboxLast->vioQuat, 4);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->vioRate, blackboxLast->vioRate, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+#endif
     }
 #else
     UNUSED(deltas16);
@@ -1774,6 +1829,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
+    blackboxCurrent->extTime = lrintf(extPosNed.time_ms);
     blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
@@ -1795,6 +1851,22 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
     blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
     blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
+#ifdef USE_VIO_POSE
+    blackboxCurrent->vioTime = lrintf(vioPosNed.time_ms);
+    blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
+    blackboxCurrent->vioPos[1] = lrintf(vioPosNed.y * METER_TO_MM);
+    blackboxCurrent->vioPos[2] = lrintf(vioPosNed.z * METER_TO_MM);
+    blackboxCurrent->vioVel[0] = lrintf(vioPosNed.vx * METER_TO_CM);
+    blackboxCurrent->vioVel[1] = lrintf(vioPosNed.vy * METER_TO_CM);
+    blackboxCurrent->vioVel[2] = lrintf(vioPosNed.vz * METER_TO_CM);
+    blackboxCurrent->vioQuat[0] = lrintf(vioPosNed.qw * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->vioQuat[1] = lrintf(vioPosNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->vioQuat[2] = lrintf(vioPosNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->vioQuat[3] = lrintf(vioPosNed.qz * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->vioRate[0] = lrintf(RADIANS_TO_DEGREES(vioPosNed.p));
+    blackboxCurrent->vioRate[1] = lrintf(RADIANS_TO_DEGREES(vioPosNed.q));
+    blackboxCurrent->vioRate[2] = lrintf(RADIANS_TO_DEGREES(vioPosNed.r));
+#endif
 #endif
 
 #ifdef USE_EKF

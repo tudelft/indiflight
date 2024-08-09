@@ -27,9 +27,15 @@
 //extern
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
+timeUs_t extLatestMsgTime = 0;
+
+vio_pos_ned_t vioPosNed;
+ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
+timeUs_t vioLatestMsgTime = 0;
+
 pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
-timeUs_t extLatestMsgTime = 0;
+
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
@@ -37,20 +43,9 @@ void checkNewPos(void) {
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_ms*1e3;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
         if (deltaMsgs != 0) {
-        //if (deltaMsgs > 0) {
             // new message available
-            // todo: how to catch stuck values? Like new messages comming in,
-            // but the values are frozed, which is also basically signal loss
             extPosState = EXT_POS_NEW_MESSAGE;
             extLatestMsgTime = currentMsgTime;
-        //} else if (deltaMsgs) < 0) {
-            // I think this may happen if there is a 35 to 70min delay between
-            // messages (or multiples of that). This will cause the difference 
-            // calculations to roll-over (expected behaviour)
-            // panic for one call, but update extLatestMsgTime
-        //    extPosState = EXT_POS_NO_SIGMAL;
-        //    extLatestMsgTime = currentMsgTime;
-        //    return;
         } else {
             // assume still valid for now
             extPosState = EXT_POS_STILL_VALID;
@@ -77,6 +72,8 @@ void getExternalPos(timeUs_t current) {
         return;
 
     if (extPosState == EXT_POS_NEW_MESSAGE) {
+        // time stamp
+        extPosNed.time_ms = piMsgExternalPoseRx->time_ms;
         // process new message into NED
         extPosNed.pos.V.X = piMsgExternalPoseRx->enu_y;
         extPosNed.pos.V.Y = piMsgExternalPoseRx->enu_x;
@@ -98,21 +95,62 @@ void getExternalPos(timeUs_t current) {
         extPosNed.att.angles.pitch = eulers.angles.pitch;
         extPosNed.att.angles.yaw = eulers.angles.yaw;
     }
-
-    // extrapolate position with speed info
-    /* removed, because now we include this info the observer in imu.h
-    static timeUs_t latestExtrapolationTime = 0;
-    timeUs_t currentExtrapolationTime = micros();
-    timeDelta_t delta = cmpTimeUs(currentExtrapolationTime, latestExtrapolationTime);
-    if ((latestExtrapolationTime > 0) && (delta > 0)) {
-        extPosNed.pos.V.X += ((float) delta) * 1e-6f * extPosNed.vel.V.X;
-        extPosNed.pos.V.Y += ((float) delta) * 1e-6f * extPosNed.vel.V.Y;
-        extPosNed.pos.V.Z += ((float) delta) * 1e-6f * extPosNed.vel.V.Z;
-    }
-    latestExtrapolationTime = currentExtrapolationTime;
-    */
-        // todo: DONE in imu.c extrapolate psi from body rates somehow using the quat
 }
+
+#ifdef USE_VIO_POSE
+void checkNewVioPos(void) {
+    if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
+        // data (already) message available
+        timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
+        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
+        if (deltaMsgs != 0) {
+            // new message available
+            vioPosState = EXT_POS_NEW_MESSAGE;
+            vioLatestMsgTime = currentMsgTime;
+        } else {
+            // assume still valid for now
+            vioPosState = EXT_POS_STILL_VALID;
+        }
+
+        // regardless of new or old message, we may have timeout
+        timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
+        if (delta > VIO_POS_TIMEOUT_US) {
+            // signal lost
+            vioPosState = EXT_POS_NO_SIGNAL;
+        }
+    } else {
+        // data (noy yet) message available
+        vioPosState = EXT_POS_NO_SIGNAL;
+    }
+}
+
+void getVioPos(timeUs_t current) {
+    UNUSED(current);
+
+    checkNewVioPos();
+    if (vioPosState == EXT_POS_NO_SIGNAL)
+        return;
+
+    if (vioPosState == EXT_POS_NEW_MESSAGE) {
+        // time stamp
+        vioPosNed.time_ms = piMsgVioPoseRx->time_ms;
+        // process new message from UNKNOWN REFERENCE FRAME to NED
+        vioPosNed.x = piMsgVioPoseRx->x;
+        vioPosNed.y = piMsgVioPoseRx->y;
+        vioPosNed.z = piMsgVioPoseRx->z;
+        vioPosNed.vx = piMsgVioPoseRx->vx;
+        vioPosNed.vy = piMsgVioPoseRx->vy;
+        vioPosNed.vz = piMsgVioPoseRx->vz;
+        vioPosNed.p = piMsgVioPoseRx->p;
+        vioPosNed.q = piMsgVioPoseRx->q;
+        vioPosNed.r = piMsgVioPoseRx->r;
+        vioPosNed.qw = piMsgVioPoseRx->qw;
+        vioPosNed.qx = piMsgVioPoseRx->qx;
+        vioPosNed.qy = piMsgVioPoseRx->qy;
+        vioPosNed.qz = piMsgVioPoseRx->qz;
+    }
+}
+#endif
 
 void getFakeGps(timeUs_t current) {
     // not that critical, because this is only for display purposes
@@ -209,17 +247,11 @@ void getPosSetpoint(timeUs_t current) {
             // THIS IS NOW A FLIGHT MODE ACTIAVTED FROM RC and managed in core.c
 #endif
             // -----------------------------------------------------------------------------------------------
-            latestSetpointTime = currentSetpointTime;
-            posSpNed.pos.V.X = piMsgPosSetpointRx->enu_y;
-            posSpNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
-            posSpNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
-            
             posSpNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
             posSpNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
             posSpNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
             posSpNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
             posSetpointState = EXT_POS_NEW_MESSAGE;
-            
         } else {
             posSetpointState = EXT_POS_STILL_VALID;
             // no upper bound on still_valid for setpoints

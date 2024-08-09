@@ -93,14 +93,10 @@ void nn_compute_motor_cmds(void) {
 	world_state[10] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
 	world_state[11] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
 	// motorspeeds
-	// world_state[12] = (float) indiRun.omega_fs[0];
-	// world_state[13] = (float) indiRun.omega_fs[1];
-	// world_state[14] = (float) indiRun.omega_fs[2];
-	// world_state[15] = (float) indiRun.omega_fs[3];
-	world_state[12] = indiRun.actHoverOmega[0];
-	world_state[13] = indiRun.actHoverOmega[1];
-	world_state[14] = indiRun.actHoverOmega[2];
-	world_state[15] = indiRun.actHoverOmega[3];
+	world_state[12] = (float) indiRun.omega_fs[0];
+	world_state[13] = (float) indiRun.omega_fs[1];
+	world_state[14] = (float) indiRun.omega_fs[2];
+	world_state[15] = (float) indiRun.omega_fs[3];
 
 	// call the neural network controller (output is in range [0,1])
 	nn_control(world_state, nn_motor_cmds);

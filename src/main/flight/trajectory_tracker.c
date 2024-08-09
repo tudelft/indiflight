@@ -57,9 +57,12 @@ void initRecoveryMode(void) {
     float y = posEstNed.V.Y;
     tt_recovery_problem.R = sqrtf(x*x + y*y);
 
-    // make sure radius is less then 4
-    if (tt_recovery_problem.R > 4.0f) {
-        tt_recovery_problem.R = 4.0f;
+    // final time hardcoded
+    tt_recovery_problem.tf = 2.0f;
+
+    // make sure radius is less then 4.0
+    if (tt_recovery_problem.R > 4.0) {
+        tt_recovery_problem.R = 4.0;
     }
 
     // get starting angle
@@ -70,9 +73,6 @@ void initRecoveryMode(void) {
     float vy = velEstNed.V.Y;
     float v_perp = (-y*vx + x*vy)/tt_recovery_problem.R;
     tt_recovery_problem.omega0 = v_perp/tt_recovery_problem.R;
-
-    // final time hardcoded to 4 seconds
-    tt_recovery_problem.tf = 4.0f;
 
     // set time to zero
     tt_time = 0.0f;
