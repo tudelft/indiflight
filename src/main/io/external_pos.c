@@ -14,15 +14,6 @@
 #ifndef USE_TELEMETRY_PI
 #error "USE_GPS_PI requires the use of USE_TELEMETRY_PI"
 #endif
-// UGLY HACK ----------------------------------------------
-#include "flight/trajectory_tracker.h"
-#include "fc/core.h"
-// --------------------------------------------------------
-// ALSO UGLY HACK -----------------------------------------
-#ifdef USE_NN_CONTROL
-#include "flight/nn_control.h"
-#endif
-// --------------------------------------------------------
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -192,64 +183,9 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.pos.V.X = piMsgPosSetpointRx->ned_x;
             posSpNed.pos.V.Y = piMsgPosSetpointRx->ned_y;
             posSpNed.pos.V.Z = piMsgPosSetpointRx->ned_z;
-
-#ifdef USE_TRAJECTORY_TRACKER
-            // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------
-            
-            // call initTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 1
-            if (piMsgPosSetpointRx->ned_xd == 1) {
-                initTrajectoryTracker();
-                return;
-            }
-
-            // call stopTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 2
-            if (piMsgPosSetpointRx->ned_xd == 2) {
-                stopTrajectoryTracker();
-                return;
-            }
-
-            // disarm when piMsgPosSetpointRx->enu_xd == 3
-            if (piMsgPosSetpointRx->ned_xd == 3) {
-                disarm(DISARM_REASON_SWITCH);
-                return;
-            }
-
-            // call setSpeedTrajectoryTracker when piMsgPosSetpointRx->enu_yd > 0 and use piMsgPosSetpointRx->enu_yd as speed
-            if (piMsgPosSetpointRx->ned_yd > 0) {
-                setSpeedTrajectoryTracker(piMsgPosSetpointRx->ned_yd);
-                return;
-            }
-
-            // call initRecoveryMode when piMsgPosSetpointRx->enu_xd == 6
-            if (piMsgPosSetpointRx->ned_xd == 6) {
-                initRecoveryMode();
-                return;
-            }
-#endif
-#ifdef USE_NN_CONTROL
-            // UGLY HACK: velocity setpoint is used for communication with the neural network controller -----------------
-            
-            // init when piMsgPosSetpointRx->enu_xd == 4
-            if (piMsgPosSetpointRx->ned_xd == 4) {
-                nn_init();
-                return;
-            }
-
-            // activate/deactivate when piMsgPosSetpointRx->enu_xd == 5
-            //if (piMsgPosSetpointRx->enu_xd == 5) {
-            //    if (nn_is_active()) {
-            //        nn_deactivate();
-            //    } else {
-            //        nn_activate();
-            //    }
-            //}
-            //
-            // THIS IS NOW A FLIGHT MODE ACTIAVTED FROM RC and managed in core.c
-#endif
-            // -----------------------------------------------------------------------------------------------
-            posSpNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
-            posSpNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
-            posSpNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
+            posSpNed.vel.V.X = piMsgPosSetpointRx->ned_xd;
+            posSpNed.vel.V.Y = piMsgPosSetpointRx->ned_yd;
+            posSpNed.vel.V.Z = piMsgPosSetpointRx->ned_zd;
             posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
             posSetpointState = EXT_POS_NEW_MESSAGE;
         } else {
