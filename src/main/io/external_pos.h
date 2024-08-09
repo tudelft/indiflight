@@ -61,7 +61,7 @@ extern ext_pos_state_t posSetpointState;
 #define EXT_POS_TIMEOUT_US 300000
 
 #ifdef USE_VIO_POSE
-#define VIO_POS_TIMEOUT_US 300000
+#define VIO_POS_TIMEOUT_US 30000000
 #endif
 
 #define POS_SETPOINT_OUTDATED_US 1000000

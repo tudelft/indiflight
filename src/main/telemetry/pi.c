@@ -192,9 +192,9 @@ void piSendIMU(void)
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
     piMsgImuTx.pitch = DEGREES_TO_RADIANS(-gyro.gyroADCf[1]);
     piMsgImuTx.yaw = DEGREES_TO_RADIANS(-gyro.gyroADCf[2]);
-    piMsgImuTx.x = 9.81 * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.y = 9.81 *-((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.z = 9.81 *-((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.x = 9.81 * ((float)acc.accADCunfiltered[0]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.y = 9.81 *-((float)acc.accADCunfiltered[1]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.z = 9.81 *-((float)acc.accADCunfiltered[2]) / ((float)acc.dev.acc_1G);
     
     piSendMsg(&piMsgImuTx, &serialWriter);
 

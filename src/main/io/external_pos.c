@@ -135,10 +135,10 @@ void getVioPos(timeUs_t current) {
         // process new message from UNKNOWN REFERENCE FRAME to NED
         vioPosNed.x = piMsgVioPoseRx->x;
         vioPosNed.y = piMsgVioPoseRx->y;
-        vioPosNed.z = -piMsgVioPoseRx->z;
+        vioPosNed.z = piMsgVioPoseRx->z;
         vioPosNed.vx = piMsgVioPoseRx->vx;
         vioPosNed.vy = piMsgVioPoseRx->vy;
-        vioPosNed.vz = -piMsgVioPoseRx->vz;
+        vioPosNed.vz = piMsgVioPoseRx->vz;
         vioPosNed.p = piMsgVioPoseRx->p;
         vioPosNed.q = piMsgVioPoseRx->q;
         vioPosNed.r = piMsgVioPoseRx->r;
