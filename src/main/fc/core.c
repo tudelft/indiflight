@@ -1113,8 +1113,10 @@ void processRxModes(timeUs_t currentTimeUs)
             initEscEndpoints(); // to use or not use output limit in mixer
         }
     } else {
-        DISABLE_FLIGHT_MODE(PID_MODE);
-        initEscEndpoints();
+        if (FLIGHT_MODE(PID_MODE)) {
+            DISABLE_FLIGHT_MODE(PID_MODE);
+            initEscEndpoints();
+        }
     }
 #endif
 
