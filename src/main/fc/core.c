@@ -1126,25 +1126,30 @@ void processRxModes(timeUs_t currentTimeUs)
     // additionally, if nn_is_active is ever false for some other reason while NN_MODE is active:
     //     --> disable and require cycling of the switch
     static bool hasNNActivationBeenTried = false;
-    if (IS_RC_MODE_ACTIVE(BOXNNCTL)) {
-        // try enable neural net once
-        if (!hasNNActivationBeenTried) {
-            nn_activate();
-            hasNNActivationBeenTried = true;
-        }
+    if (isModeActivationConditionPresent(BOXNNCTL)) {
+        // query switch logic. If no switch configured, then activation is only
+        // possible via keyboard.c
+        if (IS_RC_MODE_ACTIVE(BOXNNCTL)) {
+            // try enable neural net once
+            if (!hasNNActivationBeenTried) {
+                nn_activate(); // will activate flight mode, if successful
+                hasNNActivationBeenTried = true;
 
-        if (nn_is_active()) {
-            if (!FLIGHT_MODE(NN_MODE))
-                ENABLE_FLIGHT_MODE(NN_MODE);
+                if (!nn_is_active()) {
+                    // activation failed, make sure disabled, but issue 
+                    // correct position command
+                    DISABLE_FLIGHT_MODE(NN_MODE);
+                    nn_init();
+                }
+            }
         } else {
+            if (nn_is_active()) {
+                nn_deactivate();
+            }
+
+            hasNNActivationBeenTried = false;
             DISABLE_FLIGHT_MODE(NN_MODE);
         }
-    } else {
-        if (nn_is_active())
-            nn_deactivate();
-
-        hasNNActivationBeenTried = false;
-        DISABLE_FLIGHT_MODE(NN_MODE);
     }
 #endif
 
@@ -1486,6 +1491,11 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopTailEnd(timeUs_t currentTimeUs) {
     DEBUG_SET(DEBUG_PIDLOOP, 3, micros() - startTime);
 }
 
+static uint8_t innerLoopCounter = 0;
+
+void resetInnerLoopCounter(void) {
+    innerLoopCounter = 0;
+}
 
 // generates motor[i] commands according to the selected controller
 // does not handle arm/disarm logic, that's only done at the last step
@@ -1510,13 +1520,12 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     }
 
 #ifdef USE_NN_CONTROL
-    static uint8_t innerLoopCounter = 0;
     if (FLIGHT_MODE(NN_MODE)) {
         uint8_t rate_denom = MAX(1, nnConfig()->rate_denom);
-        if (!(++innerLoopCounter % rate_denom)) {
+        if ((innerLoopCounter++ % rate_denom) == 0) {
             // run neural network when its time has come
             nn_compute_motor_cmds();
-            innerLoopCounter = 0;
+            innerLoopCounter = 1;
         }
 
         float* nn_output = nn_get_motor_cmds();

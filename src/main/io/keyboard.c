@@ -80,15 +80,15 @@ void processKeyboard(void) {
                 case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
-                case KEY_1: initTrajectoryTracker(); break;
+                case KEY_1: initTrajectoryTracker(); speed = 0.; break;
                 case KEY_2: speed -= 0.5; setSpeedTrajectoryTracker(speed); break;
                 case KEY_3: speed += 0.5; setSpeedTrajectoryTracker(speed); break;
-                case KEY_4: stopTrajectoryTracker(); break;
-                case KEY_8: initRecoveryMode(); break;
+                case KEY_4: stopTrajectoryTracker(); speed = 0.; break;
+                case KEY_8: initRecoveryMode(); speed = 0.; break;
 #endif
 #ifdef USE_NN_CONTROL
                 case KEY_6: nn_init(); break;
-                // case KEY_7: nn_activate(); break;
+                case KEY_7: nn_activate(); break;
 #endif                
                 case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
             }
