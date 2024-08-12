@@ -74,6 +74,7 @@ bool nn_is_active(void) {
 
 void nn_compute_motor_cmds(void) {
 	// compute motor commands based on the world_state[16] (pos, vel, att, rate, motorspeeds)
+    // todo: use system state and not hardcoded EKF
 	float world_state[16] = {0.};
 	float* ekf_state = ekf_get_X();
 	// pos NED

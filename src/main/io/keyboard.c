@@ -90,7 +90,7 @@ void processKeyboard(void) {
                 case KEY_6: nn_init(); break;
                 // case KEY_7: nn_activate(); break;
 #endif                
-                case KEY_9: disarm(DISARM_REASON_SWITCH); break;
+                case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
             }
         }
     }

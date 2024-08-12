@@ -372,7 +372,7 @@ static void mixerConfigureOutput(void)
                 mixerRuntime.currentMixer[i] = mixers[currentMixerMode].motor[i];
         }
     }
-    mixerRuntime.motorCount = MAX_SUPPORTED_MOTORS;
+    //mixerRuntime.motorCount = MAX_SUPPORTED_MOTORS; // fixme
 #ifdef USE_LAUNCH_CONTROL
     loadLaunchControlMixer();
 #endif
