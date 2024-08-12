@@ -1,0 +1,23 @@
+{
+    "files.associations": {
+        "*.ptx": "platformio-debug.asm",
+        "ekf_calc.h": "c",
+        "nn_control.h": "c",
+        "nn_controller.h": "c",
+        "neural_network.h": "c",
+        "config.h": "c",
+        "pid.h": "c",
+        "common_pre.h": "c",
+        "target.h": "c",
+        "common_post.h": "c",
+        "platform.h": "c",
+        "common.h": "c",
+        "utils.h": "c",
+        "stdint.h": "c",
+        "common_defaults_post.h": "c",
+        "printf.h": "c",
+        "string_view": "c"
+    },
+    "cortex-debug.gdbPath": "gdb-multiarch",
+    "cortex-debug.liveWatchRefreshRate": 1000,
+}

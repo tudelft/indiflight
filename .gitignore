@@ -37,9 +37,6 @@ stm32.mak
 # ozone launch configurations
 /support/ozone
 
-# artefacts for VS Code
-/.vscode/settings.json
-
 # artefacts for Visual Studio 
 /.vs
 
