@@ -21,6 +21,18 @@
 #include "fc/tasks.h"
 #include "scheduler/scheduler.h"
 
+#ifndef USE_TELEMETRY_PI
+#error "MOCKUP target requires USE_TELEMETRY_PI"
+#endif
+
+#ifndef USE_POS_CTL
+#error "MOCKUP target requires USE_POS_CTL"
+#endif
+
+#ifndef USE_ACC
+#error "MOCKUP target requires USE_ACC"
+#endif
+
 void setImu(const float *g, const float *a) {
     // g in rad/s, a in N/kg
 
@@ -72,7 +84,11 @@ void setPosSetpoint(const float *pos, const float yaw) {
 void getMotorOutputCommands(float *cmd, int n) {
     int lim = MIN(n, getMotorCount());
     for (int m = 0; m < lim; m++) {
-        cmd[m] = motor_normalized[m];
+        if (ARMING_FLAG(ARMED)) {
+            cmd[m] = motor_normalized[m];
+        } else {
+            cmd[m] = motor_disarmed[m];
+        }
     }
 }
 
@@ -95,7 +111,9 @@ void tick(const timeDelta_t dtUs)
             armingFlags = 1;
         }
         getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
+#ifdef USE_EKF
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
+#endif
         getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
     } 
 

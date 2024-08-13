@@ -52,6 +52,40 @@
 #define KEY_DOWN        0x50
 
 #ifdef USE_TELEMETRY_PI
+void processKey(uint8_t key) {
+    // 0 = go to center
+    // 1 = initTrajectoryTracker
+    // 2 = decrease speed by 0.5 m/s
+    // 3 = increase speed by 0.5 m/s
+    // 4 = stopTrajectoryTracker
+    // 5 = land
+    // 6 = nn_init
+    // 7 = nn_activate
+    // 8 = recovery_mode
+    // 9 = kill
+
+    static float speed = 0;
+
+    switch (key) {
+#ifdef USE_GPS_PI
+        case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; break;
+        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; break;
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        case KEY_1: initTrajectoryTracker(); speed = 0.; break;
+        case KEY_2: speed -= 0.5; setSpeedTrajectoryTracker(speed); break;
+        case KEY_3: speed += 0.5; setSpeedTrajectoryTracker(speed); break;
+        case KEY_4: stopTrajectoryTracker(); speed = 0.; break;
+        case KEY_8: initRecoveryMode(); speed = 0.; break;
+#endif
+#ifdef USE_NN_CONTROL
+        case KEY_6: nn_init(); break;
+        case KEY_7: nn_activate(); break;
+#endif
+        case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
+    }
+}
+
 void processKeyboard(void) {
     static timeUs_t latestKeyTime = 0;
 
@@ -60,38 +94,7 @@ void processKeyboard(void) {
         timeDelta_t deltaMsgs = cmpTimeUs(currentKeyTime, latestKeyTime);
         if (deltaMsgs != 0) {
             latestKeyTime = currentKeyTime;
-
-            // 0 = go to center
-            // 1 = initTrajectoryTracker
-            // 2 = decrease speed by 0.5 m/s
-            // 3 = increase speed by 0.5 m/s
-            // 4 = stopTrajectoryTracker
-            // 5 = land
-            // 6 = nn_init
-            // 7 = nn_activate
-            // 8 = recovery_mode
-            // 9 = kill
-
-            static float speed = 0;
-
-            switch (piMsgKeyboardRx->key) {
-#ifdef USE_GPS_PI
-                case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; break;
-                case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; break;
-#endif
-#ifdef USE_TRAJECTORY_TRACKER
-                case KEY_1: initTrajectoryTracker(); speed = 0.; break;
-                case KEY_2: speed -= 0.5; setSpeedTrajectoryTracker(speed); break;
-                case KEY_3: speed += 0.5; setSpeedTrajectoryTracker(speed); break;
-                case KEY_4: stopTrajectoryTracker(); speed = 0.; break;
-                case KEY_8: initRecoveryMode(); speed = 0.; break;
-#endif
-#ifdef USE_NN_CONTROL
-                case KEY_6: nn_init(); break;
-                case KEY_7: nn_activate(); break;
-#endif                
-                case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
-            }
+            processKey(piMsgKeyboardRx->key);
         }
     }
 }

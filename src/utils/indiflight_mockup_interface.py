@@ -32,6 +32,18 @@ class boxId():
     BOXPREARM = (1 << 34)
     BOXTHROWTOARM = (1 << 35)
 
+hid_codes = {
+    'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,
+    'f': 0x09, 'g': 0x0A, 'h': 0x0B, 'i': 0x0C, 'j': 0x0D,
+    'k': 0x0E, 'l': 0x0F, 'm': 0x10, 'n': 0x11, 'o': 0x12,
+    'p': 0x13, 'q': 0x14, 'r': 0x15, 's': 0x16, 't': 0x17,
+    'u': 0x18, 'v': 0x19, 'w': 0x1A, 'x': 0x1B, 'y': 0x1C,
+    'z': 0x1D, '0': 0x27, '1': 0x1E, '2': 0x1F, '3': 0x20,
+    '4': 0x21, '5': 0x22, '6': 0x23, '7': 0x24, '8': 0x25,
+    '9': 0x26, ' ': 0x2C, '\n': 0x28, '\b': 0x2A, '\t': 0x2B,
+    'ESC': 0x29, 'LEFT': 0x50, 'UP': 0x48, 'RIGHT': 0x4D, 'DOWN': 0x50
+}
+
 # ctypes stuff
 float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
 timeUs_t = ct.c_uint32
@@ -79,6 +91,7 @@ class IndiflightSITLMockup():
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.tick.argtypes = [timeUs_t]
         self.lib.processCharacterInteractive.argtypes = [ct.c_char]
+        self.lib.processKey.argtypes = [ct.c_uint8]
         self.lib.disarm.argtypes = [ct.c_uint8]
 
         # most important states
@@ -158,6 +171,12 @@ class IndiflightSITLMockup():
     def getMotorCommands(self):
         self.lib.getMotorOutputCommands(self.motorCommands, self.N)
         return np.array(self.motorCommands, dtype=float)
+
+    def sendKeyboard(self, key):
+        if key in hid_codes.keys():
+            self.lib.processKey(hid_codes[key])
+        else:
+            raise ValueError(f"The key {key} is not present in the hid_codes.")
 
 #%% managing modes and states
     def enableFlightMode(self, mode):

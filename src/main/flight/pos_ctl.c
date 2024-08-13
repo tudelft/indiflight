@@ -8,6 +8,7 @@
 #include "pg/pg_ids.h"
 #include "config/config.h"
 #include "flight/indi.h"
+#include "flight/trajectory_tracker.h"
 
 #ifdef USE_POS_CTL
 
@@ -105,9 +106,18 @@ void updatePosCtl(timeUs_t current) {
             resetIterms();
         }
 
-        posGetAccSpNed(current);
+#ifdef USE_TRAJECTORY_TRACKER
+        // use acc and body rate setpoints from trajectory tracker if it is active
+        updateTrajectoryTracker(current);
+        if (!isActiveTrajectoryTracker())
+#endif
+        {
+            posGetAccSpNed(current);
+            posGetRateSpBody(current);
+        }
+
+        // always use NDI function to map acc setpoints
         posGetAttSpNedAndSpfSpBody(current);
-        posGetRateSpBody(current);
 
     } else {
         // panic and level craft in slight downwards motion

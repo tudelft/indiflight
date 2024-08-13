@@ -367,9 +367,6 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
-#ifdef USE_TRAJECTORY_TRACKER
-    updateTrajectoryTracker(currentTimeUs);
-#endif
 }
 #endif
 
