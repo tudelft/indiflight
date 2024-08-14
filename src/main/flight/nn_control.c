@@ -43,6 +43,7 @@ void nn_init(void) {
 	posSpNed.pos.V.Y = start_pos[1];
 	posSpNed.pos.V.Z = start_pos[2];
 	posSpNed.psi = start_yaw;
+    posSpNed.trackPsi = true;
 }
 
 void nn_activate(void) {

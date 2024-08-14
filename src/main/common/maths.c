@@ -51,7 +51,7 @@
 float sin_approx(float x)
 {
     int32_t xint = x;
-    if (xint < -32 || xint > 32) return 0.0f;                               // Stop here on error input (5 * 360 Deg)
+    if (xint < -32 || xint > 32) return sinf(x);                            // Stop here on error input (5 * 360 Deg)
     while (x >  M_PIf) x -= (2.0f * M_PIf);                                 // always wrap input angle to -PI..PI
     while (x < -M_PIf) x += (2.0f * M_PIf);
     if (x >  (0.5f * M_PIf)) x =  (0.5f * M_PIf) - (x - (0.5f * M_PIf));   // We just pick -90..+90 Degree
@@ -276,6 +276,29 @@ FAST_CODE void quaternion_of_axis_angle(fp_quaternion_t *q, const fp_vector_t *a
     q->x = ax->V.X * sang2;
     q->y = ax->V.Y * sang2;
     q->z = ax->V.Z * sang2;
+}
+
+FAST_CODE void quaternion_of_two_vectors(fp_quaternion_t *q, const fp_vector_t *a, const fp_vector_t *b, const fp_vector_t *orth_a) {
+    // returns minimum rotation quaternion to rotate a to b
+    // a, b, must be UNIT-NORM. orth_a must be UNIT vector orthogonal to a
+
+    // https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+    // Half-Way Quaternion Solution
+    float k_cos_theta = VEC3_DOT((*a), (*b));
+    if (k_cos_theta <= -0.9999f) {
+        // 180 degree rotation. needs sone (any) vector orth to a
+        q->w = 0.0f;
+        q->x = orth_a->V.X;
+        q->y = orth_a->V.Y;
+        q->z = orth_a->V.Z;
+    } else {
+        // normal case, cross product for vector part, then normalize
+        q->w = 1.0f + k_cos_theta;
+        q->x = a->V.Y * b->V.Z  -  a->V.Z * b->V.Y;
+        q->y = a->V.Z * b->V.X  -  a->V.X * b->V.Z;
+        q->z = a->V.X * b->V.Y  -  a->V.Y * b->V.X;
+        QUAT_NORMALIZE((*q));
+    }
 }
 
 FAST_CODE void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, const fp_quaternion_t *q) {

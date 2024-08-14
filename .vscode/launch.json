@@ -5,30 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: imuLocationRLS",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/support/scripts/imuLocationRLS.py",
-            "args": [
-                "/mnt/data/WorkData/BlackboxLogs/2024-01-19/LOG00503_CineRate_HIL_CorrectSequence.BFL",
-                "--range", "2179", "2677",
-            ],
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "Python: fxRLS",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/support/scripts/fxRLS.py",
-            "args": [
-                "/mnt/data/WorkData/BlackboxLogs/2024-01-19/LOG00503_CineRate_HIL_CorrectSequence.BFL",
-                "--range", "2179", "2677",
-            ],
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
             "name": "INDIflight SITL",
             "type": "cppdbg",
             "request": "launch",
@@ -58,8 +34,7 @@
             "name": "INDIflight MOCKUP",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/home/tmblaha/.venv/bin/python3",
-            //"args": ["--eval-command='run ${workspaceFolder}/mockup.py'"],
+            "program": "${userHome}/.venv/bin/python3",
             "args": ["${workspaceFolder}/src/utils/indiflight_mockup_interface.py"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -78,6 +53,17 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            // https://stackoverflow.com/questions/53519668/how-to-attach-to-remote-gdb-with-vscode
+            "name": "MOCKUP docker",
+            "type": "gdb",
+            "request": "attach",
+            "executable": "${workspaceFolder}/obj/main/indiflight_MOCKUP.so",
+            "target": "localhost:3333",
+            "remote": true,
+            "cwd": "${workspaceRoot}",
+            "stopAtEntry": false,
         },
         {
             "cwd": "${workspaceRoot}",

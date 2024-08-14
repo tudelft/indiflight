@@ -145,6 +145,7 @@ void getSetpoints(timeUs_t current) {
 #ifdef USE_POS_CTL
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         indiRun.attSpNed = attSpNedFromPos;
+        indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;
         indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
     } else

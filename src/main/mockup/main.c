@@ -79,6 +79,7 @@ void setPosSetpoint(const float *pos, const float yaw) {
         posSpNed.pos.A[axis] = pos[axis];
 
     posSpNed.psi = yaw;
+    posSpNed.trackPsi = true;
 }
 
 void getMotorOutputCommands(float *cmd, int n) {

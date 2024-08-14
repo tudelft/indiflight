@@ -187,6 +187,7 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.vel.V.Y = piMsgPosSetpointRx->ned_yd;
             posSpNed.vel.V.Z = piMsgPosSetpointRx->ned_zd;
             posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
+            posSpNed.trackPsi = true;
             posSetpointState = EXT_POS_NEW_MESSAGE;
         } else {
             posSetpointState = EXT_POS_STILL_VALID;

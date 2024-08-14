@@ -8,7 +8,9 @@ void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
 void initTrajectoryTracker(void);
 void setSpeedTrajectoryTracker(float speed);
+void incrementSpeedTrajectoryTracker(float inc);
 void stopTrajectoryTracker(void);
+void toggleHeadingTracking(void);
 
 // main task
 void updateTrajectoryTracker(timeUs_t current);

@@ -36,8 +36,6 @@
 
 // Use floating point M_PI instead explicitly.
 #define M_PIf       3.14159265358979323846f
-#undef M_LN2f
-#define M_LN2f      0.693147180559945309417f
 #define M_EULERf    2.71828182845904523536f
 
 #define GRAVITYf 9.80665f
@@ -143,6 +141,7 @@ fp_rotationMatrix_t chain_rotationMatrix(const fp_rotationMatrix_t *rA_I, const 
 void quaternion_of_fp_euler(fp_quaternion_t *q, const fp_euler_t *e);
 void quaternion_of_rotationMatrix(fp_quaternion_t *q, const fp_rotationMatrix_t *r);
 void quaternion_of_axis_angle(fp_quaternion_t *q, const fp_vector_t *ax, float angle);
+void quaternion_of_two_vectors(fp_quaternion_t *q, const fp_vector_t *a, const fp_vector_t *b, const fp_vector_t *orth_a);
 void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, const fp_quaternion_t *q);
 void rotate_vector_with_quaternion(fp_vector_t *v, const fp_quaternion_t *q);
 fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A);

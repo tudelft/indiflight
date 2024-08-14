@@ -57,11 +57,11 @@ EXTRA_FLAGS += -DUSE_TRAJECTORY_TRACKER
 ### Step 3 -- First flash and configuration
 
 Run docker image, which outputs a `./obj/*.hex` file, which can be flashed via
-the [configurator](https://github.com/tblaha/indiflight-configurator) (**use "Full chip erase" option**):
+the [configurator](https://github.com/tudelft/indiflight-configurator) (**use "Full chip erase" option**):
 
     docker run -v ./:/indiflight indiflight
 
-Now you still need to load a suitable profile via the [configurator](https://github.com/tblaha/indiflight-configurator) 
+Now you still need to load a suitable profile via the [configurator](https://github.com/tudelft/indiflight-configurator) 
 that defines the runtime-config, which is board-dependent, but also drone-dependent.
 See https://github.com/tudelft/indiflightSupport for that.
 
@@ -91,7 +91,7 @@ DEBUG=GDB remote_flash_swd  # dito, but then flash via swd on a companion comput
 
 ## Flashing and Debugging over raspberry pi companion computer
 
-For context, see REAMDME's of https://github.com/tblaha/racebian.
+For context, see REAMDME's of https://github.com/tudelft/racebian.
 
 Furthermore, install:
 

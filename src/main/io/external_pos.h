@@ -39,6 +39,7 @@ typedef struct __pos_setpoint_ned_t {
     fp_vector_t pos;
     fp_vector_t vel;
     float psi;
+    bool trackPsi;
 } pos_setpoint_ned_t;
 
 // structs used for EXTERNAL_POSE message
