@@ -129,12 +129,12 @@
 #define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE "indi_attitude_max_yaw_rate"
+#define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW "indi_manual_use_coordinated_yaw"
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
-#define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
 #define PARAM_NAME_INDI_ACT_MAX_RPM "indi_act_max_rpm"
@@ -183,7 +183,7 @@
 #define PARAM_NAME_EKF_PROC_NOISE_ACC         "ekf_proc_noise_acc"
 #define PARAM_NAME_EKF_PROC_NOISE_GYRO        "ekf_proc_noise_gyro"
 #define PARAM_NAME_EKF_MEAS_NOISE_POSITION    "ekf_meas_noise_position"
-#define PARAM_NAME_EKF_MEAS_NOISE_ATTITUDE    "ekf_meas_noise_angles"
+#define PARAM_NAME_EKF_MEAS_NOISE_ANGLES    "ekf_meas_noise_angles"
 #define PARAM_NAME_EKF_MEAS_DELAY             "ekf_meas_delay"
 #endif
 

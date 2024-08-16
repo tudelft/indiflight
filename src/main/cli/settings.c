@@ -1245,12 +1245,12 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_RATE_GAINS,                       VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, rateGains) },
     { PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE,           VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1600 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxTiltRate) },
     { PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE,            VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1600 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxYawRate) },
+    { PARAM_NAME_INDI_MAX_RATE_SETPOINT,                VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, maxRateSp) },
     { PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW,       VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualUseCoordinatedYaw) },
     { PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL,         VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxUpwardsSpf) },
     { PARAM_NAME_INDI_MANUAL_MAX_TILT,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 90 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxTilt) },
     { PARAM_NAME_INDI_USE_INCREMENT,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useIncrement) },
     { PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK,             VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useRpmDotFeedback) },
-    { PARAM_NAME_INDI_MAX_RATE_SETPOINT,                VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, maxRateSp) },
     { PARAM_NAME_INDI_ACT_NUM,                          VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_INDI_PROFILE, offsetof(indiProfile_t, actNum) },
     { PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS,             VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstMs) },
     { PARAM_NAME_INDI_ACT_MAX_RPM,                      VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actMaxRpm) },
@@ -1299,7 +1299,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_EKF_PROC_NOISE_ACC,              VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc) },
     { PARAM_NAME_EKF_PROC_NOISE_GYRO,             VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro) },
     { PARAM_NAME_EKF_MEAS_NOISE_POSITION,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
-    { PARAM_NAME_EKF_MEAS_NOISE_ATTITUDE,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_angles) },
+    { PARAM_NAME_EKF_MEAS_NOISE_ANGLES,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_angles) },
     { PARAM_NAME_EKF_MEAS_DELAY,                  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
 #endif
 
