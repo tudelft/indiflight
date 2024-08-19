@@ -85,6 +85,9 @@ void getExternalPos(timeUs_t current) {
         extPosNed.att.angles.roll = eulers.angles.roll;
         extPosNed.att.angles.pitch = eulers.angles.pitch;
         extPosNed.att.angles.yaw = eulers.angles.yaw;
+        sensorsSet(SENSOR_GPS);
+        ENABLE_STATE(GPS_FIX);
+        ENABLE_STATE(GPS_FIX_EVER);
     }
 }
 

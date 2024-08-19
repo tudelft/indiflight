@@ -74,6 +74,7 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 
 void setPosSetpoint(const float *pos, const float yaw) {
     posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    extLatestMsgTime = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];

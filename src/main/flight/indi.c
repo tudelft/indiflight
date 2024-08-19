@@ -339,7 +339,7 @@ void getMotorCommands(timeUs_t current) {
 
     static float du[MAXU] = {0.f};
     static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
     static float omega_prev[MAXU] = {0.f};
 #endif
 
@@ -371,7 +371,7 @@ void getMotorCommands(timeUs_t current) {
 
     // get motor acceleration
     for (int i = 0; i < indiRun.actNum; i++) {
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
         if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback ) {
             indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
             omega_prev[i] = indiRun.omega_fs[i];

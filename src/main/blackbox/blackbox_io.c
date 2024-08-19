@@ -724,6 +724,11 @@ bool blackboxDeviceBeginLog(void)
     case BLACKBOX_DEVICE_SDCARD:
         return blackboxSDCardBeginLog();
 #endif // USE_SDCARD
+#if defined(SITL) || defined(MOCKUP)
+    case BLACKBOX_DEVICE_SITL:
+        blackboxSITLFile.buf_fill = 0;
+        return true;
+#endif
     default:
         return true;
     }
