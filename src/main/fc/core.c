@@ -1067,7 +1067,9 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            ENABLE_FLIGHT_MODE(POSITION_MODE);
+            if (extPosState >= EXT_POS_STILL_VALID) {
+                ENABLE_FLIGHT_MODE(POSITION_MODE);
+            }
         }
     } else {
 #ifdef USE_TRAJECTORY_TRACKER

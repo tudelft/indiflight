@@ -192,9 +192,9 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
             posSpNed.trackPsi = true;
             posSetpointState = EXT_POS_NEW_MESSAGE;
-        } else {
+        } else if (posSetpointState != EXT_POS_NO_SIGNAL) {
+            // if not no-signalled by other means, just keep this
             posSetpointState = EXT_POS_STILL_VALID;
-            // no upper bound on still_valid for setpoints
         }
     }
 }

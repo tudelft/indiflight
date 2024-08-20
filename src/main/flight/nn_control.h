@@ -4,12 +4,18 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "pg/pg.h"
+#include "flight/pos_ctl.h"
 
 typedef struct nnConfig_s {
     uint8_t rate_denom;     // run net every rate_denom times the inner loop is run
 } nnConfig_t;
 
 PG_DECLARE(nnConfig_t, nnConfig);
+
+#define NN_DEADRECKONING_TIMEOUT_US 450000      // switch to position recovery mode if no position update in 0.75s
+#if (DEADRECKONING_TIMEOUT_HOLD_POSITION_US <= NN_DEADRECKONING_TIMEOUT_US)
+#error "NN_DEADRECKONING_TIMEOUT_US must be lower than DEADRECKONING_TIMEOUT_HOLD_POSITION_US"
+#endif
 
 void nn_init(void);                             // initializes controller and sets a starting point
 

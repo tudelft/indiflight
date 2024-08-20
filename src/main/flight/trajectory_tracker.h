@@ -6,6 +6,7 @@
 // UGLY HACK: initialization, setting speed and stopping happens in external_pos.c by using the velocity setpoints as communication
 void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
+bool isActiveTrajectoryTrackerRecovery(void);
 void initTrajectoryTracker(void);
 void setSpeedTrajectoryTracker(float speed);
 void incrementSpeedTrajectoryTracker(float inc);

@@ -100,8 +100,41 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
 
-    if (extPosState >= EXT_POS_STILL_VALID) {
+    if ((posSetpointState == EXT_POS_NO_SIGNAL) 
+        || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
+        // panic and level craft in slight downwards motion
+        accSpNedFromPos.V.X = 0.f;
+        accSpNedFromPos.V.Y = 0.f;
+        accSpNedFromPos.V.Z = 2.f; // slight downwards motion
+        rateSpBodyFromPos.V.X = 0.f;
+        rateSpBodyFromPos.V.Y = 0.f;
+        rateSpBodyFromPos.V.Z = 0.f;
+        posSpNed.trackPsi = false;
+
+        // latch reactivation until new actual setpoint arrives
+        posSetpointState = EXT_POS_NO_SIGNAL;
+    } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
+        // more than 0.5 sec but less than 2 seconds --> arrest motion
+#ifdef USE_TRAJECTORY_TRACKER
+        updateTrajectoryTracker(current);
+        if (isActiveTrajectoryTracker() && !isActiveTrajectoryTrackerRecovery()) {
+            stopTrajectoryTracker();
+        }
+        if (!isActiveTrajectoryTrackerRecovery())
+#endif
+        {
+            posSpNed.pos = posEstNed; // hold position
+            posSetpointState = EXT_POS_NEW_MESSAGE;
+
+            posGetAccSpNed(current);
+            rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
+            rateSpBodyFromPos.V.Y = 0;
+            rateSpBodyFromPos.V.Z = 0;
+        }
+    } else {
+        // not deadreckoning for too long, setpoint valid. lets fly
         if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
             resetIterms();
         }
@@ -117,25 +150,10 @@ void updatePosCtl(timeUs_t current) {
             rateSpBodyFromPos.V.Y = 0;
             rateSpBodyFromPos.V.Z = 0;
         }
-
-        // always use NDI function to map acc setpoints
-        posGetAttSpNedAndSpfSpBody(current);
-
-    } else {
-        // panic and level craft in slight downwards motion
-        resetIterms();
-        attSpNedFromPos.w = 1.f;
-        attSpNedFromPos.x = 0.f;
-        attSpNedFromPos.y = 0.f;
-        attSpNedFromPos.z = 0.f;
-        spfSpBodyFromPos.V.X = 0.f;
-        spfSpBodyFromPos.V.Y = 0.f;
-        spfSpBodyFromPos.V.Z = -(GRAVITYf - 2.f); // also command slight downwards acceleration
-        rateSpBodyFromPos.V.X = 0.f;
-        rateSpBodyFromPos.V.Y = 0.f;
-        rateSpBodyFromPos.V.Z = 0.f;
-        posSpNed.trackPsi = true;
     }
+
+    // always use NDI function to map acc setpoints
+    posGetAttSpNedAndSpfSpBody(current);
 }
 
 void posGetAccSpNed(timeUs_t current) {
