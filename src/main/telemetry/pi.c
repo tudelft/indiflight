@@ -72,6 +72,8 @@
 #include "pi-protocol.h"
 #include "pi-messages.h"
 
+#include "io/external_pos.h"
+
 #ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
 #endif
@@ -178,7 +180,14 @@ void processPiUplink(void)
 #endif
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
-            piParse(&p_telem, serialRead(piPort));
+            uint8_t msgId = piParse(&p_telem, serialRead(piPort));
+#ifdef USE_GPS_PI
+            if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
+                getExternalPos(0);
+            }
+#else
+            UNUSED(msgId);
+#endif
         }
     }
 }

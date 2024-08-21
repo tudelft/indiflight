@@ -33,11 +33,7 @@
 #include "flight/imu.h"
 #include "io/gps.h"
 
-#ifdef USE_GPS_PI
-
-#ifndef USE_TELEMETRY_PI
-#error "USE_GPS_PI requires the use of USE_TELEMETRY_PI"
-#endif
+#ifdef USE_POS_CTL
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -50,9 +46,11 @@ timeUs_t vioLatestMsgTime = 0;
 
 pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
+timeUs_t extLatestMsgTime = 0;
+timeUs_t extLatestMsgGpsTime = 0;
 
-
-void checkNewPos(void) {
+#ifdef USE_GPS_PI
+void checkNewPosPi(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_us;
@@ -77,6 +75,30 @@ void checkNewPos(void) {
         extPosState = EXT_POS_NO_SIGNAL;
     }
 }
+#endif
+
+void checkNewPosGps(void) {
+    if (!STATE(GPS_FIX_EVER)) {
+        extPosState = EXT_POS_NO_SIGNAL;
+    } else {
+        // assume still valid for now
+        extPosState = EXT_POS_STILL_VALID;
+
+        timeDelta_t deltaMsgs = cmpTimeUs(gpsData.lastMessage, extLatestMsgGpsTime);
+        if (STATE(GPS_FIX) && (deltaMsgs != 0)) {
+            extPosState = EXT_POS_NEW_MESSAGE;
+            extLatestMsgTime = micros();
+            extLatestMsgGpsTime = gpsData.lastMessage;
+        }
+
+        // regardless of new or old message, we may have timeout
+        timeDelta_t delta = cmpTimeUs(micros(), extLatestMsgTime);
+        if (delta > EXT_POS_TIMEOUT_US) {
+            // signal lost
+            extPosState = EXT_POS_NO_SIGNAL;
+        }
+    }
+}
 
 void getExternalPos(timeUs_t current) {
     UNUSED(current);
@@ -87,10 +109,15 @@ void getExternalPos(timeUs_t current) {
     }
 #endif
 
-    checkNewPos();
+#ifdef USE_GPS_PI
+    checkNewPosPi();
+#else
+    checkNewPosGps();
+#endif
 
     switch (extPosState) {
         case EXT_POS_NEW_MESSAGE:
+#ifdef USE_GPS_PI
             // time stamp
             extPosNed.time_us = piMsgExternalPoseRx->time_us;
             // process new message (should be NED)
@@ -113,7 +140,25 @@ void getExternalPos(timeUs_t current) {
             extPosNed.att.angles.roll = eulers.angles.roll;
             extPosNed.att.angles.pitch = eulers.angles.pitch;
             extPosNed.att.angles.yaw = eulers.angles.yaw;
-
+#else
+#define REARTH 6371000.f
+            fp_vector_t newPos;
+            newPos.V.X = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lat - GPS_home[GPS_LATITUDE]) * REARTH;
+            newPos.V.Y = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lon - GPS_home[GPS_LONGITUDE]) * REARTH
+                * cosf(1e-7f * DEGREES_TO_RADIANS(GPS_home[GPS_LONGITUDE]));
+            newPos.V.Z = -1e-2f * gpsSol.llh.altCm;
+            timeDelta_t delta_ms = cmpTimeUs(gpsData.lastMessage, gpsData.lastLastMessage); // ms, not us
+            if ((delta_ms > 0) && (delta_ms < 1000)) {
+                float iDeltaS = 1. / (0.001f*delta_ms);
+                extPosNed.vel = newPos;
+                VEC3_SCALAR_MULT_ADD(extPosNed.vel, -1., extPosNed.pos);
+                VEC3_SCALAR_MULT(extPosNed.vel, iDeltaS);
+            }
+            extPosNed.pos = newPos;
+            extPosNed.att.angles.roll = 0;
+            extPosNed.att.angles.pitch = 0;
+            extPosNed.att.angles.yaw = DECIDEGREES_TO_RADIANS(gpsSol.trueYaw);
+#endif
             sensorsSet(SENSOR_GPS);
             ENABLE_STATE(GPS_FIX);
             ENABLE_STATE(GPS_FIX_EVER);
@@ -204,6 +249,7 @@ void getPosSetpoint(timeUs_t current) {
 
     static timeUs_t latestSetpointTime = 0;
 
+#ifdef USE_GPS_PI
     if (piMsgPosSetpointRx) {
         timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);
@@ -224,6 +270,7 @@ void getPosSetpoint(timeUs_t current) {
             posSetpointState = EXT_POS_STILL_VALID;
         }
     }
+#endif
 }
 
 #endif

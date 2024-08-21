@@ -1068,6 +1068,9 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             if (extPosState >= EXT_POS_STILL_VALID) {
+#ifdef USE_GPS
+                GPS_reset_home_position();
+#endif
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }

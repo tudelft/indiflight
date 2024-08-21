@@ -70,7 +70,7 @@ void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_t * v);
 bool shouldInitializeGPSHeading(void);
 bool isUpright(void);
 
-#ifdef USE_GPS_PI
+#ifdef USE_POS_CTL
 extern fp_vector_t posEstNed;
 extern fp_vector_t velEstNed;
 //void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp);

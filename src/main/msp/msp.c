@@ -94,6 +94,7 @@
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
+#include "io/external_pos.h"
 #include "io/flashfs.h"
 #include "io/gimbal.h"
 #include "io/gps.h"
@@ -3587,7 +3588,14 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
     case MSP2_SENSOR_GPS:
         (void)sbufReadU8(src);              // instance
         (void)sbufReadU16(src);             // gps_week
-        (void)sbufReadU32(src);     // ms_tow
+        //(void)sbufReadU32(src);     // ms_tow
+        uint32_t newTime = sbufReadU32(src);
+        if (newTime == gpsData.lastMessage) {
+            *src->ptr += 45;
+            break;
+        }
+        gpsData.lastLastMessage = gpsData.lastMessage;
+        gpsData.lastMessage = newTime; // ms since start of optitrack
         gpsSetFixState(sbufReadU8(src) != 0); // fix_type
         gpsSol.numSat = sbufReadU8(src);    // satellites_in_view
         gpsSol.acc.hAcc = sbufReadU16(src) * 10; // horizontal_pos_accuracy - convert cm to mm
@@ -3602,7 +3610,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         gpsSol.groundSpeed = (uint16_t)sqrtf((ned_vel_north * ned_vel_north) + (ned_vel_east * ned_vel_east));
         (void)sbufReadU32(src);             // ned_vel_down
         gpsSol.groundCourse = ((uint16_t)sbufReadU16(src) % 360);   // ground_course
-        (void)sbufReadU16(src);             // true_yaw
+        gpsSol.trueYaw = (uint16_t) (((int16_t)sbufReadU16(src) + 3600) % 3600);   // true yaw
         (void)sbufReadU16(src);             // year
         (void)sbufReadU8(src);              // month
         (void)sbufReadU8(src);              // day
@@ -3610,6 +3618,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         (void)sbufReadU8(src);              // min
         (void)sbufReadU8(src);              // sec
         GPS_update |= GPS_MSP_UPDATE;        // MSP data signalisation to GPS functions
+        sensorsSet(SENSOR_GPS);
         break;
 
     case MSP_SET_RAW_GPS:
@@ -3996,6 +4005,18 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
                 osdAnalyzeActiveElements();
             }
 #endif
+        }
+        break;
+
+    case MSP2_SET_POSITION_SETPOINT:
+        {
+            posSpNed.time_ms = sbufReadU32(src);
+            posSpNed.mode = sbufReadU8(src);
+            posSpNed.pos.V.X = 0.001f * (int32_t) sbufReadU32(src);
+            posSpNed.pos.V.Y = 0.001f * (int32_t) sbufReadU32(src);
+            posSpNed.pos.V.Z = 0.001f * (int32_t) sbufReadU32(src);
+            posSpNed.psi = DECIDEGREES_TO_RADIANS((int16_t) sbufReadU16(src));
+            posSpNed.vel_traj = 0.001f * (int32_t) sbufReadU32(src);
         }
         break;
 

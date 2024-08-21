@@ -128,19 +128,30 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
-            // enable if we dont disable, have accel, and no disable flags than angle, arm and prearm 
+            // indended behaviour: 
+            // enable only if
+            // 1. we dont have diable conditions
+            // 2. we have good accelerometer
+            // 3. if are compiled with USE_THROWING_WITHOUT_POSITION
+            //        yes: do not run any position checks
+            //        no : only enable if position is valid OR we are not in position mode
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce &&
-                #ifdef USE_POS_CTL
-                    (
-#ifdef USE_THROWING_WITHOUT_POSITION
-                    !FLIGHT_MODE(POSITION_MODE) ||
-#endif
-                    ( (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
-                #endif
+#ifdef USE_POS_CTL
+                (
+                    ( (extPosState >= EXT_POS_STILL_VALID) && (posSetpointState >= EXT_POS_STILL_VALID) )
+    #ifdef USE_THROWING_WITHOUT_POSITION
+                || !FLIGHT_MODE(POSITION_MODE)
+    #endif
+                );
+#else
+    #ifdef USE_THROWING_WITHOUT_POSITION
                 true;
+    #else
+                false;
+    #endif
+#endif
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;

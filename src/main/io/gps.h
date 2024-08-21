@@ -249,6 +249,7 @@ typedef struct gpsSolutionData_s {
     uint16_t speed3d;               // speed in 0.1m/s
     uint16_t groundSpeed;           // speed in 0.1m/s
     uint16_t groundCourse;          // degrees * 10
+    uint16_t trueYaw;
     uint8_t numSat;
     uint32_t time;                  // GPS msToW
     uint32_t navIntervalMs;         // interval between nav solutions in ms

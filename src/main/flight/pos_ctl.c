@@ -37,10 +37,6 @@
 
 #ifdef USE_POS_CTL
 
-#ifndef USE_GPS_PI
-#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
-#endif
-
 #ifndef USE_INDI
 #error "USE_POS_CTL requires the use of USE_INDI"
 #endif
