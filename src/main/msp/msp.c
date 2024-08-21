@@ -3585,23 +3585,16 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
 #endif
 
 #ifdef USE_GPS
-    case MSP2_SENSOR_GPS:
+    case MSP2_SENSOR_GPS: // backported from 4.5.1
         (void)sbufReadU8(src);              // instance
         (void)sbufReadU16(src);             // gps_week
-        //(void)sbufReadU32(src);     // ms_tow
-        uint32_t newTime = sbufReadU32(src);
-        if (newTime == gpsData.lastMessage) {
-            *src->ptr += 45;
-            break;
-        }
-        gpsData.lastLastMessage = gpsData.lastMessage;
-        gpsData.lastMessage = newTime; // ms since start of optitrack
+        gpsSol.time = sbufReadU32(src);     // ms_tow
         gpsSetFixState(sbufReadU8(src) != 0); // fix_type
         gpsSol.numSat = sbufReadU8(src);    // satellites_in_view
         gpsSol.acc.hAcc = sbufReadU16(src) * 10; // horizontal_pos_accuracy - convert cm to mm
         gpsSol.acc.vAcc = sbufReadU16(src) * 10; // vertical_pos_accuracy - convert cm to mm
         gpsSol.acc.sAcc = sbufReadU16(src) * 10; // horizontal_vel_accuracy - convert cm to mm
-        gpsSol.dop.hdop = sbufReadU16(src); // hdop
+        gpsSol.dop.pdop = sbufReadU16(src); // hdop in 4.4 and earlier, pdop in 4.5 and above
         gpsSol.llh.lon = sbufReadU32(src);
         gpsSol.llh.lat = sbufReadU32(src);
         gpsSol.llh.altCm = sbufReadU32(src); // alt
@@ -3609,8 +3602,8 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         int32_t ned_vel_east = (int32_t)sbufReadU32(src);   // ned_vel_east
         gpsSol.groundSpeed = (uint16_t)sqrtf((ned_vel_north * ned_vel_north) + (ned_vel_east * ned_vel_east));
         (void)sbufReadU32(src);             // ned_vel_down
-        gpsSol.groundCourse = ((uint16_t)sbufReadU16(src) % 360);   // ground_course
-        gpsSol.trueYaw = (uint16_t) (((int16_t)sbufReadU16(src) + 3600) % 3600);   // true yaw
+        gpsSol.groundCourse = ((uint16_t)sbufReadU16(src) % 36000) / 10; // incoming value expected to be in centidegrees, output value in decidegrees
+        (void)sbufReadU16(src);             // true_yaw
         (void)sbufReadU16(src);             // year
         (void)sbufReadU8(src);              // month
         (void)sbufReadU8(src);              // day
@@ -3618,10 +3611,6 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         (void)sbufReadU8(src);              // min
         (void)sbufReadU8(src);              // sec
         GPS_update |= GPS_MSP_UPDATE;        // MSP data signalisation to GPS functions
-        sensorsSet(SENSOR_GPS);
-#ifdef USE_LOCAL_POSITION
-        getLocalPos(0);
-#endif
         break;
 
     case MSP_SET_RAW_GPS:
@@ -4011,9 +4000,10 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         }
         break;
 
-#ifdef USE_LOCAL_POSITION
+#if defined(USE_LOCAL_POSITION) && false
     case MSP2_SET_POSITION_SETPOINT:
         {
+            //defunc
             posSpNed.time_ms = sbufReadU32(src);
             posSpNed.mode = sbufReadU8(src);
             posSpNed.pos.V.X = 0.001f * (int32_t) sbufReadU32(src);

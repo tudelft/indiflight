@@ -223,7 +223,7 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_update(ekf_Z);
 
 		// new update that takes into account the time delay:
-		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
+		// ekf_update_delayed(ekf_Z, posLatestMsgTime * 1e-6);
 		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
 		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
 	} 

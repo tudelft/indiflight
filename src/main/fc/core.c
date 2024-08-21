@@ -1067,7 +1067,7 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (extPosState >= EXT_POS_STILL_VALID) {
+            if (posMeasState >= LOCAL_POS_STILL_VALID) {
 #ifdef USE_GPS
                 GPS_reset_home_position();
 #endif

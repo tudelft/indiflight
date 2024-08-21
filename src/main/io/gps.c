@@ -386,6 +386,7 @@ static bool gpsNewFrameUBLOX(uint8_t data);
 
 static void gpsSetState(gpsState_e state)
 {
+    gpsData.lastLastNavMessage = gpsData.lastNavMessage;
     gpsData.lastNavMessage = gpsData.now;
     sensorsClear(SENSOR_GPS);
     gpsData.state = state;
@@ -1380,6 +1381,7 @@ void gpsUpdate(timeUs_t currentTimeUs)
 
             // Data is available
             DEBUG_SET(DEBUG_GPS_CONNECTION, 3, gpsData.now - gpsData.lastNavMessage); // interval since last Nav data was received
+            gpsData.lastLastNavMessage = gpsData.lastNavMessage;
             gpsData.lastNavMessage = gpsData.now;
             sensorsSet(SENSOR_GPS);
 
@@ -1485,6 +1487,7 @@ static void gpsNewData(uint16_t c)
     }
     if (gpsData.state == GPS_STATE_RECEIVING_DATA) {
         DEBUG_SET(DEBUG_GPS_CONNECTION, 3, gpsData.now - gpsData.lastNavMessage); // interval since last Nav data was received
+        gpsData.lastLastNavMessage = gpsData.lastNavMessage;
         gpsData.lastNavMessage = gpsData.now;
         sensorsSet(SENSOR_GPS);
         // use the baud rate debug once receiving data

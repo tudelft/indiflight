@@ -278,6 +278,7 @@ typedef struct gpsData_s {
     uint32_t errors;                // gps error counter - crc error/lost of data/sync etc..
     uint32_t timeouts;
     uint32_t lastNavMessage;        // time of last valid GPS speed and position data
+    uint32_t lastLastNavMessage;        // time of previously last valid GPS speed and position data
     uint32_t now;
     uint32_t lastMessageSent;       // time last message was sent
     uint32_t state_position;        // incremental variable for loops

@@ -25,7 +25,7 @@ timeUs_t posLatestMsgTime = 0;
 timeUs_t latestMsgGpsTime = 0;
 
 vio_pos_ned_t vioPosNed;
-ext_pos_state_t vioPosState = LOCAL_POS_NO_SIGNAL;
+local_pos_measurement_state_t vioPosState = LOCAL_POS_NO_SIGNAL;
 timeUs_t vioLatestMsgTime = 0;
 
 #ifdef USE_LOCAL_POSITION_PI
@@ -63,11 +63,11 @@ static void checkNewPosGps(void) {
         // assume still valid for now
         posMeasState = LOCAL_POS_STILL_VALID;
 
-        timeDelta_t deltaMsgs = cmpTimeUs(gpsData.lastMessage, latestMsgGpsTime);
+        timeDelta_t deltaMsgs = cmpTimeUs(gpsData.lastNavMessage, latestMsgGpsTime);
         if (STATE(GPS_FIX) && (deltaMsgs != 0)) {
             posMeasState = LOCAL_POS_NEW_MESSAGE;
             posLatestMsgTime = micros();
-            latestMsgGpsTime = gpsData.lastMessage;
+            latestMsgGpsTime = gpsData.lastNavMessage;
         }
 
         // regardless of new or old message, we may have timeout
@@ -86,6 +86,9 @@ void getLocalPos(timeUs_t current) {
 
 #ifdef USE_LOCAL_POSITION_PI
     checkNewPosPi();
+#ifdef USE_GPS
+    UNUSED(checkNewPosGps);
+#endif
 #else
     checkNewPosGps();
 #endif
@@ -94,7 +97,7 @@ void getLocalPos(timeUs_t current) {
         case LOCAL_POS_NEW_MESSAGE:
 #ifdef USE_LOCAL_POSITION_PI
             // time stamp
-            posMeasState.time_us = piMsgExternalPoseRx->time_us;
+            posMeasNed.time_us = piMsgExternalPoseRx->time_us;
             // process new message (should be NED)
             posMeasNed.pos.V.X = piMsgExternalPoseRx->ned_x;
             posMeasNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
@@ -117,28 +120,30 @@ void getLocalPos(timeUs_t current) {
             posMeasNed.att.angles.yaw = eulers.angles.yaw;
 #else
 #define REARTH 6371000.f
-            fp_vector_t newPos;
-            newPos.V.X = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lat - GPS_home[GPS_LATITUDE]) * REARTH;
-            newPos.V.Y = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lon - GPS_home[GPS_LONGITUDE]) * REARTH
-                * cosf(1e-7f * DEGREES_TO_RADIANS(GPS_home[GPS_LONGITUDE]));
-            newPos.V.Z = -1e-2f * gpsSol.llh.altCm;
-            timeDelta_t delta_ms = cmpTimeUs(gpsData.lastMessage, gpsData.lastLastMessage); // ms, not us
-            if ((delta_ms > 0) && (delta_ms < 1000)) {
-                float iDeltaS = 1. / (0.001f*delta_ms);
-                posMeasNed.vel = newPos;
-                VEC3_SCALAR_MULT_ADD(posMeasNed.vel, -1., posMeasNed.pos);
-                VEC3_SCALAR_MULT(posMeasNed.vel, iDeltaS);
+            {
+                fp_vector_t newPos;
+                newPos.V.X = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lat - GPS_home[GPS_LATITUDE]) * REARTH;
+                newPos.V.Y = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lon - GPS_home[GPS_LONGITUDE]) * REARTH
+                    * cosf(1e-7f * DEGREES_TO_RADIANS(GPS_home[GPS_LONGITUDE]));
+                newPos.V.Z = -1e-2f * gpsSol.llh.altCm;
+                timeDelta_t delta_ms = cmpTimeUs(gpsData.lastNavMessage, gpsData.lastLastNavMessage); // ms, not us
+                if ((delta_ms > 0) && (delta_ms < 1000)) {
+                    float iDeltaS = 1. / (0.001f*delta_ms);
+                    posMeasNed.vel = newPos;
+                    VEC3_SCALAR_MULT_ADD(posMeasNed.vel, -1., posMeasNed.pos);
+                    VEC3_SCALAR_MULT(posMeasNed.vel, iDeltaS);
+                }
+                posMeasNed.pos = newPos;
+                posMeasNed.att.angles.roll = 0;
+                posMeasNed.att.angles.pitch = 0;
+                posMeasNed.att.angles.yaw = DECIDEGREES_TO_RADIANS(gpsSol.trueYaw);
             }
-            posMeasNed.pos = newPos;
-            posMeasNed.att.angles.roll = 0;
-            posMeasNed.att.angles.pitch = 0;
-            posMeasNed.att.angles.yaw = DECIDEGREES_TO_RADIANS(gpsSol.trueYaw);
 #endif
             sensorsSet(SENSOR_GPS);
             ENABLE_STATE(GPS_FIX);
             ENABLE_STATE(GPS_FIX_EVER);
             break;
-        case EXT_POS_NO_SIGNAL:
+        case LOCAL_POS_NO_SIGNAL:
             DISABLE_STATE(GPS_FIX);
             break;
         default:
@@ -154,22 +159,22 @@ void checkNewVioPos(void) {
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
-            vioPosState = EXT_POS_NEW_MESSAGE;
+            vioPosState = LOCAL_POS_NEW_MESSAGE;
             vioLatestMsgTime = currentMsgTime;
         } else {
             // assume still valid for now
-            vioPosState = EXT_POS_STILL_VALID;
+            vioPosState = LOCAL_POS_STILL_VALID;
         }
 
         // regardless of new or old message, we may have timeout
         timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
         if (delta > VIO_POS_TIMEOUT_US) {
             // signal lost
-            vioPosState = EXT_POS_NO_SIGNAL;
+            vioPosState = LOCAL_POS_NO_SIGNAL;
         }
     } else {
         // data (noy yet) message available
-        vioPosState = EXT_POS_NO_SIGNAL;
+        vioPosState = LOCAL_POS_NO_SIGNAL;
     }
 }
 
@@ -177,10 +182,10 @@ void getVioPos(timeUs_t current) {
     UNUSED(current);
 
     checkNewVioPos();
-    if (vioPosState == EXT_POS_NO_SIGNAL)
+    if (vioPosState == LOCAL_POS_NO_SIGNAL)
         return;
 
-    if (vioPosState == EXT_POS_NEW_MESSAGE) {
+    if (vioPosState == LOCAL_POS_NEW_MESSAGE) {
         // time stamp
         vioPosNed.time_us = piMsgVioPoseRx->time_us;
         // process new message from UNKNOWN REFERENCE FRAME to NED
@@ -222,9 +227,8 @@ void getFakeGps(timeUs_t current) {
 void getPosSetpoint(timeUs_t current) {
     UNUSED(current);
 
-    static timeUs_t latestSetpointTime = 0;
-
 #ifdef USE_TELEMETRY_PI
+    static timeUs_t latestSetpointTime = 0;
     if (piMsgPosSetpointRx) {
         timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);

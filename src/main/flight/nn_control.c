@@ -28,7 +28,7 @@
 #include "sensors/gyro.h"		// for gyro
 #include "flight/indi.h"		// for omega
 #include "flight/trajectory_tracker.h"		// for recovery mode
-#include "io/external_pos.h"	// for setpoints
+#include "io/local_pos.h"	// for setpoints
 #include "pos_ctl.h"			// for resetIterms
 #include "pg/pg_ids.h"              // for config
 #include "fc/runtime_config.h"  // for ENABLE_FLIGHT_MODE
@@ -42,12 +42,8 @@
 #error "USE_NN_CONTROL requires the use of USE_EKF"
 #endif
 
-//#ifndef USE_GPS_PI  // implicit in EKF
-//#error "USE_NN_CONTROL requires the use of USE_GPS_PI"
-//#endif
-
-#ifndef USE_POS_CTL
-#error "USE_NN_CONTROL requires the use of USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "USE_NN_CONTROL requires the use of USE_LOCAL_POSITION"
 #endif
 
 #pragma message "You are compiling with dangerous code!"
@@ -69,7 +65,7 @@ void nn_init(void) {
 	posSpNed.pos.V.Z = start_pos[2];
 	posSpNed.psi = start_yaw;
     posSpNed.trackPsi = true;
-    posSetpointState = EXT_POS_NEW_MESSAGE;
+    posSpState = LOCAL_POS_NEW_MESSAGE;
 }
 
 void nn_activate(void) {
@@ -139,7 +135,7 @@ void nn_compute_motor_cmds(void) {
 	// call the neural network controller (output is in range [0,1])
 	nn_control(world_state, nn_motor_cmds);
 
-    if (cmpTimeUs(micros(), extLatestMsgTime) > NN_DEADRECKONING_TIMEOUT_US) {
+    if (cmpTimeUs(micros(), posLatestMsgTime) > NN_DEADRECKONING_TIMEOUT_US) {
         // deadreckoning for too long --> abort
         nn_deactivate(); // fallback on position
     }

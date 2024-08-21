@@ -1,6 +1,9 @@
 #include "nn_controller.h"
 #include <math.h>
 #include <stdlib.h>
+#include "common/maths.h"
+
+#ifdef USE_NN_CONTROL
 
 bool deterministic = false;
 
@@ -105,8 +108,8 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
 
     // Get the heading of the drone in gate frame
     float yaw_rel = yaw - target_yaw;
-    while (yaw_rel > M_PI) {yaw_rel -= 2*M_PI;}
-    while (yaw_rel < -M_PI) {yaw_rel += 2*M_PI;}
+    while (yaw_rel > M_PIf) {yaw_rel -= 2.f*M_PIf;}
+    while (yaw_rel < -M_PIf) {yaw_rel += 2.f*M_PIf;}
 
     // Get the neural network input
     float nn_input[16+4*GATES_AHEAD];
@@ -151,7 +154,7 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
             // generate random gaussian variables using the Box–Muller transform
             float u1 = (float)rand() / RAND_MAX;
             float u2 = (float)rand() / RAND_MAX;
-            float rand_std = sqrtf(-2 * logf(u1)) * cosf(2 * M_PI * u2);
+            float rand_std = sqrtf(-2.f * logf(u1)) * cosf(2.f * M_PIf * u2);
             // add the noise to the output
             nn_output[i] += output_std[i] * rand_std;
         }
@@ -159,9 +162,11 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
 
     for (int i = 0; i < 4; i++) {
         // clip the output to the range [-1, 1.0] (1.0 MOTOR LIMIT)
-        if (nn_output[i] > 1.0) nn_output[i] = 1.0;
-        if (nn_output[i] < -1) {nn_output[i] = -1;}
+        if (nn_output[i] > 1.0f) nn_output[i] = 1.0f;
+        if (nn_output[i] < -1.f) {nn_output[i] = -1.f;}
         // map the output from [-1,1] to [0,1] 
-        motor_cmds[i] = (nn_output[i] + 1) / 2;
+        motor_cmds[i] = (nn_output[i] + 1.f) / 2.f;
     }
 }
+
+#endif

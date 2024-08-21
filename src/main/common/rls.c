@@ -33,7 +33,7 @@
 
 void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoffFreqHz, uint32_t sampleTimeUs) {
     biquadFilterInitLPF( &(fortescue->errorLP), cutoffFreqHz, sampleTimeUs );
-    emwvInit( &(fortescue->errorMV), 1. / ( 2.f * M_PIf * cutoffFreqHz ), sampleTimeUs );
+    emwvInit( &(fortescue->errorMV), 1.f / ( 2.f * M_PIf * cutoffFreqHz ), sampleTimeUs );
     fortescue->errorMV.variance = 0.01f;
     fortescue->sampleFreqHz = 1e6f / ((float) sampleTimeUs);
 }
@@ -41,11 +41,11 @@ void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoffFreqHz, uint
 float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTimesGains) {
     float errorLP = biquadFilterApply( &(fortescue->errorLP), error );
     float errorHP = error - errorLP;
-    float errorVar = MAX(1e-4, emwvApply( &(fortescue->errorMV), errorHP ));
+    float errorVar = MAX(1e-4f, emwvApply( &(fortescue->errorMV), errorHP ));
 
     // lam = 1 - ( 1 - AT K ) * (e**2) / Sigma0
     float e2 = error * error;
-    float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5. * fortescue->sampleFreqHz * errorVar );
+    float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5.f * fortescue->sampleFreqHz * errorVar );
 
     //if (lambda != lambda)
     //    __asm("BKPT #0\n") ; // Break into the debugger
@@ -54,14 +54,14 @@ float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTi
 }
 
 void emwvInit(emwv_t* m, float cutoffFreqHz, uint32_t sampleTimeUs) {
-    m->lambda = powf( 1.f - (float) _M_LN2, (2.f * M_PIf * cutoffFreqHz * 1e-6f * ((float) sampleTimeUs)) );
+    m->lambda = powf( 1.f - (float) M_LN2f, (2.f * M_PIf * cutoffFreqHz * 1e-6f * ((float) sampleTimeUs)) );
     m->mean = 0.f;
     m->variance = 0.f;
 }
 
 float emwvApply(emwv_t* m, float sample) {
     float diff = sample - m->mean;
-    float incr = ( 1 - m->lambda ) * diff;
+    float incr = ( 1.f - m->lambda ) * diff;
     m->mean += incr;
     m->variance = m->lambda * ( m->variance  +  diff * incr );
 
@@ -93,10 +93,10 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
 
     // initalize forgetting factor
     float sampleFreqHz = 1e6f / ((float) sampleTimeUs);
-    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45 * sampleFreqHz))
+    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz))
         return RLS_FAIL;
 
-    rls->lambdaBase = rls->lambda = powf(1.f - (float) _M_LN2, (2. * M_PIf * actionBandwidthHz) / (sampleFreqHz));
+    rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
 
     // initialize fortescue tuner
     fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
@@ -131,7 +131,7 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
         return RLS_FAIL;
     }
 
-    rls->lambda = powf(1.f - (float) _M_LN2, Ts / actMinBandwidthHz);
+    rls->lambda = powf(1.f - (float) M_LN2f, Ts / actMinBandwidthHz);
 
     return RLS_SUCCESS;
 }

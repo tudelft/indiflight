@@ -121,7 +121,7 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
-    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posLatestMsgTime);
 
     if ((posMeasState == LOCAL_POS_NO_SIGNAL) 
         || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
@@ -254,11 +254,11 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     // thrust setpoint in body frame for a multicopter:
     float spfSpLength = VEC3_LENGTH(spfSpNed);
-    spfSpBodyFromPos.V.X = 0.;
-    spfSpBodyFromPos.V.Y = 0.;
+    spfSpBodyFromPos.V.X = 0.f;
+    spfSpBodyFromPos.V.Y = 0.f;
     spfSpBodyFromPos.V.Z = -spfSpLength;
 
-    if (spfSpLength < 1e-6) {
+    if (spfSpLength < 1e-6f) {
         // when falling is commanded (spfSpNed = 0), keep current attitude apart
         // from yawing towards the commanded headingSp
         if (posSpNed.trackPsi) {
@@ -289,14 +289,11 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     if (posRuntime.use_spf_attenuation) {
         // discount thrust if we have not yet reached our attitude
-        fp_vector_t zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
         fp_quaternion_t qHover;
         getHoverAttitudeQuaternion(&qHover);
         fp_vector_t zHoverFrame = quatRotMatCol(&qHover, 2);
-        float zDotProd;
-        zDotProd = VEC3_DOT(zDesNed, zHoverFrame);
 
-        spfSpBodyFromPos.V.Z *= constrainf(VEC3_DOT(z, currentZ), 0.f, 1.f);
+        spfSpBodyFromPos.V.Z *= constrainf(VEC3_DOT(z, zHoverFrame), 0.f, 1.f);
     }
 
     if (!posSpNed.trackPsi) {
@@ -316,7 +313,7 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
 
     VEC3_CROSS(x, starboardSp, z);
-    if (VEC3_LENGTH(x) < 1e-6) {
+    if (VEC3_LENGTH(x) < 1e-6f) {
         // thrust is perp to the heading, so our nose should point towards
         // the heading
         x = headingSp;

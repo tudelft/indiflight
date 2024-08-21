@@ -534,7 +534,11 @@ void getMotorCommands(timeUs_t current) {
 
         if (as_exit_code < AS_NAN_FOUND_Q) {
             indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
+#ifdef USE_LEARNER
             indiRun.u[i] = constrainf(indiRun.u[i] + uDeltaFromNullex[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+#else
+            indiRun.u[i] = constrainf(indiRun.u[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+#endif
         }
 
         // apply lag filter to simulate spinup dynamics

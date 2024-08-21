@@ -23,7 +23,7 @@
 
 #include "pi-messages.h"                // for piMsgKeyboardRx
 #include "fc/core.h"                    // for disarm
-#include "io/external_pos.h"            // for posSpNed
+#include "io/local_pos.h"            // for posSpNed
 #include "flight/trajectory_tracker.h"  // for initTrajectoryTracker, stopTrajectoryTracker, trajectoryTrackerSetSpeed
 #include "flight/nn_control.h"          // for nn_init, nn_activate
 
@@ -89,8 +89,8 @@ void processKey(uint8_t key) {
 
     switch (key) {
 #ifdef USE_GPS_PI
-        case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSetpointState = EXT_POS_NEW_MESSAGE; break;
-        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSetpointState = EXT_POS_NEW_MESSAGE; break;
+        case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpState = LOCAL_POS_NEW_MESSAGE; break;
+        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSpState = LOCAL_POS_NEW_MESSAGE; break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         case KEY_1: initTrajectoryTracker(); break;

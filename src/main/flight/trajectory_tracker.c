@@ -202,7 +202,7 @@ void initTrajectoryTracker(void) {
     posSpNed.pos.V.Z = tt_pos_ref[2];
     posSpNed.psi = tt_yaw_ref;
     posSpNed.trackPsi = true;
-    posSetpointState = EXT_POS_NEW_MESSAGE;
+    posSpState = LOCAL_POS_NEW_MESSAGE;
 }
 
 void setSpeedTrajectoryTracker(float speed) {
@@ -290,7 +290,7 @@ void updateTrajectoryTracker(timeUs_t current) {
         // overwrite yawSetpoint (from pos_ctl.c)
         posSpNed.psi = tt_yaw_ref;
 
-        posSetpointState = EXT_POS_NEW_MESSAGE;
+        posSpState = LOCAL_POS_NEW_MESSAGE;
 
         // overwrite rateSpBody 
         if (posSpNed.trackPsi) {
