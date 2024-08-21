@@ -25,8 +25,6 @@
 #include "drivers/time.h"
 #include "common/maths.h"
 
-#ifdef USE_POS_CTL
-
 typedef enum {
     LOCAL_POS_NO_SIGNAL,
     LOCAL_POS_STILL_VALID,
@@ -73,20 +71,15 @@ extern local_pos_measurement_state_t posSpState;
 extern timeUs_t posLatestMsgTime;
 
 // structs used for VIO_POSE message
-#ifdef USE_VIO_POSE
 extern vio_pos_ned_t vioPosNed;
-extern ext_pos_state_t vioPosState;
+extern local_pos_measurement_state_t vioPosState;
 extern timeUs_t vioLatestMsgTime;
-#endif
 
 #define POS_MEAS_TIMEOUT_US 300000
 #define VIO_POS_TIMEOUT_US 30000000
 
 void getLocalPos(timeUs_t current);
-#ifdef USE_VIO_POSE
 void checkNewVioPos(void);
 void getVioPos(timeUs_t current);
-#endif
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
-#endif

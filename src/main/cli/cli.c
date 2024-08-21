@@ -4222,7 +4222,7 @@ static void cliIndiProfile(const char *cmdName, char *cmdline)
 }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static void cliPositionProfile(const char *cmdName, char *cmdline)
 {
     if (isEmpty(cmdline)) {
@@ -4310,7 +4310,7 @@ static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, du
         return;
     }
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     positionProfileIndexToUse = profileIndex;
 
     cliPrintLinefeed();
@@ -4627,7 +4627,7 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
 
                 break;
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             case PROFILE_POSITION_VALUE:
                 cliPositionProfile(cmdName, "");
 
@@ -6572,7 +6572,7 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                     cliPrintHashLine("restore original indi profile selection");
                     cliIndiProfile(cmdName, "");
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
                     cliPrintHashLine("restore original position profile selection");
                     cliPositionProfile(cmdName, "");
 #endif
@@ -6799,7 +6799,7 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_INDI
     CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     CLI_COMMAND_DEF("positionprofile", "change position profile", "[<index>]", cliPositionProfile),
 #endif
 #ifdef USE_RC_SMOOTHING_FILTER

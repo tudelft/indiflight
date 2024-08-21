@@ -346,12 +346,16 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static void taskLocalPosition(timeUs_t currentTimeUs)
 {
     getLocalPos(currentTimeUs);
     getFakeGps(currentTimeUs);
     getPosSetpoint(currentTimeUs);
+}
+static void taskPosCtl(timeUs_t currentTimeUs)
+{
+    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -360,13 +364,6 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 {
     UNUSED(currentTimeUs);
     processKeyboard();
-}
-#endif
-
-#ifdef USE_POS_CTL
-static void taskPosCtl(timeUs_t currentTimeUs)
-{
-    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -470,16 +467,13 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_POS_CTL
-    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_EKF
@@ -650,17 +644,13 @@ void tasksInit(void)
     setTaskEnabled(TASK_HIL, true);
 #endif
 
-#ifdef USE_POS_CTL
-    // todo! CHECK OTHER FLAGS for consistency
+#ifdef USE_LOCAL_POSITION
     setTaskEnabled(TASK_LOCAL_POSITION, true);
+    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_TELEMETRY_PI
     setTaskEnabled(TASK_KEYBOARD, true);
-#endif
-
-#ifdef USE_POS_CTL
-    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_EKF

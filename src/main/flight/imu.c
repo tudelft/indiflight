@@ -239,7 +239,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     UNUSED(useMag);
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     // external position transmits psi
     if (useExtPosYaw) {
         float yawI = posMeasNed.att.angles.yaw;
@@ -323,7 +323,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     attitudeIsEstablished = true;
 }
 
-#if defined(USE_POS_CTL) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
+#if defined(USE_LOCAL_POSITION) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 static bool posHasBeenInvalid = true;
@@ -578,7 +578,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     }
 
     useAcc = imuIsAccelerometerHealthy(acc.accADCf); // all smoothed accADCf values are within 20% of 1G
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     bool useExtPosYaw = (posMeasState >= LOCAL_POS_STILL_VALID);
 #else
     bool useExtPosYaw = false;
@@ -593,7 +593,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 
     imuUpdateEulerAngles();
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     float KpPos = 8.f*Kp;
     imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
         acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z], KpPos, 0.f);

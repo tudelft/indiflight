@@ -744,7 +744,7 @@ void init(void)
     initLearner();
     //testLearner();
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     posCtlInit();
 #endif
 

@@ -30,6 +30,10 @@
 #error "USE_LOCAL_POSITION_PI requires USE_TELEMETRY_PI"
 #endif
 
+#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_LOCAL_POSITION)
+#error "USE_LOCAL_POSITION_PI requires USE_LOCAL_POSITION"
+#endif
+
 #if defined(USE_TELEMETRY_PI)
 
 #include "common/maths.h"
@@ -185,7 +189,7 @@ void processPiUplink(void)
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
             uint8_t msgId = piParse(&p_telem, serialRead(piPort));
-#if defined(USE_LOCAL_POSITION_PI) && defined(USE_POS_CTL)
+#if defined(USE_LOCAL_POSITION_PI) && defined(USE_LOCAL_POSITION)
             if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
                 getLocalPos(0);
             }

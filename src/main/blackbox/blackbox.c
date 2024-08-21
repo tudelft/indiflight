@@ -355,7 +355,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"omega_dot",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 #endif
 
-#if USE_POS_CTL
+#if USE_LOCAL_POSITION
     {"pos",         0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -684,7 +684,7 @@ typedef struct blackboxMainState_s {
     uint16_t omegaUnfiltered[MAXU];
     int16_t omega_dot[MAXU];
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     uint32_t extTime; // will be in ms, so must be more than 32bit
     int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
@@ -895,7 +895,7 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
 #endif
 
     case CONDITION(POS):
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
         return isFieldEnabled(FIELD_SELECT(POS));
 #else
         return false;
@@ -1094,7 +1094,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->omega_dot, MAXU);
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
         blackboxWriteUnsignedVB(blackboxCurrent->extTime);
@@ -1353,7 +1353,7 @@ static void writeInterframe(void)
     UNUSED(deltas16);
 #endif // USE_INDI
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
@@ -1828,7 +1828,7 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);

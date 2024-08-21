@@ -35,10 +35,10 @@
 #include "flight/indi.h"
 #include "flight/trajectory_tracker.h"
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 
 #ifndef USE_INDI
-#error "USE_POS_CTL requires the use of USE_INDI"
+#pragma message "USE_LOCAL_POSITION currently only has any effect with USE_INDI"
 #endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
@@ -334,4 +334,4 @@ bool isWeathervane = false;
 // 1. velocity control..
 // 2. weathervaning
 
-#endif // USE_POS_CTL
+#endif // USE_LOCAL_POSITION
