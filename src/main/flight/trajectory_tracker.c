@@ -25,7 +25,7 @@
 
 #include <math.h>
 #include "flight/imu.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/indi.h"
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
@@ -35,6 +35,10 @@
 
 #ifndef USE_POS_CTL
 #error "USE_TRAJECTORY_TRACKER only works in combination with USE_POS_CTL"
+#endif
+
+#ifndef USE_TELEMETRY_PI
+#error "USE_TRAJECTORY_TRACKER only works in combination with USE_TELEMETRY_PI"
 #endif
 
 // state of trajectory tracker:

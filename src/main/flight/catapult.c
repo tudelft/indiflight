@@ -24,7 +24,7 @@
 
 #include "pg/pg_ids.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/imu.h"
 #include "flight/indi.h"
 #include "fc/runtime_config.h"
@@ -156,8 +156,8 @@ void runCatapultStateMachine(timeUs_t current) {
 
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
                 || !FLIGHT_MODE(CATAPULT_MODE)
-                || (extPosState == EXT_POS_NO_SIGNAL)
-                || (posSetpointState == EXT_POS_NO_SIGNAL)
+                || (posMeasState == LOCAL_POS_NO_SIGNAL)
+                || (posSpState == LOCAL_POS_NO_SIGNAL)
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
 #endif

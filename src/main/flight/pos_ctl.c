@@ -26,7 +26,7 @@
 
 #include "pos_ctl.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/imu.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
@@ -123,7 +123,7 @@ void resetIterms(void) {
 void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
 
-    if ((posSetpointState == EXT_POS_NO_SIGNAL) 
+    if ((posMeasState == LOCAL_POS_NO_SIGNAL) 
         || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
         // panic and level craft in slight downwards motion
         accSpNedFromPos.V.X = 0.f;
@@ -135,7 +135,7 @@ void updatePosCtl(timeUs_t current) {
         posSpNed.trackPsi = false;
 
         // latch reactivation until new actual setpoint arrives
-        posSetpointState = EXT_POS_NO_SIGNAL;
+        posSpState = LOCAL_POS_NO_SIGNAL;
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
         // more than 0.5 sec but less than 2 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
@@ -147,7 +147,7 @@ void updatePosCtl(timeUs_t current) {
 #endif
         {
             posSpNed.pos = posEstNed; // hold position
-            posSetpointState = EXT_POS_NEW_MESSAGE;
+            posSpState = LOCAL_POS_NEW_MESSAGE;
 
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
@@ -184,7 +184,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // pos error = pos setpoint - pos estimate
     fp_vector_t posError = posSpNed.pos;
-    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // extPosNed.pos
+    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // posMeasNed.pos
 
     // vel setpoint = posGains * posError
     posSpNed.vel.V.X = posError.V.X * horzPCasc;
@@ -198,7 +198,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // vel error = vel setpoint - vel estimate
     fp_vector_t velError = posSpNed.vel;
-    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, extPosNed.vel);
+    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
     static bool accSpXYSaturated = true;

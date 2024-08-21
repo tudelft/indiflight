@@ -94,7 +94,7 @@
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/flashfs.h"
 #include "io/gimbal.h"
 #include "io/gps.h"
@@ -3619,6 +3619,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         (void)sbufReadU8(src);              // sec
         GPS_update |= GPS_MSP_UPDATE;        // MSP data signalisation to GPS functions
         sensorsSet(SENSOR_GPS);
+        getLocalPos(0);
         break;
 
     case MSP_SET_RAW_GPS:
@@ -4008,6 +4009,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         }
         break;
 
+#ifdef USE_POS_CTL
     case MSP2_SET_POSITION_SETPOINT:
         {
             posSpNed.time_ms = sbufReadU32(src);
@@ -4019,6 +4021,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
             posSpNed.vel_traj = 0.001f * (int32_t) sbufReadU32(src);
         }
         break;
+#endif
 
     default:
         // we do not know how to handle the (valid) message, indicate error MSP $M!

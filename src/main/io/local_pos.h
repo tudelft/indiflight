@@ -28,18 +28,17 @@
 #ifdef USE_POS_CTL
 
 typedef enum {
-    EXT_POS_NO_SIGNAL,
-    EXT_POS_STILL_VALID,
-    EXT_POS_NEW_MESSAGE,
-} ext_pos_state_t;
+    LOCAL_POS_NO_SIGNAL,
+    LOCAL_POS_STILL_VALID,
+    LOCAL_POS_NEW_MESSAGE,
+} local_pos_measurement_state_t;
 
-// todo: reformulate using fp_vector_t
-typedef struct __ext_pos_ned_t {
+typedef struct __local_pos_ned_t {
     uint32_t time_us;
     fp_vector_t pos;
     fp_vector_t vel;
     fp_euler_t att;
-} ext_pos_ned_t;
+} local_pos_ned_t;
 
 typedef struct __vio_pos_ned_t {
     uint32_t time_us;
@@ -58,19 +57,20 @@ typedef struct __vio_pos_ned_t {
     float qz;
 } vio_pos_ned_t;
 
-typedef struct __pos_setpoint_ned_t {
+typedef struct __local_pos_setpoint_ned_t {
     uint32_t time_ms;
     uint8_t mode;
     fp_vector_t pos;
     fp_vector_t vel;
     float psi;
     bool trackPsi;
-} pos_setpoint_ned_t;
+} local_pos_setpoint_ned_t;
 
-// structs used for EXTERNAL_POSE message
-extern ext_pos_ned_t extPosNed;
-extern ext_pos_state_t extPosState;
-extern timeUs_t extLatestMsgTime;
+extern local_pos_ned_t posMeasNed;
+extern local_pos_measurement_state_t posMeasState;
+extern local_pos_setpoint_ned_t posSpNed;
+extern local_pos_measurement_state_t posSpState;
+extern timeUs_t posLatestMsgTime;
 
 // structs used for VIO_POSE message
 #ifdef USE_VIO_POSE
@@ -79,21 +79,10 @@ extern ext_pos_state_t vioPosState;
 extern timeUs_t vioLatestMsgTime;
 #endif
 
-// structs used for POS_SETPOINT message
-extern pos_setpoint_ned_t posSpNed;
-extern ext_pos_state_t posSetpointState;
-
-#define EXT_POS_FREQ 50
-#define EXT_POS_TIMEOUT_US 300000
-
-#ifdef USE_VIO_POSE
+#define POS_MEAS_TIMEOUT_US 300000
 #define VIO_POS_TIMEOUT_US 30000000
-#endif
 
-#define POS_SETPOINT_OUTDATED_US 1000000
-
-void checkNewPos(void);
-void getExternalPos(timeUs_t current);
+void getLocalPos(timeUs_t current);
 #ifdef USE_VIO_POSE
 void checkNewVioPos(void);
 void getVioPos(timeUs_t current);

@@ -29,7 +29,7 @@
 #include "fc/runtime_config.h"
 #include "fc/rc_modes.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
@@ -140,7 +140,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 && acc.isAccelUpdatedAtLeastOnce &&
 #ifdef USE_POS_CTL
                 (
-                    ( (extPosState >= EXT_POS_STILL_VALID) && (posSetpointState >= EXT_POS_STILL_VALID) )
+                    ( (posMeasState >= LOCAL_POS_STILL_VALID) && (posSpState >= LOCAL_POS_STILL_VALID) )
     #ifdef USE_THROWING_WITHOUT_POSITION
                 || !FLIGHT_MODE(POSITION_MODE)
     #endif

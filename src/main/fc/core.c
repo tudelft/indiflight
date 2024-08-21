@@ -82,7 +82,7 @@
 #include "flight/nn_control.h"
 
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/pidaudio.h"
 #include "io/serial.h"

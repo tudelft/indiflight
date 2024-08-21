@@ -67,7 +67,7 @@ COMMON_SRC = \
             io/transponder_ir.c \
             io/usb_cdc_hid.c \
             io/usb_msc.c \
-            io/external_pos.c \
+            io/local_pos.c \
 			io/hil.c \
             msp/msp.c \
             msp/msp_box.c \
@@ -298,7 +298,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
-			io/external_pos.c \
+			io/local_pos.c \
             io/keyboard.c \
             rx/ibus.c \
             rx/rx.c \
