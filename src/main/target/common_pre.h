@@ -49,6 +49,10 @@
 // -Wpadded can be turned on to check padding of structs
 //#pragma GCC diagnostic warning "-Wpadded"
 
+#ifdef USE_GPS_RESCUE
+#error "GPS RESCUE is not available in INDIflight"
+#endif
+
 #if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD) && !defined(MOCKUP)
 #define USE_DSHOT
 #endif
