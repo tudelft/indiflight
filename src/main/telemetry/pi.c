@@ -26,14 +26,6 @@
 
 #include "platform.h"
 
-#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_TELEMETRY_PI)
-#error "USE_LOCAL_POSITION_PI requires USE_TELEMETRY_PI"
-#endif
-
-#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_LOCAL_POSITION)
-#error "USE_LOCAL_POSITION_PI requires USE_LOCAL_POSITION"
-#endif
-
 #if defined(USE_TELEMETRY_PI)
 
 #include "common/maths.h"

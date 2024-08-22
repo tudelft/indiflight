@@ -88,7 +88,7 @@ void processKey(uint8_t key) {
     // 9 = kill
 
     switch (key) {
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION
         case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpState = LOCAL_POS_NEW_MESSAGE; break;
         case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSpState = LOCAL_POS_NEW_MESSAGE; break;
 #endif

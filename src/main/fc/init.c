@@ -804,9 +804,12 @@ void init(void)
 
 #ifdef USE_GPS
     if (featureIsEnabled(FEATURE_GPS)) {
+#if !defined(USE_LOCAL_POSITION) || defined(USE_LOCAL_POSITION_GPS)
+        // don't init if other source for local pos, do init if we dont have local pos
         gpsInit();
 #ifdef USE_GPS_RESCUE
         gpsRescueInit();
+#endif
 #endif
     }
 #endif

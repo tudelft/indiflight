@@ -10,11 +10,35 @@
 #include "flight/imu.h"
 #include "io/gps.h"
 
+
+#if defined(USE_LOCAL_POSITION_GPS) && !defined(USE_GPS)
+#error "USE_LOCAL_POSITION_GPS requires USE_GPS"
+#endif
+
+#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_TELEMETRY_PI)
+#error "USE_LOCAL_POSITION_PI requires USE_TELEMETRY_PI"
+#endif
+
+#if defined(USE_LOCAL_POSITION_PI) && !defined(USE_LOCAL_POSITION)
+#error "USE_LOCAL_POSITION_PI requires USE_LOCAL_POSITION"
+#endif
+
+#if defined(USE_LOCAL_POSITION_GPS) && !defined(USE_LOCAL_POSITION)
+#error "USE_LOCAL_POSITION_GPS requires USE_LOCAL_POSITION"
+#endif
+
+
+
 #ifdef USE_LOCAL_POSITION
 
-#if !defined(USE_GPS) && !defined(USE_LOCAL_POSITION_PI)
-#error "USE_LOCAL_POSITION requires either USE_GPS or USE_LOCAL_POSITION_PI"
+#if !defined(USE_LOCAL_POSITION_GPS) && !defined(USE_LOCAL_POSITION_PI)
+#error "USE_LOCAL_POSITION requires either USE_LOCAL_POSITION_GPS or USE_LOCAL_POSITION_PI"
 #endif
+
+#if defined(USE_LOCAL_POSITION_GPS) && defined(USE_LOCAL_POSITION_PI)
+#error "Define only one of USE_LOCAL_POSITION_GPS or USE_LOCAL_POSITION_PI" 
+#endif
+
 
 //extern
 local_pos_ned_t posMeasNed;
@@ -55,7 +79,7 @@ static void checkNewPosPi(void) {
 }
 #endif
 
-#ifdef USE_GPS
+#ifdef USE_LOCAL_POSITION_GPS
 static void checkNewPosGps(void) {
     if (!STATE(GPS_FIX_EVER)) {
         posMeasState = LOCAL_POS_NO_SIGNAL;
@@ -86,7 +110,7 @@ void getLocalPos(timeUs_t current) {
 
 #ifdef USE_LOCAL_POSITION_PI
     checkNewPosPi();
-#ifdef USE_GPS
+#ifdef USE_LOCAL_POSITION_GPS
     UNUSED(checkNewPosGps);
 #endif
 #else

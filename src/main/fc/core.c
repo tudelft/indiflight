@@ -1068,7 +1068,7 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             if (posMeasState >= LOCAL_POS_STILL_VALID) {
-#ifdef USE_GPS
+#ifdef USE_LOCAL_POSITION_GPS
                 GPS_reset_home_position();
 #endif
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
