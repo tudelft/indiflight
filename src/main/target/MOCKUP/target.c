@@ -674,7 +674,7 @@ bool isDshotTelemetryActive(void)
 
 uint16_t getDshotTelemetry(uint8_t motor)
 {
-    return (uint16_t) (indiRun.erpmToRads * motorOmegaValues[motor]);
+    return (uint16_t) (motorOmegaValues[motor] / indiRun.erpmToRads);
 }
 
 #include "drivers/dshot.h"

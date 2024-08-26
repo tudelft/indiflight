@@ -100,8 +100,41 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
 
-    if (extPosState >= EXT_POS_STILL_VALID) {
+    if ((posSetpointState == EXT_POS_NO_SIGNAL) 
+        || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
+        // panic and level craft in slight downwards motion
+        accSpNedFromPos.V.X = 0.f;
+        accSpNedFromPos.V.Y = 0.f;
+        accSpNedFromPos.V.Z = 2.f; // slight downwards motion
+        rateSpBodyFromPos.V.X = 0.f;
+        rateSpBodyFromPos.V.Y = 0.f;
+        rateSpBodyFromPos.V.Z = 0.f;
+        posSpNed.trackPsi = false;
+
+        // latch reactivation until new actual setpoint arrives
+        posSetpointState = EXT_POS_NO_SIGNAL;
+    } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
+        // more than 0.5 sec but less than 2 seconds --> arrest motion
+#ifdef USE_TRAJECTORY_TRACKER
+        updateTrajectoryTracker(current);
+        if (isActiveTrajectoryTracker() && !isActiveTrajectoryTrackerRecovery()) {
+            stopTrajectoryTracker();
+        }
+        if (!isActiveTrajectoryTrackerRecovery())
+#endif
+        {
+            posSpNed.pos = posEstNed; // hold position
+            posSetpointState = EXT_POS_NEW_MESSAGE;
+
+            posGetAccSpNed(current);
+            rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
+            rateSpBodyFromPos.V.Y = 0;
+            rateSpBodyFromPos.V.Z = 0;
+        }
+    } else {
+        // not deadreckoning for too long, setpoint valid. lets fly
         if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
             resetIterms();
         }
@@ -113,26 +146,14 @@ void updatePosCtl(timeUs_t current) {
 #endif
         {
             posGetAccSpNed(current);
-            posGetRateSpBody(current);
+            rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
+            rateSpBodyFromPos.V.Y = 0;
+            rateSpBodyFromPos.V.Z = 0;
         }
-
-        // always use NDI function to map acc setpoints
-        posGetAttSpNedAndSpfSpBody(current);
-
-    } else {
-        // panic and level craft in slight downwards motion
-        resetIterms();
-        attSpNedFromPos.w = 1.f;
-        attSpNedFromPos.x = 0.f;
-        attSpNedFromPos.y = 0.f;
-        attSpNedFromPos.z = 0.f;
-        spfSpBodyFromPos.V.X = 0.f;
-        spfSpBodyFromPos.V.Y = 0.f;
-        spfSpBodyFromPos.V.Z = -(GRAVITYf - 2.f); // also command slight downwards acceleration
-        rateSpBodyFromPos.V.X = 0.f;
-        rateSpBodyFromPos.V.Y = 0.f;
-        rateSpBodyFromPos.V.Z = 0.f;
     }
+
+    // always use NDI function to map acc setpoints
+    posGetAttSpNedAndSpfSpBody(current);
 }
 
 void posGetAccSpNed(timeUs_t current) {
@@ -193,149 +214,103 @@ void posGetAccSpNed(timeUs_t current) {
 
 void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     UNUSED(current);
-    // NOTE: this only makes sense for multicopters of course
     /*
-    * system of equations:
-    * 
-    * a^I = Rz(Psi) @ axang(alpha, axis) @ f^B   +   (0 0 G)'
-    *   where:
-    *       a^I: craft acceleration in inertial frame
-    *       Psi: craft yaw
-    *       alpha: tilt angle (assume positive)
-    *       axis: tilt axis (tx ty 0), where (tx^2 + ty^2 == 1)
-    *       f^B: body forces in body frame. Assume for MC: f^B == (0 0 fz)
-    *       G: gravity (9.80665)
-    * 
-    * define    v^Y := Rz(Psi)^(-1) @ ( a^I - (0 0 G)' )   which results in:
-    * 
-    * v^Y = axang(alpha, axis) @ f^B  +  (0 0 G)'
-    * 
-    * We require to solve tilt/thrust setpoint. Ie: solve the following 
-    * system for (fz alpha tx ty):
-    *   1      ==   tx**2  +  ty**2
-    *   vx^Y   ==   ty * sin(alpha) * fz
-    *   vy^Y   ==  -tx * sin(alpha) * fz
-    *   vz^Y   ==        cos(alpha) * fz
-    * 
-    * where we obtain the axang multplication from the last column of https://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
-    * 
-    * 
-    * The solution of the system is given by:
-    *   tx      =  sgn(vy) * 1 / sqrt( 1 + (vx / vy)^2 ) = vy / sqrt(vy^2 + vx^2)
-    *   ty      =  - (vx * tx) / vy
-    *   alpha   =  atan( sqrt(vx^2 + vy^2) / (-vz) )
-    *   fz      =  vz / cos(alpha)
-    *
-    */
+     * We want 
+     * 1. point the negative body z axis (thrust) towards accSpNed - Gravity
+     * 2. point the positive body x axis (nose) as close to (cosYaw sinYaw 0)**T as possible, while respecting 1.
+     */
+    float Psi = getYawWithoutSingularity(); // current heading
+    fp_quaternion_t attitude_q;
+    getAttitudeQuaternion(&attitude_q); // current attitude
+    // current body axes in inertial
+    fp_vector_t currentX = { .A = { rMat.m[0][0], rMat.m[1][0], rMat.m[2][0] } };
+    fp_vector_t currentZ = { .A = { rMat.m[0][2], rMat.m[1][2], rMat.m[2][2] } };
 
-    //float Psi = (float) DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
-    float Psi = getYawWithoutSingularity();
-    float cPsi = cos_approx(Psi);
-    float sPsi = sin_approx(Psi);
+    // convert acc setpoint to specific forces in NED.
+    // TODO: could add drag term here
+    fp_vector_t spfSpNed = accSpNedFromPos;
+    spfSpNed.V.Z -= GRAVITYf;
 
-    // a^I - g^I
-    fp_vector_t aSp_min_g = {
-        .V.X = accSpNedFromPos.V.X,
-        .V.Y = accSpNedFromPos.V.Y,
-        .V.Z = accSpNedFromPos.V.Z - GRAVITYf,
-    };
+    // thrust setpoint in body frame for a multicopter:
+    float spfSpLength = VEC3_LENGTH(spfSpNed);
+    spfSpBodyFromPos.V.X = 0.;
+    spfSpBodyFromPos.V.Y = 0.;
+    spfSpBodyFromPos.V.Z = -spfSpLength;
 
-    // v^I = Rz(Psi)^(-1) @ aSp_min_g
-    fp_vector_t v = {
-        .V.X =  cPsi * aSp_min_g.V.X  +  sPsi * aSp_min_g.V.Y,
-        .V.Y = -sPsi * aSp_min_g.V.X  +  cPsi * aSp_min_g.V.Y,
-        .V.Z =                                                  aSp_min_g.V.Z,
-    };
+    if (spfSpLength < 1e-6) {
+        // when falling is commanded (spfSpNed = 0), keep current attitude apart
+        // from yawing towards the commanded headingSp
+        if (posSpNed.trackPsi) {
+            fp_quaternion_t yawNed = {
+                .w = cos_approx( (posSpNed.psi - Psi) / 2.f ),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx( (posSpNed.psi - Psi) / 2.f ),
+            };
 
-    fp_vector_t ax = {0};
-    float vx2 = v.V.X*v.V.X;
-    float vy2 = v.V.Y*v.V.Y;
-    float XYnorm = sqrtf( vx2  +  vy2 );
-    if ( XYnorm < 1e-4f ) {
-        // 0.01% of a g
-        // fall back logic, either ax = (+-1 0 0) or (0 +-1 0)
-        // doesnt really matter since alpha will be tiny or close to pi
-        ax.V.X = (vy2 >= vx2) ? ((v.V.Y >= 0.f) ? +1.f : -1.f) : 0.f;
-        ax.V.Y = (vy2 <  vx2) ? ((v.V.X >= 0.f) ? -1.f : +1.f) : 0.f;
-    } else {
-        // base case
-        if (vy2 > vx2) {
-            ax.V.X  =  v.V.Y  /  XYnorm;
-            ax.V.Y  =  - (v.V.X * ax.V.X) / v.V.Y;
+            attSpNedFromPos = chain_quaternion(&attitude_q, &yawNed);
         } else {
-            ax.V.Y  =  - v.V.X  /  XYnorm;
-            ax.V.X  =  - (v.V.Y * ax.V.Y) / v.V.X;
+            // not asked to track yaw, we're done, just copy current attitude
+            // to setpoint
+            attSpNedFromPos = attitude_q;
         }
+        return;
     }
 
-    float alpha = atan2_approx( XYnorm, -v.V.Z ); // norm is positive, so this is (0, M_PIf)
-    alpha = constrainf(alpha, 0.f, posRuntime.max_tilt);
+    // base case: we need to set up the unit directions x, y, z to generate our
+    //            attitude setpoint
 
-    spfSpBodyFromPos.V.X = 0.f;
-    spfSpBodyFromPos.V.Y = 0.f;
-    spfSpBodyFromPos.V.Z = v.V.Z / cos_approx(alpha);
-
-    // attitude setpoint in the yaw frame
-    fp_quaternion_t attSpYaw;
-    quaternion_of_axis_angle(&attSpYaw, &ax, alpha);
-
-    // add in the yaw
-    fp_quaternion_t yawNed = {
-        .w = cos_approx(Psi/2.f),
-        .x = 0.f,
-        .y = 0.f,
-        .z = sin_approx(Psi/2.f),
-    };
-
-    // this is probaby the most expensive operation... can be half the cost if
-    // optimized for .x = 0, .y = 0, unless compiler does that for us?
-    attSpNedFromPos = chain_quaternion(&yawNed, &attSpYaw);
+    // z is easy:  z = -spfSpNed / || spfSpNed ||
+    fp_vector_t x,y,z;
+    z = spfSpNed;
+    VEC3_SCALAR_MULT(z, -1.f);
+    VEC3_NORMALIZE(z);
 
     if (posRuntime.use_spf_attenuation) {
         // discount thrust if we have not yet reached our attitude
-        fp_vector_t zDesNed = quatRotMatCol(&attSpNedFromPos, 2);
-        float zDotProd = zDesNed.V.X * (rMat.m[0][2])
-            + zDesNed.V.Y * (rMat.m[1][2])
-            + zDesNed.V.Z * (rMat.m[2][2]);
-
-        spfSpBodyFromPos.V.Z *= constrainf(zDotProd, 0.f, 1.f); // zDotProd is on [-1, +1]
+        spfSpBodyFromPos.V.Z *= constrainf(VEC3_DOT(z, currentZ), 0.f, 1.f);
     }
+
+    if (!posSpNed.trackPsi) {
+        // just use minimum-norm quaternion rotation that rotates current z axis
+        // to the desired z axis.
+        fp_quaternion_t attError; // in NED coordinates!
+        quaternion_of_two_vectors(&attError, &currentZ, &z, &currentX);
+
+        // exterinsic rotation, first attitude_q then attError.
+        attSpNedFromPos = chain_quaternion(&attError, &attitude_q);
+        return;
+    }
+
+    // x = (starboardSp x z) / || starboardSp x z ||
+    // this is because it has to be in the starboardSp-plane and also perp to z
+    fp_vector_t headingSp   = { .A = { cos_approx(posSpNed.psi), sin_approx(posSpNed.psi), 0} };
+    fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
+
+    VEC3_CROSS(x, starboardSp, z);
+    if (VEC3_LENGTH(x) < 1e-6) {
+        // thrust is perp to the heading, so our nose should point towards
+        // the heading
+        x = headingSp;
+    } else {
+        VEC3_NORMALIZE(x);
+    }
+    VEC3_CROSS(y, z, x);
+
+    // convert to rotation matrix
+    fp_rotationMatrix_t rotM;
+    for (int row = 0; row < 3; row++) {
+        rotM.m[row][0] = x.A[row];
+        rotM.m[row][1] = y.A[row];
+        rotM.m[row][2] = z.A[row];
+    }
+    quaternion_of_rotationMatrix( &attSpNedFromPos, &rotM );
 }
 
 bool isWeathervane = false;
 
-void posGetRateSpBody(timeUs_t current) {
-    // for handling yaw
-    // todo: weathervaning
-
-    UNUSED(current);
-
-    float yawSet = 0.;
-
-    float speed = VEC3_XY_LENGTH(velEstNed);
-    if (posRuntime.weathervane_p) {
-        if ( speed >= posRuntime.weathervane_min_v )
-            isWeathervane = true;
-        else if ( speed < 0.8f * posRuntime.weathervane_min_v )
-            isWeathervane = false;
-    } else {
-        isWeathervane = false;
-    }
-
-    yawSet = isWeathervane ? atan2_approx(velEstNed.V.Y, velEstNed.V.X) : posSpNed.psi;
-
-    float yawError = yawSet - DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
-    if (yawError > M_PIf)
-        yawError -= 2.f * M_PIf;
-    else if (yawError < -M_PIf)
-        yawError += 2.f * M_PIf;
-
-    rateSpBodyFromPos.V.X = 0.;
-    rateSpBodyFromPos.V.Y = 0.;
-    rateSpBodyFromPos.V.Z = yawError * (isWeathervane ? posRuntime.weathervane_p : posRuntime.yaw_p);
-}
-
 // TODO
 // 1. velocity control..
+// 2. weathervaning
 
 #endif // USE_POS_CTL

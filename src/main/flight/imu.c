@@ -326,17 +326,35 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
 #if defined(USE_GPS_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
+static bool posHasBeenInvalid = true;
 
-static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp, float Ki) {
+static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, float Kp, float Ki) {
+    UNUSED(Ki);
+
+    if ((dt > 0.05f) || (dt < 0.f)) {
+        // should only be momentary conditions, so we dont handle this
+        return;
+    }
+
+    bool posValid = (extPosState >= EXT_POS_STILL_VALID);
+    if (posValid && posHasBeenInvalid) {
+        // regained position after longer period on DR: reset position and velocity
+        velEstNed = extPosNed.vel;
+        posEstNed = extPosNed.pos;
+        posHasBeenInvalid = false;
+        return;
+    }
+
+    posHasBeenInvalid = !posValid;
+    Kp *= posValid; // ignore measurements, if too old
+
     // convert local accel measurement to NED
     fp_vector_t aNed = { .A = { ax, ay, az } };
     rotate_vector_with_rotationMatrix(&aNed, &rMat);
-    aNed.V.Z += acc.dev.acc_1G; // add gravity
+    aNed.V.Z += acc.dev.acc_1G; // remove gravity from accelerometer
 
     fp_vector_t velErrorNed = extPosNed.vel;
     VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
-
-    UNUSED(Ki);
 
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*GRAVITYf, aNed);
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
@@ -511,7 +529,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     float cogYawGain = 0.0f; // IMU yaw gain to be applied in imuMahonyAHRSupdate from ground course, default to no correction from CoG
     float courseOverGround = 0; // To be used when cogYawGain is non-zero, in radians
 
-    timeDelta_t deltaT = currentTimeUs - previousIMUUpdateTime;
+    timeDelta_t deltaT = cmpTimeUs(currentTimeUs, previousIMUUpdateTime);
     previousIMUUpdateTime = currentTimeUs;
 
 #ifdef USE_MAG
@@ -576,12 +594,9 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     imuUpdateEulerAngles();
 
 #ifdef USE_GPS_PI
-    Kp *= (extPosState >= EXT_POS_STILL_VALID);
-    if (deltaT < 50000) {
-        // 50ms max interval
-        imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
-            acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z], Kp*8.f, 0.f);
-    }
+    float KpPos = 8.f*Kp;
+    imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
+        acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z], KpPos, 0.f);
 #endif
 
 #endif

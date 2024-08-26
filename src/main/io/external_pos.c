@@ -8,6 +8,7 @@
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
 #include "flight/imu.h"
+#include "io/gps.h"
 
 #ifdef USE_GPS_PI
 
@@ -55,36 +56,48 @@ void checkNewPos(void) {
 }
 
 void getExternalPos(timeUs_t current) {
-
     UNUSED(current);
 
-    checkNewPos();
-    if (extPosState == EXT_POS_NO_SIGNAL)
+    if (realGPSConfigured) {
         return;
+    }
 
-    if (extPosState == EXT_POS_NEW_MESSAGE) {
-        // time stamp
-        extPosNed.time_us = piMsgExternalPoseRx->time_us;
-        // process new message (should be NED)
-        extPosNed.pos.V.X = piMsgExternalPoseRx->ned_x;
-        extPosNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
-        extPosNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
-        extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
-        extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
-        extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
-        fp_euler_t eulers;
-        fp_quaternion_t quat;
-        // the quaternion x,y,z should be NED
-        quat.w = piMsgExternalPoseRx->body_qi;
-        quat.x = piMsgExternalPoseRx->body_qx;
-        quat.y = piMsgExternalPoseRx->body_qy;
-        quat.z = piMsgExternalPoseRx->body_qz;
-        fp_quaternionProducts_t qP;
-        quaternionProducts_of_quaternion(&qP, &quat);
-        fp_euler_of_quaternionProducts (&eulers, &qP);
-        extPosNed.att.angles.roll = eulers.angles.roll;
-        extPosNed.att.angles.pitch = eulers.angles.pitch;
-        extPosNed.att.angles.yaw = eulers.angles.yaw;
+    checkNewPos();
+
+    switch (extPosState) {
+        case EXT_POS_NEW_MESSAGE:
+            // time stamp
+            extPosNed.time_us = piMsgExternalPoseRx->time_us;
+            // process new message (should be NED)
+            extPosNed.pos.V.X = piMsgExternalPoseRx->ned_x;
+            extPosNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
+            extPosNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
+            extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
+            extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
+            extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
+            fp_euler_t eulers;
+            fp_quaternion_t quat;
+            // the quaternion x,y,z should be NED
+            quat.w = piMsgExternalPoseRx->body_qi;
+            quat.x = piMsgExternalPoseRx->body_qx;
+            quat.y = piMsgExternalPoseRx->body_qy;
+            quat.z = piMsgExternalPoseRx->body_qz;
+            fp_quaternionProducts_t qP;
+            quaternionProducts_of_quaternion(&qP, &quat);
+            fp_euler_of_quaternionProducts (&eulers, &qP);
+            extPosNed.att.angles.roll = eulers.angles.roll;
+            extPosNed.att.angles.pitch = eulers.angles.pitch;
+            extPosNed.att.angles.yaw = eulers.angles.yaw;
+
+            sensorsSet(SENSOR_GPS);
+            ENABLE_STATE(GPS_FIX);
+            ENABLE_STATE(GPS_FIX_EVER);
+            break;
+        case EXT_POS_NO_SIGNAL:
+            DISABLE_STATE(GPS_FIX);
+            break;
+        default:
+            break;
     }
 }
 
@@ -149,7 +162,7 @@ void getFakeGps(timeUs_t current) {
     UNUSED(current);
 
 #ifdef USE_GPS
-    if (piMsgFakeGpsRx) {
+    if (!realGPSConfigured && piMsgFakeGpsRx) {
         gpsSol.llh.lat = piMsgFakeGpsRx->lat;
         gpsSol.llh.lon = piMsgFakeGpsRx->lon;
         gpsSol.llh.altCm = piMsgFakeGpsRx->altCm;
@@ -157,14 +170,6 @@ void getFakeGps(timeUs_t current) {
         gpsSol.groundSpeed = piMsgFakeGpsRx->groundSpeed;
         gpsSol.groundCourse = piMsgFakeGpsRx->groundCourse;
         gpsSol.numSat = piMsgFakeGpsRx->numSat;
-        // let the configurator know that we have a good GPS, and a good fix
-        sensorsSet(SENSOR_GPS);
-        ENABLE_STATE(GPS_FIX);
-        ENABLE_STATE(GPS_FIX_EVER);
-    }
-
-    if (extPosState == EXT_POS_NO_SIGNAL) {
-        DISABLE_STATE(GPS_FIX);
     }
 #endif
 }
@@ -187,10 +192,11 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.vel.V.Y = piMsgPosSetpointRx->ned_yd;
             posSpNed.vel.V.Z = piMsgPosSetpointRx->ned_zd;
             posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
+            posSpNed.trackPsi = true;
             posSetpointState = EXT_POS_NEW_MESSAGE;
-        } else {
+        } else if (posSetpointState != EXT_POS_NO_SIGNAL) {
+            // if not no-signalled by other means, just keep this
             posSetpointState = EXT_POS_STILL_VALID;
-            // no upper bound on still_valid for setpoints
         }
     }
 }

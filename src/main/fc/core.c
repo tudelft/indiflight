@@ -76,6 +76,7 @@
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/position.h"
+#include "flight/trajectory_tracker.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "flight/nn_control.h"
@@ -518,6 +519,11 @@ void disarm(flightLogDisarmReason_e reason)
 #ifdef USE_PERSISTENT_STATS
         if (!flipOverAfterCrashActive) {
             statsOnDisarm();
+        }
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        if (isActiveTrajectoryTracker()) {
+            stopTrajectoryTracker();
         }
 #endif
 
@@ -1055,9 +1061,22 @@ void processRxModes(timeUs_t currentTimeUs)
         //if (!FLIGHT_MODE(ANGLE_MODE))
         //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
 
-        if (!FLIGHT_MODE(POSITION_MODE))
-            ENABLE_FLIGHT_MODE(POSITION_MODE);
+        if (!FLIGHT_MODE(POSITION_MODE)) {
+#ifdef USE_TRAJECTORY_TRACKER
+            if (isActiveTrajectoryTracker()) {
+                stopTrajectoryTracker();
+            }
+#endif
+            if (extPosState >= EXT_POS_STILL_VALID) {
+                ENABLE_FLIGHT_MODE(POSITION_MODE);
+            }
+        }
     } else {
+#ifdef USE_TRAJECTORY_TRACKER
+        if (FLIGHT_MODE(POSITION_MODE) && isActiveTrajectoryTracker()) {
+            stopTrajectoryTracker();
+        }
+#endif
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 #endif

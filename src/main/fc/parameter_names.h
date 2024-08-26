@@ -129,12 +129,12 @@
 #define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE "indi_attitude_max_yaw_rate"
+#define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW "indi_manual_use_coordinated_yaw"
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
-#define PARAM_NAME_INDI_MAX_RATE_SETPOINT "indi_max_rate_setpoint"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
 #define PARAM_NAME_INDI_ACT_MAX_RPM "indi_act_max_rpm"
@@ -183,7 +183,7 @@
 #define PARAM_NAME_EKF_PROC_NOISE_ACC         "ekf_proc_noise_acc"
 #define PARAM_NAME_EKF_PROC_NOISE_GYRO        "ekf_proc_noise_gyro"
 #define PARAM_NAME_EKF_MEAS_NOISE_POSITION    "ekf_meas_noise_position"
-#define PARAM_NAME_EKF_MEAS_NOISE_ATTITUDE    "ekf_meas_noise_angles"
+#define PARAM_NAME_EKF_MEAS_NOISE_ANGLES    "ekf_meas_noise_angles"
 #define PARAM_NAME_EKF_MEAS_DELAY             "ekf_meas_delay"
 #endif
 
@@ -240,9 +240,13 @@
 #define PARAM_NAME_GPS_AUTO_CONFIG "gps_auto_config"
 #define PARAM_NAME_GPS_AUTO_BAUD "gps_auto_baud"
 #define PARAM_NAME_GPS_UBLOX_USE_GALILEO "gps_ublox_use_galileo"
-#define PARAM_NAME_GPS_UBLOX_MODE "gps_ublox_mode"
+#define PARAM_NAME_GPS_UBLOX_ACQUIRE_MODEL "gps_ublox_acquire_model"
+#define PARAM_NAME_GPS_UBLOX_FLIGHT_MODEL "gps_ublox_flight_model"
+#define PARAM_NAME_GPS_UBLOX_UTC_STANDARD "gps_ublox_utc_standard"
 #define PARAM_NAME_GPS_SET_HOME_POINT_ONCE "gps_set_home_point_once"
 #define PARAM_NAME_GPS_USE_3D_SPEED "gps_use_3d_speed"
+#define PARAM_NAME_GPS_NMEA_CUSTOM_COMMANDS "gps_nmea_custom_commands"
+#define PARAM_NAME_GPS_UPDATE_RATE_HZ "gps_update_rate_hz"
 
 #ifdef USE_GPS_RESCUE
 #define PARAM_NAME_GPS_RESCUE_MIN_START_DIST "gps_rescue_min_start_dist"

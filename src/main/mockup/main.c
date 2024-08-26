@@ -40,6 +40,13 @@ void setImu(const float *g, const float *a) {
         gyro.gyroADC[axis]   = RADIANS_TO_DEGREES(g[axis]); // shouldnt be used
         acc.dev.ADCRaw[axis] = a[axis] / 9.81f * acc.dev.acc_1G; // input is in g
     }
+    gyroUpdate(); // rotate and pretend to downsample
+    getTask(TASK_FILTER)->attribute->taskFunc( micros() ); // filter gyro
+
+    accUpdate(micros());
+#ifdef USE_THROW_TO_ARM
+    updateThrowFallStateMachine(micros());
+#endif
 }
 
 void setMotorSpeed(const float *omega, const int n) {
@@ -74,11 +81,13 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 
 void setPosSetpoint(const float *pos, const float yaw) {
     posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    extLatestMsgTime = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];
 
     posSpNed.psi = yaw;
+    posSpNed.trackPsi = true;
 }
 
 void getMotorOutputCommands(float *cmd, int n) {
@@ -100,12 +109,9 @@ void tick(const timeDelta_t dtUs)
     unsetArmingDisabled(0xffffffff); // disable all, always
 
     static uint8_t counter = 0;
-    gyroUpdate(); // rotate and pretend to downsample
-    getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
     if (++counter % 2 == 1) {
         // todo: make this demon nicer
         counter = 1;
-        getTask(TASK_ACCEL)->attribute->taskFunc( currentTimeUs );
         if (throwState == THROW_STATE_THROWN) {
             // because we bypass updateArmingStatus, we need to do this here manually
             armingFlags = 1;
@@ -118,4 +124,10 @@ void tick(const timeDelta_t dtUs)
     } 
 
     getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
+
+    if (cmpTimeUs(currentTimeUs, extLatestMsgTime) > EXT_POS_TIMEOUT_US) {
+        extPosState = EXT_POS_NO_SIGNAL;
+    } else {
+        extPosState = EXT_POS_STILL_VALID;
+    }
 }

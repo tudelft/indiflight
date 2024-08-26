@@ -19,16 +19,7 @@ following file (to do that for other FCs, check https://github.com/betaflight/co
 ```Makefile
 ########## TARGET CONFIG
 TARGET = STM32H743
-EXTRA_FLAGS = -D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_DSHOT -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_BLACKBOX -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_SMARTPORT
-
-# Remove propellers: hardware in the loop simulation over UART
-#EXTRA_FLAGS += -DHIL_BUILD
-
-### OR
-
-#TARGET = MOCKUP
-#EXTRA_FLAGS = -Wno-double-promotion -Wno-misleading-indentation
-#EXTRA_FLAGS += -DUSE_IMU_CALC -DUSE_ACC -DUSE_FAKE_ACC -DUSE_GYRO -DUSE_FAKE_GYRO -DUSE_GPS_PI -DUSE_BLACKBOX
+EXTRA_FLAGS = $(EXTRA_FLAGS_CMDLINE) -D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_DSHOT -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_BLACKBOX -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_SMARTPORT
 
 ########## FURTHER OPTIONS
 # Developer options
@@ -43,7 +34,7 @@ EXTRA_FLAGS += -DUSE_TELEMETRY -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS
 # higher level controllers / estimators
 #EXTRA_FLAGS += -DUSE_EKF
 EXTRA_FLAGS += -DUSE_POS_CTL -DUSE_VEL_CTL
-#EXTRA_FLAGS += -DUSE_GPS
+EXTRA_FLAGS += -DUSE_GPS
 EXTRA_FLAGS += -DUSE_TRAJECTORY_TRACKER
 
 # DANGEROUS modes!!
@@ -57,11 +48,11 @@ EXTRA_FLAGS += -DUSE_TRAJECTORY_TRACKER
 ### Step 3 -- First flash and configuration
 
 Run docker image, which outputs a `./obj/*.hex` file, which can be flashed via
-the [configurator](https://github.com/tblaha/indiflight-configurator) (**use "Full chip erase" option**):
+the [configurator](https://github.com/tudelft/indiflight-configurator) (**use "Full chip erase" option**):
 
     docker run -v ./:/indiflight indiflight
 
-Now you still need to load a suitable profile via the [configurator](https://github.com/tblaha/indiflight-configurator) 
+Now you still need to load a suitable profile via the [configurator](https://github.com/tudelft/indiflight-configurator) 
 that defines the runtime-config, which is board-dependent, but also drone-dependent.
 See https://github.com/tudelft/indiflightSupport for that.
 
@@ -91,7 +82,7 @@ DEBUG=GDB remote_flash_swd  # dito, but then flash via swd on a companion comput
 
 ## Flashing and Debugging over raspberry pi companion computer
 
-For context, see REAMDME's of https://github.com/tblaha/racebian.
+For context, see REAMDME's of https://github.com/tudelft/racebian.
 
 Furthermore, install:
 

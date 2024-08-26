@@ -29,6 +29,7 @@ typedef struct indiProfile_s {
     uint16_t rateGains[3]; // rate error to rotational accel gain * 10
     uint16_t attMaxTiltRate; // max tilt rate in deg/s, if attitude is controlled
     uint16_t attMaxYawRate; // max yaw rate in deg/s, if attitude is controlled
+    uint16_t maxRateSp[3];          // maximum rate setpoint in deg/s
     uint8_t manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     uint8_t manualMaxUpwardsSpf; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
@@ -68,7 +69,6 @@ typedef struct indiProfile_s {
     // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
     uint8_t useRpmFeedback;        // bool: make use of dshot rpm data in feedback loop if available. FIXME: actually implement this
-    uint16_t maxRateSp[3];          // maximum rate setpoint in deg/s
     // ---- WLS config
     uint8_t useWls;              // bool: enable Wls in favour of static pinv
     uint8_t wlsWarmstart;        // bool: use warmstarting of wls

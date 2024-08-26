@@ -69,6 +69,9 @@
 #include "flight/pos_ctl.h"
 #include "flight/ekf.h"
 #include "flight/learner.h"
+#include "flight/nn_control.h"
+#include "flight/catapult.h"
+#include "flight/throw.h"
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -2085,6 +2088,13 @@ static bool blackboxWriteSysinfo(void)
     rcSmoothingFilter_t *rcSmoothingData = getRcSmoothingData();
 #endif
 
+#ifdef USE_INDI
+    const indiProfile_t *indiProfile = indiProfiles(systemConfig()->indiProfileIndex);
+#endif
+#ifdef USE_POS_CTL
+    const positionProfile_t *posProfile = positionProfiles(systemConfig()->positionProfileIndex);
+#endif
+
     const controlRateConfig_t *currentControlRateProfile = controlRateProfiles(systemConfig()->activeRateProfile);
     switch (xmitState.headerIndex) {
         BLACKBOX_PRINT_HEADER_LINE("Firmware type", "%s",                   "Cleanflight");
@@ -2363,13 +2373,178 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_VELOCITY_D, "%d",      gpsRescueConfig()->velD)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_YAW_P, "%d",           gpsRescueConfig()->yawP)
 
-        BLACKBOX_PRINT_HEADER_LINE("INDI att gain x", "%d",           600)
-
- 
 #ifdef USE_MAG
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_USE_MAG, "%d",         gpsRescueConfig()->useMag)
 #endif
 #endif
+#endif
+
+#ifdef USE_INDI
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_GAINS, "%d,%d,%d",                indiProfile->attGains[0],
+                                                                                              indiProfile->attGains[1],
+                                                                                              indiProfile->attGains[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RATE_GAINS, "%d,%d,%d",                    indiProfile->rateGains[0],
+                                                                                              indiProfile->rateGains[1],
+                                                                                              indiProfile->rateGains[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE, "%d",              indiProfile->attMaxTiltRate);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE, "%d",               indiProfile->attMaxYawRate);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MAX_RATE_SETPOINT, "%d,%d,%d",             indiProfile->maxRateSp[0],
+                                                                                              indiProfile->maxRateSp[1],
+                                                                                              indiProfile->maxRateSp[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW, "%d",          indiProfile->manualUseCoordinatedYaw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL, "%d",            indiProfile->manualMaxUpwardsSpf);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_TILT, "%d",                     indiProfile->manualMaxTilt);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_INCREMENT, "%d",                       indiProfile->useIncrement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK, "%d",                indiProfile->useRpmDotFeedback);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_NUM, "%d",                             indiProfile->actNum);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS, "%d,%d,%d,%d",       indiProfile->actTimeConstMs[0],
+                                                                                              indiProfile->actTimeConstMs[1],
+                                                                                              indiProfile->actTimeConstMs[2],
+                                                                                              indiProfile->actTimeConstMs[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_MAX_RPM, "%d,%d,%d,%d",                indiProfile->actMaxRpm[0],
+                                                                                              indiProfile->actMaxRpm[1],
+                                                                                              indiProfile->actMaxRpm[2],
+                                                                                              indiProfile->actMaxRpm[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_NONLINEARITY, "%d,%d,%d,%d",           indiProfile->actNonlinearity[0],
+                                                                                              indiProfile->actNonlinearity[1],
+                                                                                              indiProfile->actNonlinearity[2],
+                                                                                              indiProfile->actNonlinearity[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_LIMIT, "%d,%d,%d,%d",                  indiProfile->actLimit[0],
+                                                                                              indiProfile->actLimit[1],
+                                                                                              indiProfile->actLimit[2],
+                                                                                              indiProfile->actLimit[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FX, "%d,%d,%d,%d",                  indiProfile->actG1_fx[0],
+                                                                                              indiProfile->actG1_fx[1],
+                                                                                              indiProfile->actG1_fx[2],
+                                                                                              indiProfile->actG1_fx[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FY, "%d,%d,%d,%d",                  indiProfile->actG1_fy[0],
+                                                                                              indiProfile->actG1_fy[1],
+                                                                                              indiProfile->actG1_fy[2],
+                                                                                              indiProfile->actG1_fy[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FZ, "%d,%d,%d,%d",                  indiProfile->actG1_fz[0],
+                                                                                              indiProfile->actG1_fz[1],
+                                                                                              indiProfile->actG1_fz[2],
+                                                                                              indiProfile->actG1_fz[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_ROLL, "%d,%d,%d,%d",                indiProfile->actG1_roll[0],
+                                                                                              indiProfile->actG1_roll[1],
+                                                                                              indiProfile->actG1_roll[2],
+                                                                                              indiProfile->actG1_roll[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_PITCH, "%d,%d,%d,%d",               indiProfile->actG1_pitch[0],
+                                                                                              indiProfile->actG1_pitch[1],
+                                                                                              indiProfile->actG1_pitch[2],
+                                                                                              indiProfile->actG1_pitch[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_YAW, "%d,%d,%d,%d",                 indiProfile->actG1_yaw[0],
+                                                                                              indiProfile->actG1_yaw[1],
+                                                                                              indiProfile->actG1_yaw[2],
+                                                                                              indiProfile->actG1_yaw[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G2_ROLL, "%d,%d,%d,%d",                indiProfile->actG2_roll[0],
+                                                                                              indiProfile->actG2_roll[1],
+                                                                                              indiProfile->actG2_roll[2],
+                                                                                              indiProfile->actG2_roll[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G2_PITCH, "%d,%d,%d,%d",               indiProfile->actG2_pitch[0],
+                                                                                              indiProfile->actG2_pitch[1],
+                                                                                              indiProfile->actG2_pitch[2],
+                                                                                              indiProfile->actG2_pitch[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G2_YAW, "%d,%d,%d,%d",                 indiProfile->actG2_yaw[0],
+                                                                                              indiProfile->actG2_yaw[1],
+                                                                                              indiProfile->actG2_yaw[2],
+                                                                                              indiProfile->actG2_yaw[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_SYNC_LOWPASS_HZ, "%d",                     indiProfile->imuSyncLp2Hz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_AXES_WEIGHTS, "%d,%d,%d,%d,%d,%d",     indiProfile->wlsWv[0],
+                                                                                              indiProfile->wlsWv[1],
+                                                                                              indiProfile->wlsWv[2],
+                                                                                              indiProfile->wlsWv[3],
+                                                                                              indiProfile->wlsWv[4],
+                                                                                              indiProfile->wlsWv[5]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_ACT_PENALTIES, "%d,%d,%d,%d",          indiProfile->wlsWu[0],
+                                                                                              indiProfile->wlsWu[1],
+                                                                                              indiProfile->wlsWu[2],
+                                                                                              indiProfile->wlsWu[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE, "%d,%d,%d,%d",    indiProfile->u_pref[0],
+                                                                                              indiProfile->u_pref[1],
+                                                                                              indiProfile->u_pref[2],
+                                                                                              indiProfile->u_pref[3]);
+#endif
+#ifdef USE_POS_CTL
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_D, "%d",  posProfile->horz_d);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED, "%d",  posProfile->horz_max_v);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL, "%d",  posProfile->horz_max_a);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_TILT, "%d",  posProfile->max_tilt);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_P, "%d",  posProfile->vert_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_I, "%d",  posProfile->vert_i);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_D, "%d",  posProfile->vert_d);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_UPWARDS_SPEED, "%d",  posProfile->vert_max_v_up);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED, "%d",  posProfile->vert_max_v_down);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL, "%d",  posProfile->vert_max_a_up);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL, "%d",  posProfile->vert_max_v_down);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_YAW_P, "%d",  posProfile->yaw_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_P, "%d",  posProfile->weathervane_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
+#endif
+#ifdef USE_EKF
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE, "%d",  ekfConfig()->use_attitude_estimate);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_POSITION_ESTIMATE, "%d",  ekfConfig()->use_position_estimate);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS, "%d,%d,%d",  ekfConfig()->use_angle_measurements[0],
+                                                                                       ekfConfig()->use_angle_measurements[1],
+                                                                                       ekfConfig()->use_angle_measurements[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",  ekfConfig()->proc_noise_acc[0],
+                                                                                       ekfConfig()->proc_noise_acc[1],
+                                                                                       ekfConfig()->proc_noise_acc[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO, "%d,%d,%d",  ekfConfig()->proc_noise_gyro[0],
+                                                                                       ekfConfig()->proc_noise_gyro[1],
+                                                                                       ekfConfig()->proc_noise_gyro[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_POSITION, "%d,%d,%d",  ekfConfig()->meas_noise_position[0],
+                                                                                       ekfConfig()->meas_noise_position[1],
+                                                                                       ekfConfig()->meas_noise_position[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_ANGLES, "%d,%d,%d",  ekfConfig()->meas_noise_angles[0],
+                                                                                       ekfConfig()->meas_noise_angles[1],
+                                                                                       ekfConfig()->meas_noise_angles[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",  ekfConfig()->meas_delay);
+#endif
+#ifdef USE_CATAPULT
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_TARGET_ALTITUDE, "%d",  catapultConfig()->altitude);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_TARGET_X_NED, "%d",  catapultConfig()->xNed);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_TARGET_Y_NED, "%d",  catapultConfig()->yNed);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_ROTATION_ROLL, "%d",  catapultConfig()->rotationRoll);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_ROTATION_PITCH, "%d",  catapultConfig()->rotationPitch);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_ROTATION_YAW, "%d",  catapultConfig()->rotationYaw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_ROTATION_RANDOMIZE, "%d",  catapultConfig()->randomizeRotation);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_ROTATION_TIME, "%d",  catapultConfig()->rotationTimeMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_UPWARDS_ACCEL, "%d",  catapultConfig()->upwardsAccel);
+#endif
+#ifdef USE_THROW_TO_ARM
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ACC_HIGH, "%d",  throwConfig()->accHighThresh);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ACC_CLIP, "%d",  throwConfig()->accClipThresh);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ACC_LOW, "%d",  throwConfig()->accLowAgainThresh);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_GYRO_HIGH, "%d",  throwConfig()->gyroHighThresh);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH, "%d",  throwConfig()->momentumThresh);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS, "%d",  throwConfig()->releaseDelayMs);
+#endif
+#ifdef USE_LEARNER
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_NUM_ACT, "%d",  learnerConfig()->numAct);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_DELAY_TIME_MS, "%d",  learnerConfig()->delayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_TIME_MS, "%d",  learnerConfig()->stepMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_TIME_MS, "%d",  learnerConfig()->rampMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_OVERLAP_TIME_MS, "%d",  learnerConfig()->overlapMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_AMPLITUDE, "%d",  learnerConfig()->stepAmp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_AMPLITUDE, "%d",  learnerConfig()->rampAmp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_GYRO_MAX, "%d",  learnerConfig()->gyroMax);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_IMU_LOWPASS_HZ, "%d",  learnerConfig()->imuFiltHz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_LOWPASS_HZ, "%d",  learnerConfig()->fxFiltHz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ, "%d",  learnerConfig()->motorFiltHz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_RATE, "%d",  learnerConfig()->zetaRate);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_ATTITUDE, "%d",  learnerConfig()->zetaAttitude);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY, "%d",  learnerConfig()->zetaVelocity);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION, "%d",  learnerConfig()->zetaPosition);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndiProfileAfterQuery);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPositionProfileAfterQuery);
+#endif
+#ifdef USE_NN_CONTROL
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);
 #endif
 
         default:
