@@ -80,7 +80,7 @@ void processKey(uint8_t key) {
 #endif
 #ifdef USE_NN_CONTROL
         case KEY_6: nn_init(); break;
-        case KEY_7: nn_activate(); break;
+        case KEY_7: if (nn_is_active()) { nn_deactivate(); } else { nn_activate(); } break;
 #endif
         case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
     }
