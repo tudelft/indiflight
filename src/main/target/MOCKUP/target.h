@@ -1,3 +1,28 @@
+/*
+ * Special SITL target to run without scheduler (by calling functions from .so)
+ *
+ * Copyright The Cleanflight and Betaflight Authors
+ * Copyright 2024 Till Blaha (Delft University of Technology)
+ *     Stripped unnecessary code. Adapted time keeping and endpoint code
+ *
+ * This file is part of Indiflight, but is based on SITL/target.h from Betaflight.
+ *
+ * Cleanflight, Betaflight and Indiflight are free software. You can redistribute
+ * this software and/or modify this software under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Cleanflight, Betaflight and Indiflight are distributed in the hope that they
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software.
+ *
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #pragma once
 

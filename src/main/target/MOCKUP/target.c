@@ -1,13 +1,19 @@
 /*
- * This file is part of Cleanflight and Betaflight.
+ * Special SITL target to run without scheduler (by calling functions from .so)
  *
- * Cleanflight and Betaflight are free software. You can redistribute
+ * Copyright The Cleanflight and Betaflight Authors
+ * Copyright 2024 Till Blaha (Delft University of Technology)
+ *     Stripped unnecessary code. Adapted time keeping and endpoint code
+ *
+ * This file is part of Indiflight, but is based on SITL/target.h from Betaflight.
+ *
+ * Cleanflight, Betaflight and Indiflight are free software. You can redistribute
  * this software and/or modify this software under the terms of the
  * GNU General Public License as published by the Free Software
  * Foundation, either version 3 of the License, or (at your option)
  * any later version.
  *
- * Cleanflight and Betaflight are distributed in the hope that they
+ * Cleanflight, Betaflight and Indiflight are distributed in the hope that they
  * will be useful, but WITHOUT ANY WARRANTY; without even the implied
  * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -228,34 +234,6 @@ void systemInit(void)
 
     SystemCoreClock = 500 * 1e6; // fake 500MHz
 
-//    if (pthread_mutex_init(&updateLock, NULL) != 0) {
-//        printf("Create updateLock error!\n");
-//        exit(1);
-//    }
-//
-//    if (pthread_mutex_init(&mainLoopLock, NULL) != 0) {
-//        printf("Create mainLoopLock error!\n");
-//        exit(1);
-//    }
-
-//    ret = pthread_create(&tcpWorker, NULL, tcpThread, NULL);
-//    if (ret != 0) {
-//        printf("Create tcpWorker error!\n");
-//        exit(1);
-//    }
-
-//    ret = udpInit(&pwmLink, "127.0.0.1", 9002, false);
-//    printf("init PwmOut UDP link...%d\n", ret);
-
-//    ret = udpInit(&stateLink, NULL, 9003, true);
-//    printf("start UDP server...%d\n", ret);
-
-//    ret = pthread_create(&udpWorker, NULL, udpThread, NULL);
-//    if (ret != 0) {
-//        printf("Create udpWorker error!\n");
-//        exit(1);
-//    }
-
     setbuf(stdout, NULL); // disable printf buffering, so we dont have to wait for linefeeds
 
 }
@@ -266,7 +244,6 @@ void systemReset(void)
     workerRunning = false;
     pthread_join(tcpWorker, NULL);
     pthread_join(udpWorker, NULL);
-    //exit(0);
 }
 void systemResetToBootloader(bootloaderRequestType_e requestType)
 {
@@ -299,55 +276,6 @@ void indicateFailure(failureMode_e mode, int repeatCount)
     UNUSED(repeatCount);
     printf("Failure LED flash for: [failureMode]!!! %d\n", mode);
 }
-
-// Time part
-// Thanks ArduPilot
-//uint64_t nanos64_real(void)
-//{
-//    struct timespec ts;
-//    clock_gettime(CLOCK_MONOTONIC, &ts);
-//    return (ts.tv_sec*1e9 + ts.tv_nsec) - (start_time.tv_sec*1e9 + start_time.tv_nsec);
-//}
-//
-//uint64_t micros64_real(void)
-//{
-//    struct timespec ts;
-//    clock_gettime(CLOCK_MONOTONIC, &ts);
-//    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
-//}
-//
-//uint64_t millis64_real(void)
-//{
-//    struct timespec ts;
-//    clock_gettime(CLOCK_MONOTONIC, &ts);
-//    return 1.0e3*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
-//}
-
-//uint64_t micros64(void)
-//{
-//    static uint64_t last = 0;
-//    static uint64_t out = 0;
-//    uint64_t now = nanos64_real();
-//
-//    out += (now - last) * simRate;
-//    last = now;
-//
-//    return out*1e-3;
-////    return micros64_real();
-//}
-
-//uint64_t millis64(void)
-//{
-//    static uint64_t last = 0;
-//    static uint64_t out = 0;
-//    uint64_t now = nanos64_real();
-//
-//    out += (now - last) * simRate;
-//    last = now;
-//
-//    return out*1e-6;
-////    return millis64_real();
-//}
 
 static timeUs_t currentTimeUs = 0;
 
@@ -406,11 +334,6 @@ void delayMicroseconds_real(uint32_t us)
 void delay(uint32_t ms)
 {
     UNUSED(ms);
-    //uint64_t start = millis64();
-
-    //while ((millis64() - start) < ms) {
-    //    microsleep(1000);
-    //}
     return;
 }
 
@@ -506,23 +429,6 @@ bool pwmIsMotorEnabled(uint8_t index)
 
 static void pwmCompleteMotorUpdate(void)
 {
-//    // send to simulator
-//    // for gazebo8 ArduCopterPlugin remap, normal range = [0.0, 1.0], 3D rang = [-1.0, 1.0]
-//
-//    double outScale = 1000.0;
-//    if (featureIsEnabled(FEATURE_3D)) {
-//        outScale = 500.0;
-//    }
-//
-//    pwmPkt.actuator_set[3] = motorsPwm[0] / outScale;
-//    pwmPkt.actuator_set[0] = motorsPwm[1] / outScale;
-//    pwmPkt.actuator_set[1] = motorsPwm[2] / outScale;
-//    pwmPkt.actuator_set[2] = motorsPwm[3] / outScale;
-//
-//    // get one "fdm_packet" can only send one "servo_packet"!!
-//    if (pthread_mutex_trylock(&updateLock) != 0) return;
-//    udpSend(&pwmLink, &pwmPkt, sizeof(servo_packet));
-////    printf("[pwm]%u:%u,%u,%u,%u\n", idlePulse, motorsPwm[0], motorsPwm[1], motorsPwm[2], motorsPwm[3]);
 }
 
 void pwmWriteServo(uint8_t index, float value)
