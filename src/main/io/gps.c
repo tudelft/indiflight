@@ -943,6 +943,9 @@ static void ubloxSetSbas(void)
 
 void setSatInfoMessageRate(uint8_t divisor)
 {
+    if (!gpsPort) {
+        return;
+    }
     // enable satInfoMessage at 1:5 of the nav rate if configurator is connected
     if (gpsData.ubloxM9orAbove) {
          ubloxSetMessageRateValSet(CFG_MSGOUT_UBX_NAV_SAT_UART1, divisor);
@@ -2638,6 +2641,9 @@ float getGpsDataIntervalSeconds(void)
 
 baudRate_e getGpsPortActualBaudRateIndex(void)
 {
+    if (!gpsPort) {
+        return 0;
+    }
     return lookupBaudRateIndex(serialGetBaudRate(gpsPort));
 }
 
