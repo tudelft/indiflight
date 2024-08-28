@@ -1,4 +1,27 @@
 /*
+ * Receive IMU, motor RPM and send motor commands using pi-protocol
+ *
+ * Copyright 2023 Till Blaha (Delft University of Technology)
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/*
 (C) tblaha 2023
  */
 #include <stdbool.h>
@@ -53,8 +76,9 @@
 #include "pi-messages.h"
 #include "flight/mixer_init.h"
 
-#define USE_CLI_DEBUG_PRINT
+#ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
+#endif
 
 #define HIL_INITIAL_PORT_MODE MODE_RXTX
 //#define HIL_MAXRATE 50
@@ -142,7 +166,10 @@ static void serialWriter(uint8_t byte) { serialWrite(hilPort, byte); }
 
 void hilSendActuators(void)
 {
-    piMsgHilOutTx.time_ms = millis();
+    if ((!hilPort) || (!hilEnabled))
+        return;
+
+    piMsgHilOutTx.time_us = micros();
 #define MOTOR_TO_HIL 32767
     piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[0], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
     piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[1], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));

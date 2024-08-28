@@ -70,7 +70,7 @@ extern "C" {
 
     uint16_t rssi;
     attitudeEulerAngles_t attitude;
-    float rMat[3][3];
+    fp_rotationMatrix_t rMat;
 
     pidProfile_t *currentPidProfile;
     int16_t debug[DEBUG16_VALUE_COUNT];

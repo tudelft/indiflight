@@ -330,9 +330,9 @@ void crsfFrameAttitude(sbuf_t *dst)
 {
      sbufWriteU8(dst, CRSF_FRAME_ATTITUDE_PAYLOAD_SIZE + CRSF_FRAME_LENGTH_TYPE_CRC);
      sbufWriteU8(dst, CRSF_FRAMETYPE_ATTITUDE);
-     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.pitch));
-     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.roll));
-     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.yaw));
+     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.angles.pitch));
+     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.angles.roll));
+     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.angles.yaw));
 }
 
 /*

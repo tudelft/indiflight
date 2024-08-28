@@ -103,10 +103,12 @@ endif
 
 include $(ROOT)/make/targets.mk
 
-REVISION := norevision
-ifeq ($(shell git diff --shortstat),)
-REVISION := $(shell git log -1 --format="%h")
+GITHASH := $(shell git log -1 --format="%h")
+DIRTYFLAG =
+ifneq ($(shell git diff --shortstat),)
+DIRTYFLAG = +dirty
 endif
+REVISION := $(GITHASH)$(DIRTYFLAG)
 
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )
@@ -136,9 +138,10 @@ else
 ifeq ($(DEBUG),INFO)
 DEBUG_FLAGS            = -ggdb3
 endif
-OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+#OPTIMISATION_BASE     := -flto -fuse-linker-plugin -ffast-math -fmerge-all-constants
+OPTIMISATION_BASE     := -flto -fuse-linker-plugin -fmerge-all-constants # todo: try -funroll-loops here
 OPTIMISE_DEFAULT      := -O2
-OPTIMISE_SPEED        := -Ofast
+OPTIMISE_SPEED        := -O3
 OPTIMISE_SIZE         := -Os
 
 LTO_FLAGS             := $(OPTIMISATION_BASE) $(OPTIMISE_SPEED)
@@ -223,15 +226,16 @@ CC_NO_OPTIMISATION      :=
 #
 TEMPORARY_FLAGS :=
 
-EXTRA_WARNING_FLAGS := -Wold-style-definition
+WARNING_FLAGS := -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wold-style-definition -Wdouble-promotion
+#WARNING_FLAGS += -Wstack-usage=1024
 
+#              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion
 CFLAGS     += $(ARCH_FLAGS) \
               $(addprefix -D,$(OPTIONS)) \
               $(addprefix -I,$(INCLUDE_DIRS)) \
               $(DEBUG_FLAGS) \
               -std=gnu17 \
-              -Wall -Wextra -Werror -Wpedantic -Wunsafe-loop-optimizations -Wdouble-promotion \
-              $(EXTRA_WARNING_FLAGS) \
+              $(WARNING_FLAGS) \
               -ffunction-sections \
               -fdata-sections \
               -fno-common \
@@ -299,6 +303,7 @@ TARGET_DFU      = $(BIN_DIR)/$(TARGET_FULLNAME).dfu
 TARGET_ZIP      = $(BIN_DIR)/$(TARGET_FULLNAME).zip
 TARGET_OBJ_DIR  = $(OBJECT_DIR)/$(TARGET_NAME)
 TARGET_ELF      = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).elf
+TARGET_SO       = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).so
 TARGET_EXST_ELF = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME)_EXST.elf
 TARGET_UNPATCHED_BIN = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME)_UNPATCHED.bin
 TARGET_LST      = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).lst
@@ -313,7 +318,7 @@ TARGET_EF_HASH_FILE := $(TARGET_OBJ_DIR)/.efhash_$(TARGET_EF_HASH)
 
 CLEAN_ARTIFACTS := $(TARGET_BIN)
 CLEAN_ARTIFACTS += $(TARGET_HEX_REV) $(TARGET_HEX)
-CLEAN_ARTIFACTS += $(TARGET_ELF) $(TARGET_OBJS) $(TARGET_MAP)
+CLEAN_ARTIFACTS += $(TARGET_ELF) $(TARGET_OBJS) $(TARGET_MAP) $(TARGET_SO)
 CLEAN_ARTIFACTS += $(TARGET_LST)
 CLEAN_ARTIFACTS += $(TARGET_DFU)
 
@@ -391,12 +396,21 @@ $(TARGET_ELF): $(TARGET_OBJS) $(LD_SCRIPT) $(LD_SCRIPTS)
 	$(V1) $(CROSS_CC) -o $@ $(filter-out %.ld,$^) $(LD_FLAGS)
 	$(V1) $(SIZE) $(TARGET_ELF)
 
+$(TARGET_SO) : $(TARGET_OBJS)
+	@echo "Creating shared library"
+	$(V1) $(CROSS_CC) -o $@ $(filter-out %.ld,$^) $(LD_FLAGS) -shared
+
 # Compile
 
 ## compile_file takes two arguments: (1) optimisation description string and (2) optimisation compiler flag
 define compile_file
-	echo "%% ($(1)) $<" "$(STDOUT)" && \
-	$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $<
+	$(V1) $(if $(findstring $<,$(LAPACK_SOURCE)), \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) -Wno-maybe-uninitialized -Wno-parentheses -Wno-double-promotion -Wno-unused-variable -Wno-old-style-definition -Wno-unused-parameter -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-variable -Wno-implicit-fallthrough -Wno-sign-compare $< \
+	, \
+		echo "%% ($(1)) $<" "$(STDOUT)" && \
+		$(CROSS_CC) -c -o $@ $(CFLAGS) $(2) $< \
+	)
 endef
 
 ifeq ($(DEBUG),GDB)
@@ -526,7 +540,18 @@ binary:
 	$(V0) $(MAKE) -j $(TARGET_BIN)
 
 hex:
+ifeq ($(TARGET),MOCKUP)
+# generate shared library instead
+	$(V0) $(MAKE) -j $(TARGET_SO)
+else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
+endif
+
+dfu:
+	$(V0) $(MAKE) -j $(TARGET_DFU)
+
+so:
+	$(V0) $(MAKE) -j $(TARGET_SO)
 
 TARGETS_REVISION = $(addsuffix _rev,$(VALID_TARGETS))
 ## <TARGET>_rev    : build target and add revision to filename
@@ -652,7 +677,7 @@ $(TARGET_EF_HASH_FILE):
 	$(V1) touch $(TARGET_EF_HASH_FILE)
 
 # pi-protocol make script
-$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../messages/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
+$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
 	@echo "generating pi protocol headers"
 	cd lib/main/pi-protocol/ && make generate CONFIG=config.yaml
 	@echo "done"
@@ -664,3 +689,6 @@ $(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildca
 -include $(TARGET_DEPS)
 
 include $(ROOT)/make/remote_flash.mk
+
+echo-cflags:
+	@echo $(CFLAGS)

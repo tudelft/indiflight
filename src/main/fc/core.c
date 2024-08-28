@@ -70,10 +70,16 @@
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
+#include "flight/indi_init.h"
+#include "flight/catapult.h"
+#include "flight/learner.h"
+#include "flight/throw.h"
 #include "flight/position.h"
+#include "flight/trajectory_tracker.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "flight/nn_control.h"
 
 #include "io/beeper.h"
 #include "io/external_pos.h"
@@ -214,10 +220,6 @@ bool canUseLaunchControl(void)
 }
 #endif
 
-#ifdef USE_NN_CONTROL
-#include "flight/nn_control.h"
-#endif
-
 void resetArmingDisabled(void)
 {
     lastArmingDisabledReason = 0;
@@ -274,150 +276,6 @@ static bool accNeedsCalibration(void)
 }
 #endif
 
-// throwing mode
-#ifdef USE_ACC
-
-static float totalAccSq(void) {
-    return sq(9.81f) * sq(acc.dev.acc_1G_rec) * 
-        ( sq(acc.accADC[X]) + sq(acc.accADC[Y]) + sq(acc.accADC[Z]) );
-}
-
-static float totalGyroSq(void) {
-    return sq(gyro.gyroADCf[X]) + sq(gyro.gyroADCf[Y]) + sq(gyro.gyroADCf[Z]);
-}
-
-#define THROW_ACC_HIGH_THRESH 20.f
-#define THROW_MOMENTUM_THRESH 4.f
-#define THROW_ACC_LOW_AGAIN_THRESH 13.f
-#define THROW_RELEASE_DELAY_MS 250
-#define THROW_GYRO_HIGH 720.f
-
-typedef enum {
-    THROW_STATE_DISABLED = -1,
-    THROW_STATE_READY = 0,
-    THROW_STATE_ACC_HIGH,
-    THROW_STATE_ENOUGH_MOMENTUM,
-    THROW_STATE_LEFT_HAND,
-    THROW_STATE_THROWN,
-} throwState_t;
-static throwState_t throwState = THROW_STATE_DISABLED;
-static float momentumAtLeavingHand = 0;
-
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-#define FALL_ACC_LOW_THRESH 3.f
-#define FALL_ACC_LOW_TIME_MS 400
-
-typedef enum {
-    FALL_STATE_DISABLED = -1,
-    FALL_STATE_READY = 0,
-    FALL_STATE_ACC_LOW,
-    FALL_STATE_FALLING
-} fallState_t;
-static fallState_t fallState = FALL_STATE_ACC_LOW;
-#endif
-
-// If some of these flags are set, then we cannot arm from throw. Disable 
-// throwing mode, which also disables the beeper so we notice.
-// If the pilot has already started throwing, then too bad.
-armingDisableFlags_e doNotTolerateDuringThrow = (
-    ARMING_DISABLED_NO_GYRO 
-    | ARMING_DISABLED_FAILSAFE
-    | ARMING_DISABLED_RX_FAILSAFE
-    | ARMING_DISABLED_BAD_RX_RECOVERY
-    | ARMING_DISABLED_BOXFAILSAFE
-    | ARMING_DISABLED_PARALYZE
-);
-
-void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
-    static float momentum = 0;
-    static timeUs_t leftHandSince = 0;
-
-    // handle timings
-    static timeUs_t lastCall = 0;
-    timeDelta_t delta = cmpTimeUs(currentTimeUs, lastCall);
-    bool timingValid = ((delta < 100000) && (delta > 0) && (lastCall > 0));
-    lastCall = currentTimeUs;
-
-    // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED) 
-        || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
-        || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
-
-    if (disableConditions && (throwState >= THROW_STATE_READY)) {
-        throwState = THROW_STATE_DISABLED;
-        beeper(BEEPER_SILENCE);
-    }
-
-    // throwing state machine
-    bool enableConditions;
-    timeDelta_t timeSinceRelease;
-    switch(throwState) {
-        case THROW_STATE_DISABLED:
-            // enable if we dont disable, have accel, and no other disables than angle, arm and prearm 
-            enableConditions = 
-                !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce
-                #ifdef USE_GPS_PI
-                    && (extPosState >= EXT_POS_STILL_VALID)
-                #endif
-                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_NOPREARM));
-
-            if (enableConditions && timingValid) { throwState = THROW_STATE_READY; }
-            break;
-        case THROW_STATE_READY:
-            if (totalAccSq() > sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_ACC_HIGH; }
-            momentum = 0.f;
-            break;
-        case THROW_STATE_ACC_HIGH:
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
-            if (momentum > THROW_MOMENTUM_THRESH) { throwState = THROW_STATE_ENOUGH_MOMENTUM; }
-            if (totalAccSq() < sq(THROW_ACC_HIGH_THRESH)) { throwState = THROW_STATE_READY; }
-            break;
-        case THROW_STATE_ENOUGH_MOMENTUM: // will definitely arm, just waiting for release
-            momentum += ( constrainf(sqrtf(totalAccSq()), 0., 40.f) - 9.81f ) * 1e-6f * ((float) delta);
-            if ( (totalAccSq() < sq(THROW_ACC_LOW_AGAIN_THRESH))
-                    || (totalGyroSq() < sq(THROW_GYRO_HIGH)) ) {
-                momentumAtLeavingHand = momentum;
-                leftHandSince = currentTimeUs;
-                throwState = THROW_STATE_LEFT_HAND;
-            }
-            break;
-        case THROW_STATE_LEFT_HAND:
-            timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
-            if (timeSinceRelease > (1e3 * THROW_RELEASE_DELAY_MS)) { throwState = THROW_STATE_THROWN; }
-            break;
-        case THROW_STATE_THROWN:
-            break;
-    }
-
-    if (throwState >= THROW_STATE_READY) { beeper(BEEPER_THROW_TO_ARM); }
-
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-    // falling state machine
-    if (throwState == THROW_STATE_DISABLED) { fallState = FALL_STATE_DISABLED; }
-
-    switch(fallState) {
-        case FALL_STATE_DISABLED:
-            if (throwState >= THROW_STATE_READY) { fallState = FALL_STATE_READY; }
-            break;
-        case FALL_STATE_READY:
-            if (totalAccSq() < sq(FALL_ACC_LOW_THRESH)) {
-                accLowSince = currentTimeUs;
-                fallState = FALL_STATE_ACC_LOW;
-            }
-            break;
-        case FALL_STATE_ACC_LOW:
-            if (totalAccSq() > sq(FALL_ACC_LOW_THRESH)) { fallState = FALL_STATE_READY; }
-
-            timeDelta_t timeAccLow = cmpTimeUs(currentTimeUs, accLowSince);
-            if (timeAccLow > (1e3 * FALL_ACC_LOW_TIME_MS)) { fallState = FALL_STATE_FALLING; }
-            break;
-        case FALL_STATE_FALLING:
-            break;
-    }
-#endif
-}
-#endif
 
 void updateArmingStatus(void)
 {
@@ -496,25 +354,6 @@ void updateArmingStatus(void)
             }
         }
 
-        /*
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && IS_RC_MODE_ACTIVE(BOXARM) && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ANGLE | ARMING_DISABLED_NOPREARM | ARMING_DISABLED_ARM_SWITCH))) {
-            beeper(BEEPER_THROW_TO_ARM);
-        } else {
-            beeper(BEEPER_SILENCE);
-        }
-
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && isAccLow() && (noThrowToArmSince > 0)) {
-            //unsetArmingDisabled(ARMING_DISABLED_THROTTLE); // may be dangerous
-            if (cmpTimeUs(micros(), noThrowToArmSince) > 250000) {
-                unsetArmingDisabled(ARMING_DISABLED_ANGLE);
-                unsetArmingDisabled(ARMING_DISABLED_NOPREARM);
-                unsetArmingDisabled(ARMING_DISABLED_ARM_SWITCH);
-            }
-        } else {
-            noThrowToArmSince = micros();
-        }
-        */
-
 #ifdef USE_GPS_RESCUE
         if (gpsRescueIsConfigured()) {
             if (gpsRescueConfig()->allowArmingWithoutFix || (STATE(GPS_FIX) && (gpsSol.numSat >= gpsRescueConfig()->minSats)) ||
@@ -565,6 +404,22 @@ void updateArmingStatus(void)
             setArmingDisabled(ARMING_DISABLED_MOTOR_PROTOCOL);
         }
 
+#ifdef USE_NN_CONTROL
+        if (FLIGHT_MODE(NN_MODE)) {
+            setArmingDisabled(ARMING_DISABLED_NN_MODE);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_NN_MODE);
+        }
+#endif
+
+#ifdef USE_CATAPULT
+        if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState != CATAPULT_WAITING_FOR_ARM)) {
+            setArmingDisabled(ARMING_DISABLED_CATAPULT_NOT_READY);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_CATAPULT_NOT_READY);
+        }
+#endif
+
         if (!isUsingSticksForArming()) {
             if (!IS_RC_MODE_ACTIVE(BOXARM)) {
 #ifdef USE_RUNAWAY_TAKEOFF
@@ -594,17 +449,29 @@ void updateArmingStatus(void)
             }
         }
 
-#ifdef USE_ACC
-        if ( (throwState == THROW_STATE_THROWN)
-#ifdef THROW_TO_ARM_USE_FALL_LOGIC
-                || (fallState == FALL_STATE_FALLING) ) {
-#else
-        ) {
-#endif
-            // unset all but doNotTolerate.
-            unsetArmingDisabled(~doNotTolerateDuringThrow);
+#ifdef USE_THROW_TO_ARM
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+            // Intended behaviour: 
+            // 1. display "THROW_NOT_READY" when RC throwtoarm switch selected, 
+            //    but conditions not met (throwState == IDLE). This is intended
+            //    to disable ANY kind of arming when the switch is selected
+            // 2. display "WAITING_FOR_THROW" if and only if directly ready 
+            //    to throw (and also sound the buzzer)
+            if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+                unsetArmingDisabled(~doNotTolerateDuringThrow);
+                if (throwState == THROW_STATE_THROWN) {
+                    unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                } else {
+                    setArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                }
+            } else {
+                unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+                setArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
+            }
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
+            unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
         }
-            // yeet
 #endif
 
         if (isArmingDisabled()) {
@@ -652,6 +519,11 @@ void disarm(flightLogDisarmReason_e reason)
 #ifdef USE_PERSISTENT_STATS
         if (!flipOverAfterCrashActive) {
             statsOnDisarm();
+        }
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        if (isActiveTrajectoryTracker()) {
+            stopTrajectoryTracker();
         }
 #endif
 
@@ -839,17 +711,17 @@ static void updateInflightCalibrationState(void)
 static void updateMagHold(void)
 {
     if (fabsf(rcCommand[YAW]) < 15 && FLIGHT_MODE(MAG_MODE)) {
-        int16_t dif = DECIDEGREES_TO_DEGREES(attitude.values.yaw) - magHold;
+        int16_t dif = DECIDEGREES_TO_DEGREES(attitude.angles.yaw) - magHold;
         if (dif <= -180)
             dif += 360;
         if (dif >= +180)
             dif -= 360;
-        dif *= -GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+        dif *= GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
         if (isUpright()) {
             rcCommand[YAW] -= dif * currentPidProfile->pid[PID_MAG].P / 30;    // 18 deg
         }
     } else
-        magHold = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+        magHold = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
 }
 #endif
 
@@ -1189,9 +1061,22 @@ void processRxModes(timeUs_t currentTimeUs)
         //if (!FLIGHT_MODE(ANGLE_MODE))
         //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
 
-        if (!FLIGHT_MODE(POSITION_MODE))
-            ENABLE_FLIGHT_MODE(POSITION_MODE);
+        if (!FLIGHT_MODE(POSITION_MODE)) {
+#ifdef USE_TRAJECTORY_TRACKER
+            if (isActiveTrajectoryTracker()) {
+                stopTrajectoryTracker();
+            }
+#endif
+            if (extPosState >= EXT_POS_STILL_VALID) {
+                ENABLE_FLIGHT_MODE(POSITION_MODE);
+            }
+        }
     } else {
+#ifdef USE_TRAJECTORY_TRACKER
+        if (FLIGHT_MODE(POSITION_MODE) && isActiveTrajectoryTracker()) {
+            stopTrajectoryTracker();
+        }
+#endif
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 #endif
@@ -1208,6 +1093,82 @@ void processRxModes(timeUs_t currentTimeUs)
             ENABLE_FLIGHT_MODE(VELOCITY_MODE);
     } else {
         DISABLE_FLIGHT_MODE(VELOCITY_MODE);
+    }
+#endif
+
+#ifdef USE_CATAPULT
+    if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
+        if (!FLIGHT_MODE(CATAPULT_MODE))
+            ENABLE_FLIGHT_MODE(CATAPULT_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(CATAPULT_MODE);
+    }
+#endif
+
+#ifdef USE_LEARNER
+    if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
+        ENABLE_FLIGHT_MODE(LEARNER_MODE);
+    } else {
+        if (FLIGHT_MODE(LEARNER_MODE)) {
+            // reset to manually tuned parameters on transition
+            if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
+                changeIndiProfile(0);
+#ifdef USE_POS_CTL
+            if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
+                changePositionProfile(0);
+#endif
+        }
+
+        DISABLE_FLIGHT_MODE(LEARNER_MODE);
+    }
+#endif
+
+#ifdef USE_INDI
+    // if we have INDI support compiled in, then we allow an RC switch to enable
+    // legacy PIDs
+    if (IS_RC_MODE_ACTIVE(BOXPIDCTL)) {
+        if (!FLIGHT_MODE(PID_MODE)) {
+            ENABLE_FLIGHT_MODE(PID_MODE);
+            initEscEndpoints(); // to use or not use output limit in mixer
+        }
+    } else {
+        if (FLIGHT_MODE(PID_MODE)) {
+            DISABLE_FLIGHT_MODE(PID_MODE);
+            initEscEndpoints();
+        }
+    }
+#endif
+
+#ifdef USE_NN_CONTROL
+    // intended behaviour: try to activate NN once when switch is flipped.
+    // If that fails, requrie that switch is cycled to retry.
+    // additionally, if nn_is_active is ever false for some other reason while NN_MODE is active:
+    //     --> disable and require cycling of the switch
+    static bool hasNNActivationBeenTried = false;
+    if (isModeActivationConditionPresent(BOXNNCTL)) {
+        // query switch logic. If no switch configured, then activation is only
+        // possible via keyboard.c
+        if (IS_RC_MODE_ACTIVE(BOXNNCTL)) {
+            // try enable neural net once
+            if (!hasNNActivationBeenTried) {
+                nn_activate(); // will activate flight mode, if successful
+                hasNNActivationBeenTried = true;
+
+                if (!nn_is_active()) {
+                    // activation failed, make sure disabled, but issue 
+                    // correct position command
+                    DISABLE_FLIGHT_MODE(NN_MODE);
+                    nn_init();
+                }
+            }
+        } else {
+            if (nn_is_active()) {
+                nn_deactivate();
+            }
+
+            hasNNActivationBeenTried = false;
+            DISABLE_FLIGHT_MODE(NN_MODE);
+        }
     }
 #endif
 
@@ -1230,7 +1191,7 @@ void processRxModes(timeUs_t currentTimeUs)
         if (IS_RC_MODE_ACTIVE(BOXMAG)) {
             if (!FLIGHT_MODE(MAG_MODE)) {
                 ENABLE_FLIGHT_MODE(MAG_MODE);
-                magHold = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+                magHold = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
             }
         } else {
             DISABLE_FLIGHT_MODE(MAG_MODE);
@@ -1303,6 +1264,19 @@ void processRxModes(timeUs_t currentTimeUs)
 bool isTouchingGround(void) {
     // if total trust is low, but we have high total accel then we are likely touching ground
     // this breaks down for fixed wings, and probably "3D" thrust ESCs
+#ifdef USE_LEARNER
+    if (FLIGHT_MODE(LEARNER_MODE) 
+        && (learningQueryState >= LEARNING_QUERY_DELAY)
+        && (learningQueryState != LEARNING_QUERY_DONE))
+        return false; // never touching ground here
+#endif
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE)
+        && (catapultState >= CATAPULT_LAUNCHING)
+        && (catapultState != CATAPULT_DONE))
+        return false;
+#endif
+
     bool gyroLow = (
         sq(gyro.gyroADCf[X])
         + sq(gyro.gyroADCf[Y])
@@ -1310,15 +1284,15 @@ bool isTouchingGround(void) {
         ) < sq(100.f);
 
     bool accHigh = (sq(acc.dev.acc_1G_rec) * (
-        sq(acc.accADC[X])
-        + sq(acc.accADC[Y])
-        + sq(acc.accADC[Z])
+        sq(acc.accADCf[X])
+        + sq(acc.accADCf[Y])
+        + sq(acc.accADCf[Z])
         )) > sq(0.8f);
 
     bool throttleLow = true;
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
-        throttleLow = spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
 #ifdef USE_GPS_RESCUE
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
@@ -1332,75 +1306,6 @@ bool isTouchingGround(void) {
 
     return (accHigh && throttleLow && gyroLow);
 }
-
-#ifdef USE_INDI
-static FAST_CODE_NOINLINE void subTaskIndiController(timeUs_t currentTimeUs) {
-    UNUSED(currentTimeUs);
-    indiController();
-}
-
-static FAST_CODE_NOINLINE void subTaskIndiApplyToActuators(timeUs_t currentTimeUs) {
-    UNUSED(currentTimeUs);
-
-    uint8_t numMotors = motorDeviceCount();
-
-    //static timeUs_t firstArmed = 0;
-
-    if (!ARMING_FLAG(ARMED)) {
-        for (int i = 0; i < numMotors; i++) {
-            //motor[i] = mixerRuntime.disarmMotorOutput;
-            motor[i] = motor_disarmed[i];
-        }
-        //firstArmed = 0;
-    } else {
-        /* test program for motor test bench. Use with care. Won't ask, just blast.
-        if (firstArmed == 0)
-            firstArmed = currentTimeUs;
-
-        u[0] = 0.;
-        int maxu = 7;
-        timeDelta_t interv = 1e6;
-        for (int i = 0; i <= maxu; i++) {
-            if (cmpTimeUs(currentTimeUs, firstArmed) > i*interv)
-                u[0] = i * 0.1f;
-        }
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+1)*interv)
-            u[0] = 0.0f;
-
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+5)*interv)
-            u[0] = 0.8f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+6)*interv)
-            u[0] = 0.9f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+7)*interv)
-            u[0] = 0.0f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+11)*interv)
-            u[0] = 1.0f;
-        if (cmpTimeUs(currentTimeUs, firstArmed) > (maxu+12)*interv)
-            u[0] = 0.0f;
-        */
-
-        for (int i = 0; i < numMotors; i++) {
-            motor[i] = scaleRangef(u_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
-        }
-
-        #ifdef USE_NN_CONTROL
-        if (nn_is_active()) {
-            float* nn_output = nn_get_motor_cmds();
-            for (int i = 0; i < numMotors; i++) {
-                motor[i] = scaleRangef(nn_output[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
-            }
-        }
-        #endif
-    }
-
-#ifdef HIL_BUILD
-    hilSendActuators();
-#else
-    writeMotors();
-#endif
-
-}
-#endif
 
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 {
@@ -1456,30 +1361,6 @@ static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 #endif
 }
 
-static FAST_CODE_NOINLINE void subTaskPidSubprocesses(timeUs_t currentTimeUs)
-{
-    uint32_t startTime = 0;
-    if (debugMode == DEBUG_PIDLOOP) {
-        startTime = micros();
-    }
-
-#if defined(USE_GPS) || defined(USE_MAG)
-    if (sensors(SENSOR_GPS) || sensors(SENSOR_MAG)) {
-        updateMagHold();
-    }
-#endif
-
-#ifdef USE_BLACKBOX
-    if (!cliMode && blackboxConfig()->device) {
-        blackboxUpdate(currentTimeUs);
-    }
-#else
-    UNUSED(currentTimeUs);
-#endif
-
-    DEBUG_SET(DEBUG_PIDLOOP, 3, micros() - startTime);
-}
-
 #ifdef USE_TELEMETRY
 #define GYRO_TEMP_READ_DELAY_US 3e6    // Only read the gyro temp every 3 seconds
 void subTaskTelemetryPollSensors(timeUs_t currentTimeUs)
@@ -1494,7 +1375,7 @@ void subTaskTelemetryPollSensors(timeUs_t currentTimeUs)
 }
 #endif
 
-static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
+static FAST_CODE void subTaskPidMixing(timeUs_t currentTimeUs)
 {
     uint32_t startTime = 0;
     if (debugMode == DEBUG_CYCLETIME) {
@@ -1509,24 +1390,6 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
     }
 
     mixTable(currentTimeUs);
-
-#ifdef USE_SERVOS
-    // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
-    if (isMixerUsingServos()) {
-        writeServos();
-    }
-#endif
-
-    writeMotors();
-
-#ifdef USE_DSHOT_TELEMETRY_STATS
-    if (debugMode == DEBUG_DSHOT_RPM_ERRORS && useDshotTelemetry) {
-        const uint8_t motorCount = MIN(getMotorCount(), 4);
-        for (uint8_t i = 0; i < motorCount; i++) {
-            debug[i] = getDshotTelemetryMotorInvalidPercent(i);
-        }
-    }
-#endif
 
     DEBUG_SET(DEBUG_PIDLOOP, 2, micros() - startTime);
 }
@@ -1573,7 +1436,7 @@ FAST_CODE bool gyroFilterReady(void)
     }
 }
 
-FAST_CODE bool pidLoopReady(void)
+FAST_CODE bool innerLoopReady(void)
 {
     if ((pidUpdateCounter % activePidLoopDenom) == (activePidLoopDenom / 2)) {
         return true;
@@ -1585,30 +1448,78 @@ FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
 
-}
-
-#ifdef USE_INDI
-FAST_CODE void taskMainIndiLoop(timeUs_t currentTimeUs)
-{
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();
 #endif
+}
 
-    subTaskRcCommand(currentTimeUs);
-    subTaskIndiController(currentTimeUs);
-    subTaskIndiApplyToActuators(currentTimeUs);
+static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t currentTimeUs) {
+    UNUSED(currentTimeUs);
+
+    // this is the disarm safety!
+    if (!ARMING_FLAG(ARMED)) {
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++)
+            motor[i] = motor_disarmed[i];
+    }
+
+#ifdef HIL_BUILD
+    hilSendActuators();
+#else
+
+#ifdef USE_SERVOS
+    // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
+    if (isMixerUsingServos()) {
+        writeServos();
+    }
+#endif
+    writeMotors();
+
+#endif
+
+#ifdef USE_DSHOT_TELEMETRY_STATS
+    if (debugMode == DEBUG_DSHOT_RPM_ERRORS && useDshotTelemetry) {
+        const uint8_t motorCount = MIN(getMotorCount(), 4);
+        for (uint8_t i = 0; i < motorCount; i++) {
+            debug[i] = getDshotTelemetryMotorInvalidPercent(i);
+        }
+    }
+#endif
+}
+
+
+static FAST_CODE_NOINLINE void subTaskInnerLoopTailEnd(timeUs_t currentTimeUs) {
+    uint32_t startTime = 0;
+    if (debugMode == DEBUG_PIDLOOP) {
+        startTime = micros();
+    }
+
+#if defined(USE_GPS) || defined(USE_MAG)
+    if (sensors(SENSOR_GPS) || sensors(SENSOR_MAG)) {
+        updateMagHold();
+    }
+#endif
+
 #ifdef USE_BLACKBOX
     if (!cliMode && blackboxConfig()->device) {
         blackboxUpdate(currentTimeUs);
     }
+#else
+    UNUSED(currentTimeUs);
 #endif
+
+    DEBUG_SET(DEBUG_PIDLOOP, 3, micros() - startTime);
 }
-#endif
 
-// Function for loop trigger
-FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
+static uint8_t innerLoopCounter = 0;
+
+void resetInnerLoopCounter(void) {
+    innerLoopCounter = 0;
+}
+
+// generates motor[i] commands according to the selected controller
+// does not handle arm/disarm logic, that's only done at the last step
+FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 {
-
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_GYROPID_SYNC)
     if (lockMainPID() != 0) return;
 #endif
@@ -1621,9 +1532,57 @@ FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
     DEBUG_SET(DEBUG_PIDLOOP, 0, micros() - currentTimeUs);
 
     subTaskRcCommand(currentTimeUs);
-    subTaskPidController(currentTimeUs);
-    subTaskMotorUpdate(currentTimeUs);
-    subTaskPidSubprocesses(currentTimeUs);
+
+    uint8_t numMotors = getMotorCount();
+    for (int motor = 0; motor < MAX_SUPPORTED_MOTORS; motor++) {
+        motor_normalized[motor] = 0.;
+    }
+
+#ifdef USE_NN_CONTROL
+    if (FLIGHT_MODE(NN_MODE)) {
+        uint8_t rate_denom = MAX(1, nnConfig()->rate_denom);
+        if ((innerLoopCounter++ % rate_denom) == 0) {
+            // run neural network when its time has come
+            nn_compute_motor_cmds();
+            innerLoopCounter = 1;
+        }
+
+        float* nn_output = nn_get_motor_cmds();
+        for (int i = 0; i < numMotors; i++) 
+            motor_normalized[i] = constrainf(nn_output[i], 0., 1.);
+
+    } else
+#endif
+#ifdef USE_INDI
+    if (!FLIGHT_MODE(PID_MODE)) {
+        indiController(currentTimeUs);
+
+        for (int i = 0; i < numMotors; i++)
+            motor_normalized[i] = constrainf(indiRun.d[i], 0., 1.);
+
+    } else
+#endif 
+    {
+        // PID 
+        subTaskPidController(currentTimeUs);
+        subTaskPidMixing(currentTimeUs);
+
+        for (int i = 0; i < numMotors; i++)
+            motor_normalized[i] = scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+    }
+
+#ifdef USE_INDI
+    indiUpdateActuatorState( motor_normalized );
+#endif
+
+    for (int i = 0; i < numMotors; i++)
+        motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+
+    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++)
+        motor[i] = motor_disarmed[i];
+
+    subTaskInnerLoopApplyToActuators(currentTimeUs);
+    subTaskInnerLoopTailEnd(currentTimeUs);
 
     DEBUG_SET(DEBUG_CYCLETIME, 0, getTaskDeltaTimeUs(TASK_SELF));
     DEBUG_SET(DEBUG_CYCLETIME, 1, getAverageSystemLoadPercent());

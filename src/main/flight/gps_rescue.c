@@ -292,7 +292,7 @@ static void rescueAttainPosition(void)
         Heading / yaw controller
     */
     // simple yaw P controller with roll mixed in.
-    // attitude.values.yaw is set by imuCalculateEstimatedAttitude() and is updated from GPS while groundspeed exceeds 2 m/s
+    // attitude.angles.yaw is set by imuCalculateEstimatedAttitude() and is updated from GPS while groundspeed exceeds 2 m/s
     // below 2m/s groundspeed, the IMU uses gyro to estimate yaw attitude change from previous values
     // above 2m/s, GPS course over ground us ysed to 'correct' the IMU heading
     // if the course over ground, due to wind or pre-exiting movement, is different from the attitude of the quad, the GPS correction will be less accurate
@@ -546,19 +546,19 @@ static void sensorUpdate(void)
     DEBUG_SET(DEBUG_GPS_RESCUE_THROTTLE_PID, 2, lrintf(rescueState.sensor.currentAltitudeCm));
     DEBUG_SET(DEBUG_GPS_RESCUE_HEADING, 0, rescueState.sensor.groundSpeedCmS); // groundspeed cm/s
     DEBUG_SET(DEBUG_GPS_RESCUE_HEADING, 1, gpsSol.groundCourse); // degrees * 10
-    DEBUG_SET(DEBUG_GPS_RESCUE_HEADING, 2, attitude.values.yaw); // degrees * 10
+    DEBUG_SET(DEBUG_GPS_RESCUE_HEADING, 2, attitude.angles.yaw); // degrees * 10
     DEBUG_SET(DEBUG_GPS_RESCUE_HEADING, 3, rescueState.sensor.directionToHome); // degrees * 10
 
     rescueState.sensor.healthy = gpsIsHealthy();
 
     if (rescueState.phase == RESCUE_LANDING) {
         // do this at sensor update rate, not the much slower GPS rate, for quick disarm
-        rescueState.sensor.accMagnitude = (float) sqrtf(sq(acc.accADC[Z] - acc.dev.acc_1G) + sq(acc.accADC[X]) + sq(acc.accADC[Y])) * acc.dev.acc_1G_rec;
+        rescueState.sensor.accMagnitude = (float) sqrtf(sq(-acc.accADCf[Z] - acc.dev.acc_1G) + sq(acc.accADCf[X]) + sq(acc.accADCf[Y])) * acc.dev.acc_1G_rec;
         // Note: subtracting 1G from Z assumes the quad is 'flat' with respect to the horizon.  A true non-gravity acceleration value, regardless of attitude, may be better.
     }
 
     rescueState.sensor.directionToHome = GPS_directionToHome;
-    rescueState.sensor.errorAngle = (attitude.values.yaw - rescueState.sensor.directionToHome) / 10.0f;
+    rescueState.sensor.errorAngle = (attitude.angles.yaw - rescueState.sensor.directionToHome) / 10.0f;
     // both attitude and direction are in degrees * 10, errorAngle is degrees
     if (rescueState.sensor.errorAngle <= -180) {
         rescueState.sensor.errorAngle += 360;

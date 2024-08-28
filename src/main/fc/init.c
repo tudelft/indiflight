@@ -35,8 +35,10 @@
 #include "cms/cms_types.h"
 
 #include "common/axis.h"
+#include "common/benchmark.h"
 #include "common/color.h"
 #include "common/maths.h"
+#include "common/rls.h"
 #include "common/printf_serial.h"
 
 #include "config/config.h"
@@ -98,10 +100,13 @@
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
+#include "flight/indi_init.h"
+#include "flight/pos_ctl.h"
 #include "flight/pid_init.h"
 #include "flight/position.h"
 #include "flight/servos.h"
+#include "flight/learner.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -731,7 +736,17 @@ void init(void)
     gyroInitFilters();
 
     pidInit(currentPidProfile);
-    indiInit(currentPidProfile);
+#ifdef USE_INDI
+    //indiInit(currentPidProfile);
+    initIndiRuntime();
+#endif
+#ifdef USE_LEARNER
+    initLearner();
+    //testLearner();
+#endif
+#ifdef USE_POS_CTL
+    posCtlInit();
+#endif
 
     mixerInitProfile();
 

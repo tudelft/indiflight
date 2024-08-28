@@ -43,6 +43,9 @@
 #include "drivers/nvic.h"
 
 #include "flight/mixer.h"
+#ifdef HIL_BUILD
+#include "flight/rpm_filter.h"
+#endif
 
 #include "io/hil.h"
 
@@ -263,8 +266,6 @@ uint16_t getDshotTelemetry(uint8_t index)
 {
 #ifdef HIL_BUILD
 
-#define ERPM_PER_LSB 100.0f
-
     if (index > 3) return 0;
     else return (uint16_t) ( hilInput.rpm[index] * motorConfig()->motorPoleCount / 2 / ERPM_PER_LSB );
 
@@ -394,6 +395,10 @@ void validateAndfixMotorOutputReordering(uint8_t *array, const unsigned size)
 {
     bool invalid = false;
 
+    if (size > MAX_SUPPORTED_MOTORS) {
+        invalid = true;
+    }
+
     for (unsigned i = 0; i < size; i++) {
         if (array[i] >= size) {
             invalid = true;
@@ -401,7 +406,7 @@ void validateAndfixMotorOutputReordering(uint8_t *array, const unsigned size)
         }
     }
 
-    int valuesAsIndexes[size];
+    int valuesAsIndexes[MAX_SUPPORTED_MOTORS];
 
     for (unsigned i = 0; i < size; i++) {
         valuesAsIndexes[i] = -1;

@@ -50,28 +50,26 @@ static bool isBoardAlignmentStandard(const boardAlignment_t *boardAlignment)
 
 void initBoardAlignment(const boardAlignment_t *boardAlignment)
 {
-    if (isBoardAlignmentStandard(boardAlignment)) {
-        return;
-    }
+    standardBoardAlignment = isBoardAlignmentStandard(boardAlignment);
 
-    standardBoardAlignment = false;
-
-    fp_angles_t rotationAngles;
+    fp_euler_t rotationAngles;
     rotationAngles.angles.roll  = degreesToRadians(boardAlignment->rollDegrees );
     rotationAngles.angles.pitch = degreesToRadians(boardAlignment->pitchDegrees);
     rotationAngles.angles.yaw   = degreesToRadians(boardAlignment->yawDegrees  );
 
-    buildRotationMatrix(&rotationAngles, &boardRotation);
+    rotationMatrix_of_fp_euler(&boardRotation, &rotationAngles);
 }
 
 static void alignBoard(float *vec)
 {
-    applyMatrixRotation(vec, &boardRotation);
+    fp_vector_t *v = (fp_vector_t*) vec;
+    rotate_vector_with_rotationMatrix(v, &boardRotation);
 }
 
 FAST_CODE_NOINLINE void alignSensorViaMatrix(float *dest, fp_rotationMatrix_t* sensorRotationMatrix)
 {
-    applyMatrixRotation(dest, sensorRotationMatrix);
+    fp_vector_t *v = (fp_vector_t*) dest;
+    rotate_vector_with_rotationMatrix(v, sensorRotationMatrix);
 
     if (!standardBoardAlignment) {
         alignBoard(dest);

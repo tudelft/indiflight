@@ -121,6 +121,7 @@ typedef enum {
     AAF_CONFIG_536HZ,
     AAF_CONFIG_997HZ,
     AAF_CONFIG_1962HZ,
+    AAF_CONFIG_126HZ,
     AAF_CONFIG_COUNT
 } aafConfig_e;
 
@@ -144,6 +145,7 @@ static aafConfig_t aafLUT42688[AAF_CONFIG_COUNT] = {  // see table in section 5.
     [AAF_CONFIG_536HZ]  = { 12,  144,  8 },
     [AAF_CONFIG_997HZ]  = { 21,  440,  6 },
     [AAF_CONFIG_1962HZ] = { 37, 1376,  4 },
+    [AAF_CONFIG_126HZ]  = {  3,    9, 12 },
 };
 
 // Possible gyro Anti-Alias Filter (AAF) cutoffs for ICM-42688P
@@ -152,7 +154,8 @@ static aafConfig_t aafLUT42605[AAF_CONFIG_COUNT] = {  // see table in section 5.
     [AAF_CONFIG_258HZ]  = { 21,  440,  6 }, // actually 249 Hz
     [AAF_CONFIG_536HZ]  = { 39, 1536,  4 }, // actually 524 Hz
     [AAF_CONFIG_997HZ]  = { 63, 3968,  3 }, // actually 995 Hz
-    [AAF_CONFIG_1962HZ] = { 63, 3968,  3 }, // 995 Hz is the max cutoff on the 42605
+    [AAF_CONFIG_1962HZ] = { 63, 3968,  3 }, // 995 Hz is the max cutoff on the 42605 
+    [AAF_CONFIG_126HZ]  = { 11,  122,  8 }, // actually 122 Hz
 };
 
 uint8_t icm426xxSpiDetect(const extDevice_t *dev)
@@ -251,7 +254,8 @@ void icm426xxGyroInit(gyroDev_t *gyro)
     spiWriteReg(dev, ICM426XX_RA_GYRO_CONFIG_STATIC5, (aafConfig.deltSqr >> 8) | (aafConfig.bitshift << 4));
 
     // Configure acc Anti-Alias Filter for 1kHz sample rate (see tasks.c)
-    aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_258HZ);
+    //aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_258HZ);
+    aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_126HZ);
     setUserBank(dev, ICM426XX_BANK_SELECT2);
     spiWriteReg(dev, ICM426XX_RA_ACCEL_CONFIG_STATIC2, aafConfig.delt << 1);
     spiWriteReg(dev, ICM426XX_RA_ACCEL_CONFIG_STATIC3, aafConfig.deltSqr & 0xFF);
@@ -326,6 +330,8 @@ static aafConfig_t getGyroAafConfig(const mpuSensor_e gyroModel, const aafConfig
             return aafLUT42605[AAF_CONFIG_536HZ];
         case GYRO_HARDWARE_LPF_OPTION_2:
             return aafLUT42605[AAF_CONFIG_997HZ];
+        case AAF_CONFIG_126HZ:
+            return aafLUT42605[AAF_CONFIG_126HZ];
         default:
             return aafLUT42605[AAF_CONFIG_258HZ];
         }
@@ -343,6 +349,8 @@ static aafConfig_t getGyroAafConfig(const mpuSensor_e gyroModel, const aafConfig
         case GYRO_HARDWARE_LPF_EXPERIMENTAL:
             return aafLUT42688[AAF_CONFIG_1962HZ];
 #endif
+        case AAF_CONFIG_126HZ:
+            return aafLUT42688[AAF_CONFIG_126HZ];
         default:
             return aafLUT42688[AAF_CONFIG_258HZ];
         }

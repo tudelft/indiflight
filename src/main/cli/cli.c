@@ -25,6 +25,9 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#ifdef MOCKUP
+#include <stdio.h>
+#endif
 
 #include "platform.h"
 
@@ -45,6 +48,7 @@ bool cliMode = false;
 #include "cms/cms.h"
 
 #include "common/axis.h"
+#include "common/benchmark.h"
 #include "common/color.h"
 #include "common/maths.h"
 #include "common/printf.h"
@@ -108,6 +112,9 @@ bool cliMode = false;
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
+#include "flight/indi.h"
+#include "flight/indi_init.h"
+#include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"
 
@@ -195,6 +202,8 @@ static bool configIsInCopy = false;
 #define CURRENT_PROFILE_INDEX -1
 static int8_t pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
 static int8_t rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
+static int8_t indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+static int8_t positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 
 #ifdef USE_CLI_BATCH
 static bool commandBatchActive = false;
@@ -311,12 +320,14 @@ typedef enum dumpFlags_e {
     DUMP_MASTER = (1 << 0),
     DUMP_PROFILE = (1 << 1),
     DUMP_RATES = (1 << 2),
-    DUMP_ALL = (1 << 3),
-    DO_DIFF = (1 << 4),
-    SHOW_DEFAULTS = (1 << 5),
-    HIDE_UNUSED = (1 << 6),
-    HARDWARE_ONLY = (1 << 7),
-    BARE = (1 << 8),
+    DUMP_INDI = (1 << 3),
+    DUMP_POSITION = (1 << 4),
+    DUMP_ALL = (1 << 5),
+    DO_DIFF = (1 << 6),
+    SHOW_DEFAULTS = (1 << 7),
+    HIDE_UNUSED = (1 << 8),
+    HARDWARE_ONLY = (1 << 9),
+    BARE = (1 << 10),
 } dumpFlags_t;
 
 typedef bool printFn(dumpFlags_t dumpMask, bool equalsDefault, const char *format, ...);
@@ -358,7 +369,11 @@ static void cliWriterFlush(void)
 
 void cliPrint(const char *str)
 {
+#ifdef MOCKUP
+    printf("%s", str);
+#else
     cliPrintInternal(cliWriter, str);
+#endif
 }
 
 void cliPrintLinefeed(void)
@@ -389,10 +404,14 @@ static void cliPutp(void *p, char ch)
 
 static void cliPrintfva(const char *format, va_list va)
 {
+#ifdef MOCKUP
+    vprintf(format, va);
+#else
     if (cliWriter) {
         tfp_format(cliWriter, cliPutp, format, va);
         cliWriterFlush();
     }
+#endif
 }
 
 static bool cliDumpPrintLinef(dumpFlags_t dumpMask, bool equalsDefault, const char *format, ...)
@@ -774,6 +793,16 @@ static uint8_t getRateProfileIndexToUse(void)
     return rateProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentControlRateProfileIndex() : rateProfileIndexToUse;
 }
 
+static uint8_t getIndiProfileIndexToUse(void)
+{
+    return indiProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentIndiProfileIndex() : indiProfileIndexToUse;
+}
+
+static uint8_t getPositionProfileIndexToUse(void)
+{
+    return positionProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentPositionProfileIndex() : positionProfileIndexToUse;
+}
+
 
 static uint16_t getValueOffset(const clivalue_t *value)
 {
@@ -785,6 +814,10 @@ static uint16_t getValueOffset(const clivalue_t *value)
         return value->offset + sizeof(pidProfile_t) * getPidProfileIndexToUse();
     case PROFILE_RATE_VALUE:
         return value->offset + sizeof(controlRateConfig_t) * getRateProfileIndexToUse();
+    case PROFILE_INDI_VALUE:
+        return value->offset + sizeof(indiProfile_t) * getIndiProfileIndexToUse();
+    case PROFILE_POSITION_VALUE:
+        return value->offset + sizeof(positionProfile_t) * getPositionProfileIndexToUse();
     }
     return 0;
 }
@@ -3168,6 +3201,28 @@ static void cliBoardName(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_BENCHMARK
+static void cliBenchmark(const char *cmdName, char *cmdline)
+{
+    UNUSED(cmdName);
+    UNUSED(cmdline);
+
+    // run the benchmarks
+    benchmark_harness();
+
+    cliPrintLinef("%-5s, %-7s, %-10s, %-10s, %-10s, %-10s", "Test", "Driver", "i16", "i32", "f32", "f64");
+
+    for (int test = 0; test < BENCH_TEST_COUNT; test++)
+        for (int driver = 0; driver < BENCH_DRIVER_COUNT; driver++)
+            cliPrintLinef("%5d  %7d  %10u  %10u  %10u  %10u",
+                test, driver, 
+                benchCounters[test][driver].i16,
+                benchCounters[test][driver].i32,
+                benchCounters[test][driver].f32,
+                benchCounters[test][driver].f64);
+}
+#endif
+
 static void printManufacturerId(dumpFlags_t dumpMask)
 {
     if (!(dumpMask & DO_DIFF) || strlen(getManufacturerId())) {
@@ -3550,7 +3605,9 @@ static void cliRebootEx(rebootTarget_e rebootTarget)
 {
     cliPrint("\r\nRebooting");
     cliWriterFlush();
+#ifndef SIMULATOR_BUILD
     waitForSerialPortToFinishTransmitting(cliPort);
+#endif
     motorShutdown();
 
     switch (rebootTarget) {
@@ -4061,7 +4118,7 @@ static void cliMotor(const char *cmdName, char *cmdline)
         if (motorValue < PWM_RANGE_MIN || motorValue > PWM_RANGE_MAX) {
             cliShowArgumentRangeError(cmdName, "VALUE", 1000, 2000);
         } else {
-            uint32_t motorOutputValue = motorConvertFromExternal(motorValue);
+            uint32_t motorOutputValue = (uint32_t) motorConvertFromExternal(motorValue);
 
             if (motorIndex != ALL_MOTORS) {
                 motor_disarmed[motorIndex] = motorOutputValue;
@@ -4147,6 +4204,42 @@ static void cliRateProfile(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_INDI
+static void cliIndiProfile(const char *cmdName, char *cmdline)
+{
+    if (isEmpty(cmdline)) {
+        cliPrintLinef("indiprofile %d", getIndiProfileIndexToUse());
+        return;
+    } else {
+        const int i = atoi(cmdline);
+        if (i >= 0 && i < INDI_PROFILE_COUNT) {
+            changeIndiProfile(i);
+            cliIndiProfile(cmdName, "");
+        } else {
+            cliPrintErrorLinef(cmdName, "INDI PROFILE OUTSIDE OF [0..%d]", INDI_PROFILE_COUNT - 1);
+        }
+    }
+}
+#endif
+
+#ifdef USE_POS_CTL
+static void cliPositionProfile(const char *cmdName, char *cmdline)
+{
+    if (isEmpty(cmdline)) {
+        cliPrintLinef("positionprofile %d", getPositionProfileIndexToUse());
+        return;
+    } else {
+        const int i = atoi(cmdline);
+        if (i >= 0 && i < POSITION_PROFILE_COUNT) {
+            changePositionProfile(i);
+            cliPositionProfile(cmdName, "");
+        } else {
+            cliPrintErrorLinef(cmdName, "POSITION PROFILE OUTSIDE OF [0..%d]", POSITION_PROFILE_COUNT - 1);
+        }
+    }
+}
+#endif
+
 static void cliDumpPidProfile(const char *cmdName, uint8_t pidProfileIndex, dumpFlags_t dumpMask)
 {
     if (pidProfileIndex >= PID_PROFILE_COUNT) {
@@ -4183,6 +4276,55 @@ static void cliDumpRateProfile(const char *cmdName, uint8_t rateProfileIndex, du
     dumpAllValues(cmdName, PROFILE_RATE_VALUE, dumpMask, rateProfileStr);
 
     rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
+}
+
+static void cliDumpIndiProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
+{
+    if (profileIndex >= INDI_PROFILE_COUNT) {
+        // Faulty values
+        return;
+    }
+
+#ifdef USE_INDI
+    indiProfileIndexToUse = profileIndex;
+
+    cliPrintLinefeed();
+    cliIndiProfile(cmdName, "");
+
+    char profileStr[15];
+    tfp_sprintf(profileStr, "indiprofile %d", profileIndex);
+    dumpAllValues(cmdName, PROFILE_INDI_VALUE, dumpMask, profileStr);
+#else
+    UNUSED(cmdName);
+    UNUSED(dumpMask);
+#endif
+
+    indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+
+}
+
+static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
+{
+    if (profileIndex >= POSITION_PROFILE_COUNT) {
+        // Faulty values
+        return;
+    }
+
+#ifdef USE_POS_CTL
+    positionProfileIndexToUse = profileIndex;
+
+    cliPrintLinefeed();
+    cliPositionProfile(cmdName, "");
+
+    char profileStr[19];
+    tfp_sprintf(profileStr, "positionprofile %d", profileIndex);
+    dumpAllValues(cmdName, PROFILE_POSITION_VALUE, dumpMask, profileStr);
+#else
+    UNUSED(cmdName);
+    UNUSED(dumpMask);
+#endif
+
+    positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 }
 
 #ifdef USE_CLI_BATCH
@@ -4456,6 +4598,8 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
 
     pidProfileIndexToUse = getCurrentPidProfileIndex();
     rateProfileIndexToUse = getCurrentControlRateProfileIndex();
+    indiProfileIndexToUse = getCurrentIndiProfileIndex();
+    positionProfileIndexToUse = getCurrentPositionProfileIndex();
 
     backupAndResetConfigs(true);
 
@@ -4477,6 +4621,18 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
                 cliRateProfile(cmdName, "");
 
                 break;
+#ifdef USE_INDI
+            case PROFILE_INDI_VALUE:
+                cliIndiProfile(cmdName, "");
+
+                break;
+#endif
+#ifdef USE_POS_CTL
+            case PROFILE_POSITION_VALUE:
+                cliPositionProfile(cmdName, "");
+
+                break;
+#endif
             default:
 
                 break;
@@ -4492,6 +4648,8 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
 
     pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
     rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
+    indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+    positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 
     if (!matchedCommands) {
         cliPrintErrorLinef(cmdName, ERROR_INVALID_NAME, cmdline);
@@ -4662,7 +4820,10 @@ STATIC_UNIT_TESTED void cliSet(const char *cmdName, char *cmdline)
                     }
 
                     // find next comma (or end of string)
-                    valPtr = strchr(valPtr, ',') + 1;
+                    valPtr = strchr(valPtr, ',');
+                    if (valPtr != NULL) {
+                        valPtr += 1;
+                    }
 
                     i++;
                 }
@@ -6238,6 +6399,10 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
         dumpMask = DUMP_PROFILE; // only
     } else if ((options = checkCommand(cmdline, "rates"))) {
         dumpMask = DUMP_RATES; // only
+    } else if ((options = checkCommand(cmdline, "indi"))) {
+        dumpMask = DUMP_INDI; // only
+    } else if ((options = checkCommand(cmdline, "position"))) {
+        dumpMask = DUMP_POSITION; // only
     } else if ((options = checkCommand(cmdline, "hardware"))) {
         dumpMask = DUMP_MASTER | HARDWARE_ONLY;   // Show only hardware related settings (useful to generate unified target configs).
     } else if ((options = checkCommand(cmdline, "all"))) {
@@ -6380,27 +6545,37 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                     cliDumpPidProfile(cmdName, pidProfileIndex, dumpMask);
                 }
 
-                pidProfileIndexToUse = systemConfig_Copy.pidProfileIndex;
-
-                if (!(dumpMask & BARE)) {
-                    cliPrintHashLine("restore original profile selection");
-
-                    cliProfile(cmdName, "");
-                }
-
-                pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
-
                 for (uint32_t rateIndex = 0; rateIndex < CONTROL_RATE_PROFILE_COUNT; rateIndex++) {
                     cliDumpRateProfile(cmdName, rateIndex, dumpMask);
                 }
 
+                for (uint32_t rateIndex = 0; rateIndex < INDI_PROFILE_COUNT; rateIndex++) {
+                    cliDumpIndiProfile(cmdName, rateIndex, dumpMask);
+                }
+
+                for (uint32_t rateIndex = 0; rateIndex < INDI_PROFILE_COUNT; rateIndex++) {
+                    cliDumpPositionProfile(cmdName, rateIndex, dumpMask);
+                }
+
+                pidProfileIndexToUse = systemConfig_Copy.pidProfileIndex;
                 rateProfileIndexToUse = systemConfig_Copy.activeRateProfile;
+                indiProfileIndexToUse = systemConfig_Copy.indiProfileIndex;
+                positionProfileIndexToUse = systemConfig_Copy.positionProfileIndex;
 
                 if (!(dumpMask & BARE)) {
+                    cliPrintHashLine("restore original profile selection");
+                    cliProfile(cmdName, "");
+
                     cliPrintHashLine("restore original rateprofile selection");
-
                     cliRateProfile(cmdName, "");
-
+#ifdef USE_INDI
+                    cliPrintHashLine("restore original indi profile selection");
+                    cliIndiProfile(cmdName, "");
+#endif
+#ifdef USE_POS_CTL
+                    cliPrintHashLine("restore original position profile selection");
+                    cliPositionProfile(cmdName, "");
+#endif
                     cliPrintHashLine("save configuration");
                     cliPrint("save");
 #ifdef USE_CLI_BATCH
@@ -6408,17 +6583,26 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 #endif
                 }
 
+                pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
                 rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
+                indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+                positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
+
             } else {
                 cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
-
                 cliDumpRateProfile(cmdName, systemConfig_Copy.activeRateProfile, dumpMask);
+                cliDumpIndiProfile(cmdName, systemConfig_Copy.indiProfileIndex, dumpMask);
+                cliDumpPositionProfile(cmdName, systemConfig_Copy.positionProfileIndex, dumpMask);
             }
         }
     } else if (dumpMask & DUMP_PROFILE) {
         cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
     } else if (dumpMask & DUMP_RATES) {
         cliDumpRateProfile(cmdName, systemConfig_Copy.activeRateProfile, dumpMask);
+    } else if (dumpMask & DUMP_INDI) {
+        cliDumpIndiProfile(cmdName, systemConfig_Copy.indiProfileIndex, dumpMask);
+    } else if (dumpMask & DUMP_POSITION) {
+        cliDumpPositionProfile(cmdName, systemConfig_Copy.positionProfileIndex, dumpMask);
     }
 
 #ifdef USE_CLI_BATCH
@@ -6527,6 +6711,9 @@ const clicmd_t cmdTable[] = {
 #if defined(USE_BOARD_INFO)
     CLI_COMMAND_DEF("board_name", "get / set the name of the board model", "[board name]", cliBoardName),
 #endif
+#if defined(USE_BENCHMARK)
+    CLI_COMMAND_DEF("benchmark", "benchmark common math functions", "", cliBenchmark),
+#endif
 #ifdef USE_LED_STRIP_STATUS_MODE
         CLI_COMMAND_DEF("color", "configure colors", NULL, cliColor),
 #endif
@@ -6609,6 +6796,12 @@ const clicmd_t cmdTable[] = {
 #endif
     CLI_COMMAND_DEF("profile", "change profile", "[<index>]", cliProfile),
     CLI_COMMAND_DEF("rateprofile", "change rate profile", "[<index>]", cliRateProfile),
+#ifdef USE_INDI
+    CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
+#endif
+#ifdef USE_POS_CTL
+    CLI_COMMAND_DEF("positionprofile", "change position profile", "[<index>]", cliPositionProfile),
+#endif
 #ifdef USE_RC_SMOOTHING_FILTER
     CLI_COMMAND_DEF("rc_smoothing_info", "show rc_smoothing operational settings", NULL, cliRcSmoothing),
 #endif // USE_RC_SMOOTHING_FILTER
@@ -6761,7 +6954,7 @@ static void processCharacter(const char c)
     }
 }
 
-static void processCharacterInteractive(const char c)
+void processCharacterInteractive(const char c)
 {
     if (c == '\t' || c == '?') {
         // do tab completion
@@ -6793,8 +6986,10 @@ static void processCharacterInteractive(const char c)
             /* Print list of ambiguous matches */
             cliPrint("\r\n\033[K");
             for (cmd = pstart; cmd <= pend; cmd++) {
-                cliPrint(cmd->name);
-                cliWrite('\t');
+                if (cmd != NULL) {
+                    cliPrint(cmd->name);
+                    cliWrite('\t');
+                }
             }
             cliPrompt();
             i = 0;    /* Redraw prompt */

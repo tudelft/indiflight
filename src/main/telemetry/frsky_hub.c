@@ -181,7 +181,7 @@ static void frSkyHubWriteByteInternal(const char data)
 static void sendAccel(void)
 {
     for (unsigned i = 0; i < 3; i++) {
-        frSkyHubWriteFrame(ID_ACC_X + i, ((int16_t)(acc.accADC[i] * acc.dev.acc_1G_rec) * 1000));
+        frSkyHubWriteFrame(ID_ACC_X + i, ((int16_t)(acc.accADCf[i] * acc.dev.acc_1G_rec) * 1000));
     }
 }
 #endif
@@ -442,7 +442,7 @@ static void sendFakeLatLongThatAllowsHeadingDisplay(void)
 
 static void sendHeading(void)
 {
-    frSkyHubWriteFrame(ID_COURSE_BP, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+    frSkyHubWriteFrame(ID_COURSE_BP, DECIDEGREES_TO_DEGREES(attitude.angles.yaw));
     frSkyHubWriteFrame(ID_COURSE_AP, 0);
 }
 #endif

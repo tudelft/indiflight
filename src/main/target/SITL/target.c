@@ -78,8 +78,8 @@ int lockMainPID(void)
 }
 
 #define RAD2DEG (180.0 / M_PI)
-#define ACC_SCALE (256 / 9.80665)
-#define GYRO_SCALE (16.4)
+#define ACC_SCALE (256.f / GRAVITYf)
+#define GYRO_SCALE (16.4f)
 void sendMotorUpdate(void)
 {
     udpSend(&pwmLink, &pwmPkt, sizeof(servo_packet));
@@ -107,42 +107,42 @@ void updateState(const fdm_packet* pkt)
     }
 
     int16_t x,y,z;
-    x = constrain(-pkt->imu_linear_acceleration_xyz[0] * ACC_SCALE, -32767, 32767);
-    y = constrain(-pkt->imu_linear_acceleration_xyz[1] * ACC_SCALE, -32767, 32767);
-    z = constrain(-pkt->imu_linear_acceleration_xyz[2] * ACC_SCALE, -32767, 32767);
+    x = (int16_t) constrainf(-pkt->imu_linear_acceleration_xyz[0] * ((double) ACC_SCALE), -32767.f, 32767.f);
+    y = (int16_t) constrainf(-pkt->imu_linear_acceleration_xyz[1] * ((double) ACC_SCALE), -32767.f, 32767.f);
+    z = (int16_t) constrainf(-pkt->imu_linear_acceleration_xyz[2] * ((double) ACC_SCALE), -32767.f, 32767.f);
     fakeAccSet(fakeAccDev, x, y, z);
 //    printf("[acc]%lf,%lf,%lf\n", pkt->imu_linear_acceleration_xyz[0], pkt->imu_linear_acceleration_xyz[1], pkt->imu_linear_acceleration_xyz[2]);
 
-    x = constrain(pkt->imu_angular_velocity_rpy[0] * GYRO_SCALE * RAD2DEG, -32767, 32767);
-    y = constrain(-pkt->imu_angular_velocity_rpy[1] * GYRO_SCALE * RAD2DEG, -32767, 32767);
-    z = constrain(-pkt->imu_angular_velocity_rpy[2] * GYRO_SCALE * RAD2DEG, -32767, 32767);
+    x = constrain(pkt->imu_angular_velocity_rpy[0]  * ((double) GYRO_SCALE * RAD2DEG), -32767, 32767);
+    y = constrain(-pkt->imu_angular_velocity_rpy[1] * ((double) GYRO_SCALE * RAD2DEG), -32767, 32767);
+    z = constrain(-pkt->imu_angular_velocity_rpy[2] * ((double) GYRO_SCALE * RAD2DEG), -32767, 32767);
     fakeGyroSet(fakeGyroDev, x, y, z);
 //    printf("[gyr]%lf,%lf,%lf\n", pkt->imu_angular_velocity_rpy[0], pkt->imu_angular_velocity_rpy[1], pkt->imu_angular_velocity_rpy[2]);
 
 #if !defined(USE_IMU_CALC)
 #if defined(SET_IMU_FROM_EULER)
     // set from Euler
-    double qw = pkt->imu_orientation_quat[0];
-    double qx = pkt->imu_orientation_quat[1];
-    double qy = pkt->imu_orientation_quat[2];
-    double qz = pkt->imu_orientation_quat[3];
-    double ysqr = qy * qy;
+    double w = pkt->imu_orientation_quat[0];
+    double x = pkt->imu_orientation_quat[1];
+    double y = pkt->imu_orientation_quat[2];
+    double z = pkt->imu_orientation_quat[3];
+    double ysqr = y * y;
     double xf, yf, zf;
 
     // roll (x-axis rotation)
-    double t0 = +2.0 * (qw * qx + qy * qz);
-    double t1 = +1.0 - 2.0 * (qx * qx + ysqr);
+    double t0 = +2.0 * (w * x + y * z);
+    double t1 = +1.0 - 2.0 * (x * x + ysqr);
     xf = atan2(t0, t1) * RAD2DEG;
 
     // pitch (y-axis rotation)
-    double t2 = +2.0 * (qw * qy - qz * qx);
+    double t2 = +2.0 * (w * y - z * x);
     t2 = t2 > 1.0 ? 1.0 : t2;
     t2 = t2 < -1.0 ? -1.0 : t2;
     yf = asin(t2) * RAD2DEG; // from wiki
 
     // yaw (z-axis rotation)
-    double t3 = +2.0 * (qw * qz + qx * qy);
-    double t4 = +1.0 - 2.0 * (ysqr + qz * qz);
+    double t3 = +2.0 * (w * z + x * y);
+    double t4 = +1.0 - 2.0 * (ysqr + z * z);
     zf = atan2(t3, t4) * RAD2DEG;
     imuSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
 #else

@@ -37,7 +37,9 @@ MCU_EXCLUDES = \
             telemetry/crsf.c \
             telemetry/ghst.c \
             telemetry/srxl.c \
-            io/displayport_oled.c
+            io/displayport_oled.c \
+			common/benchmark.c \
+			common/scalar_mult_f32_asm.S
 
 TARGET_MAP  = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET).map
 

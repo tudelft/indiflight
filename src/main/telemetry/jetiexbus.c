@@ -327,15 +327,15 @@ int32_t getSensorValue(uint8_t sensor)
         break;
 
     case EX_ROLL_ANGLE:
-        return attitude.values.roll;
+        return attitude.angles.roll;
         break;
 
     case EX_PITCH_ANGLE:
-        return attitude.values.pitch;
+        return attitude.angles.pitch;
         break;
 
     case EX_HEADING:
-        return attitude.values.yaw;
+        return attitude.angles.yaw;
         break;
 
 #ifdef USE_VARIO
@@ -380,15 +380,15 @@ int32_t getSensorValue(uint8_t sensor)
 
 #if defined(USE_ACC)
     case EX_GFORCE_X:
-       return (int16_t)(((float)acc.accADC[0] / acc.dev.acc_1G) * 1000);
+       return (int16_t)(((float)acc.accADCf[0] / acc.dev.acc_1G) * 1000);
     break;
 
     case EX_GFORCE_Y:
-       return (int16_t)(((float)acc.accADC[1] / acc.dev.acc_1G) * 1000);
+       return (int16_t)(((float)acc.accADCf[1] / acc.dev.acc_1G) * 1000);
     break;
 
     case EX_GFORCE_Z:
-        return (int16_t)(((float)acc.accADC[2] / acc.dev.acc_1G) * 1000);
+        return (int16_t)(((float)acc.accADCf[2] / acc.dev.acc_1G) * 1000);
     break;
 #endif
 

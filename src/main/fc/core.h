@@ -56,7 +56,10 @@ typedef enum {
     DISARM_REASON_GPS_RESCUE        = 7,
     DISARM_REASON_SERIAL_COMMAND    = 8,
     DISARM_REASON_ALLOC_FAILURE     = 9,
-#ifdef UNIT_TEST
+#ifdef USE_TELEMETRY_PI
+    DISARM_REASON_KEYBOARD          = 10,
+#endif
+#if defined(UNIT_TEST) || defined(SITL) || defined(MOCKUP)
     DISARM_REASON_SYSTEM            = 255,
 #endif
 } flightLogDisarmReason_e;
@@ -73,8 +76,6 @@ void handleInflightCalibrationStickPosition(void);
 
 void resetArmingDisabled(void);
 
-void updateThrowFallStateMachine(timeUs_t currentTimeUs);
-
 void disarm(flightLogDisarmReason_e reason);
 void tryArm(void);
 
@@ -82,12 +83,12 @@ bool processRx(timeUs_t currentTimeUs);
 void processRxModes(timeUs_t currentTimeUs);
 void updateArmingStatus(void);
 
+void resetInnerLoopCounter(void);
 void taskGyroSample(timeUs_t currentTimeUs);
 bool gyroFilterReady(void);
-bool pidLoopReady(void);
+bool innerLoopReady(void);
 void taskFiltering(timeUs_t currentTimeUs);
-void taskMainPidLoop(timeUs_t currentTimeUs);
-void taskMainIndiLoop(timeUs_t currentTimeUs);
+void taskMainInnerLoop(timeUs_t currentTimeUs);
 
 bool isTouchingGround(void);
 bool isFlipOverAfterCrashActive(void);

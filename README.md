@@ -2,41 +2,96 @@
 
 This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras, or even offboard control is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
 
-[![Latest version](https://img.shields.io/github/v/release/betaflight/betaflight)](https://github.com/betaflight/betaflight/releases) [![Build](https://img.shields.io/github/actions/workflow/status/betaflight/betaflight/nightly.yml?branch=master)](https://github.com/betaflight/betaflight/actions/workflows/nightly.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Join us on Discord!](https://img.shields.io/discord/868013470023548938)](https://discord.gg/n4E6ak4u3c)
+## Building using docker -- the preferred way
 
-Betaflight is flight controller software (firmware) used to fly multi-rotor craft and fixed wing craft.
+(tested on Ubuntu 22.04, install docker like https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
 
-This fork differs from Baseflight and Cleanflight in that it focuses on flight performance, leading-edge feature additions, and wide target support.
+### Step 1 -- Create a docker image:
 
-## Custom make command
+    docker build . -t indiflight
 
-TODO: this can be improved
 
-For Tills MATEKH743 MINI V3:
-```bash
-make STM32H743 EXTRA_FLAGS="-D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_BARO -DUSE_BARO_BMP280 -DUSE_BARO_DPS310 -DUSE_DSHOT -DUSE_GPS -DUSE_GPS_PLUS_CODES -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_TELEMETRY -DUSE_TELEMETRY_CRSF -DUSE_VTX -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DTELEMETRY_PI_UPLINK"
-```
+### Step 2 -- Create a `make/local.mk`
 
-This has been improved. Put all that junk in `make/local.mk`:
+This defines the build configuration. For the Mateksys H743 you can use the 
+following file (to do that for other FCs, check https://github.com/betaflight/config/):
+
 ```Makefile
-TARGET=STM32H743
-EXTRA_FLAGS=-D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_BARO -DUSE_BARO_BMP280 -DUSE_BARO_DPS310 -DUSE_DSHOT -DUSE_GPS -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DTELEMETRY_PI_UPLINK -DUSE_GPS_PI
+########## TARGET CONFIG
+TARGET = STM32H743
+EXTRA_FLAGS = $(EXTRA_FLAGS_CMDLINE) -D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_DSHOT -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_BLACKBOX -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_SMARTPORT
+
+########## FURTHER OPTIONS
+# Developer options
+#EXTRA_FLAGS += -DUSE_BENCHMARK -DUSE_STACK_CHECK
+
+# indi config:
+EXTRA_FLAGS += -DUSE_INDI
+
+# telemetry config:
+EXTRA_FLAGS += -DUSE_TELEMETRY -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DUSE_GPS_PI
+
+# higher level controllers / estimators
+#EXTRA_FLAGS += -DUSE_EKF
+EXTRA_FLAGS += -DUSE_POS_CTL -DUSE_VEL_CTL
+EXTRA_FLAGS += -DUSE_GPS
+EXTRA_FLAGS += -DUSE_TRAJECTORY_TRACKER
+
+# DANGEROUS modes!!
+#EXTRA_FLAGS += -DUSE_ACCEL_RPM_FILTER 
+#EXTRA_FLAGS += -DUSE_THROW_TO_ARM -DUSE_THROWING_WITHOUT_POSITION
+#EXTRA_FLAGS += -DUSE_CATAPULT
+#EXTRA_FLAGS += -DUSE_LEARNER
+#EXTRA_FLAGS += -DUSE_NN_CONTROL
 ```
 
-## Flashing and Debugging over pi
+### Step 3 -- First flash and configuration
 
-For context, see REAMDME's of https://github.com/tblaha/pi-kompaan.
+Run docker image, which outputs a `./obj/*.hex` file, which can be flashed via
+the [configurator](https://github.com/tudelft/indiflight-configurator) (**use "Full chip erase" option**):
+
+    docker run -v ./:/indiflight indiflight
+
+Now you still need to load a suitable profile via the [configurator](https://github.com/tudelft/indiflight-configurator) 
+that defines the runtime-config, which is board-dependent, but also drone-dependent.
+See https://github.com/tudelft/indiflightSupport for that.
+
+
+### Step 4 -- Subsequent compilations
+
+The next compilations can be much faster, without full chip erase, and even
+without the configurator at all. Boot the flight controller into DFU-mode by
+pressing the boot button while powering on. Then compile and flash at the same
+time:
+
+    docker run --privileged -v ./:/indiflight indiflight dfu_flash
+
+See below for how to use a companion computer to flash and debug even faster
+
+
+### Step 5 -- Other useful arguments to the container
+
+All arguments after the image tag `indiflight`, are directly passed to `make`. Examples are:
+```sh
+clean                       # delete all relevant object files
+DEBUG=GDB                   # no optimisations and with debug symbols (run clean before!)
+DEBUG=GDB dfu_flash         # dito, but then flash via dfu after
+DEBUG=GDB remote_flash_swd  # dito, but then flash via swd on a companion computer
+```
+
+
+## Flashing and Debugging over raspberry pi companion computer
+
+For context, see REAMDME's of https://github.com/tudelft/racebian.
 
 Furthermore, install:
-```shell
-apt install gdb-multiarch binutils-multiarch sshpass
-```
 
-If connected to the pi-kompaan raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash:
-```bash
-make remote_flash_swd
-# make DEBUG=GDB remote_flash_swd  # to compile with symbols and without optimisations
-```
+    apt install gdb-multiarch binutils-multiarch sshpass
+
+If connected to the racebian raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash:
+
+    docker run -v ./:/indiflight indiflight remote_flash_swd
+    #docker run -v ./:/indiflight indiflight DEBUG=GDB remote_flash_swd
 
 To debug within VScode, just hit `CTRL+SHIFT+D`, hit play and be a little bit patient (15sec or so? Then youll be taken to the start of `main()`).
 
@@ -45,110 +100,7 @@ DO NOT CLICK ON `Global` variables, this froze and crashed by VScode.
 You can reset and execution of betaflight by typing `monitor reset` in the `DEBUG CONSOLE`.
 
 
-## Events
-
-| Date  | Event |
-| - | - |
-| 01-11-2022 | Firmware 4.4 Feature freeze |
-
-
-## News
-
-### Requirements for the submission of new and updated targets
-
-The following new requirements for pull requests adding new targets or modifying existing targets are put in place from now on:
-
-1. Read the [hardware specification](https://betaflight.com/docs/manufacturer/Manufacturer%20Design%20Guidelines)
-
-2. No new F3 based targets will be accepted;
-
-3. For any new target that is to be added, only a Unified Target config into https://github.com/betaflight/unified-targets/tree/master/configs/default needs to be submitted. See the [instructions](https://betaflight.com/docs/manufacturer/Creating%20An%20Unified%20Target) for how to create a Unified Target configuration. If there is no Unified Target for the MCU type of the new target (see instructions above), then a 'legacy' format target definition into `src/main/target/` has to be submitted as well;
-
-4. For changes to existing targets, the change needs to be applied to the Unified Target config in https://github.com/betaflight/unified-targets/tree/master/configs/default. If no Unified Target configuration for the target exists, a new Unified Target configuration will have to be created and submitted. If there is no Unified Target for the MCU type of the new target (see instructions above), then an update to the 'legacy' format target definition in `src/main/target/` has to be submitted alongside the update to the Unified Target configuration.
-
-
-## Features
-
-Betaflight has the following features:
-
-* Multi-color RGB LED strip support (each LED can be a different color using variable length WS2811 Addressable RGB strips - use for Orientation Indicators, Low Battery Warning, Flight Mode Status, Initialization Troubleshooting, etc)
-* DShot (150, 300 and 600), Multishot, Oneshot (125 and 42) and Proshot1000 motor protocol support
-* Blackbox flight recorder logging (to onboard flash or external microSD card where equipped)
-* Support for targets that use the STM32 F4, G4, F7 and H7 processors
-* PWM, PPM, SPI, and Serial (SBus, SumH, SumD, Spektrum 1024/2048, XBus, etc) RX connection with failsafe detection
-* Multiple telemetry protocols (CRSF, FrSky, HoTT smart-port, MSP, etc)
-* RSSI via ADC - Uses ADC to read PWM RSSI signals, tested with FrSky D4R-II, X8R, X4R-SB, & XSR
-* OSD support & configuration without needing third-party OSD software/firmware/comm devices
-* OLED Displays - Display information on: Battery voltage/current/mAh, profile, rate profile, mode, version, sensors, etc
-* In-flight manual PID tuning and rate adjustment
-* PID and filter tuning using sliders
-* Rate profiles and in-flight selection of them
-* Configurable serial ports for Serial RX, Telemetry, ESC telemetry, MSP, GPS, OSD, Sonar, etc - Use most devices on any port, softserial included
-* VTX support for Unify Pro and IRC Tramp
-* and MUCH, MUCH more.
-
-## Installation & Documentation
-
-See: https://betaflight.com/docs/wiki
-
-## Support and Developers Channel
-
-There's a dedicated Discord server here:
-
-https://discord.gg/n4E6ak4u3c
-
-We also have a Facebook Group. Join us to get a place to talk about Betaflight, ask configuration questions, or just hang out with fellow pilots.
-
-https://www.facebook.com/groups/betaflightgroup/
-
-Etiquette: Don't ask to ask and please wait around long enough for a reply - sometimes people are out flying, asleep or at work and can't answer immediately.
-
-## Configuration Tool
-
-To configure Betaflight you should use the Betaflight-configurator GUI tool (Windows/OSX/Linux) which can be found here:
-
-https://github.com/betaflight/betaflight-configurator/releases/latest
-
-## Contributing
-
-Contributions are welcome and encouraged. You can contribute in many ways:
-
-* implement a new feature in the firmware or in configurator (see [below](#Developers));
-* documentation updates and corrections;
-* How-To guides - received help? Help others!
-* bug reporting & fixes;
-* new feature ideas & suggestions;
-* provide a new translation for configurator, or help us maintain the existing ones (see [below](#Translators)).
-
-The best place to start is the Betaflight Discord (registration [here](https://discord.gg/n4E6ak4u3c)). Next place is the github issue tracker:
-
-https://github.com/betaflight/betaflight/issues
-https://github.com/betaflight/betaflight-configurator/issues
-
-Before creating new issues please check to see if there is an existing one, search first otherwise you waste people's time when they could be coding instead!
-
-If you want to contribute to our efforts financially, please consider making a donation to us through [PayPal](https://paypal.me/betaflight).
-
-If you want to contribute financially on an ongoing basis, you should consider becoming a patron for us on [Patreon](https://www.patreon.com/betaflight).
-
-## Developers
-
-Contribution of bugfixes and new features is encouraged. Please be aware that we have a thorough review process for pull requests, and be prepared to explain what you want to achieve with your pull request.
-Before starting to write code, please read our [development guidelines](https://betaflight.com/docs/development/development) and [coding style definition](https://betaflight.com/docs/development/development/CodingStyle).
-
-GitHub actions are used to run automatic builds
-
-## Translators
-
-We want to make Betaflight accessible for pilots who are not fluent in English, and for this reason we are currently maintaining translations into 21 languages for Betaflight Configurator: Català, Dansk, Deutsch, Español, Euskera, Français, Galego, Hrvatski, Bahasa Indonesia, Italiano, 日本語, 한국어, Latviešu, Português, Português Brasileiro, polski, Русский язык, Svenska, 简体中文, 繁體中文.
-We have got a team of volunteer translators who do this work, but additional translators are always welcome to share the workload, and we are keen to add additional languages. If you would like to help us with translations, you have got the following options:
-- if you help by suggesting some updates or improvements to translations in a language you are familiar with, head to [crowdin](https://crowdin.com/project/betaflight-configurator) and add your suggested translations there;
-- if you would like to start working on the translation for a new language, or take on responsibility for proof-reading the translation for a language you are very familiar with, please head to the Betaflight Discord chat (registration [here](https://discord.gg/n4E6ak4u3c)), and join the ['translation'](https://discord.com/channels/868013470023548938/1057773726915100702) channel - the people in there can help you to get a new language added, or set you up as a proof reader.
-
-## Hardware Issues
-
-Betaflight does not manufacture or distribute their own hardware. While we are collaborating with and supported by a number of manufacturers, we do not do any kind of hardware support.
-If you encounter any hardware issues with your flight controller or another component, please contact the manufacturer or supplier of your hardware, or check RCGroups https://rcgroups.com/forums/showthread.php?t=2464844 to see if others with the same problem have found a solution.
+# From Original Betaflight README
 
 ## Betaflight Releases
 

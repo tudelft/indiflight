@@ -59,10 +59,10 @@ PG_REGISTER_ARRAY(motorMixer_t, MAX_SUPPORTED_MOTORS, customMotorMixer, PG_MOTOR
 mixerMode_e currentMixerMode;
 
 static const motorMixer_t mixerQuadX[] = {
-    { 1.0f, -1.0f,  1.0f, -1.0f },          // REAR_R
-    { 1.0f, -1.0f, -1.0f,  1.0f },          // FRONT_R
-    { 1.0f,  1.0f,  1.0f,  1.0f },          // REAR_L
-    { 1.0f,  1.0f, -1.0f, -1.0f },          // FRONT_L
+    { 1.0f, -1.0f, -1.0f, +1.0f },          // REAR_R
+    { 1.0f, -1.0f, +1.0f, -1.0f },          // FRONT_R
+    { 1.0f,  1.0f, -1.0f, -1.0f },          // REAR_L
+    { 1.0f,  1.0f, +1.0f, +1.0f },          // FRONT_L
 };
 #ifndef USE_QUAD_MIXER_ONLY
 static const motorMixer_t mixerTricopter[] = {
@@ -284,11 +284,14 @@ bool mixerIsTricopter(void)
 // DSHOT scaling is done to the actual dshot range
 void initEscEndpoints(void)
 {
-    float motorOutputLimit = 1.0f;
-    //if (currentPidProfile->motor_output_limit < 100) {
-    //    motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
-    //}
-    // this now gets managed in att_ctl, so the controller is aware
+    float motorOutputLimit = 1.;
+    if ((currentPidProfile->motor_output_limit < 100)
+#ifdef USE_INDI
+        && (FLIGHT_MODE(PID_MODE))
+#endif
+        ) {
+        motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
+    }
     motorInitEndpoints(motorConfig(), motorOutputLimit, &mixerRuntime.motorOutputLow, &mixerRuntime.motorOutputHigh, &mixerRuntime.disarmMotorOutput, &mixerRuntime.deadbandMotor3dHigh, &mixerRuntime.deadbandMotor3dLow);
 }
 
@@ -369,6 +372,9 @@ static void mixerConfigureOutput(void)
                 mixerRuntime.currentMixer[i] = mixers[currentMixerMode].motor[i];
         }
     }
+#ifdef MOCKUP
+    mixerRuntime.motorCount = MAX_SUPPORTED_MOTORS; // fixme#
+#endif
 #ifdef USE_LAUNCH_CONTROL
     loadLaunchControlMixer();
 #endif

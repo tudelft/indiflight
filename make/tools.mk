@@ -260,6 +260,8 @@ zip_clean:
 #
 ##############################
 
+ifneq ($(TARGET), MOCKUP)
+
 ifeq ($(shell [ -d "$(ARM_SDK_DIR)" ] && echo "exists"), exists)
   ARM_SDK_PREFIX := $(ARM_SDK_DIR)/bin/arm-none-eabi-
 else ifeq (,$(filter %_install test% clean% %-print checks help, $(MAKECMDGOALS)))
@@ -272,6 +274,8 @@ else ifeq (,$(filter %_install test% clean% %-print checks help, $(MAKECMDGOALS)
 
   # ARM tookchain is in the path, and the version is what's required.
   ARM_SDK_PREFIX ?= arm-none-eabi-
+endif
+
 endif
 
 ifeq ($(shell [ -d "$(ZIP_DIR)" ] && echo "exists"), exists)

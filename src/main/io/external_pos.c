@@ -1,3 +1,26 @@
+/*
+ * Get local NED position from difference sources (uplink/GPS)
+ *
+ * Copyright 2024 Till Blaha (Delft University of Technology)
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
 
 #include "pi-messages.h"
 #include "external_pos.h"
@@ -8,21 +31,13 @@
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
 #include "flight/imu.h"
+#include "io/gps.h"
 
 #ifdef USE_GPS_PI
 
 #ifndef USE_TELEMETRY_PI
 #error "USE_GPS_PI requires the use of USE_TELEMETRY_PI"
 #endif
-// UGLY HACK ----------------------------------------------
-#include "flight/trajectory_tracker.h"
-#include "fc/core.h"
-// --------------------------------------------------------
-// ALSO UGLY HACK -----------------------------------------
-#ifdef USE_NN_CONTROL
-#include "flight/nn_control.h"
-#endif
-// --------------------------------------------------------
 
 //extern
 ext_pos_ned_t extPosNed;
@@ -33,14 +48,14 @@ vio_pos_ned_t vioPosNed;
 ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
 timeUs_t vioLatestMsgTime = 0;
 
-pos_setpoint_ned_t posSetpointNed;
+pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
 
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
-        timeUs_t currentMsgTime = piMsgExternalPoseRx->time_ms*1e3;
+        timeUs_t currentMsgTime = piMsgExternalPoseRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
@@ -64,34 +79,50 @@ void checkNewPos(void) {
 }
 
 void getExternalPos(timeUs_t current) {
-
     UNUSED(current);
 
-    checkNewPos();
-    if (extPosState == EXT_POS_NO_SIGNAL)
+#ifdef USE_GPS
+    if (realGPSConfigured) {
         return;
+    }
+#endif
 
-    if (extPosState == EXT_POS_NEW_MESSAGE) {
-        // time stamp
-        extPosNed.time_ms = piMsgExternalPoseRx->time_ms;
-        // process new message into NED
-        extPosNed.pos.V.X = piMsgExternalPoseRx->enu_y;
-        extPosNed.pos.V.Y = piMsgExternalPoseRx->enu_x;
-        extPosNed.pos.V.Z = -piMsgExternalPoseRx->enu_z;
-        extPosNed.vel.V.X = piMsgExternalPoseRx->enu_yd;
-        extPosNed.vel.V.Y = piMsgExternalPoseRx->enu_xd;
-        extPosNed.vel.V.Z = -piMsgExternalPoseRx->enu_zd;
-        fp_angles_t eulers;
-        fp_quaternion_t quat;
-        // the quaternion x,y,z are in ENU, we convert them to NED
-        quat.qi = piMsgExternalPoseRx->body_qi;
-        quat.qx = piMsgExternalPoseRx->body_qy;
-        quat.qy = piMsgExternalPoseRx->body_qx;
-        quat.qz =-piMsgExternalPoseRx->body_qz;
-        float_eulers_of_quat(&eulers, &quat);
-        extPosNed.att.angles.roll = eulers.angles.roll;
-        extPosNed.att.angles.pitch = eulers.angles.pitch;
-        extPosNed.att.angles.yaw = eulers.angles.yaw;
+    checkNewPos();
+
+    switch (extPosState) {
+        case EXT_POS_NEW_MESSAGE:
+            // time stamp
+            extPosNed.time_us = piMsgExternalPoseRx->time_us;
+            // process new message (should be NED)
+            extPosNed.pos.V.X = piMsgExternalPoseRx->ned_x;
+            extPosNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
+            extPosNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
+            extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
+            extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
+            extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
+            fp_euler_t eulers;
+            fp_quaternion_t quat;
+            // the quaternion x,y,z should be NED
+            quat.w = piMsgExternalPoseRx->body_qi;
+            quat.x = piMsgExternalPoseRx->body_qx;
+            quat.y = piMsgExternalPoseRx->body_qy;
+            quat.z = piMsgExternalPoseRx->body_qz;
+            fp_quaternionProducts_t qP;
+            quaternionProducts_of_quaternion(&qP, &quat);
+            fp_euler_of_quaternionProducts (&eulers, &qP);
+            extPosNed.att.angles.roll = eulers.angles.roll;
+            extPosNed.att.angles.pitch = eulers.angles.pitch;
+            extPosNed.att.angles.yaw = eulers.angles.yaw;
+
+            sensorsSet(SENSOR_GPS);
+            ENABLE_STATE(GPS_FIX);
+            ENABLE_STATE(GPS_FIX_EVER);
+            break;
+        case EXT_POS_NO_SIGNAL:
+            DISABLE_STATE(GPS_FIX);
+            break;
+        default:
+            break;
     }
 }
 
@@ -99,7 +130,7 @@ void getExternalPos(timeUs_t current) {
 void checkNewVioPos(void) {
     if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
-        timeUs_t currentMsgTime = piMsgVioPoseRx->time_ms*1e3;
+        timeUs_t currentMsgTime = piMsgVioPoseRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
@@ -131,7 +162,7 @@ void getVioPos(timeUs_t current) {
 
     if (vioPosState == EXT_POS_NEW_MESSAGE) {
         // time stamp
-        vioPosNed.time_ms = piMsgVioPoseRx->time_ms;
+        vioPosNed.time_us = piMsgVioPoseRx->time_us;
         // process new message from UNKNOWN REFERENCE FRAME to NED
         vioPosNed.x = piMsgVioPoseRx->x;
         vioPosNed.y = piMsgVioPoseRx->y;
@@ -156,7 +187,7 @@ void getFakeGps(timeUs_t current) {
     UNUSED(current);
 
 #ifdef USE_GPS
-    if (piMsgFakeGpsRx) {
+    if (!realGPSConfigured && piMsgFakeGpsRx) {
         gpsSol.llh.lat = piMsgFakeGpsRx->lat;
         gpsSol.llh.lon = piMsgFakeGpsRx->lon;
         gpsSol.llh.altCm = piMsgFakeGpsRx->altCm;
@@ -164,14 +195,6 @@ void getFakeGps(timeUs_t current) {
         gpsSol.groundSpeed = piMsgFakeGpsRx->groundSpeed;
         gpsSol.groundCourse = piMsgFakeGpsRx->groundCourse;
         gpsSol.numSat = piMsgFakeGpsRx->numSat;
-        // let the configurator know that we have a good GPS, and a good fix
-        sensorsSet(SENSOR_GPS);
-        ENABLE_STATE(GPS_FIX);
-        ENABLE_STATE(GPS_FIX_EVER);
-    }
-
-    if (extPosState == EXT_POS_NO_SIGNAL) {
-        DISABLE_STATE(GPS_FIX);
     }
 #endif
 }
@@ -182,77 +205,23 @@ void getPosSetpoint(timeUs_t current) {
     static timeUs_t latestSetpointTime = 0;
 
     if (piMsgPosSetpointRx) {
-        timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_ms * 1e3;
+        timeUs_t currentSetpointTime = piMsgPosSetpointRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentSetpointTime, latestSetpointTime);
         bool newMsg = (deltaMsgs != 0);
         if (newMsg) {
             latestSetpointTime = currentSetpointTime;
-            posSetpointNed.pos.V.X = piMsgPosSetpointRx->enu_y;
-            posSetpointNed.pos.V.Y = piMsgPosSetpointRx->enu_x;
-            posSetpointNed.pos.V.Z = -piMsgPosSetpointRx->enu_z;
-
-#ifdef USE_TRAJECTORY_TRACKER
-            // UGLY HACK: velocity setpoint is used for communication with the trajectory tracker -----------------
-            
-            // call initTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 1
-            if (piMsgPosSetpointRx->enu_xd == 1) {
-                initTrajectoryTracker();
-                return;
-            }
-
-            // call stopTrajectoryTracker when piMsgPosSetpointRx->enu_xd == 2
-            if (piMsgPosSetpointRx->enu_xd == 2) {
-                stopTrajectoryTracker();
-                return;
-            }
-
-            // disarm when piMsgPosSetpointRx->enu_xd == 3
-            if (piMsgPosSetpointRx->enu_xd == 3) {
-                disarm(DISARM_REASON_SWITCH);
-                return;
-            }
-
-            // call setSpeedTrajectoryTracker when piMsgPosSetpointRx->enu_yd > 0 and use piMsgPosSetpointRx->enu_yd as speed
-            if (piMsgPosSetpointRx->enu_yd > 0) {
-                setSpeedTrajectoryTracker(piMsgPosSetpointRx->enu_yd);
-                return;
-            }
-
-            // call initRecoveryMode when piMsgPosSetpointRx->enu_xd == 6
-            if (piMsgPosSetpointRx->enu_xd == 6) {
-                initRecoveryMode();
-                return;
-            }
-#endif
-#ifdef USE_NN_CONTROL
-            // UGLY HACK: velocity setpoint is used for communication with the neural network controller -----------------
-            
-            // init when piMsgPosSetpointRx->enu_xd == 4
-            if (piMsgPosSetpointRx->enu_xd == 4) {
-                nn_init();
-                return;
-            }
-
-            // activate/deactivate when piMsgPosSetpointRx->enu_xd == 5
-            if (piMsgPosSetpointRx->enu_xd == 5) {
-                if (nn_is_active()) {
-                    nn_deactivate();
-                } else {
-                    nn_activate();
-                }
-            }
-#endif
-            // -----------------------------------------------------------------------------------------------
-            
-            posSetpointNed.vel.V.X = 0; //piMsgPosSetpointRx->enu_yd;
-            posSetpointNed.vel.V.Y = 0; //piMsgPosSetpointRx->enu_xd;
-            posSetpointNed.vel.V.Z = 0; //-piMsgPosSetpointRx->enu_zd;
-            posSetpointNed.psi = DEGREES_TO_RADIANS(-piMsgPosSetpointRx->yaw);
+            posSpNed.pos.V.X = piMsgPosSetpointRx->ned_x;
+            posSpNed.pos.V.Y = piMsgPosSetpointRx->ned_y;
+            posSpNed.pos.V.Z = piMsgPosSetpointRx->ned_z;
+            posSpNed.vel.V.X = piMsgPosSetpointRx->ned_xd;
+            posSpNed.vel.V.Y = piMsgPosSetpointRx->ned_yd;
+            posSpNed.vel.V.Z = piMsgPosSetpointRx->ned_zd;
+            posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
+            posSpNed.trackPsi = true;
             posSetpointState = EXT_POS_NEW_MESSAGE;
-            
-        } else {
+        } else if (posSetpointState != EXT_POS_NO_SIGNAL) {
+            // if not no-signalled by other means, just keep this
             posSetpointState = EXT_POS_STILL_VALID;
-            // no upper bound on still_valid for setpoints
         }
     }
 }

@@ -143,7 +143,7 @@ static int16_t headingOrScaledMilliAmpereHoursDrawn(void)
         return getMAhDrawn() / telemetryConfig()->mavlink_mah_as_heading_divisor;
     }
     // heading Current heading in degrees, in compass units (0..360, 0=north)
-    return DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+    return DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
 }
 
 
@@ -385,11 +385,11 @@ void mavlinkSendAttitude(void)
         // time_boot_ms Timestamp (milliseconds since system boot)
         millis(),
         // roll Roll angle (rad)
-        DECIDEGREES_TO_RADIANS(attitude.values.roll),
+        DECIDEGREES_TO_RADIANS(attitude.angles.roll),
         // pitch Pitch angle (rad)
-        DECIDEGREES_TO_RADIANS(-attitude.values.pitch),
+        DECIDEGREES_TO_RADIANS(-attitude.angles.pitch),
         // yaw Yaw angle (rad)
-        DECIDEGREES_TO_RADIANS(attitude.values.yaw),
+        DECIDEGREES_TO_RADIANS(attitude.angles.yaw),
         // rollspeed Roll angular speed (rad/s)
         0,
         // pitchspeed Pitch angular speed (rad/s)

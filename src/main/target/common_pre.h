@@ -49,8 +49,53 @@
 // -Wpadded can be turned on to check padding of structs
 //#pragma GCC diagnostic warning "-Wpadded"
 
-#if !defined(CLOUD_BUILD) && !defined(SITL)
+#ifdef USE_GPS_RESCUE
+#error "GPS RESCUE is not available in INDIflight"
+#endif
+
+#if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD) && !defined(MOCKUP)
 #define USE_DSHOT
+#endif
+
+#if defined(MOCKUP)
+#undef USE_DSHOT
+#undef USE_SDCARD
+#undef USE_OSD
+#undef USE_OSD_SD
+#undef USE_OSD_HD
+#undef USE_MAX7456
+#undef USE_ACC_MPU6500
+#undef USE_GYRO_MPU6500
+#undef USE_ACC_SPI_MPU6000
+#undef USE_GYRO_SPI_MPU6000
+#undef USE_ACC_SPI_MPU6500
+#undef USE_GYRO_SPI_MPU6500
+#undef USE_ACC_SPI_ICM20689
+#undef USE_GYRO_SPI_ICM20689
+#undef USE_ACCGYRO_LSM6DSO
+#undef USE_ACCGYRO_BMI270
+#undef USE_GYRO_SPI_ICM42605
+#undef USE_GYRO_SPI_ICM42688P
+#undef USE_ACC_SPI_ICM42605
+#undef USE_ACC_SPI_ICM42688P
+#ifndef USE_GYRO
+#define USE_GYRO
+#endif
+#ifndef USE_ACC
+#define USE_ACC
+#endif
+#ifndef USE_FAKE_ACC
+#define USE_FAKE_ACC
+#endif
+#ifndef USE_FAKE_GYRO
+#define USE_FAKE_GYRO
+#endif
+#ifndef USE_BLACKBOX
+#define USE_BLACKBOX
+#endif
+#ifndef USE_IMU_CALC
+#define USE_IMU_CALC
+#endif
 #endif
 
 #ifdef USE_DSHOT
@@ -251,11 +296,13 @@ extern uint8_t _dmaram_end__;
 
 #define USE_CLI
 #define USE_SERIAL_PASSTHROUGH
+#if !defined(SIMULATOR_BUILD)
 #define USE_GYRO_REGISTER_DUMP  // Adds gyroregisters command to cli to dump configured register values
+#endif
 //#define USE_IMU_CALC
 
 // all the settings for classic build
-#if !defined(CLOUD_BUILD) && !defined(SITL)
+#if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD)
 
 #define USE_MAG
 
@@ -402,10 +449,7 @@ extern uint8_t _dmaram_end__;
 #define USE_TELEMETRY_IBUS_EXTENDED
 #define USE_TELEMETRY_JETIEXBUS
 #define USE_TELEMETRY_MAVLINK
-#ifndef USE_TELEMETRY_PI
-    #define USE_TELEMETRY_PI
-#endif
-// #define USE_TELEMETRY_PI
+#define USE_TELEMETRY_PI
 #define USE_TELEMETRY_HOTT
 #define USE_TELEMETRY_LTM
 

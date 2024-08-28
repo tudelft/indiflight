@@ -725,28 +725,28 @@ void processSmartPortTelemetry(smartPortPayload_t *payload, volatile bool *clear
                 break;
 #endif
             case FSSP_DATAID_HEADING    :
-                smartPortSendPackage(id, attitude.values.yaw * 10); // in degrees * 100 according to SmartPort spec
+                smartPortSendPackage(id, attitude.angles.yaw * 10); // in degrees * 100 according to SmartPort spec
                 *clearToSend = false;
                 break;
 #if defined(USE_ACC)
             case FSSP_DATAID_PITCH      :
-                smartPortSendPackage(id, attitude.values.pitch); // given in 10*deg
+                smartPortSendPackage(id, attitude.angles.pitch); // given in 10*deg
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ROLL       :
-                smartPortSendPackage(id, attitude.values.roll); // given in 10*deg
+                smartPortSendPackage(id, attitude.angles.roll); // given in 10*deg
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCX       :
-                smartPortSendPackage(id, lrintf(100 * acc.accADC[X] * acc.dev.acc_1G_rec)); // Multiply by 100 to show as x.xx g on Taranis
+                smartPortSendPackage(id, lrintf(100 * acc.accADCf[X] * acc.dev.acc_1G_rec)); // Multiply by 100 to show as x.xx g on Taranis
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCY       :
-                smartPortSendPackage(id, lrintf(100 * acc.accADC[Y] * acc.dev.acc_1G_rec));
+                smartPortSendPackage(id, lrintf(100 * acc.accADCf[Y] * acc.dev.acc_1G_rec));
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCZ       :
-                smartPortSendPackage(id, lrintf(100 * acc.accADC[Z] * acc.dev.acc_1G_rec));
+                smartPortSendPackage(id, lrintf(100 * acc.accADCf[Z] * acc.dev.acc_1G_rec));
                 *clearToSend = false;
                 break;
 #endif

@@ -110,6 +110,7 @@
 #include "msp/msp_box.h"
 #include "msp/msp_protocol.h"
 #include "msp/msp_protocol_v2_betaflight.h"
+#include "msp/msp_protocol_v2_indiflight.h"
 #include "msp/msp_protocol_v2_common.h"
 #include "msp/msp_serial.h"
 
@@ -1085,7 +1086,7 @@ static bool mspProcessOutCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, sbuf_t
             boxBitmask_t flightModeFlags;
             const int flagBits = packFlightModeFlags(&flightModeFlags);
 
-            sbufWriteU16(dst, getTaskDeltaTimeUs(TASK_PID));
+            sbufWriteU16(dst, getTaskDeltaTimeUs(TASK_INNER_LOOP));
 #ifdef USE_I2C
             sbufWriteU16(dst, i2cGetErrorCounter());
 #else
@@ -1141,7 +1142,7 @@ static bool mspProcessOutCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, sbuf_t
 
             for (int i = 0; i < 3; i++) {
 #if defined(USE_ACC)
-                sbufWriteU16(dst, lrintf(acc.accADC[i] / scale));
+                sbufWriteU16(dst, lrintf(acc.accADCf[i] / scale));
 #else
                 sbufWriteU16(dst, 0);
 #endif
@@ -1330,9 +1331,9 @@ case MSP_NAME:
         break;
 
     case MSP_ATTITUDE:
-        sbufWriteU16(dst, attitude.values.roll);
-        sbufWriteU16(dst, attitude.values.pitch);
-        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+        sbufWriteU16(dst, attitude.angles.roll);
+        sbufWriteU16(dst, attitude.angles.pitch);
+        sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.angles.yaw));
         break;
 
     case MSP_ALTITUDE:
@@ -2280,7 +2281,7 @@ static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDesc, int16_
             serializeBoxReply(dst, page, &serializeBoxPermanentIdFn);
         }
         break;
-    case MSP_REBOOT:
+    case MSP_REBOOT: // stuff happening here
         if (sbufBytesRemaining(src)) {
             rebootMode = sbufReadU8(src);
 

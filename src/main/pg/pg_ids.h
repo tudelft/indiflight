@@ -81,7 +81,13 @@
 #define PG_GPS_RESCUE 55 // struct OK
 #define PG_POSITION 56
 #define PG_VTX_IO_CONFIG 57
-#define PG_INDI_CONFIG 58
+#define PG_INDI_PROFILE 58
+#define PG_POSITION_PROFILE 59
+#define PG_CATAPULT_CONFIG 60
+#define PG_THROW_CONFIG 61
+#define PG_LEARNER_CONFIG 62
+#define PG_EKF_CONFIG 63
+#define PG_NN_CONFIG 64
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

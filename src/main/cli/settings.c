@@ -63,6 +63,13 @@
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "flight/pos_ctl.h"
+#include "flight/indi.h"
+#include "flight/catapult.h"
+#include "flight/learner.h"
+#include "flight/throw.h"
+#include "flight/ekf.h"
+#include "flight/nn_control.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -205,8 +212,16 @@ static const char * const lookupTableGPSSBASMode[] = {
     "AUTO", "EGNOS", "WAAS", "MSAS", "GAGAN", "NONE"
 };
 
-static const char * const lookupTableGPSUBLOXMode[] = {
-    "AIRBORNE", "PEDESTRIAN", "DYNAMIC"
+//static const char * const lookupTableGPSUBLOXMode[] = {
+//    "AIRBORNE", "PEDESTRIAN", "DYNAMIC"
+//};
+
+static const char * const lookupTableGpsUbloxModels[] = {
+    "PORTABLE", "STATIONARY", "PEDESTRIAN", "AUTOMOTIVE", "AT_SEA", "AIRBORNE_1G", "AIRBORNE_2G", "AIRBORNE_4G"
+};
+
+static const char * const lookupTableGpsUbloxUtcStandard[] = {
+    "AUTO", "USNO", "EU", "SU", "NTSC"
 };
 #endif
 
@@ -218,7 +233,7 @@ static const char * const lookupTableGimbalMode[] = {
 
 #ifdef USE_BLACKBOX
 static const char * const lookupTableBlackboxDevice[] = {
-    "NONE", "SPIFLASH", "SDCARD", "SERIAL"
+    "NONE", "SPIFLASH", "SDCARD", "SERIAL", "SITL"
 };
 
 static const char * const lookupTableBlackboxMode[] = {
@@ -533,7 +548,9 @@ const lookupTableEntry_t lookupTables[] = {
 #ifdef USE_GPS
     LOOKUP_TABLE_ENTRY(lookupTableGPSProvider),
     LOOKUP_TABLE_ENTRY(lookupTableGPSSBASMode),
-    LOOKUP_TABLE_ENTRY(lookupTableGPSUBLOXMode),
+    //LOOKUP_TABLE_ENTRY(lookupTableGPSUBLOXMode),
+    LOOKUP_TABLE_ENTRY(lookupTableGpsUbloxModels),
+    LOOKUP_TABLE_ENTRY(lookupTableGpsUbloxUtcStandard),
 #ifdef USE_GPS_RESCUE
     LOOKUP_TABLE_ENTRY(lookupTableRescueSanityType),
     LOOKUP_TABLE_ENTRY(lookupTableRescueAltitudeMode),
@@ -710,6 +727,7 @@ const clivalue_t valueTable[] = {
 
     // 4 elements are output for the ACC calibration - The 3 axis values and the 4th representing whether calibration has been performed
     { "acc_calibration",            VAR_INT16  | MASTER_VALUE | MODE_ARRAY, .config.array.length = 4, PG_ACCELEROMETER_CONFIG, offsetof(accelerometerConfig_t, accZero.raw) },
+    { PARAM_NAME_ACC_OFFSET,        VAR_INT16  | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_ACCELEROMETER_CONFIG, offsetof(accelerometerConfig_t, acc_offset) },
 #endif
 
 // PG_COMPASS_CONFIG
@@ -826,6 +844,18 @@ const clivalue_t valueTable[] = {
     { "blackbox_disable_motors",    VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_MOTOR,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
 #ifdef USE_GPS
     { "blackbox_disable_gps",       VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_GPS,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
+#endif
+#ifdef USE_INDI
+    { "blackbox_disable_indi",       VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_INDI,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
+#endif
+#ifdef USE_POS_CTL
+    { "blackbox_disable_pos",       VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_POS,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
+#endif
+#ifdef USE_EKF
+    { "blackbox_disable_ekf",       VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_EKF,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
+#endif
+#ifdef USE_LEARNER
+    { "blackbox_disable_learner",       VAR_UINT32 | MASTER_VALUE | MODE_BITSET, .config.bitpos = FLIGHT_LOG_FIELD_SELECT_LEARNER,   PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, fields_disabled_mask) },
 #endif
     { "blackbox_mode",              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_BLACKBOX_MODE }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, mode) },
     { "blackbox_high_resolution",   VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, high_resolution) },
@@ -998,15 +1028,29 @@ const clivalue_t valueTable[] = {
 
 // PG_GPS_CONFIG
 #ifdef USE_GPS
+    //{ PARAM_NAME_GPS_PROVIDER,               VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_PROVIDER },   PG_GPS_CONFIG, offsetof(gpsConfig_t, provider) },
+    //{ PARAM_NAME_GPS_SBAS_MODE,              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_SBAS_MODE },  PG_GPS_CONFIG, offsetof(gpsConfig_t, sbasMode) },
+    //{ PARAM_NAME_GPS_AUTO_CONFIG,            VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, autoConfig) },
+    //{ PARAM_NAME_GPS_AUTO_BAUD,              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, autoBaud) },
+    //{ PARAM_NAME_GPS_UBLOX_MODE,             VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_UBLOX_MODE }, PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_mode) },
+    //{ PARAM_NAME_GPS_UBLOX_USE_GALILEO,      VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_use_galileo) },
+    //{ PARAM_NAME_GPS_SET_HOME_POINT_ONCE,    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_set_home_point_once) },
+    //{ PARAM_NAME_GPS_USE_3D_SPEED,           VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_use_3d_speed) },
+    //{ PARAM_NAME_GPS_SBAS_INTEGRITY,         VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, sbas_integrity) },
+
     { PARAM_NAME_GPS_PROVIDER,               VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_PROVIDER },   PG_GPS_CONFIG, offsetof(gpsConfig_t, provider) },
     { PARAM_NAME_GPS_SBAS_MODE,              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_SBAS_MODE },  PG_GPS_CONFIG, offsetof(gpsConfig_t, sbasMode) },
     { PARAM_NAME_GPS_AUTO_CONFIG,            VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, autoConfig) },
     { PARAM_NAME_GPS_AUTO_BAUD,              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, autoBaud) },
-    { PARAM_NAME_GPS_UBLOX_MODE,             VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_UBLOX_MODE }, PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_mode) },
+    { PARAM_NAME_GPS_UBLOX_ACQUIRE_MODEL,    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_UBLOX_MODELS }, PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_acquire_model) },
+    { PARAM_NAME_GPS_UBLOX_FLIGHT_MODEL,     VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_UBLOX_MODELS }, PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_flight_model) },
+    { PARAM_NAME_GPS_UPDATE_RATE_HZ,         VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {1, 20},          PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_update_rate_hz) },
+    { PARAM_NAME_GPS_UBLOX_UTC_STANDARD,     VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GPS_UBLOX_UTC_STANDARD }, PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_utc_standard) },
     { PARAM_NAME_GPS_UBLOX_USE_GALILEO,      VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_ublox_use_galileo) },
     { PARAM_NAME_GPS_SET_HOME_POINT_ONCE,    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_set_home_point_once) },
     { PARAM_NAME_GPS_USE_3D_SPEED,           VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_use_3d_speed) },
     { PARAM_NAME_GPS_SBAS_INTEGRITY,         VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, sbas_integrity) },
+    { PARAM_NAME_GPS_NMEA_CUSTOM_COMMANDS,   VAR_UINT8  | MASTER_VALUE | MODE_STRING, .config.string = { 1, NMEA_CUSTOM_COMMANDS_MAX_LENGTH, STRING_FLAGS_NONE }, PG_GPS_CONFIG, offsetof(gpsConfig_t, nmeaCustomCommands) },
 
 #ifdef USE_GPS_RESCUE
     // PG_GPS_RESCUE
@@ -1219,6 +1263,115 @@ const clivalue_t valueTable[] = {
 #endif
     { PARAM_NAME_TPA_RATE,          VAR_UINT8  | PROFILE_VALUE, .config.minmaxUnsigned = { 0, TPA_MAX}, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_rate) },
     { PARAM_NAME_TPA_BREAKPOINT,    VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_PULSE_MIN, PWM_PULSE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_breakpoint) },
+
+#ifdef USE_INDI
+    { PARAM_NAME_INDI_ATTITUDE_GAINS,                   VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, attGains) },
+    { PARAM_NAME_INDI_RATE_GAINS,                       VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, rateGains) },
+    { PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE,           VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1600 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxTiltRate) },
+    { PARAM_NAME_INDI_ATTITUDE_MAX_YAW_RATE,            VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1600 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxYawRate) },
+    { PARAM_NAME_INDI_MAX_RATE_SETPOINT,                VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, maxRateSp) },
+    { PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW,       VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualUseCoordinatedYaw) },
+    { PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL,         VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxUpwardsSpf) },
+    { PARAM_NAME_INDI_MANUAL_MAX_TILT,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 90 }, PG_INDI_PROFILE, offsetof(indiProfile_t, manualMaxTilt) },
+    { PARAM_NAME_INDI_USE_INCREMENT,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useIncrement) },
+    { PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK,             VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useRpmDotFeedback) },
+    { PARAM_NAME_INDI_ACT_NUM,                          VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_INDI_PROFILE, offsetof(indiProfile_t, actNum) },
+    { PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS,             VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstMs) },
+    { PARAM_NAME_INDI_ACT_MAX_RPM,                      VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actMaxRpm) },
+    { PARAM_NAME_INDI_ACT_HOVER_RPM,                    VAR_UINT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actHoverRpm) },
+    { PARAM_NAME_INDI_ACT_NONLINEARITY,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actNonlinearity) },
+    { PARAM_NAME_INDI_ACT_LIMIT,                        VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actLimit) },
+    { PARAM_NAME_INDI_ACT_G1_FX,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fx) },
+    { PARAM_NAME_INDI_ACT_G1_FY,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fy) },
+    { PARAM_NAME_INDI_ACT_G1_FZ,                        VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_fz) },
+    { PARAM_NAME_INDI_ACT_G1_ROLL,                      VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_roll) },
+    { PARAM_NAME_INDI_ACT_G1_PITCH,                     VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_pitch) },
+    { PARAM_NAME_INDI_ACT_G1_YAW,                       VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG1_yaw) },
+    { PARAM_NAME_INDI_ACT_G2_ROLL,                      VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_roll) },
+    { PARAM_NAME_INDI_ACT_G2_PITCH,                     VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_pitch) },
+    { PARAM_NAME_INDI_ACT_G2_YAW,                       VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actG2_yaw) },
+    { PARAM_NAME_INDI_SYNC_LOWPASS_HZ,                  VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_INDI_PROFILE, offsetof(indiProfile_t, imuSyncLp2Hz) },
+    { PARAM_NAME_INDI_WLS_AXES_WEIGHTS,                 VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXV, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWv) },
+    { PARAM_NAME_INDI_WLS_ACT_PENALTIES,                VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, wlsWu) },
+    { PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE,          VAR_INT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, u_pref) },
+#endif
+
+#ifdef USE_POS_CTL
+    { PARAM_NAME_POSITION_HORIZONTAL_P,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_p) },
+    { PARAM_NAME_POSITION_HORIZONTAL_I,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 2, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_i) },
+    { PARAM_NAME_POSITION_HORIZONTAL_D,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_d) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED,   VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_v) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL,   VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1  }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_a) },
+    { PARAM_NAME_POSITION_MAX_TILT,               VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 180 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, max_tilt) },
+    { PARAM_NAME_POSITION_VERTICAL_P,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_p) },
+    { PARAM_NAME_POSITION_VERTICAL_I,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 2, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_i) },
+    { PARAM_NAME_POSITION_VERTICAL_D,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_d) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_SPEED,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, 850 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_down) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_down) },
+    { PARAM_NAME_POSITION_YAW_P,                  VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 5, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, yaw_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_P,          VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 25, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
+    { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
+#endif
+
+#ifdef USE_EKF
+    { PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_attitude_estimate) },
+    { PARAM_NAME_EKF_USE_POSITION_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_position_estimate) },
+    { PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS,      VAR_UINT8 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_angle_measurements) },
+    { PARAM_NAME_EKF_PROC_NOISE_ACC,              VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc) },
+    { PARAM_NAME_EKF_PROC_NOISE_GYRO,             VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro) },
+    { PARAM_NAME_EKF_MEAS_NOISE_POSITION,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
+    { PARAM_NAME_EKF_MEAS_NOISE_ANGLES,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_angles) },
+    { PARAM_NAME_EKF_MEAS_DELAY,                  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
+#endif
+
+#ifdef USE_CATAPULT
+    { PARAM_NAME_CATAPULT_TARGET_ALTITUDE, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 100, 1000 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, altitude) },
+    { PARAM_NAME_CATAPULT_TARGET_X_NED,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -300, 300 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, xNed) },
+    { PARAM_NAME_CATAPULT_TARGET_Y_NED,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -300, 300 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, yNed) },
+    { PARAM_NAME_CATAPULT_ROTATION_ROLL,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationRoll) },
+    { PARAM_NAME_CATAPULT_ROTATION_PITCH,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationPitch) },
+    { PARAM_NAME_CATAPULT_ROTATION_YAW,   VAR_INT16 | MASTER_VALUE, .config.minmax = { -1600, 1600 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationYaw) },
+    { PARAM_NAME_CATAPULT_ROTATION_RANDOMIZE, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, randomizeRotation) },
+    { PARAM_NAME_CATAPULT_ROTATION_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, rotationTimeMs) },
+    { PARAM_NAME_CATAPULT_UPWARDS_ACCEL,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 40 }, PG_CATAPULT_CONFIG, offsetof(catapultConfig_t, upwardsAccel) },
+#endif
+
+#ifdef USE_THROW_TO_ARM
+    { PARAM_NAME_THROW_TO_ARM_ACC_HIGH,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 15, 30 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accHighThresh) },
+    { PARAM_NAME_THROW_TO_ARM_ACC_CLIP,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 40, 100 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accClipThresh) },
+    { PARAM_NAME_THROW_TO_ARM_ACC_LOW,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 10, 30 }, PG_THROW_CONFIG, offsetof(throwConfig_t, accLowAgainThresh) },
+    { PARAM_NAME_THROW_TO_ARM_GYRO_HIGH,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 270, 900 }, PG_THROW_CONFIG, offsetof(throwConfig_t, gyroHighThresh) },
+    { PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 200, 2000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, momentumThresh) },
+    { PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 5000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, releaseDelayMs) },
+#endif
+
+#ifdef USE_LEARNER
+    { PARAM_NAME_LEARNER_MODE,              VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 7 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
+    { PARAM_NAME_LEARNER_NUM_ACT,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
+    { PARAM_NAME_LEARNER_DELAY_TIME_MS,     VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, delayMs) },
+    { PARAM_NAME_LEARNER_STEP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepMs) },
+    { PARAM_NAME_LEARNER_RAMP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampMs) },
+    { PARAM_NAME_LEARNER_OVERLAP_TIME_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, overlapMs) },
+    { PARAM_NAME_LEARNER_STEP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepAmp) },
+    { PARAM_NAME_LEARNER_RAMP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampAmp) },
+    { PARAM_NAME_LEARNER_GYRO_MAX,          VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 720, 1600 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, gyroMax) },
+    { PARAM_NAME_LEARNER_IMU_LOWPASS_HZ,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, imuFiltHz) },
+    { PARAM_NAME_LEARNER_FX_LOWPASS_HZ,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxFiltHz) },
+    { PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, motorFiltHz) },
+    { PARAM_NAME_LEARNER_ZETA_RATE,         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaRate) },
+    { PARAM_NAME_LEARNER_ZETA_ATTITUDE,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaAttitude) },
+    { PARAM_NAME_LEARNER_ZETA_VELOCITY,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocity) },
+    { PARAM_NAME_LEARNER_ZETA_POSITION,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPosition) },
+    { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
+    { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
+#endif
+
+#ifdef USE_NN_CONTROL
+    { PARAM_NAME_NN_RATE_DENOM,             VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 255 }, PG_NN_CONFIG, offsetof(nnConfig_t, rate_denom) },
+#endif
 
 // PG_TELEMETRY_CONFIG
 #ifdef USE_TELEMETRY

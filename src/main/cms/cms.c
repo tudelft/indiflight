@@ -368,7 +368,8 @@ static void cmsPadToSize(char *buf, int size)
 
 static int cmsDisplayWrite(displayPort_t *instance, uint8_t x, uint8_t y, uint8_t attr, const char *s)
 {
-    char buffer[strlen(s) + 1];
+    //char buffer[strlen(s) + 1];
+    char buffer[1024];
     char* b = buffer;
     while (*s) {
         char c = toupper(*s++);

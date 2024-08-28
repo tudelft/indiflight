@@ -487,7 +487,7 @@ static void showSensorsPage(void)
 
 #if defined(USE_ACC)
     if (sensors(SENSOR_ACC)) {
-        tfp_sprintf(lineBuffer, format, "ACC", lrintf(acc.accADC[X]), lrintf(acc.accADC[Y]), lrintf(acc.accADC[Z]));
+        tfp_sprintf(lineBuffer, format, "ACC", lrintf(acc.accADCf[X]), lrintf(acc.accADCf[Y]), lrintf(acc.accADCf[Z]));
         padLineBuffer();
         i2c_OLED_set_line(dev, rowIndex++);
         i2c_OLED_send_string(dev, lineBuffer);
@@ -510,7 +510,7 @@ static void showSensorsPage(void)
     }
 #endif
 
-    tfp_sprintf(lineBuffer, format, "I&H", attitude.values.roll, attitude.values.pitch, DECIDEGREES_TO_DEGREES(attitude.values.yaw));
+    tfp_sprintf(lineBuffer, format, "I&H", attitude.angles.roll, attitude.angles.pitch, DECIDEGREES_TO_DEGREES(attitude.angles.yaw));
     padLineBuffer();
     i2c_OLED_set_line(dev, rowIndex++);
     i2c_OLED_send_string(dev, lineBuffer);

@@ -1,3 +1,26 @@
+/*
+ * Get local NED position from difference sources (uplink/GPS)
+ *
+ * Copyright 2024 Till Blaha (Delft University of Technology)
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
 
 #include "drivers/time.h"
 #include "common/maths.h"
@@ -10,16 +33,16 @@ typedef enum {
     EXT_POS_NEW_MESSAGE,
 } ext_pos_state_t;
 
-// todo: reformulate using t_fp_vector
+// todo: reformulate using fp_vector_t
 typedef struct __ext_pos_ned_t {
-    uint32_t time_ms;
-    t_fp_vector pos;
-    t_fp_vector vel;
-    fp_angles_t att;
+    uint32_t time_us;
+    fp_vector_t pos;
+    fp_vector_t vel;
+    fp_euler_t att;
 } ext_pos_ned_t;
 
 typedef struct __vio_pos_ned_t {
-    uint32_t time_ms;
+    uint32_t time_us;
     float x;
     float y;
     float z;
@@ -36,9 +59,10 @@ typedef struct __vio_pos_ned_t {
 } vio_pos_ned_t;
 
 typedef struct __pos_setpoint_ned_t {
-    t_fp_vector pos;
-    t_fp_vector vel;
+    fp_vector_t pos;
+    fp_vector_t vel;
     float psi;
+    bool trackPsi;
 } pos_setpoint_ned_t;
 
 // structs used for EXTERNAL_POSE message
@@ -54,7 +78,7 @@ extern timeUs_t vioLatestMsgTime;
 #endif
 
 // structs used for POS_SETPOINT message
-extern pos_setpoint_ned_t posSetpointNed;
+extern pos_setpoint_ned_t posSpNed;
 extern ext_pos_state_t posSetpointState;
 
 #define EXT_POS_FREQ 50

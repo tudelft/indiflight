@@ -24,6 +24,7 @@
 #include "pg/pg.h"
 #include "drivers/accgyro/accgyro.h"
 #include "sensors/sensors.h"
+#include "flight/rpm_filter.h"
 
 // Type of accelerometer used/detected
 typedef enum {
@@ -53,12 +54,16 @@ typedef enum {
 typedef struct acc_s {
     accDev_t dev;
     uint16_t sampleRateHz;
-    float accADC[XYZ_AXIS_COUNT];
-    float accADCunfiltered[XYZ_AXIS_COUNT];
+    float accADC[XYZ_AXIS_COUNT];         // aligned, calibrated, scaled, but unfiltered data from the sensor
+    float accADCafterRpm[XYZ_AXIS_COUNT]; // rpm-filtered, if enabled
+    float accADCf[XYZ_AXIS_COUNT];        // also lowpass filtered
     bool isAccelUpdatedAtLeastOnce;
 } acc_t;
 
 extern acc_t acc;
+#ifdef USE_ACCEL_RPM_FILTER
+extern rpmFilter_t rpmFilterAcc;
+#endif
 
 typedef struct rollAndPitchTrims_s {
     int16_t roll;
@@ -74,7 +79,8 @@ typedef union rollAndPitchTrims_u {
 typedef struct accelerometerConfig_s {
     uint16_t acc_lpf_hz;                    // cutoff frequency for the low pass filter used on the acc z-axis for althold in Hz
     uint8_t acc_hardware;                   // Which acc hardware to use on boards with more than one device
-        bool acc_high_fsr;
+    int16_t acc_offset[3];                  // offset from CoG to acc in Forward-Left-Up frame in mm
+    bool acc_high_fsr;
     flightDynamicsTrims_t accZero;
     rollAndPitchTrims_t accelerometerTrims;
 } accelerometerConfig_t;

@@ -1,0 +1,4 @@
+{
+    "cortex-debug.gdbPath": "gdb-multiarch",
+    "cortex-debug.liveWatchRefreshRate": 1000,
+}

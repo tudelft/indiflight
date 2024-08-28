@@ -24,7 +24,7 @@ README.pdf
 /tools/
 /build/
 # local changes only
-make/local*
+make/local*.mk
 
 # artefacts for VisualGDB (running in Visual Studio)
 mcu.mak
@@ -36,9 +36,6 @@ stm32.mak
 
 # ozone launch configurations
 /support/ozone
-
-# artefacts for VS Code
-/.vscode/settings.json
 
 # artefacts for Visual Studio 
 /.vs
@@ -58,3 +55,6 @@ eeprom.bin
 
 make/local.mk
 __pycache__
+
+# logs
+logs/

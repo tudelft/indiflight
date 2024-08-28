@@ -55,19 +55,19 @@
 #undef SCHEDULER_DELAY_LIMIT
 #define SCHEDULER_DELAY_LIMIT           1
 
-#define USE_FAKE_LED
+//#define USE_FAKE_LED
 
-#define USE_ACC
-#define USE_FAKE_ACC
+//#define USE_ACC
+//#define USE_FAKE_ACC
 
-#define USE_GYRO
-#define USE_FAKE_GYRO
+//#define USE_GYRO
+//#define USE_FAKE_GYRO
 
-#define USE_MAG
-#define USE_FAKE_MAG
-
-#define USE_BARO
-#define USE_FAKE_BARO
+//#define USE_MAG
+//#define USE_FAKE_MAG
+//
+//#define USE_BARO
+//#define USE_FAKE_BARO
 
 #define USABLE_TIMER_CHANNEL_COUNT 0
 
@@ -182,6 +182,11 @@ typedef struct
 {
     void* test;
 } TIM_OCInitTypeDef;
+
+typedef struct
+{
+    void* test;
+} TIM_ICInitTypeDef;
 
 typedef struct {
     void* test;

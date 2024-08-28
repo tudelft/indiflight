@@ -85,6 +85,7 @@ typedef struct gyro_s {
     uint32_t sampleLooptime;
     float scale;
     float gyroADC[XYZ_AXIS_COUNT];     // aligned, calibrated, scaled, but unfiltered data from the sensor(s)
+    float gyroADCafterRpm[XYZ_AXIS_COUNT];    // filtered gyro data
     float gyroADCf[XYZ_AXIS_COUNT];    // filtered gyro data
     uint8_t sampleCount;               // gyro sensor sample counter
     float sampleSum[XYZ_AXIS_COUNT];   // summed samples used for downsampling

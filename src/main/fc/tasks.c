@@ -60,8 +60,9 @@
 #include "flight/position.h"
 #include "flight/pos_ctl.h"
 #include "flight/trajectory_tracker.h"
-#include "flight/att_ctl.h"
+#include "flight/indi.h"
 #include "flight/ekf.h"
+#include "flight/throw.h"
 #include "flight/nn_control.h"
 
 
@@ -80,6 +81,7 @@
 #include "io/usb_cdc_hid.h"
 #include "io/vtx.h"
 #include "io/hil.h"
+#include "io/keyboard.h"
 
 #include "msp/msp.h"
 #include "msp/msp_serial.h"
@@ -176,7 +178,9 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
 static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
 {
     accUpdate(currentTimeUs);
+#ifdef USE_THROW_TO_ARM
     updateThrowFallStateMachine(currentTimeUs);
+#endif
 }
 #endif
 
@@ -351,13 +355,18 @@ static void taskGpsPi(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_TELEMETRY_PI
+static void taskKeyboard(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    processKeyboard();
+}
+#endif
+
 #ifdef USE_POS_CTL
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
-#ifdef USE_TRAJECTORY_TRACKER
-    updateTrajectoryTracker(currentTimeUs);
-#endif
 }
 #endif
 
@@ -365,14 +374,6 @@ static void taskPosCtl(timeUs_t currentTimeUs)
 static void taskEkf(timeUs_t currentTimeUs)
 {
     updateEkf(currentTimeUs);
-}
-#endif
-
-#ifdef USE_NN_CONTROL
-static void taskNnControl(timeUs_t currentTimeUs)
-{
-    UNUSED(currentTimeUs);
-    nn_compute_motor_cmds();
 }
 #endif
 
@@ -419,10 +420,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
     [TASK_GYRO] = DEFINE_TASK("GYRO", NULL, NULL, taskGyroSample, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
     [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_PID] = DEFINE_TASK("PID", NULL, NULL, taskMainPidLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-#ifdef USE_INDI
-    [TASK_INDI] = DEFINE_TASK("INDI", NULL, NULL, taskMainIndiLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-#endif
+    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 
 #ifdef USE_ACC
     [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
@@ -476,16 +474,16 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
 
+#ifdef USE_TELEMETRY_PI
+    [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#endif
+
 #ifdef USE_POS_CTL
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_EKF
     [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_NN_CONTROL
-    [TASK_NN_CONTROL] = DEFINE_TASK("NN_CONTROL", NULL, NULL, taskNnControl, TASK_PERIOD_HZ(100), TASK_PRIORITY_HIGH),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -577,14 +575,10 @@ void tasksInit(void)
     if (sensors(SENSOR_GYRO)) {
         rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
-        rescheduleTask(TASK_PID, gyro.targetLooptime);
+        rescheduleTask(TASK_INNER_LOOP, gyro.targetLooptime);
         setTaskEnabled(TASK_GYRO, true);
         setTaskEnabled(TASK_FILTER, true);
-        setTaskEnabled(TASK_PID, true);
-#ifdef USE_INDI
-        rescheduleTask(TASK_INDI, gyro.targetLooptime);
-        setTaskEnabled(TASK_INDI, true);
-#endif
+        setTaskEnabled(TASK_INNER_LOOP, true);
         schedulerEnableGyro();
     }
 
@@ -661,16 +655,16 @@ void tasksInit(void)
     setTaskEnabled(TASK_GPS_PI, true);
 #endif
 
+#ifdef USE_TELEMETRY_PI
+    setTaskEnabled(TASK_KEYBOARD, true);
+#endif
+
 #ifdef USE_POS_CTL
     setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_EKF
     setTaskEnabled(TASK_EKF, true);
-#endif
-
-#ifdef USE_NN_CONTROL
-    setTaskEnabled(TASK_NN_CONTROL, true);
 #endif
 
 #ifdef USE_LED_STRIP

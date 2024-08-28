@@ -26,7 +26,7 @@
 #include "fc/runtime_config.h"
 #include "io/beeper.h"
 
-uint8_t armingFlags = 0;
+armingFlag_e armingFlags = 0;
 uint8_t stateFlags = 0;
 flightModeFlags_e flightModeFlags = 0;
 
@@ -88,9 +88,9 @@ armingDisableFlags_e getArmingDisableFlags(void)
  * Enables the given flight mode.  A beep is sounded if the flight mode
  * has changed.  Returns the new 'flightModeFlags' value.
  */
-uint16_t enableFlightMode(flightModeFlags_e mask)
+flightModeFlags_e enableFlightMode(flightModeFlags_e mask)
 {
-    uint16_t oldVal = flightModeFlags;
+    flightModeFlags_e oldVal = flightModeFlags;
 
     flightModeFlags |= (mask);
     if (flightModeFlags != oldVal)
@@ -102,9 +102,9 @@ uint16_t enableFlightMode(flightModeFlags_e mask)
  * Disables the given flight mode.  A beep is sounded if the flight mode
  * has changed.  Returns the new 'flightModeFlags' value.
  */
-uint16_t disableFlightMode(flightModeFlags_e mask)
+flightModeFlags_e disableFlightMode(flightModeFlags_e mask)
 {
-    uint16_t oldVal = flightModeFlags;
+    flightModeFlags_e oldVal = flightModeFlags;
 
     flightModeFlags &= ~(mask);
     if (flightModeFlags != oldVal)

@@ -1,6 +1,26 @@
 /*
-(C) tblaha 2023
+ * Configure serial port to parse pi-messages and provide facilities to send
+ *
+ * Copyright 2023 Till Blaha (Delft University of Technology)
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
  */
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -52,8 +72,9 @@
 #include "pi-protocol.h"
 #include "pi-messages.h"
 
-#define USE_CLI_DEBUG_PRINT
+#ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
+#endif
 
 #define TELEMETRY_PI_INITIAL_PORT_MODE MODE_RXTX
 #define TELEMETRY_PI_MAXRATE 50
@@ -65,50 +86,8 @@ static const serialPortConfig_t *portConfig;
 static bool piTelemetryEnabled =  false;
 static portSharing_e piPortSharing;
 
-/* MAVLink datastream rates in Hz */
-/*
-static const uint8_t mavRates[] = {
-    [MAV_DATA_STREAM_EXTENDED_STATUS] = 2, //2Hz
-    [MAV_DATA_STREAM_RC_CHANNELS] = 5, //5Hz
-    [MAV_DATA_STREAM_POSITION] = 2, //2Hz
-    [MAV_DATA_STREAM_EXTRA1] = 10, //10Hz
-    [MAV_DATA_STREAM_EXTRA2] = 10 //2Hz
-};
-*/
-
-// #define MAXSTREAMS ARRAYLEN(piRates)
-
-
-// static uint8_t mavTicks[MAXSTREAMS];
-//static uint8_t piBuffer[PI_MAX_PACKET_LEN];
-//static uint32_t lastPiMessage = 0;
-
 // wrapper for serialWrite
 static void serialWriter(uint8_t byte) { serialWrite(piPort, byte); }
-
-/*
-static int mavlinkStreamTrigger(enum MAV_DATA_STREAM streamNum)
-{
-    uint8_t rate = (uint8_t) mavRates[streamNum];
-    if (rate == 0) {
-        return 0;
-    }
-
-    if (mavTicks[streamNum] == 0) {
-        // we're triggering now, setup the next trigger point
-        if (rate > TELEMETRY_MAVLINK_MAXRATE) {
-            rate = TELEMETRY_MAVLINK_MAXRATE;
-        }
-
-        mavTicks[streamNum] = (TELEMETRY_MAVLINK_MAXRATE / rate);
-        return 1;
-    }
-
-    // count down at TASK_RATE_HZ
-    mavTicks[streamNum]--;
-    return 0;
-}
-*/
 
 void freePiTelemetryPort(void)
 {
@@ -131,27 +110,16 @@ void configurePiTelemetryPort(void)
         return;
     }
 
-    //delay(500);
-    //BLINK_ONCE;
-
     baudRate_e baudRateIndex = portConfig->telemetry_baudrateIndex;
     if (baudRateIndex == BAUD_AUTO) {
-        // default rate for minimOSD
-        //baudRateIndex = BAUD_500000;
         baudRateIndex = BAUD_921600;
     }
 
-    //BLINK_ONCE;
-
     piPort = openSerialPort(portConfig->identifier, FUNCTION_TELEMETRY_PI, NULL, NULL, baudRates[baudRateIndex], TELEMETRY_PI_INITIAL_PORT_MODE, SERIAL_NOT_INVERTED);
-
-    //BLINK_ONCE;
 
     if (!piPort) {
         return;
     }
-
-    //BLINK_ONCE;
 
     piTelemetryEnabled = true;
 }
@@ -179,43 +147,15 @@ void checkPiTelemetryState(void)
 
 void piSendIMU(void)
 {
-    piMsgImuTx.time_ms = millis();
-    // piMsgImuTx.roll = gyro.gyroADCf[FD_ROLL]; // filtered with notches and lpf
-    // piMsgImuTx.pitch = gyro.gyroADCf[FD_PITCH]; // filtered with notches and lpf
-    // piMsgImuTx.yaw = gyro.gyroADCf[FD_YAW]; // filtered with notches and lpf
-    // piMsgImuTx.x = acc.accADC[X];
-    // piMsgImuTx.y = acc.accADC[Y];
-    // piMsgImuTx.z = acc.accADC[Z];
-
-    // change to a chill format for logging onto pi..
-    // FLU to FRD
+    piMsgImuTx.time_us = micros();
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
-    piMsgImuTx.pitch = DEGREES_TO_RADIANS(-gyro.gyroADCf[1]);
-    piMsgImuTx.yaw = DEGREES_TO_RADIANS(-gyro.gyroADCf[2]);
-    piMsgImuTx.x = 9.81 * ((float)acc.accADCunfiltered[0]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.y = 9.81 *-((float)acc.accADCunfiltered[1]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.z = 9.81 *-((float)acc.accADCunfiltered[2]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
+    piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
+    piMsgImuTx.x = GRAVITYf * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.y = GRAVITYf * ((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.z = GRAVITYf * ((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
     
     piSendMsg(&piMsgImuTx, &serialWriter);
-
-    // send dummy data to test serialization escaping
-    /*
-    test_cast.s.A = PI_STX_ESC;
-    test_cast.s.B = PI_ESC_ESC;
-    test_cast.s.C = PI_ESC;
-    test_cast.s.D = PI_STX;
-    int len = piMsgImuPack(
-        piBuffer,
-        millis(),
-        //gyro.gyroADCf[FD_ROLL], // filtered with notches and lpf
-        test_cast.f,
-        gyro.gyroADCf[FD_PITCH],
-        gyro.gyroADCf[FD_YAW],
-        acc.accADC[X], // heavily filtered (25Hz?) because only used in the attitude loop, not gyro loop
-        acc.accADC[Y],
-        acc.accADC[Z]
-    );
-    */
 }
 
 void processPiTelemetry(void)
@@ -253,12 +193,8 @@ void handlePiTelemetry(void)
         return;
     }
 
-    //uint32_t now = micros();
-    //if ((now - lastPiMessage) >= TELEMETRY_PI_DELAY) {
-        processPiTelemetry();
-        processPiUplink();
-    //    lastPiMessage = now;
-    //}
+    processPiTelemetry();
+    processPiUplink();
 }
 
 #endif

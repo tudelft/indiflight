@@ -23,8 +23,31 @@
 #include <stdbool.h>
 
 #include "common/time.h"
+#include "common/filter.h"
+#include "common/axis.h"
 
 #include "pg/rpm_filter.h"
+
+#define SECONDS_PER_MINUTE       60.0f
+#define ERPM_PER_LSB             100.0f
+#define RPM_FILTER_HARMONICS_MAX 3
+#define RPM_FILTER_DURATION_S    0.001f  // Maximum duration allowed to update all RPM notches once
+
+typedef struct rpmFilter_s {
+
+    int numHarmonics;
+    float minHz;
+    float maxHz;
+    float fadeRangeHz;
+    float q;
+
+    timeUs_t looptimeUs;
+    biquadFilter_t notch[XYZ_AXIS_COUNT][MAX_SUPPORTED_MOTORS][RPM_FILTER_HARMONICS_MAX];
+
+} rpmFilter_t;
+
+extern rpmFilter_t rpmFilter;
+extern float motorFrequencyHz[MAX_SUPPORTED_MOTORS];
 
 void rpmFilterInit(const rpmFilterConfig_t *config, const timeUs_t looptimeUs);
 void rpmFilterUpdate(void);

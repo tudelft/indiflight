@@ -275,7 +275,7 @@ static uint16_t getMode(void)
 #if defined(USE_ACC)
 static int16_t getACC(uint8_t index)
 {
-    return (int16_t)((acc.accADC[index] * acc.dev.acc_1G_rec) * 1000);
+    return (int16_t)((acc.accADCf[index] * acc.dev.acc_1G_rec) * 1000);
 }
 #endif
 
@@ -414,7 +414,7 @@ static void setValue(uint8_t* bufferPtr, uint8_t sensorType, uint8_t length)
             break;
 #if defined(USE_TELEMETRY_IBUS_EXTENDED)
         case IBUS_SENSOR_TYPE_CMP_HEAD:
-            value.uint16 = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
+            value.uint16 = DECIDEGREES_TO_DEGREES(attitude.angles.yaw);
             break;
 #ifdef USE_VARIO
         case IBUS_SENSOR_TYPE_VERTICAL_SPEED:

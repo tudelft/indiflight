@@ -83,6 +83,7 @@
 #include "sensors/gyro.h"
 #include "sensors/gyro_init.h"
 #include "sensors/sensors.h"
+#include "flight/mixer.h"
 
 #include "acceleration_init.h"
 
@@ -92,6 +93,10 @@
     !defined(USE_ACC_ADXL345) && !defined(USE_ACC_BMA280) && !defined(USE_ACC_LSM303DLHC) && \
     !defined(USE_ACC_MMA8452) && !defined(USE_FAKE_ACC)
 #error At least one USE_ACC device definition required
+#endif
+
+#if defined(USE_ACC_RPM_FILTER) && !defined(USE_RPM_FILTER)
+#error Cannot USE_ACC_RPM_FILTER without USE_RPM_FILTER
 #endif
 
 #define CALIBRATING_ACC_CYCLES              400
@@ -134,13 +139,14 @@ void pgResetFn_accelerometerConfig(accelerometerConfig_t *instance)
     RESET_CONFIG_2(accelerometerConfig_t, instance,
         .acc_lpf_hz = 25, // ATTITUDE/IMU runs at 100Hz (acro) or 500Hz (level modes) so we need to set 50 Hz (or lower) to avoid aliasing
         .acc_hardware = ACC_DEFAULT,
+        .acc_offset = {0., 0., 0.},
         .acc_high_fsr = false,
     );
     resetRollAndPitchTrims(&instance->accelerometerTrims);
     resetFlightDynamicsTrims(&instance->accZero);
 }
 
-PG_REGISTER_WITH_RESET_FN(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG, 2);
+PG_REGISTER_WITH_RESET_FN(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG, 3);
 
 extern uint16_t InflightcalibratingA;
 extern bool AccInflightCalibrationMeasurementDone;
@@ -354,6 +360,11 @@ retry:
     return true;
 }
 
+#if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
+    static int notchUpdatesPerIteration;
+#endif
+
+
 void accInitFilters(void)
 {
     // Only set the lowpass cutoff if the ACC sample rate is detected otherwise
@@ -365,6 +376,26 @@ void accInitFilters(void)
             pt2FilterInit(&accelerationRuntime.accFilter[axis], k);
         }
     }
+
+#if defined(USE_ACCEL_RPM_FILTER) && defined(USE_RPM_FILTER)
+    rpmFilterAcc.numHarmonics = MIN(rpmFilter.numHarmonics, 1); // disable (ie 0), if gyro also disabled
+    rpmFilterAcc.minHz = rpmFilter.minHz;
+    rpmFilterAcc.maxHz = MIN(rpmFilter.maxHz, 0.48*acc.sampleRateHz); // avoid nyquist
+    rpmFilterAcc.fadeRangeHz = rpmFilter.fadeRangeHz;
+    rpmFilterAcc.q = rpmFilter.q;
+    rpmFilterAcc.looptimeUs = 1.f / acc.sampleRateHz;
+
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        for (int motor = 0; motor < getMotorCount(); motor++) {
+            for (int i = 0; i < rpmFilterAcc.numHarmonics; i++) {
+                biquadFilterInit(&rpmFilterAcc.notch[axis][motor][i], rpmFilterAcc.minHz * i, rpmFilterAcc.looptimeUs, rpmFilterAcc.q, FILTER_NOTCH, 0.0f);
+            }
+        }
+    }
+    const float loopIterationsPerUpdate = RPM_FILTER_DURATION_S / (rpmFilterAcc.looptimeUs * 1e-6f);
+    const float numNotchesPerAxis = getMotorCount() * rpmFilter.numHarmonics;
+    notchUpdatesPerIteration = ceilf(numNotchesPerAxis / loopIterationsPerUpdate); // round to ceiling
+#endif
 }
 
 bool accInit(uint16_t accSampleRateHz)
@@ -446,7 +477,7 @@ void performAcclerationCalibration(rollAndPitchTrims_t *rollAndPitchTrims)
         // Calculate average, shift Z down by acc_1G and store values in EEPROM at end of calibration
         accelerationRuntime.accelerationTrims->raw[X] = (a[X] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES;
         accelerationRuntime.accelerationTrims->raw[Y] = (a[Y] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES;
-        accelerationRuntime.accelerationTrims->raw[Z] = (a[Z] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES - acc.dev.acc_1G;
+        accelerationRuntime.accelerationTrims->raw[Z] = (a[Z] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES + acc.dev.acc_1G;
 
         resetRollAndPitchTrims(rollAndPitchTrims);
         setConfigCalibrationCompleted();

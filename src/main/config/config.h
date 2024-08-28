@@ -43,6 +43,8 @@ PG_DECLARE(pilotConfig_t, pilotConfig);
 typedef struct systemConfig_s {
     uint8_t pidProfileIndex;
     uint8_t activeRateProfile;
+    uint8_t indiProfileIndex;
+    uint8_t positionProfileIndex;
     uint8_t debug_mode;
     uint8_t task_statistics;
     uint8_t rateProfile6PosSwitch;
@@ -78,6 +80,9 @@ void changePidProfileFromCellCount(uint8_t cellCount);
 
 uint8_t getCurrentControlRateProfileIndex(void);
 void changeControlRateProfile(uint8_t profileIndex);
+
+uint8_t getCurrentIndiProfileIndex(void);
+uint8_t getCurrentPositionProfileIndex(void);
 
 bool canSoftwareSerialBeUsed(void);
 

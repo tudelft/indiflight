@@ -16,6 +16,7 @@ DEST_PATH=$2
 
 # betaflight specific: fucntion to reset flight controller in non MSC mode without reconnecting power.
 reset () {
+    echo ""
     sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 '/usr/bin/openocd -f /opt/openocd/openocd.cfg -c "init; reset; exit"'
 }
 
@@ -25,11 +26,11 @@ if [[ $? -gt 0 ]]; then
     # not yet available
     echo "MSC Device not (yet) available on remote."
 
-
     echo -n "Sending reboot-to-MSC signal to FC... "
 
     # restart ser2net to terminate any existing connections, then hope we are faster with sending the reboot signal than auto reconnect of the configurator
     sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo systemctl restart ser2net"
+    sleep 1
 
     # use MSP protocol over TCP (command 68, one Byte of value 0x03)
     timeout 3 $(dirname "$0")/sendMSPoverTCP.py --host 10.0.0.1 --port 5761 68 B 3
@@ -59,14 +60,14 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Failed to bring up MSC device. Resetting FC..."
-        echo
         reset
         exit 1
     fi
 
-    echo "MSC device available! Attempting checking/fixing of FAT filesystem on ${DEV}:"
-    echo ""
-    sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V ${DEV}"
+    echo "MSC device available!"
+    #echo "MSC device available! Attempting checking/fixing of FAT filesystem on ${DEV}:"
+    #echo ""
+    #sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "sudo fsck.vfat -l -a -v -w -V ${DEV}"
 
     echo ""
     echo "Attempting mounting ${DEV} on remote:/mnt..."
@@ -82,7 +83,6 @@ if [[ $? -gt 0 ]]; then
     if [[ $? -gt 0 ]]; then
         # mount failed, only path here
         echo "Mounting failed! Resetting FC..."
-        echo
         reset
         exit 1
     fi
@@ -104,6 +104,5 @@ sshpass -p pi ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 pi@10.0.0.1 "s
 
 # always reset
 echo "Resetting FC..."
-echo
 reset
 exit ${exit_code}
