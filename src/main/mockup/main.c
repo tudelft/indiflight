@@ -144,7 +144,7 @@ void tick(const timeDelta_t dtUs)
 #ifdef USE_EKF
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
 #endif
-        getTask(TASK_LOCAL_POSITION)->attribute->taskFunc( currentTimeUs );
+        getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
     } 
 
     getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );

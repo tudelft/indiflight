@@ -91,9 +91,6 @@ typedef struct learningRuntime_s {
     float motorSqrtD[MAX_SUPPORTED_MOTORS];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
-    bool applyIndiProfileAfterQuery;
-    bool applyPositionProfileAfterQuery;
-    bool applyHoverRotationAfterQuery;
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;

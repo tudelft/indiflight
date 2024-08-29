@@ -98,9 +98,6 @@ void initLearnerRuntime(void) {
     learnRun.zeta[LEARNER_LOOP_ATTITUDE] = constrainf(0.01f * learnerConfig()->zetaAttitude, 0.5f, 1.0f);
     learnRun.zeta[LEARNER_LOOP_VELOCITY] = constrainf(0.01f * learnerConfig()->zetaVelocity, 0.5f, 1.0f);
     learnRun.zeta[LEARNER_LOOP_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
-    learnRun.applyIndiProfileAfterQuery = (bool) learnerConfig()->applyIndiProfileAfterQuery;
-    learnRun.applyPositionProfileAfterQuery = (bool) learnerConfig()->applyPositionProfileAfterQuery;
-    learnRun.applyHoverRotationAfterQuery = (bool) learnerConfig()->applyHoverRotationAfterQuery;
 }
 
 // externs
@@ -441,7 +438,8 @@ static bool calculateHoverAttitude(void) {
     // 9. compute tilt quaternion
     fp_vector_t up   = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     fp_vector_t orth = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
-    quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
+    if (learnerConfig()->applyHoverRotationAfterQuery)
+        quaternion_of_two_vectors(&hoverAttitude, &up, &hoverThrust, &orth);
     //if (hoverAttitude.w != hoverAttitude.w)
     //    __asm("BKPT #1\n");
 
@@ -573,11 +571,11 @@ void updateLearner(timeUs_t current) {
 
     static bool appliedAfterQuery = false;
     if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
-        if (learnRun.applyIndiProfileAfterQuery)
+        if (learnerConfig()->applyIndiProfileAfterQuery)
             changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
 
 #ifdef USE_LOCAL_POSITION
-        if (learnRun.applyPositionProfileAfterQuery)
+        if (learnerConfig()->applyPositionProfileAfterQuery)
             changePositionProfile(POSITION_PROFILE_COUNT-1); 
 #endif
         appliedAfterQuery = true;
@@ -803,7 +801,7 @@ doMore:
                 //if (learnRun.applyHoverRotationAfterQuery && success)
                 //    updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
 
-                if (learnRun.applyHoverRotationAfterQuery) {
+                if (learnerConfig()->applyHoverRotationAfterQuery) {
                     // reset accelerometer trims
                     accelerometerConfigMutable()->accZero.raw[0] = 0;
                     accelerometerConfigMutable()->accZero.raw[1] = 0;
