@@ -642,7 +642,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     quaternionProducts_of_quaternion(&imu_to_hoverP, &imu_to_hover);
     rotationMatrix_of_quaternionProducts(&imu_to_hoverR, &imu_to_hoverP);
 
-    for (int act = 0; act < learnerConfig()->numAct ; act++) {
+    indi->actNum = MIN(learnerConfig()->numAct, MAXU);
+    for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
@@ -658,17 +659,6 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         else
             indi->actNonlinearity[act] = 50;
 
-        // indi->actLimit[act] = 0.6;
-        //                    inv y-scale        a-scale           config scale
-        //actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0 + act];
-        //actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[4 + act];
-        //actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[8 + act];
-        //actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0  + act];
-        //actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[8  + act];
-        //actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[16 + act];
-        //actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[0  + 4 + act];
-        //actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[8  + 4 + act];
-        //actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRateDotRls.X[16 + 4 + act];
         actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[act];
         actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[act];
         actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[act];

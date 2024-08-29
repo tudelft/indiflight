@@ -163,8 +163,10 @@ void getSetpoints(timeUs_t current) {
         && (learningQueryState < LEARNING_QUERY_DONE))
     {
         indiRun.bypassControl = true;
-        for (int i=0; i < indiRun.actNum; i++)
+        for (int i=0; i < learnerConfig()->numAct; i++)
             indiRun.d[i] = outputFromLearningQuery[i];
+        for (int i=learnerConfig()->numAct; i < MAXU; i++)
+            indiRun.d[i] = 0;
     }
     else if (FLIGHT_MODE(LEARNER_MODE) && (nullexState == LEARNER_NULLEX_STATE_ARREST))
     {
@@ -552,7 +554,7 @@ void getMotorCommands(timeUs_t current) {
 //     at the same rate as getMotorCommands would be called. EVEN IF NOT IN 
 //     INDI MODE. Otherwise switching to INDI may result in a super high jerk.
 void indiUpdateActuatorState( float* d ) {
-    for (int i=0; i < indiRun.actNum; i++) {
+    for (int i=0; i < getMotorCount(); i++) {
         float u = indiOutputCurve( &indiRun.lin[i], d[i] );
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
