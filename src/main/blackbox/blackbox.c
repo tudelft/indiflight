@@ -1979,8 +1979,8 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[0].n); i++) {
         // specific force setpoints (fxRls 0, 1, 2)
         blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxRls[1].x[i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxRls[2].x[i]);
     }
     // two for loops for the rate, because we need to ensure that the omega_dot
     // regressors start at BLACKBOX_LEARNER_N and not fxRateDotRls.n which is unknown
@@ -1991,8 +1991,8 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[i]);
         blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[i]);
         blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[(fxRls[3].n >> 1) + i]);
-        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[(fxRls[3].n >> 1) + i]);
-        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[(fxRls[3].n >> 1) + i]);
+        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[(fxRls[4].n >> 1) + i]);
+        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[(fxRls[5].n >> 1) + i]);
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
