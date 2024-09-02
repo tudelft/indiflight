@@ -2,6 +2,9 @@
 
 This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras, or even offboard control is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
 
+Supporting software:
+[![Github](https://img.shields.io/badge/Github-indiflight_support-blue?logo=github)](https://github.com/tudelft/indiflightSupport) Contains simulation, groundstation softare, information on research papers connected with Indiflight and  Documentation on Drone builds/setups.
+
 ## Building using docker -- the preferred way
 
 (tested on Ubuntu 22.04, install docker like https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
