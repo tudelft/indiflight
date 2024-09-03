@@ -122,7 +122,9 @@ void accUpdate(timeUs_t currentTimeUs)
         }
     } else
 #endif
+    {
         for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) { acc.accADCafterRpm[axis] = acc.accADC[axis]; }
+    }
 
     // apply LP filtering
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
