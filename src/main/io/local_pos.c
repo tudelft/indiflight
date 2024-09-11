@@ -129,19 +129,11 @@ void getLocalPos(timeUs_t current) {
             posMeasNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
             posMeasNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
             posMeasNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
-            fp_euler_t eulers;
-            fp_quaternion_t quat;
             // the quaternion x,y,z should be NED
-            quat.w = piMsgExternalPoseRx->body_qi;
-            quat.x = piMsgExternalPoseRx->body_qx;
-            quat.y = piMsgExternalPoseRx->body_qy;
-            quat.z = piMsgExternalPoseRx->body_qz;
-            fp_quaternionProducts_t qP;
-            quaternionProducts_of_quaternion(&qP, &quat);
-            fp_euler_of_quaternionProducts(&eulers, &qP);
-            posMeasNed.att.angles.roll = eulers.angles.roll;
-            posMeasNed.att.angles.pitch = eulers.angles.pitch;
-            posMeasNed.att.angles.yaw = eulers.angles.yaw;
+            posMeasNed.quat.w = piMsgExternalPoseRx->body_qi;
+            posMeasNed.quat.x = piMsgExternalPoseRx->body_qx;
+            posMeasNed.quat.y = piMsgExternalPoseRx->body_qy;
+            posMeasNed.quat.z = piMsgExternalPoseRx->body_qz;
 #else
 #define REARTH 6371000.f
             {
@@ -158,9 +150,10 @@ void getLocalPos(timeUs_t current) {
                     VEC3_SCALAR_MULT(posMeasNed.vel, iDeltaS);
                 }
                 posMeasNed.pos = newPos;
-                posMeasNed.att.angles.roll = 0;
-                posMeasNed.att.angles.pitch = 0;
-                posMeasNed.att.angles.yaw = DECIDEGREES_TO_RADIANS(gpsSol.trueYaw);
+                posMeasNed.quat.w = 1.f; // nope
+                posMeasNed.quat.x = 0.f;
+                posMeasNed.quat.y = 0.f;
+                posMeasNed.quat.z = 0.f;
             }
 #endif
             sensorsSet(SENSOR_GPS);

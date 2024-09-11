@@ -389,6 +389,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"extAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"extAtt",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
 #ifdef USE_VIO_POSE
     {"vioTime",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
@@ -419,9 +420,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_vel",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
-    {"ekf_att",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
     {"ekf_acc_b",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_acc_b",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -735,7 +737,7 @@ typedef struct blackboxMainState_s {
     int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
-    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t extAtt[4]; // will be degrees/1000
 #ifdef USE_VIO_POSE
     uint32_t vioTime;           // will be in ms, so must be more than 32bit
     int32_t vioPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
@@ -747,7 +749,7 @@ typedef struct blackboxMainState_s {
 #ifdef USE_EKF
     int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t ekf_att[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t ekf_quat[4]; // quaternion
     int16_t ekf_acc_b[XYZ_AXIS_COUNT];
     int16_t ekf_gyro_b[XYZ_AXIS_COUNT];
 #endif
@@ -1152,7 +1154,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, 4);
 #ifdef USE_VIO_POSE
         blackboxWriteUnsignedVB(blackboxCurrent->vioTime);
         blackboxWriteSignedVBArray(blackboxCurrent->vioPos, XYZ_AXIS_COUNT);
@@ -1166,7 +1168,7 @@ static void writeIntraframe(void)
     if (testBlackboxCondition(CONDITION(EKF))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_att, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_gyro_b, XYZ_AXIS_COUNT);
     }
@@ -1434,8 +1436,8 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 #ifdef USE_VIO_POSE
         blackboxWriteUnsignedVB(blackboxCurrent->vioTime - blackboxLast->vioTime);
 
@@ -1464,8 +1466,8 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->ekf_vel, blackboxLast->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->ekf_att, blackboxLast->ekf_att, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->ekf_quat, blackboxLast->ekf_quat, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_acc_b, blackboxLast->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
@@ -1927,9 +1929,10 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->accSp[0] = lrintf(accSpNedFromPos.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNedFromPos.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNedFromPos.V.Z * METER_TO_CM);
-    blackboxCurrent->extAtt[0] = lrintf(posMeasNed.att.angles.roll * 1000.f); // milirad
-    blackboxCurrent->extAtt[1] = lrintf(posMeasNed.att.angles.pitch * 1000.f); // milirad
-    blackboxCurrent->extAtt[2] = lrintf(posMeasNed.att.angles.yaw * 1000.f); // milirad
+    blackboxCurrent->extAtt[0] = lrintf(posMeasNed.quat.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->extAtt[1] = lrintf(posMeasNed.quat.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->extAtt[2] = lrintf(posMeasNed.quat.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->extAtt[3] = lrintf(posMeasNed.quat.z * UNIT_FLOAT_TO_SIGNED16VB);
 #ifdef USE_VIO_POSE
     blackboxCurrent->vioTime = lrintf(vioPosNed.time_us);
     blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
@@ -1956,15 +1959,16 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_vel[0] = lrintf(ekf_X[3] * METER_TO_CM);
     blackboxCurrent->ekf_vel[1] = lrintf(ekf_X[4] * METER_TO_CM);
     blackboxCurrent->ekf_vel[2] = lrintf(ekf_X[5] * METER_TO_CM);
-    blackboxCurrent->ekf_att[0] = lrintf(ekf_X[6] * 1000); // milirad
-    blackboxCurrent->ekf_att[1] = lrintf(ekf_X[7] * 1000); // milirad
-    blackboxCurrent->ekf_att[2] = lrintf(ekf_X[8] * 1000); // milirad
-    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
-    blackboxCurrent->ekf_gyro_b[0] = lrintf(RADIANS_TO_DEGREES(ekf_X[12])); // deg/s
-    blackboxCurrent->ekf_gyro_b[1] = lrintf(RADIANS_TO_DEGREES(ekf_X[13])); // deg/s
-    blackboxCurrent->ekf_gyro_b[2] = lrintf(RADIANS_TO_DEGREES(ekf_X[14])); // deg/s
+    blackboxCurrent->ekf_quat[0] = lrintf(ekf_X[6] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[1] = lrintf(ekf_X[7] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[2] = lrintf(ekf_X[8] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[3] = lrintf(ekf_X[9] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[10] * METER_TO_MM); // mm/s^2
+    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[11] * METER_TO_MM); // mm/s^2
+    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[12] * METER_TO_MM); // mm/s^2
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[15])); // mdeg/s
 #endif
 
 #ifdef USE_LEARNER
@@ -2192,7 +2196,7 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_INDI
     const indiProfile_t *indiProfile = indiProfiles(systemConfig()->indiProfileIndex);
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     const positionProfile_t *posProfile = positionProfiles(systemConfig()->positionProfileIndex);
 #endif
 
@@ -2566,7 +2570,7 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->u_pref[2],
                                                                                               indiProfile->u_pref[3]);
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_D, "%d",  posProfile->horz_d);
@@ -2588,21 +2592,26 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_EKF
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE, "%d",  ekfConfig()->use_attitude_estimate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_POSITION_ESTIMATE, "%d",  ekfConfig()->use_position_estimate);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS, "%d,%d,%d",  ekfConfig()->use_angle_measurements[0],
-                                                                                       ekfConfig()->use_angle_measurements[1],
-                                                                                       ekfConfig()->use_angle_measurements[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_QUAT_MEASUREMENT, "%d",  ekfConfig()->use_quat_measurement);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",  ekfConfig()->proc_noise_acc[0],
                                                                                        ekfConfig()->proc_noise_acc[1],
                                                                                        ekfConfig()->proc_noise_acc[2]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO, "%d,%d,%d",  ekfConfig()->proc_noise_gyro[0],
                                                                                        ekfConfig()->proc_noise_gyro[1],
                                                                                        ekfConfig()->proc_noise_gyro[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS, "%d,%d,%d",  ekfConfig()->proc_noise_acc_bias[0],
+                                                                                    ekfConfig()->proc_noise_acc_bias[1],
+                                                                                    ekfConfig()->proc_noise_acc_bias[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS, "%d,%d,%d", ekfConfig()->proc_noise_gyro_bias[0],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[1],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[2]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_POSITION, "%d,%d,%d",  ekfConfig()->meas_noise_position[0],
                                                                                        ekfConfig()->meas_noise_position[1],
                                                                                        ekfConfig()->meas_noise_position[2]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_ANGLES, "%d,%d,%d",  ekfConfig()->meas_noise_angles[0],
-                                                                                       ekfConfig()->meas_noise_angles[1],
-                                                                                       ekfConfig()->meas_noise_angles[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_QUAT, "%d,%d,%d,%d",  ekfConfig()->meas_noise_quat[0],
+                                                                                   ekfConfig()->meas_noise_quat[1],
+                                                                                   ekfConfig()->meas_noise_quat[2],
+                                                                                   ekfConfig()->meas_noise_quat[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",  ekfConfig()->meas_delay);
 #endif
 #ifdef USE_CATAPULT

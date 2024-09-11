@@ -88,19 +88,10 @@ void setMocap(const float *pos, const float *vel, const float *q) {
         posMeasNed.pos.A[axis] = pos[axis];
         posMeasNed.vel.A[axis] = vel[axis];
     }
-    fp_euler_t eulers;
-    fp_quaternion_t quat;
-    // the quaternion x,y,z are in ENU, we convert them to NED
-    quat.w = q[0];
-    quat.x = q[1];
-    quat.y = q[2];
-    quat.z = q[3];
-    fp_quaternionProducts_t qP;
-    quaternionProducts_of_quaternion(&qP, &quat);
-    fp_euler_of_quaternionProducts (&eulers, &qP);
-    posMeasNed.att.angles.roll = eulers.angles.roll;
-    posMeasNed.att.angles.pitch = eulers.angles.pitch;
-    posMeasNed.att.angles.yaw = eulers.angles.yaw;
+    posMeasNed.quat.w = q[0];
+    posMeasNed.quat.x = q[1];
+    posMeasNed.quat.y = q[2];
+    posMeasNed.quat.z = q[3];
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {

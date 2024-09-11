@@ -46,6 +46,7 @@
 #include "flight/catapult.h"
 #include "flight/pos_ctl.h"
 #include "flight/throw.h"
+#include "flight/ekf_calc.h"
 
 #include "f2c.h"
 #include "clapack.h"
@@ -839,6 +840,13 @@ doMore:
                 getAttitudeQuaternion(&attitude);
                 newAttitude = chain_quaternion(&attitude, &iboard_q);
                 setAttitudeWithQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
+#ifdef USE_EKF
+                float *theEkfX = ekf_get_X();
+                theEkfX[6] = newAttitude.w;
+                theEkfX[7] = newAttitude.x;
+                theEkfX[8] = newAttitude.y;
+                theEkfX[9] = newAttitude.z; // this probably messes up covariances, who cares
+#endif
             }
 
             if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))

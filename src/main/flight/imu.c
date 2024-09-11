@@ -244,10 +244,14 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     UNUSED(useMag);
 #endif
 
-#ifdef USE_LOCAL_POSITION
+#if defined(USE_LOCAL_POSITION) && defined(USE_LOCAL_POSITION_PI) // use this only with optitrack
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = posMeasNed.att.angles.yaw;
+        fp_quaternionProducts_t qp;
+        fp_euler_t eulers;
+        quaternionProducts_of_quaternion(&qp, &posMeasNed.quat);
+        fp_euler_of_quaternionProducts(&eulers, &qp);
+        float yawI = eulers.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }

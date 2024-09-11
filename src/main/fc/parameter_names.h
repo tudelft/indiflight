@@ -179,11 +179,13 @@
 #ifdef USE_EKF
 #define PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE  "ekf_use_attitude_estimate"
 #define PARAM_NAME_EKF_USE_POSITION_ESTIMATE  "ekf_use_position_estimate"
-#define PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS "ekf_use_angles"
+#define PARAM_NAME_EKF_USE_QUAT_MEASUREMENT "ekf_use_quat"
 #define PARAM_NAME_EKF_PROC_NOISE_ACC         "ekf_proc_noise_acc"
 #define PARAM_NAME_EKF_PROC_NOISE_GYRO        "ekf_proc_noise_gyro"
+#define PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS         "ekf_proc_noise_acc_bias"
+#define PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS        "ekf_proc_noise_gyro_bias"
 #define PARAM_NAME_EKF_MEAS_NOISE_POSITION    "ekf_meas_noise_position"
-#define PARAM_NAME_EKF_MEAS_NOISE_ANGLES    "ekf_meas_noise_angles"
+#define PARAM_NAME_EKF_MEAS_NOISE_QUAT    "ekf_meas_noise_quat"
 #define PARAM_NAME_EKF_MEAS_DELAY             "ekf_meas_delay"
 #endif
 

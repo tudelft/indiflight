@@ -35,7 +35,7 @@ typedef struct __local_pos_ned_t {
     uint32_t time_us;
     fp_vector_t pos;
     fp_vector_t vel;
-    fp_euler_t att;
+    fp_quaternion_t quat;
 } local_pos_ned_t;
 
 typedef struct __vio_pos_ned_t {
