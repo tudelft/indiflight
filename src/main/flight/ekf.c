@@ -190,8 +190,8 @@ void initEkf(timeUs_t currentTimeUs) {
             }
         }
 #endif
-        //X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
-        X0[2] = posMeasNed.pos.V.Z; //todo testingggg
+        X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+        //X0[2] = posMeasNed.pos.V.Z; //todo testingggg
     }
 #endif
 
@@ -263,8 +263,8 @@ void runEkf(timeUs_t currentTimeUs) {
 #endif
             float baroCalib = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
             DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
-            ekf_Z[2] = posMeasNed.pos.V.Z; //todo testingggg
-            //ekf_Z[2] = baroCalib; //todo testingggg
+            //ekf_Z[2] = posMeasNed.pos.V.Z; //todo testingggg
+            ekf_Z[2] = baroCalib; //todo testingggg
         } else
 #endif
         {// GPS
