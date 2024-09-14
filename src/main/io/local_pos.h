@@ -73,7 +73,7 @@ extern vio_pos_ned_t vioPosNed;
 extern local_pos_measurement_state_t vioPosState;
 extern timeUs_t vioLatestMsgTime;
 
-#define POS_MEAS_TIMEOUT_US 300000
+#define POS_MEAS_TIMEOUT_US 1000000
 #define VIO_POS_TIMEOUT_US 30000000
 
 void getLocalPos(timeUs_t current);

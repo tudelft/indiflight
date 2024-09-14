@@ -48,6 +48,8 @@ static bool isBoardAlignmentStandard(const boardAlignment_t *boardAlignment)
     return !boardAlignment->rollDegrees && !boardAlignment->pitchDegrees && !boardAlignment->yawDegrees;
 }
 
+#include "flight/learner.h" // IMAV beun
+
 void initBoardAlignment(const boardAlignment_t *boardAlignment)
 {
     standardBoardAlignment = isBoardAlignmentStandard(boardAlignment);
@@ -58,6 +60,7 @@ void initBoardAlignment(const boardAlignment_t *boardAlignment)
     rotationAngles.angles.yaw   = degreesToRadians(boardAlignment->yawDegrees  );
 
     rotationMatrix_of_fp_euler(&boardRotation, &rotationAngles);
+    //quaternion_of_fp_euler(&hoverAttitude, &rotationAngles); /// TODO take out IMAV beun fixme
 }
 
 static void alignBoard(float *vec)
