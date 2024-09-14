@@ -208,7 +208,7 @@ void calculateEstimatedAltitude(void)
     DEBUG_SET(DEBUG_ALTITUDE, 3, estimatedVario);
 #endif
     DEBUG_SET(DEBUG_RTH, 1, displayAltitudeCm);
-    DEBUG_SET(DEBUG_BARO, 3, baroAltCm);
+    //DEBUG_SET(DEBUG_BARO, 3, baroAltCm);
 }
 #endif //defined(USE_BARO) || defined(USE_GPS)
 

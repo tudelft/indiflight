@@ -80,6 +80,7 @@
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "flight/nn_control.h"
+#include "flight/ekf.h"
 
 #include "io/beeper.h"
 #include "io/local_pos.h"
@@ -631,7 +632,7 @@ void tryArm(void)
         lastArmingDisabledReason = 0;
 
 #ifdef USE_GPS
-        GPS_reset_home_position();
+        //GPS_reset_home_position(); // IMAV hack: dangerous to forget this. drone will literally attack you
         //beep to indicate arming
         if (featureIsEnabled(FEATURE_GPS)) {
             if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueConfig()->minSats) {
@@ -1068,10 +1069,12 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             if (posMeasState >= LOCAL_POS_STILL_VALID) {
-#ifdef USE_LOCAL_POSITION_GPS
-                GPS_reset_home_position();
+#ifdef USE_EKF
+                if (ekfConfig()->use_position_estimate && isInitializedEkf())
 #endif
-                ENABLE_FLIGHT_MODE(POSITION_MODE);
+                {
+                    ENABLE_FLIGHT_MODE(POSITION_MODE);
+                }
             }
         }
     } else {
@@ -1083,6 +1086,21 @@ void processRxModes(timeUs_t currentTimeUs)
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 #endif
+
+    if (!ARMING_FLAG(ARMED)) {
+        if (IS_RC_MODE_ACTIVE(BOXRESETHOME)) {
+#ifdef USE_GPS
+            GPS_reset_home_position();
+#endif
+#ifdef USE_BARO
+            baroSetGroundLevel();
+            baro.altitude = 0; // set this now, or else EKF won't reset properly
+#endif
+#ifdef USE_EKF
+            initEkf(currentTimeUs);
+#endif
+        }
+    }
 
 #ifdef USE_VEL_CTL
     if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {

@@ -25,6 +25,8 @@
 
 #include "ekf.h"
 
+#include "build/debug.h"
+
 #include "io/local_pos.h"  		// for extPosNed
 #include "fc/runtime_config.h"		// for FLIGHT_MODE
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
@@ -32,6 +34,9 @@
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "sensors/barometer.h"
+#include "flight/indi.h"
+#include "drivers/dshot.h"
 #include <stdbool.h>
 
 #include "pg/pg_ids.h"              // for config
@@ -46,9 +51,9 @@
 #error "USE_EKF requires USE_GYRO"
 #endif
 
-#ifndef USE_LOCAL_POSITION_PI
-#error "USE_EKF requires USE_LOCAL_POSITION_PI"
-#endif
+//#ifndef USE_LOCAL_POSITION_PI
+//#error "USE_EKF requires USE_LOCAL_POSITION_PI"
+//#endif
 
 PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
@@ -129,6 +134,10 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 
 extern bool ekf_use_quat;
 
+bool isInitializedEkf(void) {
+    return ekf_initialized;
+}
+
 void initEkf(timeUs_t currentTimeUs) {
 	// set ekf parameters
 	ekf_use_quat = ekfConfig()->use_quat_measurement;
@@ -169,6 +178,23 @@ void initEkf(timeUs_t currentTimeUs) {
         1., 0., 0., 0., // quaternion
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
+
+#ifdef USE_BARO
+    // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion.
+    if (sensors(SENSOR_BARO)) {
+        float mean = 0.f;
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+        if (isDshotTelemetryActive()) { 
+            for (int i=0; i<indiRun.actNum; i++) {
+                mean += indiRun.omega_fs[i] / indiRun.actNum;
+            }
+        }
+#endif
+        //X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+        X0[2] = posMeasNed.pos.V.Z; //todo testingggg
+    }
+#endif
+
 
 	// sets initial covariance to 1
 	float P_diag0[N_STATES] = {
@@ -224,7 +250,26 @@ void runEkf(timeUs_t currentTimeUs) {
         lastUpdateTimestamp = posLatestMsgTime;
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
-		ekf_Z[2] = posMeasNed.pos.V.Z;
+#ifdef USE_BARO
+        if (sensors(SENSOR_BARO)) {
+            // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion
+            float mean = 0.f;
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+            if (isDshotTelemetryActive()) { 
+                for (int i=0; i<indiRun.actNum; i++) {
+                    mean += indiRun.omega_fs[i] / indiRun.actNum;
+                }
+            }
+#endif
+            float baroCalib = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+            DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
+            ekf_Z[2] = posMeasNed.pos.V.Z; //todo testingggg
+        } else
+#endif
+        {// GPS
+		    ekf_Z[2] = posMeasNed.pos.V.Z;
+        }
+
 		ekf_Z[3] = (ekf_use_quat) * posMeasNed.quat.w;
 		ekf_Z[4] = (ekf_use_quat) * posMeasNed.quat.x;
 		ekf_Z[5] = (ekf_use_quat) * posMeasNed.quat.y;

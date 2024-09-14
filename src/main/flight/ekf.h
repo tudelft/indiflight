@@ -47,6 +47,8 @@ typedef struct ekfConfig_s {
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
 
+bool isInitializedEkf(void);
+void initEkf(timeUs_t currentTimeUs);
 void updateEkf(timeUs_t currentTimeUs);
 
 #endif // EKF_H
