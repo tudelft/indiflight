@@ -81,7 +81,7 @@ static void checkNewPosPi(void) {
 
 #ifdef USE_LOCAL_POSITION_GPS
 static void checkNewPosGps(void) {
-    if (!STATE(GPS_FIX_EVER)) {
+    if (!STATE(GPS_FIX_EVER) || !STATE(GPS_FIX_HOME)) {
         posMeasState = LOCAL_POS_NO_SIGNAL;
     } else {
         // assume still valid for now
