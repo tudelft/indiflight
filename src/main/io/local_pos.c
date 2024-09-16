@@ -161,7 +161,7 @@ void getLocalPos(timeUs_t current) {
             ENABLE_STATE(GPS_FIX_EVER);
             break;
         case LOCAL_POS_NO_SIGNAL:
-            DISABLE_STATE(GPS_FIX);
+            //DISABLE_STATE(GPS_FIX);
             break;
         default:
             break;
