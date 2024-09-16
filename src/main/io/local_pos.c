@@ -9,6 +9,7 @@
 #include "sensors/sensors.h"
 #include "flight/imu.h"
 #include "io/gps.h"
+#include "fc/core.h"
 
 
 #if defined(USE_LOCAL_POSITION_GPS) && !defined(USE_GPS)
@@ -154,6 +155,9 @@ void getLocalPos(timeUs_t current) {
                 posMeasNed.quat.x = 0.f;
                 posMeasNed.quat.y = 0.f;
                 posMeasNed.quat.z = 0.f;
+                if (hypotf( posMeasNed.pos.V.X, posMeasNed.pos.V.Y ) > 8.f) {
+                    disarm(DISARM_REASON_RUNAWAY_TAKEOFF);
+                }
             }
 #endif
             sensorsSet(SENSOR_GPS);
@@ -161,7 +165,11 @@ void getLocalPos(timeUs_t current) {
             ENABLE_STATE(GPS_FIX_EVER);
             break;
         case LOCAL_POS_NO_SIGNAL:
-            //DISABLE_STATE(GPS_FIX);
+#ifdef USE_LOCAL_POSITION_PI
+            DISABLE_STATE(GPS_FIX);
+#else
+            disarm(DISARM_REASON_GPS_RESCUE);
+#endif
             break;
         default:
             break;
