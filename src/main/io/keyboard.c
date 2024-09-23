@@ -77,6 +77,7 @@
 #ifdef USE_TELEMETRY_PI
 void processKey(uint8_t key) {
     // 0 = go to center
+    // p = go to above nn_init
     // 1 = initTrajectoryTracker
     // 2 = decrease speed by 0.5 m/s
     // 3 = increase speed by 0.5 m/s
@@ -103,6 +104,7 @@ void processKey(uint8_t key) {
 #ifdef USE_NN_CONTROL
         case KEY_6: nn_init(); break;
         case KEY_7: if (nn_is_active()) { nn_deactivate(); } else { nn_activate(); } break;
+        case KEY_P: posSpNed.pos.V.X = 1.5; posSpNed.pos.V.Y = -3.; posSpNed.pos.V.Z = -1.5; posSetpointState = EXT_POS_NEW_MESSAGE; break;
 #endif
         case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
     }
