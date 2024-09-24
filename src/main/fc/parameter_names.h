@@ -208,6 +208,15 @@
 #define PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS "throw_to_arm_release_delay_ms"
 #endif
 
+#ifdef USE_INERTIA_BY_THROWING
+#define PARAM_NAME_INERTIA_LOW_TIME "inertia_low_time"
+#define PARAM_NAME_INERTIA_LOW_PERC "inertia_low_percentage"
+#define PARAM_NAME_INERTIA_HIGH_TIME "inertia_high_time"
+#define PARAM_NAME_INERTIA_HIGH_PERC "inertia_high_percentage"
+#define PARAM_NAME_INERTIA_LOW_AGAIN_TIME "inertia_low_again_time"
+#define PARAM_NAME_INERTIA_LOW_AGAIN_PERC "inertia_low_again_percentage"
+#endif
+
 #ifdef USE_LEARNER
 #define PARAM_NAME_LEARNER_MODE "learner_mode"
 #define PARAM_NAME_LEARNER_NUM_ACT "learner_num_actuators"

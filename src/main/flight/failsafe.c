@@ -195,6 +195,9 @@ void failsafeOnValidDataFailed(void)
 // after the stage 1 delay has expired, sets the rxLinkState to RXLINK_DOWN, ie not up, causing failsafeIsReceivingRxData to become false
 // if failsafe is configured to go direct to stage 2, this is emulated immediately in failsafeUpdateState()
 {
+#ifdef USE_INERTIA_BY_THROWING
+    return;
+#endif
     setArmingDisabled(ARMING_DISABLED_RX_FAILSAFE);
     //  set RXLOSS in OSD and block arming after 100ms of signal loss (is restored in rx.c immediately signal returns)
 
@@ -209,6 +212,9 @@ void failsafeOnValidDataFailed(void)
 void failsafeCheckDataFailurePeriod(void)
 // runs directly from scheduler, every 10ms, to validate the link
 {
+#ifdef USE_INERTIA_BY_THROWING
+    return;
+#endif
     if (cmp32(millis(), failsafeState.validRxDataReceivedAt) > (int32_t)failsafeState.rxDataFailurePeriod) {
         // sets link DOWN after the stage 1 failsafe period, initiating stage 2
         failsafeState.rxLinkState = FAILSAFE_RXLINK_DOWN;

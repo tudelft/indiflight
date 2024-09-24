@@ -72,6 +72,7 @@
 #include "flight/pid.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/inertia.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
@@ -149,6 +150,15 @@ enum {
 
 #define DEBUG_RUNAWAY_TAKEOFF_TRUE  1
 #define DEBUG_RUNAWAY_TAKEOFF_FALSE 0
+#endif
+
+#ifdef USE_INERTIA_BY_THROWING
+    #ifndef USE_THROW_TO_ARM
+    #define USE_THROW_TO_ARM
+    #endif
+    #ifndef USE_THROWING_WITHOUT_POSITION
+    #define USE_THROWING_WITHOUT_POSITION
+    #endif
 #endif
 
 #if defined(USE_GPS) || defined(USE_MAG)
@@ -471,6 +481,20 @@ void updateArmingStatus(void)
         } else {
             unsetArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
             unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+        }
+#endif
+
+#ifdef USE_INERTIA_BY_THROWING
+        unsetArmingDisabled(0xFFFFFFFF);
+        if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+            unsetArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
+            if (throwState == THROW_STATE_THROWN) {
+                unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+            } else {
+                setArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
+            }
+        } else {
+            setArmingDisabled(ARMING_DISABLED_THROW_NOT_READY);
         }
 #endif
 
@@ -1552,6 +1576,13 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
             motor_normalized[i] = constrainf(nn_output[i], 0., 1.);
 
     } else
+#endif
+#ifdef USE_INERTIA_BY_THROWING
+    if (true) { // always run this
+        inertiaUpdateStateMachine(currentTimeUs);
+        for (int i = 0; i < numMotors; i++)
+            motor_normalized[i] = constrainf(outputFromInertiaCommands[i], 0.f, 1.f);
+    } else 
 #endif
 #ifdef USE_INDI
     if (!FLIGHT_MODE(PID_MODE)) {

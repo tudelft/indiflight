@@ -70,6 +70,7 @@
 #include "flight/throw.h"
 #include "flight/ekf.h"
 #include "flight/nn_control.h"
+#include "flight/inertia.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1346,6 +1347,15 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_THROW_TO_ARM_GYRO_HIGH,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 270, 900 }, PG_THROW_CONFIG, offsetof(throwConfig_t, gyroHighThresh) },
     { PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 200, 2000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, momentumThresh) },
     { PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 5000 }, PG_THROW_CONFIG, offsetof(throwConfig_t, releaseDelayMs) },
+#endif
+
+#ifdef USE_INERTIA_BY_THROWING
+    { PARAM_NAME_INERTIA_LOW_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 500 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, lowTime) },
+    { PARAM_NAME_INERTIA_LOW_PERC,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, lowPerc) },
+    { PARAM_NAME_INERTIA_HIGH_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 500 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, highTime) },
+    { PARAM_NAME_INERTIA_HIGH_PERC,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, highPerc) },
+    { PARAM_NAME_INERTIA_LOW_AGAIN_TIME,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 500 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, lowAgainTime) },
+    { PARAM_NAME_INERTIA_LOW_AGAIN_PERC,   VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_INERTIA_CONFIG, offsetof(inertiaConfig_t, lowAgainPerc) },
 #endif
 
 #ifdef USE_LEARNER

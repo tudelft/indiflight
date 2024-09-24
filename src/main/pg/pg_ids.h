@@ -89,6 +89,8 @@
 #define PG_EKF_CONFIG 63
 #define PG_NN_CONFIG 64
 
+#define PG_INERTIA_CONFIG 99
+
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight
 #define PG_DRIVER_FLASHCHIP_CONFIG 101 // does not exist in betaflight

@@ -1,4 +1,9 @@
 {
     "cortex-debug.gdbPath": "gdb-multiarch",
     "cortex-debug.liveWatchRefreshRate": 1000,
+    "files.associations": {
+        "*.ptx": "platformio-debug.asm",
+        "stdbool.h": "c",
+        "msp_protocol.h": "c"
+    },
 }

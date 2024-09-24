@@ -114,6 +114,7 @@ bool cliMode = false;
 #include "flight/pid.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/inertia.h"
 #include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"
@@ -6207,6 +6208,24 @@ static void cliUplink(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_INERTIA_BY_THROWING
+static void cliInertia(const char *cmdName, char *cmdline)
+{
+    if (strcasecmp(cmdline, "arm") == 0) {
+        if (inertiaTryArm()) {
+            cliPrintLinef("Enable inertia throwing state machines...");
+        } else {
+            cliPrintLinef("ERROR: inertia already in progress");
+        }
+    } else if (strcasecmp(cmdline, "disarm") == 0) {
+        inertiaDisarm();
+        cliPrintLinef("INERTIA_STATE_DISABLED");
+    } else {
+        cliShowParseError(cmdName);
+    }
+}
+#endif
+
 #if defined(USE_RESOURCE_MGMT)
 static void cliResource(const char *cmdName, char *cmdline)
 {
@@ -6844,6 +6863,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("timer", "show/set timers", "<> | <pin> list | <pin> [af<alternate function>|none|<option(deprecated)>] | list | show", cliTimer),
 #endif
     CLI_COMMAND_DEF("uplink", "show pi uplink stats/msgs", "stats | msgs", cliUplink),
+#ifdef USE_INERTIA_BY_THROWING
+    CLI_COMMAND_DEF("inertia", "arm/disarm inertia-by-throwing experiment", "arm | disarm", cliInertia),
+#endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_VTX_CONTROL
 #ifdef MINIMAL_CLI

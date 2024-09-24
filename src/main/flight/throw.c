@@ -33,7 +33,10 @@
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
+#include "flight/inertia.h"
 
+#define USE_CLI_DEBUG_PRINT
+#include "cli/cli.h"
 #include "pg/pg_ids.h"
 
 #include "throw.h"
@@ -107,6 +110,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // disable state machines (and possibly abort throw/fall if in progress)
     bool disableConditions = ARMING_FLAG(ARMED)
+#ifdef USE_INERTIA_BY_THROWING //neglect everything else in this case
+        || (inertiaState == INERTIA_STATE_DISABLED);
+#else
 #ifndef USE_THROWING_WITHOUT_POSITION
         || !FLIGHT_MODE(POSITION_MODE)
 #endif
@@ -116,6 +122,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
         || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
 #endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
+#endif
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
         // abort if in progress
