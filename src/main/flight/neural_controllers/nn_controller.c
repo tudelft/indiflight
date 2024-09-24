@@ -5,10 +5,10 @@
 bool deterministic = false;
 
 const float output_std[4] = {
-    0.1382165551185608,
-    0.13982060551643372,
-    0.12038909643888474,
-    0.12977690994739532,
+    0.1483265459537506,
+    0.14839455485343933,
+    0.1450345516204834,
+    0.14798009395599365,
 };
 
 const float gate_pos[NUM_GATES][3] = {
@@ -34,7 +34,7 @@ const float gate_yaw[NUM_GATES] = {
 };
 
 const float start_pos[3] = {
-    1.5, -3.0, 0.0
+    1.5, -2.5, -1.5
 };
 
 const float start_yaw = 1.5707963705062866;
