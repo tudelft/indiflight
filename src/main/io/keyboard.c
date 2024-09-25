@@ -77,7 +77,6 @@
 #ifdef USE_TELEMETRY_PI
 void processKey(uint8_t key) {
     // 0 = go to center
-    // p = go to above nn_init
     // 1 = initTrajectoryTracker
     // 2 = decrease speed by 0.5 m/s
     // 3 = increase speed by 0.5 m/s
@@ -87,11 +86,16 @@ void processKey(uint8_t key) {
     // 7 = nn_activate
     // 8 = recovery_mode
     // 9 = kill
+    // p = go to above nn_init
+    // s = set waypoint here
+    // t = takeoff
 
     switch (key) {
 #ifdef USE_GPS_PI
         case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpNed.trackPsi = true; posSetpointState = EXT_POS_NEW_MESSAGE; break;
-        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSetpointState = EXT_POS_NEW_MESSAGE; break;
+        case KEY_5: posSpNed.pos.V.Z = 0.; posSetpointState = EXT_POS_NEW_MESSAGE; break;
+        case KEY_S: posSpNed.pos.V.X = extPosNed.pos.V.X; posSpNed.pos.V.Y = extPosNed.pos.V.Y; posSpNed.pos.V.Z = extPosNed.pos.V.Z; posSetpointState = EXT_POS_NEW_MESSAGE; break;
+        case KEY_T: posSpNed.pos.V.X = extPosNed.pos.V.X; posSpNed.pos.V.Y = extPosNed.pos.V.Y; posSpNed.pos.V.Z = -1.5; posSetpointState = EXT_POS_NEW_MESSAGE; break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         case KEY_1: initTrajectoryTracker(); break;

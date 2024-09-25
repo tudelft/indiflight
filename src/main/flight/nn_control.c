@@ -74,10 +74,7 @@ void nn_init(void) {
 
 void nn_activate(void) {
 	// only activate when the drone is at start point (within 0.5 meters)
-	if ((fabsf(ekf_get_X()[0] - start_pos[0]) < 0.5f) &&
-		(fabsf(ekf_get_X()[1] - start_pos[1]) < 0.5f) &&
-		(fabsf(ekf_get_X()[2] - start_pos[2]) < 0.5f) &&
-        FLIGHT_MODE(POSITION_MODE)) {
+	if (FLIGHT_MODE(POSITION_MODE)) {
 
         nn_active = true;
 
