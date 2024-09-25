@@ -107,7 +107,8 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 },
     { .boxId = BOXLEARNER, .boxName = "LEARNER", .permanentId = 58 },
     { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 59 },
-    { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 }
+    { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 },
+    { .boxId = BOXRESETHOME, .boxName = "RESET HOME", .permanentId = 61 },
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -196,6 +197,9 @@ void initActiveBoxIds(void)
     BME(BOXPREARM);
 #ifdef USE_THROW_TO_ARM
     BME(BOXTHROWTOARM);
+#endif
+#if defined(USE_GPS) || defined(USE_BARO) || defined(USE_EKF)
+    BME(BOXRESETHOME);
 #endif
 #ifdef USE_CATAPULT
     BME(BOXCATAPULT);

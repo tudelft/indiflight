@@ -42,12 +42,12 @@
 #error "USE_NN_CONTROL requires the use of USE_EKF"
 #endif
 
-//#ifndef USE_GPS_PI  // implicit in EKF
-//#error "USE_NN_CONTROL requires the use of USE_GPS_PI"
-//#endif
-
 #ifndef USE_POS_CTL
 #error "USE_NN_CONTROL requires the use of USE_POS_CTL"
+#endif
+
+#ifndef USE_TRAJECTORY_TRACKER // for recovery mode
+#error "USE_NN_CONTROL requires the use if USE_TRAJECTORY_TRACER"
 #endif
 
 #pragma message "You are compiling with dangerous code!"
@@ -123,6 +123,11 @@ void nn_compute_motor_cmds(void) {
 	world_state[4] = ekf_state[4];
 	world_state[5] = ekf_state[5];
 	// att
+    fp_quaternion_t q = { .w = ekf_state[6], .x = ekf_state[7], .y = ekf_state[8], .z = ekf_state[9] };
+    fp_quaternionProducts_t qp;
+    fp_euler_t eulers;
+    quaternionProducts_of_quaternion(&qp, &q);
+    fp_euler_of_quaternionProducts(&eulers, &qp);
 	world_state[6] = ekf_state[6];
 	world_state[7] = ekf_state[7];
 	world_state[8] = ekf_state[8];

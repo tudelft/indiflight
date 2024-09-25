@@ -258,11 +258,11 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     // thrust setpoint in body frame for a multicopter:
     float spfSpLength = VEC3_LENGTH(spfSpNed);
-    spfSpBodyFromPos.V.X = 0.;
-    spfSpBodyFromPos.V.Y = 0.;
+    spfSpBodyFromPos.V.X = 0.f;
+    spfSpBodyFromPos.V.Y = 0.f;
     spfSpBodyFromPos.V.Z = -spfSpLength;
 
-    if (spfSpLength < 1e-6) {
+    if (spfSpLength < 1e-6f) {
         // when falling is commanded (spfSpNed = 0), keep current attitude apart
         // from yawing towards the commanded headingSp
         if (posSpNed.trackPsi) {
@@ -313,7 +313,7 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
 
     VEC3_CROSS(x, starboardSp, z);
-    if (VEC3_LENGTH(x) < 1e-6) {
+    if (VEC3_LENGTH(x) < 1e-6f) {
         // thrust is perp to the heading, so our nose should point towards
         // the heading
         x = headingSp;

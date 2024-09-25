@@ -33,6 +33,8 @@
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
 
+#include <stdbool.h>
+
 #include "pg/pg_ids.h"              // for config
 
 #ifdef USE_EKF
@@ -53,11 +55,13 @@ PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_attitude_estimate = 0,
     .use_position_estimate = 0,
-    .use_angle_measurements = { 1, 1, 1 },
-    .proc_noise_acc = { 5000, 5000, 5000 },
-    .proc_noise_gyro = { 1000, 1000, 1000 },
-    .meas_noise_position = { 10, 10, 10 },
-    .meas_noise_angles = { 100, 100, 100 },
+    .use_quat_measurement  = 1,
+    .proc_noise_acc        = { 500000, 500000, 500000 }, // micro-covariances
+    .proc_noise_gyro       = { 100000, 100000, 100000 },
+    .proc_noise_acc_bias   = { 100, 100, 100 },
+    .proc_noise_gyro_bias  = { 10, 10, 10 },
+    .meas_noise_position   = { 1000, 1000, 1000 },
+    .meas_noise_quat       = { 50000, 50000, 50000, 50000 },
     .meas_delay = 0,
 ); 
 
@@ -105,7 +109,7 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 	}
 	// set the ekf state to the found state
 	ekf_set_X(ekf_X_history[index]);
-	ekf_set_P(ekf_P_history[index]);
+	//ekf_set_P(ekf_P_history[index]); // apparently, P_diag is the only one now?
 
 	// prediction step to get to the exact time t
 	ekf_predict(ekf_U_history[index], t - ekf_t_history[index]);
@@ -124,30 +128,45 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 	}
 }
 
+extern bool ekf_use_quat;
+
+bool isInitializedEkf(void) {
+    return ekf_initialized;
+}
+
 void initEkf(timeUs_t currentTimeUs) {
+    if (extPosState == EXT_POS_NO_SIGNAL) {
+        return;
+    }
+
 	// set ekf parameters
-	ekf_use_phi = ekfConfig()->use_angle_measurements[0];
-	ekf_use_theta = ekfConfig()->use_angle_measurements[1];
-	ekf_use_psi = ekfConfig()->use_angle_measurements[2];
+	ekf_use_quat = ekfConfig()->use_quat_measurement;
 
 	// process noise covariance
 	float Q[N_STATES] = {
-		((float) ekfConfig()->proc_noise_acc[0]) * 1e-4f, // ax
-		((float) ekfConfig()->proc_noise_acc[1]) * 1e-4f, // ay
-		((float) ekfConfig()->proc_noise_acc[2]) * 1e-4f, // az
-		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-4f, // p
-		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-4f, // q
-		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-4f // r
+		((float) ekfConfig()->proc_noise_acc[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc[2]) * 1e-6f, // az
+		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-6f, // r
+		((float) ekfConfig()->proc_noise_acc_bias[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc_bias[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc_bias[2]) * 1e-6f, // az 
+		((float) ekfConfig()->proc_noise_gyro_bias[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro_bias[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro_bias[2]) * 1e-6f // r
 	};
 
 	// measurement noise covariance
 	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-4f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-4f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-4f, // posD
-		((float) ekfConfig()->meas_noise_angles[0]) * 1e-4f, // phi
-		((float) ekfConfig()->meas_noise_angles[1]) * 1e-4f, // theta
-		((float) ekfConfig()->meas_noise_angles[2]) * 1e-4f, // psi
+		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
+		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
+		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
+		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
+		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
+		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
+		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
 	};
 
 	// sets initial state to the latest external pos and att
@@ -156,9 +175,7 @@ void initEkf(timeUs_t currentTimeUs) {
 		extPosNed.pos.V.Y,
 		extPosNed.pos.V.Z,
 		0., 0., 0., // vel
-		extPosNed.att.angles.roll,
-		extPosNed.att.angles.pitch,
-		extPosNed.att.angles.yaw,
+        1., 0., 0., 0., // quaternion
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
@@ -166,12 +183,24 @@ void initEkf(timeUs_t currentTimeUs) {
 	float P_diag0[N_STATES] = {
 		1., 1., 1., // pos
 		1., 1., 1., // vel
-		1., 1., 1., // att
-		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)!
+		1., 1., 1., 1., // quat
+		1e-2f, 1e-2f, 1e-2f, 1e-2f, 1e-2f, 1e-2f // acc and gyro biases (to turn off bias estimation, set these to 0)!
 	};
 
-    ekf_Z[5] = extPosNed.att.angles.yaw;
-	
+    if (ekf_use_quat) {
+		X0[6] = extPosNed.quat.w;
+		X0[7] = extPosNed.quat.x;
+		X0[8] = extPosNed.quat.y;
+		X0[9] = extPosNed.quat.z;
+    } else {
+        P_diag0[13] = 0.f; // turn off gyro bias estimation
+        P_diag0[14] = 0.f; // turn off gyro bias estimation
+        P_diag0[15] = 0.f; // turn off gyro bias estimation
+        Q[13] = 0.f;
+        Q[14] = 0.f;
+        Q[15] = 0.f;
+    }
+
 	// initialize ekf
 	ekf_set_Q(Q);
 	ekf_set_R(R);
@@ -205,19 +234,11 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_Z[0] = extPosNed.pos.V.X;
 		ekf_Z[1] = extPosNed.pos.V.Y;
 		ekf_Z[2] = extPosNed.pos.V.Z;
-		ekf_Z[3] = extPosNed.att.angles.roll;
-		ekf_Z[4] = extPosNed.att.angles.pitch;
 
-		// fix yaw discontinuity (rad)
-		float delta_psi = extPosNed.att.angles.yaw - ekf_Z[5];
-		while (delta_psi > M_PI) {
-			delta_psi -= 2 * M_PI;
-		}
-		while (delta_psi < -M_PI) {
-			delta_psi += 2 * M_PI;
-		}
-
-		ekf_Z[5] += delta_psi;
+		ekf_Z[3] = (ekf_use_quat) * extPosNed.quat.w;
+		ekf_Z[4] = (ekf_use_quat) * extPosNed.quat.x;
+		ekf_Z[5] = (ekf_use_quat) * extPosNed.quat.y;
+		ekf_Z[6] = (ekf_use_quat) * extPosNed.quat.z;
 
 		// old update:
 		ekf_update(ekf_Z);
@@ -243,7 +264,10 @@ void updateEkf(timeUs_t currentTimeUs) {
         // when ekf is not initialized, we need to wait for the first external position message
         if (extPosState != EXT_POS_NO_SIGNAL) {
             // INIT EKF
-            initEkf(currentTimeUs);
+            if (ekfConfig()->use_quat_measurement) {
+                // auto re-init only when we have an absolute source of heading?
+                initEkf(currentTimeUs);
+            }
         }
     } else {
         // ekf is initialized and POSITION_MODE, we can run the ekf
@@ -259,9 +283,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         float *ekf_X = ekf_get_X();
 
         if (ekfConfig()->use_attitude_estimate) {
-            fp_quaternion_t q;
-            fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
-            quaternion_of_fp_euler(&q, &e);
+            fp_quaternion_t q = { .w = ekf_X[6], .x = ekf_X[7], .y = ekf_X[8], .z = ekf_X[9], };
             setAttitudeWithQuaternion(&q);
         }
 

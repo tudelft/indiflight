@@ -33,6 +33,7 @@
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
+#include "flight/ekf.h"
 
 #include "pg/pg_ids.h"
 
@@ -115,6 +116,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 #ifdef USE_INDI
         || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
 #endif
+#ifdef USE_EKF
+        || ( ( ekfConfig()->use_position_estimate || ekfConfig()->use_attitude_estimate ) && !isInitializedEkf() ) // loss of position or anything like that. isInitializedEkf latches until home button is pressed again
+#endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
@@ -128,6 +132,30 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
+            // indended behaviour: 
+            // enable only if
+            // 1. we dont have diable conditions
+            // 2. we have good accelerometer
+            // 3. if are compiled with USE_THROWING_WITHOUT_POSITION
+            //        yes: do not run any position checks
+            //        no : only enable if position is valid OR we are not in position mode
+            enableConditions = 
+                !disableConditions
+                && acc.isAccelUpdatedAtLeastOnce &&
+#ifdef USE_POS_CTL
+                (
+                    ( (extPosState >= EXT_POS_STILL_VALID) && (extPosState >= EXT_POS_STILL_VALID) )
+    #ifdef USE_THROWING_WITHOUT_POSITION
+                || !FLIGHT_MODE(POSITION_MODE)
+    #endif
+                );
+#else
+    #ifdef USE_THROWING_WITHOUT_POSITION
+                true;
+    #else
+                false;
+    #endif
+#endif
             // enable if we dont disable, have accel, and no disable flags than angle, arm and prearm 
             enableConditions = 
                 !disableConditions

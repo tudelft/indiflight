@@ -1319,11 +1319,13 @@ const clivalue_t valueTable[] = {
 #ifdef USE_EKF
     { PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_attitude_estimate) },
     { PARAM_NAME_EKF_USE_POSITION_ESTIMATE,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_position_estimate) },
-    { PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS,      VAR_UINT8 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_angle_measurements) },
+    { PARAM_NAME_EKF_USE_QUAT_MEASUREMENT,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, use_quat_measurement) },
     { PARAM_NAME_EKF_PROC_NOISE_ACC,              VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc) },
     { PARAM_NAME_EKF_PROC_NOISE_GYRO,             VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro) },
+    { PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc_bias) },
+    { PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS,        VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro_bias) },
     { PARAM_NAME_EKF_MEAS_NOISE_POSITION,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
-    { PARAM_NAME_EKF_MEAS_NOISE_ANGLES,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_angles) },
+    { PARAM_NAME_EKF_MEAS_NOISE_QUAT,             VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 4, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_quat) },
     { PARAM_NAME_EKF_MEAS_DELAY,                  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
 #endif
 

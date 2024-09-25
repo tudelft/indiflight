@@ -57,6 +57,7 @@
 #include "io/gimbal.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
+#include "io/external_pos.h"
 
 #include "rx/rx.h"
 
@@ -178,7 +179,14 @@ void processPiUplink(void)
 #endif
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
-            piParse(&p_telem, serialRead(piPort));
+            uint8_t msgId = piParse(&p_telem, serialRead(piPort));
+#if defined(USE_GPS_PI)
+            if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
+                getExternalPos(0);
+            }
+#else
+            UNUSED(msgId);
+#endif
         }
     }
 }

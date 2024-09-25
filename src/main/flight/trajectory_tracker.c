@@ -37,6 +37,10 @@
 #error "USE_TRAJECTORY_TRACKER only works in combination with USE_POS_CTL"
 #endif
 
+#ifndef USE_TELEMETRY_PI
+#error "USE_TRAJECTORY_TRACKER only works in combination with USE_TELEMETRY_PI"
+#endif
+
 // state of trajectory tracker:
 bool tt_active = false;
 

@@ -26,7 +26,6 @@
 
 #include "common/time.h"		   // for timeUs_t
 
-// UGLY HACK: initialization, setting speed and stopping happens in external_pos.c by using the velocity setpoints as communication
 void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
 bool isActiveTrajectoryTrackerRecovery(void);

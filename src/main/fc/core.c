@@ -72,6 +72,7 @@
 #include "flight/pid.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/ekf.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
@@ -1068,7 +1069,12 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             if (extPosState >= EXT_POS_STILL_VALID) {
-                ENABLE_FLIGHT_MODE(POSITION_MODE);
+#ifdef USE_EKF
+                if (ekfConfig()->use_position_estimate && isInitializedEkf())
+#endif
+                {
+                    ENABLE_FLIGHT_MODE(POSITION_MODE);
+                }
             }
         }
     } else {
@@ -1080,6 +1086,21 @@ void processRxModes(timeUs_t currentTimeUs)
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 #endif
+
+    if (!ARMING_FLAG(ARMED)) {
+        if (IS_RC_MODE_ACTIVE(BOXRESETHOME)) {
+#ifdef USE_GPS
+            GPS_reset_home_position();
+#endif
+#ifdef USE_BARO
+            baroSetGroundLevel();
+            baro.altitude = 0; // set this now, or else EKF won't reset properly
+#endif
+#ifdef USE_EKF
+            initEkf(currentTimeUs);
+#endif
+        }
+    }
 
 #ifdef USE_VEL_CTL
     if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {

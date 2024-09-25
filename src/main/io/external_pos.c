@@ -100,19 +100,11 @@ void getExternalPos(timeUs_t current) {
             extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
             extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
             extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
-            fp_euler_t eulers;
-            fp_quaternion_t quat;
             // the quaternion x,y,z should be NED
-            quat.w = piMsgExternalPoseRx->body_qi;
-            quat.x = piMsgExternalPoseRx->body_qx;
-            quat.y = piMsgExternalPoseRx->body_qy;
-            quat.z = piMsgExternalPoseRx->body_qz;
-            fp_quaternionProducts_t qP;
-            quaternionProducts_of_quaternion(&qP, &quat);
-            fp_euler_of_quaternionProducts (&eulers, &qP);
-            extPosNed.att.angles.roll = eulers.angles.roll;
-            extPosNed.att.angles.pitch = eulers.angles.pitch;
-            extPosNed.att.angles.yaw = eulers.angles.yaw;
+            extPosNed.quat.w = piMsgExternalPoseRx->body_qi;
+            extPosNed.quat.x = piMsgExternalPoseRx->body_qx;
+            extPosNed.quat.y = piMsgExternalPoseRx->body_qy;
+            extPosNed.quat.z = piMsgExternalPoseRx->body_qz;
 
             sensorsSet(SENSOR_GPS);
             ENABLE_STATE(GPS_FIX);

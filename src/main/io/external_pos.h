@@ -25,8 +25,6 @@
 #include "drivers/time.h"
 #include "common/maths.h"
 
-#ifdef USE_GPS_PI
-
 typedef enum {
     EXT_POS_NO_SIGNAL,
     EXT_POS_STILL_VALID,
@@ -38,7 +36,7 @@ typedef struct __ext_pos_ned_t {
     uint32_t time_us;
     fp_vector_t pos;
     fp_vector_t vel;
-    fp_euler_t att;
+    fp_quaternion_t quat;
 } ext_pos_ned_t;
 
 typedef struct __vio_pos_ned_t {
@@ -82,13 +80,11 @@ extern pos_setpoint_ned_t posSpNed;
 extern ext_pos_state_t posSetpointState;
 
 #define EXT_POS_FREQ 50
-#define EXT_POS_TIMEOUT_US 300000
+#define EXT_POS_TIMEOUT_US 1000000 // 1 second
 
 #ifdef USE_VIO_POSE
 #define VIO_POS_TIMEOUT_US 30000000
 #endif
-
-#define POS_SETPOINT_OUTDATED_US 1000000
 
 void checkNewPos(void);
 void getExternalPos(timeUs_t current);
@@ -98,4 +94,3 @@ void getVioPos(timeUs_t current);
 #endif
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
-#endif
