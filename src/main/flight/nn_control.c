@@ -46,6 +46,10 @@
 #error "USE_NN_CONTROL requires the use of USE_LOCAL_POSITION"
 #endif
 
+#ifndef USE_TRAJECTORY_TRACKER
+#error "USE_NN_CONTROL requires the use if USE_TRAJECTORY_TRACER"
+#endif
+
 #pragma message "You are compiling with dangerous code!"
 
 PG_REGISTER_WITH_RESET_TEMPLATE(nnConfig_t, nnConfig, PG_NN_CONFIG, 0);
