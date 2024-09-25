@@ -27,6 +27,7 @@
 #include "io/local_pos.h"
 #include "flight/imu.h"
 #include "flight/indi.h"
+#include "flight/ekf.h"
 #include "fc/runtime_config.h"
 #include "common/rng.h"
 
@@ -160,6 +161,9 @@ void runCatapultStateMachine(timeUs_t current) {
                 || (posSpState == LOCAL_POS_NO_SIGNAL)
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
+#endif
+#ifdef USE_EKF
+        || ( ( ekfConfig()->use_position_estimate || ekfConfig()->use_attitude_estimate ) && !isInitializedEkf() ) // loss of position or anything like that
 #endif
 #if defined(USE_EKF) && false
                 || !ekf_is_healthy() // TODO: implement this!

@@ -139,6 +139,10 @@ bool isInitializedEkf(void) {
 }
 
 void initEkf(timeUs_t currentTimeUs) {
+    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
+        return;
+    }
+
 	// set ekf parameters
 	ekf_use_quat = ekfConfig()->use_quat_measurement;
 
@@ -300,7 +304,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         // when ekf is not initialized, we need to wait for the first external position message
         if (posMeasState != LOCAL_POS_NO_SIGNAL) {
             // INIT EKF
-            initEkf(currentTimeUs);
+            //initEkf(currentTimeUs); // imav: do not init/reset, unless button pressed
         }
     } else {
         // ekf is initialized and POSITION_MODE, we can run the ekf
