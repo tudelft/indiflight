@@ -1,5 +1,15 @@
 ![Indiflight](docs/assets/images/IndiflightLogoFull.png)
 
+# FOR DEMO. CineRat only tested
+
+- Copy `demoConfig/correctLocal.mk` into `make`
+- load `demoConfig/profile.txt` after flashing onto the CineRat
+
+
+
+
+# actual readme:
+
 This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras, or even offboard control is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
 
 ## Building using docker -- the preferred way
