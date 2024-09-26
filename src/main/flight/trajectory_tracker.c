@@ -62,8 +62,8 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 3.0; //1.5;
-float tt_vel_gain = 4.0; //2.5;
+float tt_pos_gain = 2.0; //1.5;
+float tt_vel_gain = 3.0; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
@@ -86,7 +86,7 @@ void initRecoveryMode(void) {
     tt_recovery_problem.R = sqrtf(x*x + y*y);
 
     // final time hardcoded
-    tt_recovery_problem.tf = 2.0f;
+    tt_recovery_problem.tf = 1.0f;
 
     // make sure radius is less then 4.0
     if (tt_recovery_problem.R > 4.0) {
