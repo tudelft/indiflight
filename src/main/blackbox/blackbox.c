@@ -1745,10 +1745,18 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->axisPID_I[i] = lrintf(pidData[i].I);
         blackboxCurrent->axisPID_D[i] = lrintf(pidData[i].D);
         blackboxCurrent->axisPID_F[i] = lrintf(pidData[i].F);
+#ifdef USE_INERTIA_BY_THROWING // inertia measurement requires the rawest of raw measurements
+        blackboxCurrent->gyroADC[i] = gyro.rawSensorDev->gyroADCRaw[i];
+#else
         blackboxCurrent->gyroADC[i] = lrintf(gyro.gyroADCf[i] * blackboxHighResolutionScale);
+#endif
         blackboxCurrent->gyroADCafterRpm[i] = lrintf(gyro.gyroADCafterRpm[i] * blackboxHighResolutionScale);
 #if defined(USE_ACC)
+#ifdef USE_INERTIA_BY_THROWING // inertia measurement requires the rawest of raw measurements
+        blackboxCurrent->accADCf[i] = acc.dev.ADCRaw[i];
+#else
         blackboxCurrent->accADCf[i] = lrintf(acc.accADCf[i]);
+#endif
         blackboxCurrent->accADCafterRpm[i] = lrintf(acc.accADCafterRpm[i]);
 #endif
 #ifdef USE_MAG

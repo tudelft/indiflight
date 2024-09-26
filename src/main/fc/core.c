@@ -1024,7 +1024,7 @@ void processRxModes(timeUs_t currentTimeUs)
         && !cmsInMenu
 #endif
         ) {
-        processRcStickPositions();
+        //processRcStickPositions();
     }
 
     if (featureIsEnabled(FEATURE_INFLIGHT_ACC_CAL)) {
