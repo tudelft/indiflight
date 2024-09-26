@@ -125,9 +125,9 @@ void nn_compute_motor_cmds(void) {
     fp_euler_t eulers;
     quaternionProducts_of_quaternion(&qp, &q);
     fp_euler_of_quaternionProducts(&eulers, &qp);
-	world_state[6] = ekf_state[6];
-	world_state[7] = ekf_state[7];
-	world_state[8] = ekf_state[8];
+	world_state[6] = eulers.roll;
+	world_state[7] = eulers.pitch;
+	world_state[8] = eulers.yaw;
 	// rate (in FRD)
 	world_state[9]  = DEGREES_TO_RADIANS(gyro.gyroADCf[0]); // TODO: figure out if we need gyroADCf or gyroADC
 	world_state[10] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
