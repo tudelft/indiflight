@@ -48,6 +48,7 @@
 #include "drivers/compass/compass.h"
 #include "drivers/sensor.h"
 #include "drivers/time.h"
+#include "drivers/dshot.h"
 
 #include "fc/board_info.h"
 #include "fc/controlrate_profile.h"
@@ -270,6 +271,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"motor",       5, UNSIGNED, .Ipredict = PREDICT(MOTOR_0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(AT_LEAST_MOTORS_6)},
     {"motor",       6, UNSIGNED, .Ipredict = PREDICT(MOTOR_0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(AT_LEAST_MOTORS_7)},
     {"motor",       7, UNSIGNED, .Ipredict = PREDICT(MOTOR_0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(AT_LEAST_MOTORS_8)},
+
+#ifdef USE_INERTIA_BY_THROWING
+    {"erpm",       0, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(AT_LEAST_MOTORS_1)},
+#endif
 
     /* Tricopter tail servo */
     {"servo",       5, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(TRICOPTER)},
@@ -655,6 +660,9 @@ typedef struct blackboxMainState_s {
     int16_t accADCafterRpm[XYZ_AXIS_COUNT];
     int16_t debug[DEBUG16_VALUE_COUNT];
     int16_t motor[MAX_SUPPORTED_MOTORS];
+#ifdef USE_INERTIA_BY_THROWING
+    int16_t erpm0;
+#endif
     int16_t servo[MAX_SUPPORTED_SERVOS];
 
     uint16_t vbatLatest;
@@ -1076,6 +1084,9 @@ static void writeIntraframe(void)
             //Assume the tail spends most of its time around the center
             blackboxWriteSignedVB(blackboxCurrent->servo[5] - 1500);
         }
+#ifdef USE_INERTIA_BY_THROWING
+        blackboxWriteUnsignedVB(blackboxCurrent->erpm0);
+#endif
     }
 
 #ifdef USE_INDI
@@ -1281,6 +1292,9 @@ static void writeInterframe(void)
         if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_TRICOPTER)) {
             blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
         }
+#ifdef USE_INERTIA_BY_THROWING
+        blackboxWriteSignedVB(blackboxCurrent->erpm0 - blackboxLast->erpm0);
+#endif
     }
 
 #ifdef USE_INDI
@@ -1783,6 +1797,10 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int i = 0; i < motorCount; i++) {
         blackboxCurrent->motor[i] = lrintf(motor[i]);
     }
+
+#ifdef USE_INERTIA_BY_THROWING
+    blackboxCurrent->erpm0 = getDshotTelemetry(0);
+#endif
 
     blackboxCurrent->vbatLatest = getBatteryVoltageLatest();
     blackboxCurrent->amperageLatest = getAmperageLatest();

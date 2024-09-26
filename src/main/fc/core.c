@@ -1524,7 +1524,11 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopTailEnd(timeUs_t currentTimeUs) {
 #endif
 
 #ifdef USE_BLACKBOX
-    if (!cliMode && blackboxConfig()->device) {
+    if (
+#ifndef USE_INERTIA_BY_THROWING
+        !cliMode &&
+#endif
+            blackboxConfig()->device) {
         blackboxUpdate(currentTimeUs);
     }
 #else
