@@ -26,6 +26,15 @@
 
 #include "common/time.h"		   // for timeUs_t
 
+// heading modes
+typedef enum {
+    TT_LOOK_AT_NOTHING,
+    TT_LOOK_AT_GATES,
+    TT_LOOK_AT_REF,
+} tt_heading_mode_t;
+
+extern tt_heading_mode_t tt_heading_mode;
+
 void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
 bool isActiveTrajectoryTrackerRecovery(void);
@@ -33,7 +42,6 @@ void initTrajectoryTracker(void);
 void setSpeedTrajectoryTracker(float speed);
 void incrementSpeedTrajectoryTracker(float inc);
 void stopTrajectoryTracker(void);
-void toggleHeadingTracking(void);
 
 // main task
 void updateTrajectoryTracker(timeUs_t current);

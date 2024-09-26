@@ -41,6 +41,9 @@
 #error "USE_TRAJECTORY_TRACKER only works in combination with USE_TELEMETRY_PI"
 #endif
 
+// heading modes
+tt_heading_mode_t tt_heading_mode = TT_LOOK_AT_NOTHING;
+
 // state of trajectory tracker:
 bool tt_active = false;
 
@@ -53,7 +56,6 @@ float tt_vel_ref[3] = {0};
 float tt_acc_ref[3] = {0};
 float tt_yaw_ref = 0.;
 float tt_yaw_rate_ref = 0.;
-bool tt_track_heading = false;
 
 // time stuff
 float tt_speed_factor = 0.0f;
@@ -238,44 +240,72 @@ void getRefsTrajectoryTracker(float p) {
     tt_acc_ref[1] = -lam*lam * tt_pos_ref[1];
     tt_acc_ref[2] = 0.0f;
 
-    // heading
-    float gates[4][2] = {
-        {0.f, 0.f},
-        {0.f, 3.f},
-        {0.f, 0.f},
-        {0.f, -3.f},
-    };
+    // switch case depnding on tt_heading_mode
+    switch (tt_heading_mode) {
+        case TT_LOOK_AT_GATES:
+            {
+            // heading
+            float gates[4][2] = {
+                {0.f, 0.f},
+                {0.f, 3.f},
+                {0.f, 0.f},
+                {0.f, -3.f},
+            };
 
-    float sf = 0.1f * M_PIf / 2.f;
+            float sf = 0.1f * M_PIf / 2.f;
 
-    int g = 1;
-    if (((0.5f * M_PIf - sf) <= p) && (p <= (1.0f * M_PIf - sf))) {
-        g = 2;
-    } else
-    if (((1.0f * M_PIf - sf) <= p) && (p <= (1.5f * M_PIf - sf))) {
-        g = 3;
-    }
-    if (((1.5f * M_PIf - sf) <= p) && (p <= (2.0f * M_PIf - sf))) {
-        g = 0;
-    }
+            int g = 1;
+            if (((0.5f * M_PIf - sf) <= p) && (p <= (1.0f * M_PIf - sf))) {
+                g = 2;
+            } else
+            if (((1.0f * M_PIf - sf) <= p) && (p <= (1.5f * M_PIf - sf))) {
+                g = 3;
+            }
+            if (((1.5f * M_PIf - sf) <= p) && (p <= (2.0f * M_PIf - sf))) {
+                g = 0;
+            }
 
-    fp_vector_t dg = { 
-        .V.X = gates[g][0] - tt_pos_ref[0],
-        .V.Y = gates[g][1] - tt_pos_ref[1],
-        .V.Z  = 0.f // unused
-    };
+            fp_vector_t dg = { 
+                .V.X = gates[g][0] - tt_pos_ref[0],
+                .V.Y = gates[g][1] - tt_pos_ref[1],
+                .V.Z  = 0.f // unused
+            };
 
-    float d2 = hypotf(dg.V.X, dg.V.Y); // x**2 + y**2
-    tt_yaw_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
+            float d2 = hypotf(dg.V.X, dg.V.Y); // x**2 + y**2
+            tt_yaw_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
 
-    // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
-    // total derivative of the atan2: -gy / d2 * (-dx/dt)  +  gx / d2 * (-dy/dt)
-    if (d2 < 0.01f) { // within 10cm of next gate, do nothing. this should never happen, because switchover to the next gate should happen sooner
-        tt_yaw_rate_ref = 0.f;
-        posSpNed.trackPsi = false;
-    } else {
-        tt_yaw_rate_ref = (dg.V.Y * tt_vel_ref[0]  -  dg.V.X * tt_vel_ref[1]) / d2;
-        posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
+            // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
+            // total derivative of the atan2: -gy / d2 * (-dx/dt)  +  gx / d2 * (-dy/dt)
+            if (d2 < 0.01f) { // within 10cm of next gate, do nothing. this should never happen, because switchover to the next gate should happen sooner
+                tt_yaw_rate_ref = 0.f;
+                posSpNed.trackPsi = false;
+            } else {
+                tt_yaw_rate_ref = (dg.V.Y * tt_vel_ref[0]  -  dg.V.X * tt_vel_ref[1]) / d2;
+                posSpNed.trackPsi = true; // choice: track heading or neglect it?
+            }
+            break;   
+            }
+        case TT_LOOK_AT_REF:
+            {
+            // heading should align with velocity ref
+            float d2 = hypotf(tt_vel_ref[0], tt_vel_ref[1]); // x**2 + y**2
+            tt_yaw_ref = atan2f(tt_vel_ref[1], tt_vel_ref[0]); // look along velocity ref vector
+
+            // total derivative of the atan2: -vy / d2 * dvx/dt  +  vx / d2 * dvy/dt
+            if (d2 < 0.01f) { // velocity too small, do nothing
+                tt_yaw_rate_ref = 0.f;
+                posSpNed.trackPsi = false;
+            } else {
+                tt_yaw_rate_ref = (-tt_vel_ref[1] * tt_acc_ref[0]  +  tt_vel_ref[0] * tt_acc_ref[1]) / d2;
+                posSpNed.trackPsi = true; // choice: track heading or neglect it?
+            }
+            break;
+            }
+        case TT_LOOK_AT_NOTHING:
+            // do nothing
+            tt_yaw_rate_ref = 0.f;
+            posSpNed.trackPsi = false;
+            break;
     }
 }
 
@@ -304,10 +334,6 @@ void setSpeedTrajectoryTracker(float speed) {
 void incrementSpeedTrajectoryTracker(float inc) {
     tt_speed_factor += inc/tt_R;
     tt_active = true;
-}
-
-void toggleHeadingTracking(void) {
-    tt_track_heading ^= true;
 }
 
 void stopTrajectoryTracker(void) {

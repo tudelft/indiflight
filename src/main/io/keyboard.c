@@ -103,7 +103,9 @@ void processKey(uint8_t key) {
         case KEY_3: incrementSpeedTrajectoryTracker(+0.5f); break;
         case KEY_4: stopTrajectoryTracker(); break;
         case KEY_8: initRecoveryMode(); break;
-        case KEY_H: toggleHeadingTracking(); break;
+        case KEY_G: tt_heading_mode = TT_LOOK_AT_GATES; break;
+        case KEY_R: tt_heading_mode = TT_LOOK_AT_REF; break;
+        case KEY_N: tt_heading_mode = TT_LOOK_AT_NOTHING; break;
 #endif
 #ifdef USE_NN_CONTROL
         case KEY_6: nn_init(); break;
