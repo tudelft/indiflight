@@ -281,7 +281,7 @@ void getRefsTrajectoryTracker(float p) {
 
 void initTrajectoryTracker(void) {
     // reset everything
-    tt_progress = 0.97f * 2.0f * M_PIf; // just infront of gate 0
+    tt_progress = 1.75f * M_PIf; // just infront of gate 0
     tt_speed_factor = 0.0f;
     tt_yaw_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
