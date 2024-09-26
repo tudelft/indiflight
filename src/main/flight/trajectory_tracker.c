@@ -64,8 +64,8 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 2.0; //1.5;
-float tt_vel_gain = 3.0; //2.5;
+float tt_pos_gain = 4.0; //1.5;
+float tt_vel_gain = 5.0; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
@@ -271,7 +271,7 @@ void getRefsTrajectoryTracker(float p) {
                 .V.Z  = 0.f // unused
             };
 
-            float d2 = hypotf(dg.V.X, dg.V.Y); // x**2 + y**2
+            float d2 = dg.V.X*dg.V.X  +  dg.V.Y*dg.V.Y; // x**2 + y**2
             tt_yaw_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
 
             // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
@@ -288,7 +288,7 @@ void getRefsTrajectoryTracker(float p) {
         case TT_LOOK_AT_REF:
             {
             // heading should align with velocity ref
-            float d2 = hypotf(tt_vel_ref[0], tt_vel_ref[1]); // x**2 + y**2
+            float d2 = tt_vel_ref[0]*tt_vel_ref[0]  +  tt_vel_ref[1]*tt_vel_ref[1]; // x**2 + y**2
             tt_yaw_ref = atan2f(tt_vel_ref[1], tt_vel_ref[0]); // look along velocity ref vector
 
             // total derivative of the atan2: -vy / d2 * dvx/dt  +  vx / d2 * dvy/dt
