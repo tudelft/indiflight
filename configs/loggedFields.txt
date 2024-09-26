@@ -12,3 +12,7 @@
 "accSmooth[:]": uncorrected acc readings, straight from the device
     Filtered with an internal 2nd order butterworth lowpass at 258Hz break frequency
     Scale is 2048 units for 1g, can probably also be adjusted
+"erpm[0]": revolutions per minute of the electrical field.
+    Scale is 1 units for 100 eRPMs.
+    eRPMs convert to (mechanical) RPM by dividing by half the motor poles: RPM = eRPM / (poles / 2)
+    For the small motor, we have 12 poles, the larger one has 14.
