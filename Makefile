@@ -110,6 +110,24 @@ DIRTYFLAG = +dirty
 endif
 REVISION := $(GITHASH)$(DIRTYFLAG)
 
+check_dirty : 
+ifneq ($(shell git diff --shortstat),)
+	@echo "Uncommited changes. Continue with build? [y/N]"; \
+		read answer; \
+		if [ "$$answer" != "y" ]; then \
+		  echo "Aborting target"; \
+		  exit 1; \
+		fi
+endif
+	@if [ -d $(TARGET_OBJ_DIR) ]; then \
+		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N]"; \
+			read answer; \
+			if [ "$$answer" != "y" ]; then \
+			  echo "Aborting target"; \
+			  exit 1; \
+			fi \
+	fi
+
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_PATCH := $(shell grep " FC_VERSION_PATCH" src/main/build/version.h | awk '{print $$3}' )
@@ -533,13 +551,13 @@ $(TARGETS_ZIP):
 	$(V0) $(MAKE) hex TARGET=$(subst _zip,,$@)
 	$(V0) $(MAKE) zip TARGET=$(subst _zip,,$@)
 
-zip:
+zip: check_dirty
 	$(V0) zip $(TARGET_ZIP) $(TARGET_HEX)
 
-binary:
+binary: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_BIN)
 
-hex:
+hex: check_dirty
 ifeq ($(TARGET),MOCKUP)
 # generate shared library instead
 	$(V0) $(MAKE) -j $(TARGET_SO)
@@ -547,10 +565,10 @@ else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
 endif
 
-dfu:
+dfu: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_DFU)
 
-so:
+so: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_SO)
 
 TARGETS_REVISION = $(addsuffix _rev,$(VALID_TARGETS))

@@ -6,7 +6,8 @@ REMOTE_USER ?= pi
 REMOTE_PASSWORD ?= pi
 TARGET_MCU_LOWER_CASE = $(shell echo $(TARGET_MCU) | tr A-Z a-z)
 
-remote_flash_swd : $(TARGET_ELF)
+remote_flash_swd : check_dirty
+	$(V0) $(MAKE) -j $(TARGET_ELF)
 	$(SSHPASS) -p $(REMOTE_PASSWORD) \
 		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
 			'sudo ln -sf /usr/share/openocd/scripts/target/$(TARGET_MCU_LOWER_CASE)x.cfg /opt/openocd/chip.cfg \
@@ -21,7 +22,8 @@ remote_flash_swd : $(TARGET_ELF)
 			'openocd -f /opt/openocd/openocd.cfg \
 			-c "program /home/pi/indiflight/$(TARGET_ELF) verify reset exit"'
 
-remote_flash_dfu : $(TARGET_DFU)
+remote_flash_dfu : check_dirty
+	$(V0) $(MAKE) -j $(TARGET_DFU)
 # temporarily stop ser2net to release tty device
 	$(SSHPASS) -p $(REMOTE_PASSWORD) \
 		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
