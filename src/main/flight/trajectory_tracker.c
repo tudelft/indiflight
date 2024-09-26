@@ -62,8 +62,8 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 2.0; //1.5;
-float tt_vel_gain = 3.0; //2.5;
+float tt_pos_gain = 3.0; //1.5;
+float tt_vel_gain = 4.0; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
@@ -156,6 +156,7 @@ bool isActiveTrajectoryTrackerRecovery(void) {
     return tt_recovery_active;
 }
 
+/* circle
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
     // x(t)   = R*cos(p(t))
@@ -187,16 +188,106 @@ void getRefsTrajectoryTracker(float p) {
     tt_yaw_rate_ref = tt_speed_factor;
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
+*/
+
+void getRefsTrajectoryTracker(float p) {
+    // hard coded figure 8
+    // x(t)   = -R*sin(p)*cos(p)
+    // y(t)   = +R*sin(p)
+    // z(t)   = -1.0
+    // psi(t) = look at next gate
+    // where:
+    // dp/dt  = speed_factor (piecewise constant)
+
+    /*
+    float laptime = 1000.f;
+    float lam = 0.f;
+    if (fabsf(tt_speed_factor) > 0.1f) {
+        laptime = tt_R*5.f / tt_speed_factor; // estiamte: lap is 15 meter long for 3 radius
+        lam = 1.f / laptime;
+    }
+
+    float p = lam * t;
+    while (p >  2.0f*M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
+    while (p < 0.f) p += (2.0f * M_PIf);
+
+    if (lam != 0.f) {
+        // update progress, incase we wrapped
+        tt_progress = p / lam;
+    }
+    */
+
+    while (p >  2.0f*M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
+    while (p < 0.f) p += (2.0f * M_PIf);
+    tt_progress = p;
+    float lam;
+    lam = tt_speed_factor;
+
+    // position refs
+    tt_pos_ref[0] = tt_R*(-sinf(p)*cosf(p));
+    tt_pos_ref[1] = tt_R*(+sinf(p));
+    tt_pos_ref[2] = -1.0f;
+
+    // velocity refs
+    tt_vel_ref[0] = -tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
+    tt_vel_ref[1] = tt_R*lam*cosf(p);
+    tt_vel_ref[2] = 0.0f;
+
+    // acceleration refs
+    tt_acc_ref[0] = 4*lam*lam * tt_pos_ref[0];
+    tt_acc_ref[1] = -lam*lam * tt_pos_ref[1];
+    tt_acc_ref[2] = 0.0f;
+
+    // heading
+    float gates[4][2] = {
+        {0.f, 0.f},
+        {0.f, 3.f},
+        {0.f, 0.f},
+        {0.f, -3.f},
+    };
+
+    float sf = 0.1f * M_PIf / 2.f;
+
+    int g = 1;
+    if (((0.5f * M_PIf - sf) <= p) && (p <= (1.0f * M_PIf - sf))) {
+        g = 2;
+    } else
+    if (((1.0f * M_PIf - sf) <= p) && (p <= (1.5f * M_PIf - sf))) {
+        g = 3;
+    }
+    if (((1.5f * M_PIf - sf) <= p) && (p <= (2.0f * M_PIf - sf))) {
+        g = 0;
+    }
+
+    fp_vector_t dg = { 
+        .V.X = gates[g][0] - tt_pos_ref[0],
+        .V.Y = gates[g][1] - tt_pos_ref[1],
+        .V.Z  = 0.f // unused
+    };
+
+    float d2 = hypotf(dg.V.X, dg.V.Y); // x**2 + y**2
+    tt_yaw_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
+
+    // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
+    // total derivative of the atan2: -gy / d2 * (-dx/dt)  +  gx / d2 * (-dy/dt)
+    if (d2 < 0.01f) { // within 10cm of next gate, do nothing. this should never happen, because switchover to the next gate should happen sooner
+        tt_yaw_rate_ref = 0.f;
+        posSpNed.trackPsi = false;
+    } else {
+        tt_yaw_rate_ref = (dg.V.Y * tt_vel_ref[0]  -  dg.V.X * tt_vel_ref[1]) / d2;
+        posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
+    }
+}
 
 void initTrajectoryTracker(void) {
     // reset everything
-    tt_progress = 0.0f;
+    tt_progress = 0.97f * 2.0f * M_PIf; // just infront of gate 0
     tt_speed_factor = 0.0f;
     tt_yaw_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
 
     // setpoint = starting point of trajectory
-    getRefsTrajectoryTracker(0.0f);
+    getRefsTrajectoryTracker(tt_progress);
     posSpNed.pos.V.X = tt_pos_ref[0];
     posSpNed.pos.V.Y = tt_pos_ref[1];
     posSpNed.pos.V.Z = tt_pos_ref[2];
