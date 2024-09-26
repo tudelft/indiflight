@@ -1,0 +1,13 @@
+
+"time": microseconds since flight controller start
+"vbatLatest": battery voltage in hundreths of volts
+"amperageLatest": battery current in some unit that i dont know
+"gyroADC[:]": uncorrected gyro readings, straight from the device
+    Filtered with an internal factory tuned notch filter, and a 2nd order 
+    butterworth lowpass at 258Hz break Anti-Aliasing Filter (AAF), according to
+    datasheet page 26 (https://invensense.tdk.com/download-pdf/icm-42688-p-datasheet/). 
+    Scale is 16.384 units for 1 deg/s, can be increased at the cost of lower measurement range (now is +-2000deg/s). see datasheet page 35 "FSR"
+"accSmooth[:]": uncorrected acc readings, straight from the device
+    Filtered with an internal 2nd order butterworth lowpass at 258Hz break frequency
+    Scale is 2048 units for 1g
+    
