@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "start-openocd",
+            "label": "start-openocd-pi",
             "command": "/usr/bin/sshpass",
             "args": [
                 "-p",
@@ -12,7 +12,7 @@
                 "StrictHostKeyChecking=no",
                 "-o",
                 "ConnectTimeout=3",
-                "pi@10.0.0.1",
+                "pi@${input:REMOTE_IP}",
                 "sudo",
                 "systemctl",
                 "start",
@@ -24,6 +24,38 @@
                 "revealProblems": "onProblem",
                 "close": true
             }
+        },
+        {
+            "label": "start-openocd-orin",
+            "command": "/usr/bin/sshpass",
+            "args": [
+                "-p",
+                "dr",
+                "ssh",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "ConnectTimeout=3",
+                "droneracing@${input:REMOTE_IP}",
+                "sudo",
+                "systemctl",
+                "restart",
+                "openocd.service"
+            ],
+            "type": "shell",
+            "presentation": {
+                "reveal": "silent",
+                "revealProblems": "onProblem",
+                "close": true
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "REMOTE_IP",
+            "description": "Please provide the ip of the remote to be debugged",
+            "default": ""
         }
     ]
 }
