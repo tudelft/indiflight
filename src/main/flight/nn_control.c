@@ -115,6 +115,8 @@ void nn_compute_motor_cmds(void) {
 	world_state[0] = ekf_state[0];
 	world_state[1] = ekf_state[1];
 	world_state[2] = ekf_state[2];
+	// UGLY HACK:
+	world_state[2] -= 0.4; // add 0.4 meters to the z position
 	// vel NED
 	world_state[3] = ekf_state[3];
 	world_state[4] = ekf_state[4];
