@@ -134,6 +134,10 @@ bool isInitializedEkf(void) {
     return ekf_initialized;
 }
 
+void resetEkf(void) {
+	ekf_initialized = false;
+}
+
 void initEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         return;

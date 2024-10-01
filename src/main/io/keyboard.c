@@ -26,6 +26,7 @@
 #include "io/external_pos.h"            // for posSpNed
 #include "flight/trajectory_tracker.h"  // for initTrajectoryTracker, stopTrajectoryTracker, trajectoryTrackerSetSpeed
 #include "flight/nn_control.h"          // for nn_init, nn_activate
+#include "flight/ekf.h"                 // for resetEkf
 
 // HID Codes (https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2)
 #define KEY_A           0x04
@@ -106,6 +107,8 @@ void processKey(uint8_t key) {
         case KEY_G: tt_heading_mode = TT_LOOK_AT_GATES; break;
         case KEY_R: tt_heading_mode = TT_LOOK_AT_REF; break;
         case KEY_N: tt_heading_mode = TT_LOOK_AT_NOTHING; break;
+        // only reset ekf when on the ground
+        case KEY_E: if (extPosNed.pos.V.Z > -0.5) { resetEkf(); } break;
 #endif
 #ifdef USE_NN_CONTROL
         case KEY_6: nn_init(); break;
