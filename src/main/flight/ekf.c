@@ -278,7 +278,7 @@ void updateEkf(timeUs_t currentTimeUs) {
     imuUpdateAttitude(currentTimeUs);
 
     // update system state with EKF data, if possible and configured
-    if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
+    if (ekf_initialized) {
         // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 
