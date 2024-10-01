@@ -79,6 +79,13 @@ float ekf_P_history[EKF_HISTORY_SIZE][N_STATES*(N_STATES+1)/2]; // covariance ma
 float ekf_U_history[EKF_HISTORY_SIZE][N_INPUTS];				// input vector
 int ekf_history_index = 0;										// index
 
+// DANGEROUS HACK: EKF UPDATE INTERUPT
+bool ekf_update_interrupt = false;
+
+void interuptEkfUpdate(void) {
+	ekf_update_interrupt = true;
+}
+
 void ekf_add_to_history(float t) {
 	ekf_history_index = (ekf_history_index + 1) % EKF_HISTORY_SIZE;		// increment index and wrap around
 	// t
@@ -244,8 +251,10 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_Z[5] = (ekf_use_quat) * extPosNed.quat.y;
 		ekf_Z[6] = (ekf_use_quat) * extPosNed.quat.z;
 
-		// old update:
-		ekf_update(ekf_Z);
+		// only update when we dont have an interrupt
+		if (!ekf_update_interrupt) {
+			ekf_update(ekf_Z);
+		}
 
 		// new update that takes into account the time delay:
 		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);

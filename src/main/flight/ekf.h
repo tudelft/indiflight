@@ -51,5 +51,6 @@ bool isInitializedEkf(void);
 void initEkf(timeUs_t currentTimeUs);
 void updateEkf(timeUs_t currentTimeUs);
 void resetEkf(void);
+void interuptEkfUpdate(void);
 
 #endif // EKF_H
