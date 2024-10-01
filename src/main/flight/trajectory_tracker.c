@@ -370,6 +370,8 @@ void updateTrajectoryTracker(timeUs_t current) {
             if (tt_time >= tt_recovery_problem.tf) {
                 tt_recovery_active = false;
                 tt_active = false;
+                // immediately land after recovery
+                posSpNed.pos.V.Z = 0.0f;
             }
         }
 
