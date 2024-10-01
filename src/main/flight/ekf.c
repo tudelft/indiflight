@@ -32,6 +32,7 @@
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "trajectory_tracker.h"    	// for recovery mode
 
 #include <stdbool.h>
 
@@ -254,6 +255,14 @@ void runEkf(timeUs_t currentTimeUs) {
 		// only update when we dont have an interrupt
 		if (!ekf_update_interrupt) {
 			ekf_update(ekf_Z);
+		} else {
+			// check if the position error is too large and switch to recovery mode
+			float pos_error = sqrtf((ekf_Z[0] - ekf_get_X()[0]) * (ekf_Z[0] - ekf_get_X()[0]) +
+									(ekf_Z[1] - ekf_get_X()[1]) * (ekf_Z[1] - ekf_get_X()[1]) +
+									(ekf_Z[2] - ekf_get_X()[2]) * (ekf_Z[2] - ekf_get_X()[2]));
+			if (pos_error > 1.0f) {
+				initRecoveryMode();
+			}
 		}
 
 		// new update that takes into account the time delay:
