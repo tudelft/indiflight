@@ -82,7 +82,7 @@ extern positionRuntime_t posRuntime;
 void initPositionRuntime();
 void changePositionProfile(uint8_t profileIndex);
 
-#define DEADRECKONING_TIMEOUT_HOLD_POSITION_US 5000000 // 5 sec
+#define DEADRECKONING_TIMEOUT_HOLD_POSITION_US 1500000 // 1.5 sec
 #define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 2500000 // 2.5 sec
 
 extern fp_vector_t accSpNedFromPos;
