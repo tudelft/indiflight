@@ -226,18 +226,18 @@ void getRefsTrajectoryTracker(float p) {
     lam = tt_speed_factor;
 
     // position refs
-    tt_pos_ref[0] = tt_R*(-sinf(p)*cosf(p));
-    tt_pos_ref[1] = tt_R*(+sinf(p));
+    tt_pos_ref[0] = tt_R*cosf(p); //tt_R*(-sinf(p)*cosf(p));
+    tt_pos_ref[1] = tt_R*sinf(p); //tt_R*(+sinf(p));
     tt_pos_ref[2] = -1.0f;
 
     // velocity refs
-    tt_vel_ref[0] = -tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
-    tt_vel_ref[1] = tt_R*lam*cosf(p);
+    tt_vel_ref[0] = -tt_R*lam*sinf(p);  //-tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
+    tt_vel_ref[1] = tt_R*lam*cosf(p);   //tt_R*lam*cosf(p);
     tt_vel_ref[2] = 0.0f;
 
     // acceleration refs
-    tt_acc_ref[0] = 4*lam*lam * tt_pos_ref[0];
-    tt_acc_ref[1] = -lam*lam * tt_pos_ref[1];
+    tt_acc_ref[0] = -tt_R*lam*lam*cosf(p);      //4*lam*lam * tt_pos_ref[0];
+    tt_acc_ref[1] = -tt_R*lam*lam*sinf(p);      //-lam*lam * tt_pos_ref[1];
     tt_acc_ref[2] = 0.0f;
 
     // switch case depnding on tt_heading_mode
