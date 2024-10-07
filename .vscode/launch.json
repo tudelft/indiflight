@@ -69,7 +69,7 @@
             "cwd": "${workspaceRoot}",
             "executable": "obj/main/indiflight_STM32H743.elf",
             "name": "Pi Cortex OpenOCD",
-            "request": "launch",
+            "request": "attach",
             "preLaunchTask": "start-openocd-pi",
             "type": "cortex-debug",
             "liveWatch": {

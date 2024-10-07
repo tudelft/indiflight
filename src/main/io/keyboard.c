@@ -24,6 +24,7 @@
 #include "pi-messages.h"                // for piMsgKeyboardRx
 #include "fc/core.h"                    // for disarm
 #include "fc/runtime_config.h"
+#include "fc/rc_modes.h"
 #include "io/external_pos.h"            // for posSpNed
 #include "flight/trajectory_tracker.h"  // for initTrajectoryTracker, stopTrajectoryTracker, trajectoryTrackerSetSpeed
 #include "flight/nn_control.h"          // for nn_init, nn_activate
@@ -118,7 +119,10 @@ void processKey(uint8_t key) {
 #endif
 #ifdef USE_NN_CONTROL
         case KEY_6: nn_init(); break;
-        case KEY_7: if (nn_is_active()) { nn_deactivate(); } else { nn_activate(); } break;
+        case KEY_7: 
+            if (isModeActivationConditionPresent(BOXNNCTL)) { break; }
+            if (!nn_is_active()) { nn_activate(); } else { nn_deactivate(); }
+            break;
         case KEY_P: posSpNed.pos.V.X = 1.5; posSpNed.pos.V.Y = -3.; posSpNed.pos.V.Z = -1.5; posSetpointState = EXT_POS_NEW_MESSAGE; break;
 #endif
         case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
