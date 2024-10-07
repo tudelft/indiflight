@@ -79,6 +79,7 @@ struct recovery_problem {
     float theta0;    // starting angle along the cicle
     float omega0;    // starting angular velocity
     float tf;        // time when recovery should be finished
+    bool straight_recovery; // recover in a straight line
 } tt_recovery_problem;
 
 void initRecoveryMode(void) {
@@ -86,6 +87,7 @@ void initRecoveryMode(void) {
     float x = posEstNed.V.X;
     float y = posEstNed.V.Y;
     tt_recovery_problem.R = sqrtf(x*x + y*y);
+    tt_recovery_problem.straight_recovery = false;
 
     // final time hardcoded
     tt_recovery_problem.tf = 1.0f;
@@ -93,6 +95,8 @@ void initRecoveryMode(void) {
     // make sure radius is less then 4.0
     if (tt_recovery_problem.R > 4.0) {
         tt_recovery_problem.R = 4.0;
+    } else if (tt_recovery_problem.R < 1.0) {
+        tt_recovery_problem.straight_recovery = true;
     }
 
     // get starting angle
@@ -124,30 +128,52 @@ void getRefsRecoveryTrajectory(float t) {
         t = tf;
     }
 
-    float omega = omega0*(1.0f - t/tf);                 // angular velocity
-    float theta = theta0 + omega0*(t - 0.5f*t*t/tf);    // angle along the circle
-    while (theta >  M_PIf) theta -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
-    while (theta < -M_PIf) theta += (2.0f * M_PIf);
+    // Circular recovery
+    if (tt_recovery_problem.straight_recovery) {
+        // constant acceleration bringing v_init to zero
+        float vx_init = velEstNed.V.X;
+        float vy_init = velEstNed.V.Y;
 
-    // position refs
-    tt_pos_ref[0] = R*cosf(theta);
-    tt_pos_ref[1] = R*sinf(theta);
-    tt_pos_ref[2] = -1.5f;
+        tt_pos_ref[0] = vx_init*t - 0.5f*vx_init/tf*t*t;
+        tt_pos_ref[1] = vy_init*t - 0.5f*vy_init/tf*t*t;
+        tt_pos_ref[2] = -1.5f;
 
-    // velocity refs
-    tt_vel_ref[0] = -R*sinf(theta)*omega;
-    tt_vel_ref[1] = R*cosf(theta)*omega;
-    tt_vel_ref[2] = 0.0f;
+        tt_vel_ref[0] = vx_init - (vx_init/tf)*t;
+        tt_vel_ref[1] = vy_init - (vy_init/tf)*t;
+        tt_vel_ref[2] = 0.0f;
 
-    // acceleration refs
-    tt_acc_ref[0] = -R*cosf(theta)*omega*omega -R*sinf(theta)*(-omega0/tf);
-    tt_acc_ref[1] = -R*sinf(theta)*omega*omega +R*cosf(theta)*(-omega0/tf);
-    tt_acc_ref[2] = 0.0f;
+        tt_acc_ref[0] = -vx_init/tf;
+        tt_acc_ref[1] = -vy_init/tf;
+        tt_acc_ref[2] = 0.0f;
 
-    // heading (we dont want to track that in recovery though)
-    tt_yaw_ref = theta;
-    tt_yaw_rate_ref = omega;
-    posSpNed.trackPsi = false;
+        // heading (we dont want to track that in recovery though)
+        tt_yaw_rate_ref = 0.;
+        posSpNed.trackPsi = false;
+    } else {
+        float omega = omega0*(1.0f - t/tf);                 // angular velocity
+        float theta = theta0 + omega0*(t - 0.5f*t*t/tf);    // angle along the circle
+        while (theta >  M_PIf) theta -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
+        while (theta < -M_PIf) theta += (2.0f * M_PIf);
+
+        // position refs
+        tt_pos_ref[0] = R*cosf(theta);
+        tt_pos_ref[1] = R*sinf(theta);
+        tt_pos_ref[2] = -1.5f;
+
+        // velocity refs
+        tt_vel_ref[0] = -R*sinf(theta)*omega;
+        tt_vel_ref[1] = R*cosf(theta)*omega;
+        tt_vel_ref[2] = 0.0f;
+
+        // acceleration refs
+        tt_acc_ref[0] = -R*cosf(theta)*omega*omega -R*sinf(theta)*(-omega0/tf);
+        tt_acc_ref[1] = -R*sinf(theta)*omega*omega +R*cosf(theta)*(-omega0/tf);
+        tt_acc_ref[2] = 0.0f;
+
+        // heading (we dont want to track that in recovery though)
+        tt_yaw_rate_ref = 0.;
+        posSpNed.trackPsi = false;
+    }
 }
 
 bool isActiveTrajectoryTracker(void) {
