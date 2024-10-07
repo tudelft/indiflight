@@ -80,6 +80,10 @@ struct recovery_problem {
     float omega0;    // starting angular velocity
     float tf;        // time when recovery should be finished
     bool straight_recovery; // recover in a straight line
+    float x_init;    // initial x position
+    float y_init;    // initial y position
+    float vx_init;   // initial x velocity
+    float vy_init;   // initial y velocity
 } tt_recovery_problem;
 
 void initRecoveryMode(void) {
@@ -96,6 +100,10 @@ void initRecoveryMode(void) {
     if ((tt_recovery_problem.R < 1.5) || (tt_recovery_problem.R > 3.0)) {
         tt_recovery_problem.straight_recovery = true;
         tt_recovery_problem.tf = .6f;
+        tt_recovery_problem.x_init = x;
+        tt_recovery_problem.y_init = y;
+        tt_recovery_problem.vx_init = velEstNed.V.X;
+        tt_recovery_problem.vy_init = velEstNed.V.Y;
     }
 
     // get starting angle
@@ -130,11 +138,13 @@ void getRefsRecoveryTrajectory(float t) {
     // Circular recovery
     if (tt_recovery_problem.straight_recovery) {
         // constant acceleration bringing v_init to zero
-        float vx_init = velEstNed.V.X;
-        float vy_init = velEstNed.V.Y;
+        float vx_init = tt_recovery_problem.vx_init;
+        float vy_init = tt_recovery_problem.vy_init;
+        float x_init = tt_recovery_problem.x_init;
+        float y_init = tt_recovery_problem.y_init;
 
-        tt_pos_ref[0] = vx_init*t - 0.5f*vx_init/tf*t*t;
-        tt_pos_ref[1] = vy_init*t - 0.5f*vy_init/tf*t*t;
+        tt_pos_ref[0] = x_init + vx_init*t - 0.5f*vx_init/tf*t*t;
+        tt_pos_ref[1] = y_init + vy_init*t - 0.5f*vy_init/tf*t*t;
         tt_pos_ref[2] = -1.5f;
 
         tt_vel_ref[0] = vx_init - (vx_init/tf)*t;
