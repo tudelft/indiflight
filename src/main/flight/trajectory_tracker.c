@@ -92,11 +92,10 @@ void initRecoveryMode(void) {
     // final time hardcoded
     tt_recovery_problem.tf = 1.0f;
 
-    // make sure radius is less then 4.0
-    if (tt_recovery_problem.R > 4.0) {
-        tt_recovery_problem.R = 4.0;
-    } else if (tt_recovery_problem.R < 1.0) {
+    // make sure radius is less then 3.0
+    if ((tt_recovery_problem.R < 1.5) || (tt_recovery_problem.R > 3.0)) {
         tt_recovery_problem.straight_recovery = true;
+        tt_recovery_problem.tf = .6f;
     }
 
     // get starting angle
