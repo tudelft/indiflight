@@ -23,9 +23,11 @@
 
 #include "pi-messages.h"                // for piMsgKeyboardRx
 #include "fc/core.h"                    // for disarm
+#include "fc/runtime_config.h"
 #include "io/external_pos.h"            // for posSpNed
 #include "flight/trajectory_tracker.h"  // for initTrajectoryTracker, stopTrajectoryTracker, trajectoryTrackerSetSpeed
 #include "flight/nn_control.h"          // for nn_init, nn_activate
+#include "flight/ekf.h"
 
 // HID Codes (https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2)
 #define KEY_A           0x04
@@ -96,6 +98,13 @@ void processKey(uint8_t key) {
         case KEY_5: posSpNed.pos.V.Z = 0.; posSetpointState = EXT_POS_NEW_MESSAGE; break;
         case KEY_S: posSpNed.pos.V.X = extPosNed.pos.V.X; posSpNed.pos.V.Y = extPosNed.pos.V.Y; posSpNed.pos.V.Z = extPosNed.pos.V.Z; posSetpointState = EXT_POS_NEW_MESSAGE; break;
         case KEY_T: posSpNed.pos.V.X = extPosNed.pos.V.X; posSpNed.pos.V.Y = extPosNed.pos.V.Y; posSpNed.pos.V.Z = -1.5; posSetpointState = EXT_POS_NEW_MESSAGE; break;
+#endif
+#ifdef USE_EKF
+        case KEY_I: 
+            if (!ARMING_FLAG(ARMED)) {
+                initEkf(micros());
+            }
+            break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         case KEY_1: initTrajectoryTracker(); break;

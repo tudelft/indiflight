@@ -261,6 +261,8 @@ void updateEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         ekf_initialized = false;
     } else if (!ekf_initialized) {
+        // NEVER EVER auto-reinitialize EKF. bad things will happen. use a switch or the keyboard
+/*
         // when ekf is not initialized, we need to wait for the first external position message
         if (extPosState != EXT_POS_NO_SIGNAL) {
             // INIT EKF
@@ -269,6 +271,7 @@ void updateEkf(timeUs_t currentTimeUs) {
                 initEkf(currentTimeUs);
             }
         }
+*/
     } else {
         // ekf is initialized and POSITION_MODE, we can run the ekf
 		runEkf(currentTimeUs);
