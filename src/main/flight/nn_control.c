@@ -153,7 +153,7 @@ void nn_compute_motor_cmds(void) {
 	// abs(x) > 3.0
 	// abs(y) > 8.0
 	// abs(z) > 3.5
-	if (fabs(world_state[0]) > 3.0 || fabs(world_state[1]) > 8.0 || fabs(world_state[2]) > 3.5) {
+	if (fabsf(world_state[0]) > 3.0f || fabsf(world_state[1]) > 8.0f || fabsf(world_state[2]) > 3.5f) {
 		nn_deactivate();
 	}
 
