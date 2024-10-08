@@ -8,11 +8,12 @@
 
 #ifndef PROJECT__MIN_SNAP__H
 #define PROJECT__MIN_SNAP__H
-float maxV;
+extern float maxV;
 float get_x(float t);
 float get_y(float t);
 float get_z(float t);
 float get_psi(float t);
+float get_psi_dot(float t);
 float get_vx(float t);
 float get_vy(float t);
 float get_vz(float t);
