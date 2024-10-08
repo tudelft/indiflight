@@ -30,6 +30,7 @@
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
 #include "sensors/acceleration.h"
+#include "trajectories/min_snap.h"
 
 
 #ifdef USE_TRAJECTORY_TRACKER
@@ -49,12 +50,16 @@ tt_heading_mode_t tt_heading_mode = TT_LOOK_AT_NOTHING;
 bool tt_active = false;
 
 // reference trajectory
+#define MAX_SUPPORTED_GATES 50
 fp_vector_t tt_pos_ref = {0};
 fp_vector_t tt_vel_ref = {0};
 fp_vector_t tt_acc_ref = {0};
 fp_vector_t tt_jerk_ref = {0};
 float tt_heading_ref = 0.;
 float tt_heading_rate_ref = 0.;
+float tt_start_p = 0.f;
+gate_t gates[MAX_SUPPORTED_GATES];
+int n_gates = 0;
 
 // time stuff
 float tt_speed_factor = 0.0f;
@@ -235,7 +240,20 @@ void getRefsTrajectoryTracker(float p) {
 }
 */
 
+static float wrap_2pi(float p) {
+    while (p >  2.0f*M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
+    while (p < 0.f) p += (2.0f * M_PIf);
+    return p;
+}
+
+static float wrap_mpi_pi(float p) {
+    while (p > M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
+    while (p < -M_PIf) p += (2.0f * M_PIf);
+    return p;
+}
+
 void getRefsTrajectoryTracker(float p) {
+    UNUSED(wrap_2pi); // optional
     // x(t)   = -R*sin(p)*cos(p)
     // y(t)   = +R*sin(p)
     // z(t)   = -1.0
@@ -261,14 +279,11 @@ void getRefsTrajectoryTracker(float p) {
     }
     */
 
-    while (p >  2.0f*M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
-    while (p < 0.f) p += (2.0f * M_PIf);
-    tt_progress = p;
-    float lam;
-    lam = tt_speed_factor;
-
     // ----- circle
     /*
+    tt_progress = warp_2pi(tt_progress);
+    float p = tt_progress;
+
     // position refs
     tt_pos_ref.V.X = tt_R*cosf(p); //tt_R*(-sinf(p)*cosf(p));
     tt_pos_ref.V.Y = tt_R*sinf(p); //tt_R*(+sinf(p));
@@ -288,9 +303,29 @@ void getRefsTrajectoryTracker(float p) {
     tt_jerk_ref.V.X = +tt_R*lam*lam*lam*sinf(p);
     tt_jerk_ref.V.Y = -tt_R*lam*lam*lam*cosf(p);
     tt_jerk_ref.V.Z = 0.0f;
+
+    // heading reference
+    tt_heading_ref = 0.0f;
+    tt_heading_rate_ref = 0.0f;
+    posSpNed.trackPsi = false;
     */
 
     // ----- figure 8
+    /*
+    tt_progress = warp_2pi(tt_progress);
+    float p = tt_progress;
+    gates[0] = (gate_t){.x = 0.f, .y = 0.f, .p = 0.}; // currently broken
+    float gates[4][3] = {
+        {0.f, 0.f},
+        {0.f, 3.f},
+        {0.f, 0.f},
+        {0.f, -3.f},
+    };
+
+
+    float lam;
+    lam = tt_speed_factor;
+
     // position refs
     tt_pos_ref.V.X = tt_R*(-sinf(p)*cosf(p));
     tt_pos_ref.V.Y = tt_R*(+sinf(p));
@@ -311,18 +346,49 @@ void getRefsTrajectoryTracker(float p) {
     tt_jerk_ref.V.Y = -lam*lam * tt_vel_ref.V.Y;
     tt_jerk_ref.V.Z = 0.0f;
 
+    // heading default for this trajectory
+    tt_heading_ref = 0.0f;
+    tt_heading_rate_ref = 0.0f;
+    posSpNed.trackPsi = false;
+    */
+
+    // ----- min snap
+    // position refs
+    tt_pos_ref.V.X = get_x(p);
+    tt_pos_ref.V.Y = get_y(p);
+    tt_pos_ref.V.Z = get_z(p);
+
+    // velocity refs
+    tt_vel_ref.V.X = get_vx(p);
+    tt_vel_ref.V.Y = get_vy(p);
+    tt_vel_ref.V.Z = get_vz(p);
+
+    // acceleration refs
+    tt_acc_ref.V.X = get_ax(p);
+    tt_acc_ref.V.Y = get_ay(p);
+    tt_acc_ref.V.Z = get_az(p);
+
+    // jerk refs
+    tt_jerk_ref.V.X = get_jx(p);
+    tt_jerk_ref.V.Y = get_jy(p);
+    tt_jerk_ref.V.Z = get_jz(p);
+
+    // heading
+    tt_heading_ref = get_psi(p);
+    tt_heading_rate_ref = 0.f;//get_psi_dot(p);
+    posSpNed.trackPsi = true;
+
     // switch case depnding on tt_heading_mode
     switch (tt_heading_mode) {
+        case TT_LOOK_AT_REF:
+            // default mode, just use what was defined above
+            break;
         case TT_LOOK_AT_GATES:
-            {
-            // heading
-            float gates[4][2] = {
-                {0.f, 0.f},
-                {0.f, 3.f},
-                {0.f, 0.f},
-                {0.f, -3.f},
-            };
+            // broken, should fix it some time, now falltthrough
+/*
+            if (gates && n_gates) {
 
+            }
             float sf = 0.1f * M_PIf / 2.f;
 
             int g = 1;
@@ -355,8 +421,13 @@ void getRefsTrajectoryTracker(float p) {
                 posSpNed.trackPsi = true; // choice: track heading or neglect it?
             }
             break;   
-            }
-        case TT_LOOK_AT_REF:
+*/
+        case TT_LOOK_AT_NOTHING:
+            // do nothing
+            tt_heading_rate_ref = 0.f;
+            posSpNed.trackPsi = false;
+            break;
+        case TT_LOOK_ALONG_VELOCITY:
             {
             // heading should align with velocity ref
             float d2 = tt_vel_ref.V.X*tt_vel_ref.V.X  +  tt_vel_ref.V.Y*tt_vel_ref.V.Y; // x**2 + y**2
@@ -372,17 +443,12 @@ void getRefsTrajectoryTracker(float p) {
             }
             break;
             }
-        case TT_LOOK_AT_NOTHING:
-            // do nothing
-            tt_heading_rate_ref = 0.f;
-            posSpNed.trackPsi = false;
-            break;
     }
 }
 
 void initTrajectoryTracker(void) {
     // reset everything
-    tt_progress = 1.75f * M_PIf; // just infront of gate 0
+    tt_progress = 0; // todo: make option to start just infront of gate 0
     tt_speed_factor = 0.0f;
     tt_heading_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
@@ -392,18 +458,18 @@ void initTrajectoryTracker(void) {
     posSpNed.pos.V.X = tt_pos_ref.V.X;
     posSpNed.pos.V.Y = tt_pos_ref.V.Y;
     posSpNed.pos.V.Z = tt_pos_ref.V.Z;
-    posSpNed.psi = tt_heading_ref;
+    posSpNed.psi = wrap_mpi_pi(tt_heading_ref);
     posSpNed.trackPsi = true;
     posSetpointState = EXT_POS_NEW_MESSAGE;
 }
 
 void setSpeedTrajectoryTracker(float speed) {
-    tt_speed_factor = speed/tt_R;
+    tt_speed_factor = speed;
     tt_active = true;
 }
 
 void incrementSpeedTrajectoryTracker(float inc) {
-    tt_speed_factor += inc/tt_R;
+    tt_speed_factor += inc;
     tt_active = true;
 }
 
@@ -568,7 +634,7 @@ void updateTrajectoryTracker(timeUs_t current) {
         // boom, roasted. not tested yet, seems hard to implement/debug
 
         // overwrite yawSetpoint (from pos_ctl.c)
-        posSpNed.psi = tt_heading_ref;
+        posSpNed.psi = wrap_mpi_pi(tt_heading_ref);
 
         posSetpointState = EXT_POS_NEW_MESSAGE;
 

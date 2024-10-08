@@ -124,8 +124,7 @@ else
 endif
 endif
 ifeq ($(TARGET), MOCKUP)
-	@echo "Not cleanined, cleaning first..."
-	$(V0) $(MAKE) -j clean
+	@echo "!!!! NOT CLEANED !!!!. Continuing with build!"
 else
 	@if [ -d $(TARGET_OBJ_DIR) ]; then \
 		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N]"; \

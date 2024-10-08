@@ -28,10 +28,17 @@
 
 // heading modes
 typedef enum {
-    TT_LOOK_AT_NOTHING,
-    TT_LOOK_AT_GATES,
     TT_LOOK_AT_REF,
+    TT_LOOK_AT_NOTHING,
+    TT_LOOK_ALONG_VELOCITY,
+    TT_LOOK_AT_GATES,
 } tt_heading_mode_t;
+
+typedef struct gate_s {
+    float x;
+    float y;
+    float p; // scaled time at passing
+} gate_t;
 
 extern tt_heading_mode_t tt_heading_mode;
 
