@@ -29,6 +29,7 @@
 #include "flight/indi.h"
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
+#include "sensors/acceleration.h"
 
 
 #ifdef USE_TRAJECTORY_TRACKER
@@ -47,15 +48,13 @@ tt_heading_mode_t tt_heading_mode = TT_LOOK_AT_NOTHING;
 // state of trajectory tracker:
 bool tt_active = false;
 
-// acceleration and yaw rate setpoints
-float tt_acc_sp[3] = {0};
-
 // reference trajectory
-float tt_pos_ref[3] = {0};
-float tt_vel_ref[3] = {0};
-float tt_acc_ref[3] = {0};
-float tt_yaw_ref = 0.;
-float tt_yaw_rate_ref = 0.;
+fp_vector_t tt_pos_ref = {0};
+fp_vector_t tt_vel_ref = {0};
+fp_vector_t tt_acc_ref = {0};
+fp_vector_t tt_jerk_ref = {0};
+float tt_heading_ref = 0.;
+float tt_heading_rate_ref = 0.;
 
 // time stuff
 float tt_speed_factor = 0.0f;
@@ -66,6 +65,7 @@ timeUs_t last = 0;
 // gains
 float tt_pos_gain = 4.0; //1.5;
 float tt_vel_gain = 5.0; //2.5;
+float tt_acc_gain = 0.f; // zero, because we use attitude feedback control in indi.c
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
@@ -143,20 +143,24 @@ void getRefsRecoveryTrajectory(float t) {
         float x_init = tt_recovery_problem.x_init;
         float y_init = tt_recovery_problem.y_init;
 
-        tt_pos_ref[0] = x_init + vx_init*t - 0.5f*vx_init/tf*t*t;
-        tt_pos_ref[1] = y_init + vy_init*t - 0.5f*vy_init/tf*t*t;
-        tt_pos_ref[2] = -1.5f;
+        tt_pos_ref.V.X = x_init + vx_init*t - 0.5f*vx_init/tf*t*t;
+        tt_pos_ref.V.Y = y_init + vy_init*t - 0.5f*vy_init/tf*t*t;
+        tt_pos_ref.V.Z = -1.5f;
 
-        tt_vel_ref[0] = vx_init - (vx_init/tf)*t;
-        tt_vel_ref[1] = vy_init - (vy_init/tf)*t;
-        tt_vel_ref[2] = 0.0f;
+        tt_vel_ref.V.X = vx_init - (vx_init/tf)*t;
+        tt_vel_ref.V.Y = vy_init - (vy_init/tf)*t;
+        tt_vel_ref.V.Z = 0.0f;
 
-        tt_acc_ref[0] = -vx_init/tf;
-        tt_acc_ref[1] = -vy_init/tf;
-        tt_acc_ref[2] = 0.0f;
+        tt_acc_ref.V.X = -vx_init/tf;
+        tt_acc_ref.V.Y = -vy_init/tf;
+        tt_acc_ref.V.Z = 0.0f;
+
+        tt_jerk_ref.V.X = 0.0f;
+        tt_jerk_ref.V.Y = 0.0f;
+        tt_jerk_ref.V.Z = 0.0f;
 
         // heading (we dont want to track that in recovery though)
-        tt_yaw_rate_ref = 0.;
+        tt_heading_rate_ref = 0.;
         posSpNed.trackPsi = false;
     } else {
         float omega = omega0*(1.0f - t/tf);                 // angular velocity
@@ -165,22 +169,26 @@ void getRefsRecoveryTrajectory(float t) {
         while (theta < -M_PIf) theta += (2.0f * M_PIf);
 
         // position refs
-        tt_pos_ref[0] = R*cosf(theta);
-        tt_pos_ref[1] = R*sinf(theta);
-        tt_pos_ref[2] = -1.5f;
+        tt_pos_ref.V.X = R*cosf(theta);
+        tt_pos_ref.V.Y = R*sinf(theta);
+        tt_pos_ref.V.Z = -1.5f;
 
         // velocity refs
-        tt_vel_ref[0] = -R*sinf(theta)*omega;
-        tt_vel_ref[1] = R*cosf(theta)*omega;
-        tt_vel_ref[2] = 0.0f;
+        tt_vel_ref.V.X = -R*sinf(theta)*omega;
+        tt_vel_ref.V.Y = R*cosf(theta)*omega;
+        tt_vel_ref.V.Z = 0.0f;
 
         // acceleration refs
-        tt_acc_ref[0] = -R*cosf(theta)*omega*omega -R*sinf(theta)*(-omega0/tf);
-        tt_acc_ref[1] = -R*sinf(theta)*omega*omega +R*cosf(theta)*(-omega0/tf);
-        tt_acc_ref[2] = 0.0f;
+        tt_acc_ref.V.X = -R*cosf(theta)*omega*omega -R*sinf(theta)*(-omega0/tf);
+        tt_acc_ref.V.Y = -R*sinf(theta)*omega*omega +R*cosf(theta)*(-omega0/tf);
+        tt_acc_ref.V.Z = 0.0f;
+
+        tt_jerk_ref.V.X = 0.0f;
+        tt_jerk_ref.V.Y = 0.0f;
+        tt_jerk_ref.V.Z = 0.0f;
 
         // heading (we dont want to track that in recovery though)
-        tt_yaw_rate_ref = 0.;
+        tt_heading_rate_ref = 0.;
         posSpNed.trackPsi = false;
     }
 }
@@ -221,14 +229,13 @@ void getRefsTrajectoryTracker(float p) {
     tt_acc_ref[2] = 0.0f;
 
     // heading
-    tt_yaw_ref = p + M_PIf/2.0f;
-    tt_yaw_rate_ref = tt_speed_factor;
+    tt_heading_ref = p + M_PIf/2.0f;
+    tt_heading_rate_ref = tt_speed_factor;
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
 */
 
 void getRefsTrajectoryTracker(float p) {
-    // hard coded figure 8
     // x(t)   = -R*sin(p)*cos(p)
     // y(t)   = +R*sin(p)
     // z(t)   = -1.0
@@ -260,20 +267,49 @@ void getRefsTrajectoryTracker(float p) {
     float lam;
     lam = tt_speed_factor;
 
+    // ----- circle
+    /*
     // position refs
-    tt_pos_ref[0] = tt_R*cosf(p); //tt_R*(-sinf(p)*cosf(p));
-    tt_pos_ref[1] = tt_R*sinf(p); //tt_R*(+sinf(p));
-    tt_pos_ref[2] = -1.0f;
+    tt_pos_ref.V.X = tt_R*cosf(p); //tt_R*(-sinf(p)*cosf(p));
+    tt_pos_ref.V.Y = tt_R*sinf(p); //tt_R*(+sinf(p));
+    tt_pos_ref.V.Z = -1.0f;
 
     // velocity refs
-    tt_vel_ref[0] = -tt_R*lam*sinf(p);  //-tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
-    tt_vel_ref[1] = tt_R*lam*cosf(p);   //tt_R*lam*cosf(p);
-    tt_vel_ref[2] = 0.0f;
+    tt_vel_ref.V.X = -tt_R*lam*sinf(p);  //-tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
+    tt_vel_ref.V.Y = tt_R*lam*cosf(p);   //tt_R*lam*cosf(p);
+    tt_vel_ref.V.Z = 0.0f;
 
     // acceleration refs
-    tt_acc_ref[0] = -tt_R*lam*lam*cosf(p);      //4*lam*lam * tt_pos_ref[0];
-    tt_acc_ref[1] = -tt_R*lam*lam*sinf(p);      //-lam*lam * tt_pos_ref[1];
-    tt_acc_ref[2] = 0.0f;
+    tt_acc_ref.V.X = -tt_R*lam*lam*cosf(p);      //4*lam*lam * tt_pos_ref[0];
+    tt_acc_ref.V.Y = -tt_R*lam*lam*sinf(p);      //-lam*lam * tt_pos_ref[1];
+    tt_acc_ref.V.Z = 0.0f;
+
+    // jerk refs
+    tt_jerk_ref.V.X = +tt_R*lam*lam*lam*sinf(p);
+    tt_jerk_ref.V.Y = -tt_R*lam*lam*lam*cosf(p);
+    tt_jerk_ref.V.Z = 0.0f;
+    */
+
+    // ----- figure 8
+    // position refs
+    tt_pos_ref.V.X = tt_R*(-sinf(p)*cosf(p));
+    tt_pos_ref.V.Y = tt_R*(+sinf(p));
+    tt_pos_ref.V.Z = -1.0f;
+
+    // velocity refs
+    tt_vel_ref.V.X = tt_R*lam*(sinf(p)*sinf(p) - cosf(p)*cosf(p));
+    tt_vel_ref.V.Y = tt_R*lam*cosf(p);
+    tt_vel_ref.V.Z = 0.0f;
+
+    // acceleration refs
+    tt_acc_ref.V.X = -4*lam*lam * tt_pos_ref.V.X;
+    tt_acc_ref.V.Y = -lam*lam * tt_pos_ref.V.Y;
+    tt_acc_ref.V.Z = 0.0f;
+
+    // jerk refs
+    tt_jerk_ref.V.X = -4*lam*lam * tt_vel_ref.V.X;
+    tt_jerk_ref.V.Y = -lam*lam * tt_vel_ref.V.Y;
+    tt_jerk_ref.V.Z = 0.0f;
 
     // switch case depnding on tt_heading_mode
     switch (tt_heading_mode) {
@@ -301,21 +337,21 @@ void getRefsTrajectoryTracker(float p) {
             }
 
             fp_vector_t dg = { 
-                .V.X = gates[g][0] - tt_pos_ref[0],
-                .V.Y = gates[g][1] - tt_pos_ref[1],
+                .V.X = gates[g][0] - tt_pos_ref.V.X,
+                .V.Y = gates[g][1] - tt_pos_ref.V.Y,
                 .V.Z  = 0.f // unused
             };
 
             float d2 = dg.V.X*dg.V.X  +  dg.V.Y*dg.V.Y; // x**2 + y**2
-            tt_yaw_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
+            tt_heading_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
 
             // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
             // total derivative of the atan2: -gy / d2 * (-dx/dt)  +  gx / d2 * (-dy/dt)
             if (d2 < 0.01f) { // within 10cm of next gate, do nothing. this should never happen, because switchover to the next gate should happen sooner
-                tt_yaw_rate_ref = 0.f;
+                tt_heading_rate_ref = 0.f;
                 posSpNed.trackPsi = false;
             } else {
-                tt_yaw_rate_ref = (dg.V.Y * tt_vel_ref[0]  -  dg.V.X * tt_vel_ref[1]) / d2;
+                tt_heading_rate_ref = (dg.V.Y * tt_vel_ref.V.X  -  dg.V.X * tt_vel_ref.V.Y) / d2;
                 posSpNed.trackPsi = true; // choice: track heading or neglect it?
             }
             break;   
@@ -323,22 +359,22 @@ void getRefsTrajectoryTracker(float p) {
         case TT_LOOK_AT_REF:
             {
             // heading should align with velocity ref
-            float d2 = tt_vel_ref[0]*tt_vel_ref[0]  +  tt_vel_ref[1]*tt_vel_ref[1]; // x**2 + y**2
-            tt_yaw_ref = atan2f(tt_vel_ref[1], tt_vel_ref[0]); // look along velocity ref vector
+            float d2 = tt_vel_ref.V.X*tt_vel_ref.V.X  +  tt_vel_ref.V.Y*tt_vel_ref.V.Y; // x**2 + y**2
+            tt_heading_ref = atan2f(tt_vel_ref.V.Y, tt_vel_ref.V.X); // look along velocity ref vector
 
             // total derivative of the atan2: -vy / d2 * dvx/dt  +  vx / d2 * dvy/dt
             if (d2 < 0.01f) { // velocity too small, do nothing
-                tt_yaw_rate_ref = 0.f;
+                tt_heading_rate_ref = 0.f;
                 posSpNed.trackPsi = false;
             } else {
-                tt_yaw_rate_ref = (-tt_vel_ref[1] * tt_acc_ref[0]  +  tt_vel_ref[0] * tt_acc_ref[1]) / d2;
+                tt_heading_rate_ref = (-tt_vel_ref.V.Y * tt_acc_ref.V.X  +  tt_vel_ref.V.X * tt_acc_ref.V.Y) / d2;
                 posSpNed.trackPsi = true; // choice: track heading or neglect it?
             }
             break;
             }
         case TT_LOOK_AT_NOTHING:
             // do nothing
-            tt_yaw_rate_ref = 0.f;
+            tt_heading_rate_ref = 0.f;
             posSpNed.trackPsi = false;
             break;
     }
@@ -348,15 +384,15 @@ void initTrajectoryTracker(void) {
     // reset everything
     tt_progress = 1.75f * M_PIf; // just infront of gate 0
     tt_speed_factor = 0.0f;
-    tt_yaw_ref = 0.f;
+    tt_heading_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
 
     // setpoint = starting point of trajectory
     getRefsTrajectoryTracker(tt_progress);
-    posSpNed.pos.V.X = tt_pos_ref[0];
-    posSpNed.pos.V.Y = tt_pos_ref[1];
-    posSpNed.pos.V.Z = tt_pos_ref[2];
-    posSpNed.psi = tt_yaw_ref;
+    posSpNed.pos.V.X = tt_pos_ref.V.X;
+    posSpNed.pos.V.Y = tt_pos_ref.V.Y;
+    posSpNed.pos.V.Z = tt_pos_ref.V.Z;
+    posSpNed.psi = tt_heading_ref;
     posSpNed.trackPsi = true;
     posSetpointState = EXT_POS_NEW_MESSAGE;
 }
@@ -408,50 +444,156 @@ void updateTrajectoryTracker(timeUs_t current) {
             }
         }
 
-        // update setpoints
-        // pos error
-        float x_error = tt_pos_ref[0] - posEstNed.V.X;
-        float y_error = tt_pos_ref[1] - posEstNed.V.Y;
-        float z_error = tt_pos_ref[2] - posEstNed.V.Z;
+        // update velocity setpoints
+        // pos error = tt_pos_ref - posEstNed
+        fp_vector_t pos_error = tt_pos_ref;
+        VEC3_SCALAR_MULT_ADD(pos_error, -1.f, posEstNed); // subtract estiamte from reference
 
-        // vel setpoint
-        float vx_sp = tt_vel_ref[0] + tt_pos_gain*x_error;
-        float vy_sp = tt_vel_ref[1] + tt_pos_gain*y_error;
-        float vz_sp = tt_vel_ref[2] + tt_pos_gain*z_error;
+        // vel setpoint = tt_vel_ref + tt_pos_gain * pos_error
+        fp_vector_t vel_sp = tt_vel_ref;
+        VEC3_SCALAR_MULT_ADD(vel_sp, tt_pos_gain, pos_error);
 
-        // acc setpoint
-        tt_acc_sp[0] = tt_acc_ref[0] + tt_vel_gain*(vx_sp - velEstNed.V.X);
-        tt_acc_sp[1] = tt_acc_ref[1] + tt_vel_gain*(vy_sp - velEstNed.V.Y);
-        tt_acc_sp[2] = tt_acc_ref[2] + tt_vel_gain*(vz_sp - velEstNed.V.Z);
+        // update acceleration setpoints
+        // vel error = vel_sp - velEstNed
+        fp_vector_t vel_error = vel_sp;
+        VEC3_SCALAR_MULT_ADD(vel_error, -1.f, velEstNed); // subtract estiamte from reference
 
-        // overwrite accSpNedFromPos and rateSpBodyFromPos (from pos_ctl.c)
-        accSpNedFromPos.V.X = tt_acc_sp[0];
-        accSpNedFromPos.V.Y = tt_acc_sp[1];
-        accSpNedFromPos.V.Z = tt_acc_sp[2];
+        // acc setpoint = tt_acc_ref + tt_vel_gain * vel_error
+        fp_vector_t acc_sp = tt_acc_ref;
+        VEC3_SCALAR_MULT_ADD(acc_sp, tt_vel_gain, vel_error);
 
-        // overwrite posSpNed (from pos_ctl.c)
-        posSpNed.pos.V.X = tt_pos_ref[0];
-        posSpNed.pos.V.Y = tt_pos_ref[1];
-        posSpNed.pos.V.Z = tt_pos_ref[2];
+        // update jerk setpoints
+        // acc estimate in NED
+        fp_vector_t accEstNed = { .V.X = acc.accADCf[0], .V.Y = acc.accADCf[1], .V.Z = acc.accADCf[2] };
+        rotate_vector_with_rotationMatrix(&accEstNed, &rMat);
+        VEC3_SCALAR_MULT(accEstNed, GRAVITYf / acc.dev.acc_1G);
+        accEstNed.V.Z += GRAVITYf; // remove gravity from accelerometer
 
-        // overwrite velSetpointNed (from pos_ctl.c)
-        posSpNed.vel.V.X = vx_sp;
-        posSpNed.vel.V.Y = vy_sp; //random comment
-        posSpNed.vel.V.Z = vz_sp;
+        // acc error = acc_sp - accEstNed
+        fp_vector_t acc_error = acc_sp;
+        VEC3_SCALAR_MULT_ADD(acc_error, -1.f, accEstNed); // subtract estiamte from reference
+
+        // jerk setpoint = tt_jerk_ref + tt_acc_gain * acc_error
+        fp_vector_t jerk_sp = tt_jerk_ref;
+        VEC3_SCALAR_MULT_ADD(jerk_sp, tt_acc_gain, acc_error);
+
+        // overwrite set points velSetpointNed (from pos_ctl.c)
+        posSpNed.pos = tt_pos_ref;
+        posSpNed.vel = vel_sp;
+        accSpNedFromPos = acc_sp; 
+        // todo: do attitude conversion here, because looking at gates is actually more complex than just a psi reference
+
+        // transform jerk to body rates
+        // some math:
+        //   - derivative of rotation matrix is   Rdot = R omega_skew, where omega_skew is a skew symmetric matrix of body rates
+        //   - omega_skew = [ 0 -r q; r 0 -p; -q p 0 ]
+        //   - derivative of a norm d/dt ||r|| = rT r_dot / ||r||
+        // drag model:
+        //   dB = k \circ vB
+        //   dI = R k \circ vB = R (k \circ R-1 vI)
+        //   dI_dot = R omega_skew (k \circ R**T vI)  +  R (k \circ (R omega_skew)**T vI)  +  R (k \circ R**T aI)
+        //   dI_dot ~ R (k \circ R**T aI)   // impossible to solve with omega_skew in there
+        // some models
+        //   aI = R (0,0,fzb)  +  gI  +  dI
+        //   fzb = || aI - gI - dI ||
+        //   fzI_n := (aI - gI - dI) / || aI - gI - dI ||
+        //   fzb_dot = (aI - gI - dI)**T (jI - dI_dot) / || aI - gI - dI ||
+        //   fzb_dot = fzI_n**T (jI - dI_dot)
+
+        // finally, take aI derivative to solve for wx, wy
+        //   aI = R (0,0,fzb)  +  gI  +  dI
+        //   jI = R omega_skew (0,0,fzb)  +  R (0,0,fzb_dot)  +  dI_dot
+        //   jI - dI_dot = fzb * R (-q p 0)**T  +  R (0,0,fzI_n**T (jI - dI_dot))
+        //   R**T (jI - dI_dot) / fzb = (-q p 0)**T  +  (0,0,fzI_n**T (jI - dI_dot))
+        //   (-q p)**T = I_(2x3) R**T (jI - dI_dot) / fzb
+        //   (-q p)**T ~ I_(2x3) R**T (jI + R (k \circ R**T aI)) / || aI - gI + R (k \circ R**T vI) ||
+
+        // get rotation matrix inverse from state
+        fp_rotationMatrix_t rMatT = rMat;
+        rMatT.m[0][1] = rMat.m[1][0];
+        rMatT.m[0][2] = rMat.m[2][0];
+        rMatT.m[1][0] = rMat.m[0][1];
+        rMatT.m[1][2] = rMat.m[2][1];
+        rMatT.m[2][0] = rMat.m[0][2];
+        rMatT.m[2][1] = rMat.m[1][2];
+
+        //fp_vector_t drag_pars = { .V.X = -0.f, .V.Y = -0.f, .V.Z = 0.f };
+        fp_vector_t drag_pars = { .V.X = -0.5f, .V.Y = -0.5f, .V.Z = 0.f };
+
+        fp_vector_t dI = posSpNed.vel;
+        rotate_vector_with_rotationMatrix(&dI, &rMatT); // todo: we may need rMat from trajectory not state?
+        VEC3_ELEM_MULT(dI, drag_pars);
+        rotate_vector_with_rotationMatrix(&dI, &rMat); 
+
+        fp_vector_t dI_dot = posSpNed.vel;
+        rotate_vector_with_rotationMatrix(&dI_dot, &rMatT); // todo: not q, we need the q from trajectory
+        VEC3_ELEM_MULT(dI_dot, drag_pars);
+        rotate_vector_with_rotationMatrix(&dI_dot, &rMat); 
+
+        //   R (0,0,fzb)  =  aI  -  gI  -  dI
+        fp_vector_t Rfzb = accSpNedFromPos; 
+        VEC3_SCALAR_MULT_ADD(Rfzb, -1.f, dI);
+        Rfzb.V.Z -= GRAVITYf; // signs?
+
+        //  fzb  =  || R (0,0,fzb) ||
+        float fzb = (VEC3_LENGTH(Rfzb) > 0.01f) ? VEC3_LENGTH(Rfzb) : 0.01f;
+
+        // finally, (-q p)**T = I_(2x3) R**T (jI - dI_dot) / fzb
+        // finally, (-q p 0)**T = R**T (jI - dI_dot) / fzb
+        fp_vector_t minq_p_0 = tt_jerk_ref;
+        VEC3_SCALAR_MULT_ADD(minq_p_0, -1.f, dI_dot);
+        VEC3_SCALAR_MULT(minq_p_0, 1.f / fzb);
+        rotate_vector_with_rotationMatrix(&minq_p_0, &rMatT);
+
+        rateSpBodyFromPos.V.X = minq_p_0.V.Y;
+        rateSpBodyFromPos.V.Y = -minq_p_0.V.X;
+        rateSpBodyFromPos.V.Z = 0.;
+
+        // keep looking at fix point xf
+        // (q R_cam nxB q-)_xy
+
+        // solve for wz to keep looking at a fix point xf
+        //   - this is a complementary contraint:  (xf - xI)**T nyI = 0, where nyI is the y axis of the body in inertial coordinates. (also (xf - xI)**T nxI >= 0)
+        //   - the attitude mapper (posGetAttSpNedAndSpfSpBody) already satisfies this constraint, we need to now compute wz to track it (to first order)
+        //   - notice that nyI = R (0 1 0)**T, so nyI_dot = R omega_skew (0 1 0)**T
+        //   - also, define d = (xf - xI)
+        //   - derivative of d**T nyI = 0:
+        //       (0 - vI)**T nyI  +  d**T nyI_dot  =  0
+        //       vI**T nyI  =  d**T R omega_skew (0 1 0)**T
+        //       vI**T nyI  =  d**T R (wz 0 -wx)**T
+        //       vI**T nyI  =  d**T (nxI wz - nzI wx)
+        //       d**T (nxI wz)  =  vI**T nyI  +  (xf - xI)**T (nzI wx)
+        //       (d**T nxI) wz  =  vI**T nyI  +  (xf - xI)**T (nzI wx)
+        //       wz  =  ( vI**T nyI  +  d**T (nzI wx) ) / (d**T nxI)
+        // boom, roasted. not tested yet, seems hard to implement/debug
 
         // overwrite yawSetpoint (from pos_ctl.c)
-        posSpNed.psi = tt_yaw_ref;
+        posSpNed.psi = tt_heading_ref;
 
         posSetpointState = EXT_POS_NEW_MESSAGE;
 
-        // overwrite rateSpBody 
-        if (posSpNed.trackPsi) {
-            rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_ref);
-        } else {
-            rateSpBodyFromPos.V.X = 0;
-            rateSpBodyFromPos.V.Y = 0;
-            rateSpBodyFromPos.V.Z = 0;
+        fp_euler_t eulers;
+        fp_euler_of_i16_euler(&eulers, &attitude);
+        float cosphi = cosf(eulers.angles.roll);
+        if ((posSpNed.trackPsi) && (fabsf(cosphi) > 0.05)) {
+            // we can use yaw rate r feedforward to improve heading tracking
+            //  equation is  psid*cos(theta) = q sin(phi) + r cos(phi)
+            //  solves to r = ( psid*cos(theta) - q sin(phi) )  /  cos(phi)
+            float sinphi = sinf(eulers.angles.roll);
+            float costheta = sinf(eulers.angles.pitch);
+            float q = rateSpBodyFromPos.V.Y; // or take actual?
+            float r = (tt_heading_rate_ref * costheta - q * sinphi ) / cosphi;
+            rateSpBodyFromPos.V.Z += r;
         }
+
+        // overwrite rateSpBody 
+        //if (posSpNed.trackPsi) {
+        //    rateSpBodyFromPos = coordinatedYaw(tt_heading_rate_ref);
+        //} else {
+        //    rateSpBodyFromPos.V.X = 0;
+        //    rateSpBodyFromPos.V.Y = 0;
+        //    rateSpBodyFromPos.V.Z = 0;
+        //}
     }
 
     // update last
