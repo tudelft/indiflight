@@ -148,6 +148,16 @@ void nn_compute_motor_cmds(void) {
         nn_deactivate(); // fallback on position
     }
 
+	// DEACTIVE WHEN IN DANGER ZONE
+	// danger zone:
+	// abs(x) > 3.0
+	// abs(y) > 8.0
+	// abs(z) > 3.5
+	if (fabs(world_state[0]) > 3.0 || fabs(world_state[1]) > 8.0 || fabs(world_state[2]) > 3.5) {
+		nn_deactivate();
+	}
+
+
 	// set nn_motor_cmds to 0.1
 	// for (int i = 0; i < 4; i++) {
 	// 	nn_motor_cmds[i] = 0.1;
