@@ -112,6 +112,9 @@ REVISION := $(GITHASH)$(DIRTYFLAG)
 
 check_dirty : 
 ifneq ($(shell git diff --shortstat),)
+ifeq ($(TARGET), MOCKUP)
+	@echo "Uncommited changes. Continuing with build!"
+else
 	@echo "Uncommited changes. Continue with build? [y/N]"; \
 		read answer; \
 		if [ "$$answer" != "y" ]; then \
@@ -119,6 +122,11 @@ ifneq ($(shell git diff --shortstat),)
 		  exit 1; \
 		fi
 endif
+endif
+ifeq ($(TARGET), MOCKUP)
+	@echo "Not cleanined, cleaning first..."
+	$(V0) $(MAKE) -j clean
+else
 	@if [ -d $(TARGET_OBJ_DIR) ]; then \
 		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N]"; \
 			read answer; \
@@ -127,6 +135,7 @@ endif
 			  exit 1; \
 			fi \
 	fi
+endif
 
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )

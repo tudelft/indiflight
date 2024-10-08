@@ -156,6 +156,12 @@ fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
     _orig.V.Z += _sc * _add.V.Z; \
 }
 
+#define VEC3_ELEM_MULT(_orig, _gains) { \
+    _orig.V.X *= _gains.V.X; \
+    _orig.V.Y *= _gains.V.Y; \
+    _orig.V.Z *= _gains.V.Z; \
+}
+
 #define VEC3_ELEM_MULT_ADD(_orig, _gains, _add) { \
     _orig.V.X += _gains.V.X * _add.V.X; \
     _orig.V.Y += _gains.V.Y * _add.V.Y; \
