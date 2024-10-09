@@ -353,29 +353,31 @@ void getRefsTrajectoryTracker(float p) {
     */
 
     // ----- min snap
+    // because we plug in p = tt_speed_factor*t
+    // we have to apply the chain rule to get the derivatives
     // position refs
     tt_pos_ref.V.X = get_x(p);
     tt_pos_ref.V.Y = get_y(p);
     tt_pos_ref.V.Z = get_z(p);
 
     // velocity refs
-    tt_vel_ref.V.X = get_vx(p);
-    tt_vel_ref.V.Y = get_vy(p);
-    tt_vel_ref.V.Z = get_vz(p);
+    tt_vel_ref.V.X = tt_speed_factor*get_vx(p);
+    tt_vel_ref.V.Y = tt_speed_factor*get_vy(p);
+    tt_vel_ref.V.Z = tt_speed_factor*get_vz(p);
 
     // acceleration refs
-    tt_acc_ref.V.X = get_ax(p);
-    tt_acc_ref.V.Y = get_ay(p);
-    tt_acc_ref.V.Z = get_az(p);
+    tt_acc_ref.V.X = tt_speed_factor*tt_speed_factor*get_ax(p);
+    tt_acc_ref.V.Y = tt_speed_factor*tt_speed_factor*get_ay(p);
+    tt_acc_ref.V.Z = tt_speed_factor*tt_speed_factor*get_az(p);
 
     // jerk refs
-    tt_jerk_ref.V.X = get_jx(p);
-    tt_jerk_ref.V.Y = get_jy(p);
-    tt_jerk_ref.V.Z = get_jz(p);
+    tt_jerk_ref.V.X = tt_speed_factor*tt_speed_factor*tt_speed_factor*get_jx(p);
+    tt_jerk_ref.V.Y = tt_speed_factor*tt_speed_factor*tt_speed_factor*get_jy(p);
+    tt_jerk_ref.V.Z = tt_speed_factor*tt_speed_factor*tt_speed_factor*get_jz(p);
 
     // heading
     tt_heading_ref = get_psi(p);
-    tt_heading_rate_ref = 0.f;//get_psi_dot(p);
+    tt_heading_rate_ref = tt_speed_factor*get_psi_dot(p);
     posSpNed.trackPsi = true;
 
     // switch case depnding on tt_heading_mode
