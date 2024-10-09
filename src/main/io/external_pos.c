@@ -43,6 +43,7 @@
 ext_pos_ned_t extPosNed;
 ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
 timeUs_t extLatestMsgTime = 0;
+timeUs_t extLatestMsgTimeReceived = 0;
 
 vio_pos_ned_t vioPosNed;
 ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
@@ -51,23 +52,43 @@ timeUs_t vioLatestMsgTime = 0;
 pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
 
+// maximal allowed timing jitter
+#define MAX_TIMING_JITTER_US 25000
+
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
-        // data (already) message available
+        // Get delta Msg sent
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_us;
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
-        if (deltaMsgs != 0) {
+        // Get delta Msg received
+        timeUs_t currentMsgTimeReceived = micros();
+        timeDelta_t deltaMsgsReceived = cmpTimeUs(currentMsgTimeReceived, extLatestMsgTimeReceived);
+        // Get timing jitter between mocap sample deltas and receive time deltas
+        timeDelta_t timingJitter = deltaMsgsReceived - deltaMsgs;
+
+        if ((timingJitter < MAX_TIMING_JITTER_US) && (timingJitter > -MAX_TIMING_JITTER_US)) {
             // new message available
             extPosState = EXT_POS_NEW_MESSAGE;
             extLatestMsgTime = currentMsgTime;
+            extLatestMsgTimeReceived = currentMsgTimeReceived;
         } else {
             // assume still valid for now
             extPosState = EXT_POS_STILL_VALID;
         }
 
+        // if (deltaMsgs != 0) {
+        //     // new message available
+        //     extPosState = EXT_POS_NEW_MESSAGE;
+        //     extLatestMsgTime = currentMsgTime;
+        //     extLatestMsgTimeReceived = micros();
+        // } else {
+        //     // assume still valid for now
+        //     extPosState = EXT_POS_STILL_VALID;
+        // }
+
         // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(micros(), extLatestMsgTime);
+        timeDelta_t delta = cmpTimeUs(micros(), currentMsgTimeReceived);
         if (delta > EXT_POS_TIMEOUT_US) {
             // signal lost
             extPosState = EXT_POS_NO_SIGNAL;

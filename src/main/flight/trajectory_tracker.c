@@ -68,8 +68,8 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 4.0; //1.5;
-float tt_vel_gain = 5.0; //2.5;
+float tt_pos_gain = 1.5; //1.5;
+float tt_vel_gain = 2.5; //2.5;
 float tt_acc_gain = 0.f; // zero, because we use attitude feedback control in indi.c
 // float tt_yaw_gain = 1.0;
 

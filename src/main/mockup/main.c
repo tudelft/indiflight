@@ -83,7 +83,7 @@ void setMotorSpeed(const float *omega, const int n) {
 
 void setMocap(const float *pos, const float *vel, const float *q) {
     extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
+    extLatestMsgTimeReceived = micros();
     for (int axis = 0; axis < 3; axis++) {
         extPosNed.pos.A[axis] = pos[axis];
         extPosNed.vel.A[axis] = vel[axis];
@@ -96,7 +96,7 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 
 void setPosSetpoint(const float *pos, const float yaw) {
     posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
+    extLatestMsgTimeReceived = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];
@@ -140,7 +140,7 @@ void tick(const timeDelta_t dtUs)
 
     getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
 
-    if (cmpTimeUs(currentTimeUs, extLatestMsgTime) > EXT_POS_TIMEOUT_US) {
+    if (cmpTimeUs(currentTimeUs, extLatestMsgTimeReceived) > EXT_POS_TIMEOUT_US) {
         extPosState = EXT_POS_NO_SIGNAL;
     } else {
         extPosState = EXT_POS_STILL_VALID;

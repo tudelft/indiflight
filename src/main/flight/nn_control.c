@@ -143,7 +143,7 @@ void nn_compute_motor_cmds(void) {
 	// call the neural network controller (output is in range [0,1])
 	nn_control(world_state, nn_motor_cmds);
 
-    if (cmpTimeUs(micros(), extLatestMsgTime) > NN_DEADRECKONING_TIMEOUT_US) {
+    if (cmpTimeUs(micros(), extLatestMsgTimeReceived) > NN_DEADRECKONING_TIMEOUT_US) {
         // deadreckoning for too long --> abort
         nn_deactivate(); // fallback on position
     }

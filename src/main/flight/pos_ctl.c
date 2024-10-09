@@ -125,7 +125,7 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
-    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTimeReceived);
 
     if ((posSetpointState == EXT_POS_NO_SIGNAL) 
         || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {

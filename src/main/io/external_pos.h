@@ -67,6 +67,7 @@ typedef struct __pos_setpoint_ned_t {
 extern ext_pos_ned_t extPosNed;
 extern ext_pos_state_t extPosState;
 extern timeUs_t extLatestMsgTime;
+extern timeUs_t extLatestMsgTimeReceived;
 
 // structs used for VIO_POSE message
 #ifdef USE_VIO_POSE
