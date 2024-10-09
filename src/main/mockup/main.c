@@ -83,6 +83,7 @@ void setMotorSpeed(const float *omega, const int n) {
 
 void setMocap(const float *pos, const float *vel, const float *q) {
     extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    extLatestMsgTime = micros();
     extLatestMsgTimeReceived = micros();
     for (int axis = 0; axis < 3; axis++) {
         extPosNed.pos.A[axis] = pos[axis];
@@ -96,6 +97,7 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 
 void setPosSetpoint(const float *pos, const float yaw) {
     posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    extLatestMsgTime = micros();
     extLatestMsgTimeReceived = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
