@@ -53,7 +53,7 @@ pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
 
 // maximal allowed timing jitter
-#define MAX_TIMING_JITTER_US 25000
+#define MAX_TIMING_JITTER_US 15000
 
 
 void checkNewPos(void) {
