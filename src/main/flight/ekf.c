@@ -229,8 +229,8 @@ void runEkf(timeUs_t currentTimeUs) {
 	ekf_predict(ekf_U, dt);
 
 	// UPDATE STEP 			(only when new measurement is available)
-	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
-        lastUpdateTimestamp = extLatestMsgTime;
+	if (cmpTimeUs(extLatestMsgTimeReceived, lastUpdateTimestamp) > 0) {
+        lastUpdateTimestamp = extLatestMsgTimeReceived;
 		ekf_Z[0] = extPosNed.pos.V.X;
 		ekf_Z[1] = extPosNed.pos.V.Y;
 		ekf_Z[2] = extPosNed.pos.V.Z;
@@ -244,7 +244,7 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_update(ekf_Z);
 
 		// new update that takes into account the time delay:
-		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
+		// ekf_update_delayed(ekf_Z, extLatestMsgTimeReceived * 1e-6);
 		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
 		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
 	} 
