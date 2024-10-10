@@ -73,9 +73,6 @@ float tt_vel_gain = 2.5; //2.5;
 float tt_acc_gain = 0.f; // zero, because we use attitude feedback control in indi.c
 // float tt_yaw_gain = 1.0;
 
-// radius of circular trajectory
-float tt_R = 3.0f;
-
 // recovery algorithm
 bool tt_recovery_active = false;
 
@@ -269,7 +266,7 @@ void getRefsTrajectoryTracker(float p) {
         lam = 1.f / laptime;
     }
 
-    float p = lam * t;
+    p = lam * t;
     while (p >  2.0f*M_PIf) p -= (2.0f * M_PIf);  // always wrap input angle to 0..PI
     while (p < 0.f) p += (2.0f * M_PIf);
 
@@ -280,9 +277,14 @@ void getRefsTrajectoryTracker(float p) {
     */
 
     // ----- circle
-    /*
-    tt_progress = warp_2pi(tt_progress);
-    float p = tt_progress;
+    n_gates = 1;
+    gates[0].p = 3*M_PIf; // never
+    gates[0].x = 0.f;
+    gates[0].y = 3.f;
+
+    tt_progress = wrap_2pi(p);
+    p = tt_progress + 0.5f * M_PIf;
+    float tt_R = 1.5f;
 
     // position refs
     tt_pos_ref.V.X = tt_R*cosf(p); //tt_R*(-sinf(p)*cosf(p));
@@ -290,30 +292,29 @@ void getRefsTrajectoryTracker(float p) {
     tt_pos_ref.V.Z = -1.0f;
 
     // velocity refs
-    tt_vel_ref.V.X = -tt_R*lam*sinf(p);  //-tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
-    tt_vel_ref.V.Y = tt_R*lam*cosf(p);   //tt_R*lam*cosf(p);
+    tt_vel_ref.V.X = -tt_R*tt_speed_factor*sinf(p);  //-tt_R*lam*(cosf(p)*cosf(p) - sinf(p)*sinf(p));
+    tt_vel_ref.V.Y = tt_R*tt_speed_factor*cosf(p);   //tt_R*lam*cosf(p);
     tt_vel_ref.V.Z = 0.0f;
 
     // acceleration refs
-    tt_acc_ref.V.X = -tt_R*lam*lam*cosf(p);      //4*lam*lam * tt_pos_ref[0];
-    tt_acc_ref.V.Y = -tt_R*lam*lam*sinf(p);      //-lam*lam * tt_pos_ref[1];
+    tt_acc_ref.V.X = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);      //4*tt_speed_factor*tt_speed_factor * tt_pos_ref[0];
+    tt_acc_ref.V.Y = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);      //-tt_speed_factor*tt_speed_factor * tt_pos_ref[1];
     tt_acc_ref.V.Z = 0.0f;
 
     // jerk refs
-    tt_jerk_ref.V.X = +tt_R*lam*lam*lam*sinf(p);
-    tt_jerk_ref.V.Y = -tt_R*lam*lam*lam*cosf(p);
+    tt_jerk_ref.V.X = +tt_R*tt_speed_factor*tt_speed_factor*tt_speed_factor*sinf(p);
+    tt_jerk_ref.V.Y = -tt_R*tt_speed_factor*tt_speed_factor*tt_speed_factor*cosf(p);
     tt_jerk_ref.V.Z = 0.0f;
 
     // heading reference
-    tt_heading_ref = 0.0f;
+    tt_heading_ref = 0.5f * M_PIf;
     tt_heading_rate_ref = 0.0f;
-    posSpNed.trackPsi = false;
-    */
+    posSpNed.trackPsi = true;
 
     // ----- figure 8
     /*
-    tt_progress = warp_2pi(tt_progress);
-    float p = tt_progress;
+    tt_progress = wrap_2pi(p);
+    p = tt_progress;
     gates[0] = (gate_t){.x = 0.f, .y = 0.f, .p = 0.}; // currently broken
     float gates[4][3] = {
         {0.f, 0.f},
@@ -352,7 +353,8 @@ void getRefsTrajectoryTracker(float p) {
     posSpNed.trackPsi = false;
     */
 
-    // ----- min snap
+    // ----- min snap long oval
+    /*
     // because we plug in p = tt_speed_factor*t
     // we have to apply the chain rule to get the derivatives
     // position refs
@@ -379,6 +381,7 @@ void getRefsTrajectoryTracker(float p) {
     tt_heading_ref = get_psi(p);
     tt_heading_rate_ref = tt_speed_factor*get_psi_dot(p);
     posSpNed.trackPsi = true;
+    */
 
     // switch case depnding on tt_heading_mode
     switch (tt_heading_mode) {
@@ -386,7 +389,33 @@ void getRefsTrajectoryTracker(float p) {
             // default mode, just use what was defined above
             break;
         case TT_LOOK_AT_GATES:
-            // broken, should fix it some time, now falltthrough
+            for (int g = 0; g < n_gates; g++) {
+                gate_t* gate = gates + g;
+                if (p > gate->p) {
+                    continue;
+                }
+
+                fp_vector_t dg = { 
+                    .V.X = gate->x - tt_pos_ref.V.X,
+                    .V.Y = gate->y - tt_pos_ref.V.Y,
+                    .V.Z  = 0.f // unused
+                };
+
+                float d2 = sq(dg.V.X)  +  sq(dg.V.Y); // x**2 + y**2
+                tt_heading_ref = atan2f(dg.V.Y, dg.V.X); // look at next gate
+
+                // total derivative of the atan2: -gy / d2 * dgx/dt  +  gx / d2 * dgy/dt
+                // total derivative of the atan2: -gy / d2 * (-dx/dt)  +  gx / d2 * (-dy/dt)
+                if (d2 < 0.01f) { // within 10cm of next gate, do nothing. this should never happen, because switchover to the next gate should happen sooner
+                    tt_heading_rate_ref = 0.f;
+                    posSpNed.trackPsi = false;
+                } else {
+                    tt_heading_rate_ref = (dg.V.Y * tt_vel_ref.V.X  -  dg.V.X * tt_vel_ref.V.Y) / d2;
+                    posSpNed.trackPsi = true; // choice: track heading or neglect it?
+                }
+                break;
+            }
+            break;
 /*
             if (gates && n_gates) {
 

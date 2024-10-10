@@ -33,6 +33,7 @@
 #include "flight/throw.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/ekf.h"
 #include "fc/init.h"
 #include "fc/runtime_config.h"
 #include "flight/mixer.h"
@@ -66,11 +67,8 @@ void setImu(const float *g, const float *a) {
     }
     gyroUpdate(); // rotate and pretend to downsample
     getTask(TASK_FILTER)->attribute->taskFunc( micros() ); // filter gyro
+    getTask(TASK_ACCEL)->attribute->taskFunc( micros() ); // filter gyro
 
-    accUpdate(micros());
-#ifdef USE_THROW_TO_ARM
-    updateThrowFallStateMachine(micros());
-#endif
 }
 
 void setMotorSpeed(const float *omega, const int n) {
@@ -93,6 +91,19 @@ void setMocap(const float *pos, const float *vel, const float *q) {
     extPosNed.quat.x = q[1];
     extPosNed.quat.y = q[2];
     extPosNed.quat.z = q[3];
+}
+
+void setOffboardPose(const float *pos, const float *q) {
+    //extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    offboardLatestMsgTime = micros();
+    //extLatestMsgTimeReceived = micros();
+    for (int axis = 0; axis < 3; axis++) {
+        offboardPosNed.pos.A[axis] = pos[axis];
+    }
+    offboardPosNed.quat.w = q[0];
+    offboardPosNed.quat.x = q[1];
+    offboardPosNed.quat.y = q[2];
+    offboardPosNed.quat.z = q[3];
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {

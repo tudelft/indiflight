@@ -37,4 +37,4 @@ void checkPiTelemetryState(void);
 void freePiTelemetryPort(void);
 void configurePiTelemetryPort(void);
 
-void piSendEkfInputs(timeUs_t currentTimeUs, fp_vector_t* g, fp_vector_t* a, float* omega);
+void piSendEkfInputs(timeUs_t currentTimeUs, fp_vector_t* a, fp_vector_t*, float* omega);

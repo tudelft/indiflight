@@ -161,15 +161,15 @@ void piSendIMU(void)
 }
 */
 
-void piSendEkfInputs(timeUs_t currentTimeUs, fp_vector_t* g, fp_vector_t* a, float* omega)
+void piSendEkfInputs(timeUs_t currentTimeUs, fp_vector_t* a, fp_vector_t* g, float* omega)
 {
     piMsgEkfInputsTx.time_us = (uint32_t) currentTimeUs;
-    piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.X) * 0.0005f);
-    piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.Y) * 0.0005f);
-    piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.Z) * 0.0005f);
     piMsgEkfInputsTx.x = (int16_t) ( ((float) acc.dev.acc_1G) / GRAVITYf * a->V.X );
     piMsgEkfInputsTx.y = (int16_t) ( ((float) acc.dev.acc_1G) / GRAVITYf * a->V.Y );
     piMsgEkfInputsTx.z = (int16_t) ( ((float) acc.dev.acc_1G) / GRAVITYf * a->V.Z );
+    piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.X) * 0.0005f);
+    piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.Y) * 0.0005f);
+    piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * RADIANS_TO_DEGREES(g->V.Z) * 0.0005f);
     piMsgEkfInputsTx.omega1 = (int16_t) omega[0];
     piMsgEkfInputsTx.omega2 = (int16_t) omega[1];
     piMsgEkfInputsTx.omega3 = (int16_t) omega[2];

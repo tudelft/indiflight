@@ -86,6 +86,9 @@ class IndiflightSITLMockup():
         self.vel = np.zeros(3, dtype=ct.c_float)
         self.quat = np.zeros(4, dtype=ct.c_float)
 
+        self.offboardPos = np.zeros(3, dtype=ct.c_float)
+        self.offboardQuat = np.zeros(4, dtype=ct.c_float)
+
         self.posSp = np.zeros(3, dtype=ct.c_float)
         self.yawSp = 0.
 
@@ -110,6 +113,7 @@ class IndiflightSITLMockup():
         self.lib.setImu.argtypes = [float_ptr, float_ptr]
         self.lib.setMotorSpeed.argtypes = [float_ptr, ct.c_int]
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
+        self.lib.setOffboardPose.argtypes = [float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.tick.argtypes = [timeUs_t]
@@ -185,6 +189,11 @@ class IndiflightSITLMockup():
         self.vel[:] = vel
         self.quat[:] = quat
         self.lib.setMocap(self.pos, self.vel, self.quat)
+
+    def sendOffboardPose(self, pos, quat):
+        self.offboardPos[:] = pos
+        self.offboardQuat[:] = quat
+        self.lib.setMocap(self.offboardPos, self.offboardQuat)
 
     def sendPositionSetpoint(self, pos, yaw):
         self.posSp[:] = pos

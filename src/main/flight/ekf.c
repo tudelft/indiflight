@@ -145,17 +145,17 @@ static float R_offboard[N_MEASUREMENTS] = {0};
 static float R_extPos[N_MEASUREMENTS] = {0};
 
 void initEkf(timeUs_t currentTimeUs) {
-    if (extPosState == EXT_POS_NO_SIGNAL) {
-        return;
-    }
-
     // init filters
     for (int i = 0; i < 4; i++) {
         if (i < 3) {
             biquadFilterInitLPF(&gyroFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, gyro.targetLooptime);
-            biquadFilterInitLPF(&accFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, 1.f / acc.sampleRateHz);
+            biquadFilterInitLPF(&accFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, (uint16_t) (1e6f / acc.sampleRateHz));
         }
         biquadFilterInitLPF(&omegaFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, gyro.targetLooptime);
+    }
+
+    if (extPosState == EXT_POS_NO_SIGNAL) {
+        return;
     }
 
 	// set ekf parameters
@@ -269,17 +269,17 @@ void runEkf(timeUs_t currentTimeUs) {
     static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
     // send to offboard
-#ifdef USE_TELEMETRY_PI
-    piSendEkfInputs(currentTimeUs, &gyroInputEkf, &accInputEkf, omegaInputEkf);
+#if defined(USE_TELEMETRY_PI)
+    piSendEkfInputs(currentTimeUs, &accInputEkf, &gyroInputEkf, omegaInputEkf);
 #endif
 
     // FRD frame's, which we have now everywhere in INDIFlight
-	ekf_U[0] = gyroInputEkf.V.X;
-	ekf_U[1] = gyroInputEkf.V.Y;
-	ekf_U[2] = gyroInputEkf.V.Z;
-	ekf_U[3] = accInputEkf.V.X;
-	ekf_U[4] = accInputEkf.V.Y;
-	ekf_U[5] = accInputEkf.V.Z;
+	ekf_U[0] = accInputEkf.V.X;
+	ekf_U[1] = accInputEkf.V.Y;
+	ekf_U[2] = accInputEkf.V.Z;
+	ekf_U[3] = gyroInputEkf.V.X;
+	ekf_U[4] = gyroInputEkf.V.Y;
+	ekf_U[5] = gyroInputEkf.V.Z;
 
 
 	// add to history (will be used in the update step)
@@ -315,9 +315,9 @@ void runEkf(timeUs_t currentTimeUs) {
 	    if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
             lastUpdateTimestamp = extLatestMsgTime;
 
-		    ekf_Z[0] = offboardPosNed.pos.V.X;
-		    ekf_Z[1] = offboardPosNed.pos.V.Y;
-		    ekf_Z[2] = offboardPosNed.pos.V.Z;
+		    ekf_Z[0] = extPosNed.pos.V.X;
+		    ekf_Z[1] = extPosNed.pos.V.Y;
+		    ekf_Z[2] = extPosNed.pos.V.Z;
 
 		    ekf_Z[3] = (ekf_use_quat) * extPosNed.quat.w;
 		    ekf_Z[4] = (ekf_use_quat) * extPosNed.quat.x;
