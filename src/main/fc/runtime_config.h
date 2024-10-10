@@ -101,6 +101,7 @@ typedef enum {
     LEARNER_MODE     = (1 << 15),
     PID_MODE         = (1 << 16),
     NN_MODE          = (1 << 17),
+    OFFBOARD_STATE_MODE = (1 << 18),
 } flightModeFlags_e;
 
 extern flightModeFlags_e flightModeFlags;
@@ -112,19 +113,20 @@ extern flightModeFlags_e flightModeFlags;
 // macro to initialize map from boxId_e to log2(flightModeFlags). Keep it in sync with flightModeFlags_e enum.
 // [BOXARM] is left unpopulated
 #define BOXID_TO_FLIGHT_MODE_MAP_INITIALIZER {           \
-   [BOXANGLE]       = LOG2(ANGLE_MODE),                  \
-   [BOXHORIZON]     = LOG2(HORIZON_MODE),                \
-   [BOXMAG]         = LOG2(MAG_MODE),                    \
-   [BOXHEADFREE]    = LOG2(HEADFREE_MODE),               \
-   [BOXPASSTHRU]    = LOG2(PASSTHRU_MODE),               \
-   [BOXFAILSAFE]    = LOG2(FAILSAFE_MODE),               \
-   [BOXGPSRESCUE]   = LOG2(GPS_RESCUE_MODE),             \
-   [BOXVELCTL]      = LOG2(VELOCITY_MODE),               \
-   [BOXPOSCTL]      = LOG2(POSITION_MODE),               \
-   [BOXCATAPULT]    = LOG2(CATAPULT_MODE),               \
-   [BOXLEARNER]     = LOG2(LEARNER_MODE),                \
-   [BOXPIDCTL]      = LOG2(PID_MODE),                   \
-   [BOXNNCTL]       = LOG2(NN_MODE),                     \
+   [BOXANGLE]         = LOG2(ANGLE_MODE),                  \
+   [BOXHORIZON]       = LOG2(HORIZON_MODE),                \
+   [BOXMAG]           = LOG2(MAG_MODE),                    \
+   [BOXHEADFREE]      = LOG2(HEADFREE_MODE),               \
+   [BOXPASSTHRU]      = LOG2(PASSTHRU_MODE),               \
+   [BOXFAILSAFE]      = LOG2(FAILSAFE_MODE),               \
+   [BOXGPSRESCUE]     = LOG2(GPS_RESCUE_MODE),             \
+   [BOXVELCTL]        = LOG2(VELOCITY_MODE),               \
+   [BOXPOSCTL]        = LOG2(POSITION_MODE),               \
+   [BOXCATAPULT]      = LOG2(CATAPULT_MODE),               \
+   [BOXLEARNER]       = LOG2(LEARNER_MODE),                \
+   [BOXPIDCTL]        = LOG2(PID_MODE),                   \
+   [BOXNNCTL]         = LOG2(NN_MODE),                     \
+   [BOXOFFBOARDSTATE] = LOG2(OFFBOARD_STATE_MODE),                     \
 }                                                        \
 /**/
 

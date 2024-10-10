@@ -178,6 +178,9 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
 static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
 {
     accUpdate(currentTimeUs);
+#ifdef USE_EKF
+    downsampleAccEkf(acc.accADCafterRpm); // input has no low pass
+#endif
 #ifdef USE_THROW_TO_ARM
     updateThrowFallStateMachine(currentTimeUs);
 #endif
@@ -423,7 +426,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 
 #ifdef USE_ACC
-    [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
+    [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH), // todo: we need thisreal time as well
     [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, imuUpdateAttitude, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
 #endif
 

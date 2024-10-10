@@ -32,6 +32,8 @@
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "telemetry/pi.h"
+#include "common/filter.h"
 
 #include <stdbool.h>
 
@@ -134,9 +136,23 @@ bool isInitializedEkf(void) {
     return ekf_initialized;
 }
 
+static biquadFilter_t gyroFilterEkf[3];
+static biquadFilter_t accFilterEkf[3];
+static biquadFilter_t omegaFilterEkf[4];
+#define EKF_DOWNSAMPLE_BANDWIDTH_HZ 150
+
 void initEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         return;
+    }
+
+    // init filters
+    for (int i = 0; i < 4; i++) {
+        if (i < 3) {
+            biquadFilterInitLPF(&gyroFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, gyro.targetLooptime);
+            biquadFilterInitLPF(&accFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, 1.f / acc.sampleRateHz);
+        }
+        biquadFilterInitLPF(&omegaFilterEkf[i], EKF_DOWNSAMPLE_BANDWIDTH_HZ, gyro.targetLooptime);
     }
 
 	// set ekf parameters
@@ -210,16 +226,51 @@ void initEkf(timeUs_t currentTimeUs) {
 	lastTimeUs = currentTimeUs;
 }
 
+static fp_vector_t gyroInputEkf = {0};
+static fp_vector_t accInputEkf = {0};
+static float omegaInputEkf[4] = {0};
+
+void downsampleGyroEkf(float* g) {
+    // input the "calibrated", downsampled gyro, but not low-passed
+    // input the downsampled acc, but not low-passed
+    for (int i = 0; i < 3; i++) {
+        gyroInputEkf.A[i] = biquadFilterApply(&gyroFilterEkf[i],
+            DEGREES_TO_RADIANS(g[i])
+            );
+    }
+}
+
+void downsampleAccEkf(float* a)
+{
+    for (int i = 0; i < 3; i++) {
+        accInputEkf.A[i] = biquadFilterApply(&accFilterEkf[i],
+            GRAVITYf * ((float)a[i]) / ((float)acc.dev.acc_1G)
+            );
+    }
+}
+
+void downsampleOmegaEkf(float* omega) {
+    for (int i = 0; i < 4; i++) {
+        omegaInputEkf[i] = biquadFilterApply(&omegaFilterEkf[i], omega[i]);
+    }
+}
+
 void runEkf(timeUs_t currentTimeUs) {
     static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
+    // send to offboard
+#ifdef USE_TELEMETRY_PI
+    piSendEkfInputs(currentTimeUs, &gyroInputEkf, &accInputEkf, omegaInputEkf);
+#endif
+
     // FRD frame's, which we have now everywhere in INDIFlight
-	ekf_U[0] = GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G);
-	ekf_U[1] = GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G);
-	ekf_U[2] = GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G);
-	ekf_U[3] = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
-	ekf_U[4] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
-	ekf_U[5] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
+	ekf_U[0] = gyroInputEkf.V.X;
+	ekf_U[1] = gyroInputEkf.V.Y;
+	ekf_U[2] = gyroInputEkf.V.Z;
+	ekf_U[3] = accInputEkf.V.X;
+	ekf_U[4] = accInputEkf.V.Y;
+	ekf_U[5] = accInputEkf.V.Z;
+
 
 	// add to history (will be used in the update step)
 	// ekf_add_to_history(currentTimeUs * 1e-6);
@@ -230,6 +281,7 @@ void runEkf(timeUs_t currentTimeUs) {
 
 	// UPDATE STEP 			(only when new measurement is available)
 	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
+        // todo: do rate limiting, otherwise higher mocap frequency will nuke our scheduler
         lastUpdateTimestamp = extLatestMsgTime;
 		ekf_Z[0] = extPosNed.pos.V.X;
 		ekf_Z[1] = extPosNed.pos.V.Y;

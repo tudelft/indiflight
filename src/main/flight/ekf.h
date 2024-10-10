@@ -47,6 +47,9 @@ typedef struct ekfConfig_s {
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
 
+void downsampleGyroEkf(float* g);
+void downsampleAccEkf(float* a);
+void downsampleOmegaEkf(float* omega);
 bool isInitializedEkf(void);
 void initEkf(timeUs_t currentTimeUs);
 void updateEkf(timeUs_t currentTimeUs);

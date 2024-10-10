@@ -1469,6 +1469,10 @@ FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
 
+#ifdef USE_EKF
+    downsampleGyroEkf(gyro.gyroADCafterRpm);
+#endif
+
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();
 #endif
@@ -1594,6 +1598,9 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 
 #ifdef USE_INDI
     indiUpdateActuatorState( motor_normalized );
+#ifdef USE_EKF
+    downsampleOmegaEkf( indiRun.omega );
+#endif
 #endif
 
     for (int i = 0; i < numMotors; i++)
