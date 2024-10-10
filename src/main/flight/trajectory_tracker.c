@@ -358,7 +358,7 @@ void getRefsTrajectoryTracker(float p) {
     // position refs
     tt_pos_ref.V.X = get_x(p);
     tt_pos_ref.V.Y = get_y(p);
-    tt_pos_ref.V.Z = get_z(p);
+    tt_pos_ref.V.Z = get_z(p) + 0.4; //UGLY HACK
 
     // velocity refs
     tt_vel_ref.V.X = tt_speed_factor*get_vx(p);
