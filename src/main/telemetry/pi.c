@@ -221,6 +221,7 @@ void processPiUplink(void)
                 offboardPosNed.quat.x = piMsgOffboardPoseRx->qx;
                 offboardPosNed.quat.y = piMsgOffboardPoseRx->qy;
                 offboardPosNed.quat.z = piMsgOffboardPoseRx->qz;
+                offboardLatestMsgTime = offboardPosNed.time_us;
             }
 #endif
         }

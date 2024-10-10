@@ -101,7 +101,7 @@ typedef enum {
     LEARNER_MODE     = (1 << 15),
     PID_MODE         = (1 << 16),
     NN_MODE          = (1 << 17),
-    OFFBOARD_STATE_MODE = (1 << 18),
+    OFFBOARD_POSE_MODE = (1 << 18),
 } flightModeFlags_e;
 
 extern flightModeFlags_e flightModeFlags;
@@ -126,7 +126,7 @@ extern flightModeFlags_e flightModeFlags;
    [BOXLEARNER]       = LOG2(LEARNER_MODE),                \
    [BOXPIDCTL]        = LOG2(PID_MODE),                   \
    [BOXNNCTL]         = LOG2(NN_MODE),                     \
-   [BOXOFFBOARDSTATE] = LOG2(OFFBOARD_STATE_MODE),                     \
+   [BOXOFFBOARDPOSE] = LOG2(OFFBOARD_POSE_MODE),                     \
 }                                                        \
 /**/
 

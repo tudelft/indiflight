@@ -50,6 +50,7 @@ ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
 timeUs_t vioLatestMsgTime = 0;
 
 ext_pos_ned_t offboardPosNed;
+timeUs_t offboardLatestMsgTime = 0;
 
 pos_setpoint_ned_t posSpNed;
 ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;

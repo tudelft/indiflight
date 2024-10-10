@@ -70,6 +70,7 @@ extern timeUs_t extLatestMsgTime;
 extern timeUs_t extLatestMsgTimeReceived;
 
 extern ext_pos_ned_t offboardPosNed;
+extern timeUs_t offboardLatestMsgTime;
 
 // structs used for VIO_POSE message
 #ifdef USE_VIO_POSE

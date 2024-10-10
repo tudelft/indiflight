@@ -1193,6 +1193,31 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
+#ifdef USE_EKF
+    static bool hasOffboardStateActivationBeenTried = false;
+    if (IS_RC_MODE_ACTIVE(BOXOFFBOARDPOSE)) {
+        if (!FLIGHT_MODE(OFFBOARD_POSE_MODE)
+            && FLIGHT_MODE(POSITION_MODE) // this covers NN mode, as position mode is prerequisite for NN_MODE
+            && !hasOffboardStateActivationBeenTried
+            && (extPosState != EXT_POS_NO_SIGNAL) // must have mocap
+            )
+        {
+            ENABLE_FLIGHT_MODE(OFFBOARD_POSE_MODE);
+        }
+        hasOffboardStateActivationBeenTried = true;
+    } else {
+        if (FLIGHT_MODE(OFFBOARD_POSE_MODE)) {
+#ifdef USE_NN_CONTROL
+            if (nn_is_active()) {
+                nn_deactivate();
+            }
+#endif
+            DISABLE_FLIGHT_MODE(OFFBOARD_POSE_MODE);
+        }
+        hasOffboardStateActivationBeenTried = false;
+    }
+#endif
+
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE) || true) {
         //LED1_ON; // @tblaha this LED is used for debugging now.
         // increase frequency of attitude task to reduce drift when in angle or horizon mode
@@ -1468,11 +1493,9 @@ FAST_CODE bool innerLoopReady(void)
 FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
-
 #ifdef USE_EKF
     downsampleGyroEkf(gyro.gyroADCafterRpm);
 #endif
-
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();
 #endif

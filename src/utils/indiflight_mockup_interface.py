@@ -30,20 +30,20 @@ import os
 # updated manually if things are appended/inserted in Indiflight
 # similar problem with the configurator on a few things.. but yeah.. this is what it will be
 class flightModeFlags():
-    ANGLE_MODE          = (1 << 0)
-    HORIZON_MODE        = (1 << 1)
-    MAG_MODE            = (1 << 2)
-    HEADFREE_MODE       = (1 << 6)
-    PASSTHRU_MODE       = (1 << 8)
-    FAILSAFE_MODE       = (1 << 10)
-    GPS_RESCUE_MODE     = (1 << 11)
-    VELOCITY_MODE       = (1 << 12)
-    POSITION_MODE       = (1 << 13)
-    CATAPULT_MODE       = (1 << 14)
-    LEARNER_MODE        = (1 << 15)
-    PID_MODE            = (1 << 16)
-    NN_MODE             = (1 << 17)
-    OFFBOARD_STATE_MODE = (1 << 18)
+    ANGLE_MODE         = (1 << 0)
+    HORIZON_MODE       = (1 << 1)
+    MAG_MODE           = (1 << 2)
+    HEADFREE_MODE      = (1 << 6)
+    PASSTHRU_MODE      = (1 << 8)
+    FAILSAFE_MODE      = (1 << 10)
+    GPS_RESCUE_MODE    = (1 << 11)
+    VELOCITY_MODE      = (1 << 12)
+    POSITION_MODE      = (1 << 13)
+    CATAPULT_MODE      = (1 << 14)
+    LEARNER_MODE       = (1 << 15)
+    PID_MODE           = (1 << 16)
+    NN_MODE            = (1 << 17)
+    OFFBOARD_POSE_MODE = (1 << 18)
 
 class flightLogDisarmReason():
     DISARM_REASON_SWITCH = 4

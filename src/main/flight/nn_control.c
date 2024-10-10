@@ -100,6 +100,9 @@ void nn_deactivate(void) {
     // disable flight mode:
     // --> this will cause taskMainInnerLoop to run nn_compute_motor_cmds()
     DISABLE_FLIGHT_MODE(NN_MODE);
+
+    // switch to mocap
+    DISABLE_FLIGHT_MODE(OFFBOARD_POSE_MODE);
 }
 
 bool nn_is_active(void) {

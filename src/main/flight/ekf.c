@@ -141,6 +141,9 @@ static biquadFilter_t accFilterEkf[3];
 static biquadFilter_t omegaFilterEkf[4];
 #define EKF_DOWNSAMPLE_BANDWIDTH_HZ 150
 
+static float R_offboard[N_MEASUREMENTS] = {0};
+static float R_extPos[N_MEASUREMENTS] = {0};
+
 void initEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         return;
@@ -174,16 +177,23 @@ void initEkf(timeUs_t currentTimeUs) {
 		((float) ekfConfig()->proc_noise_gyro_bias[2]) * 1e-6f // r
 	};
 
+	// measurement noise covariance, as configured
+	R_extPos[0] = ((float) ekfConfig()->meas_noise_position[0]) * 1e-6f; // posN
+	R_extPos[1] = ((float) ekfConfig()->meas_noise_position[1]) * 1e-6f; // posE
+	R_extPos[2] = ((float) ekfConfig()->meas_noise_position[2]) * 1e-6f; // posD
+	R_extPos[3] = ((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f; // qw
+	R_extPos[4] = ((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f; // qx
+	R_extPos[5] = ((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f; // qy
+	R_extPos[6] = ((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f; // qz
+
 	// measurement noise covariance
-	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
-		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
-		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
-		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
-		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
-	};
+	R_offboard[0] = 0.5f; // guessed
+	R_offboard[1] = 0.5f;
+	R_offboard[2] = 0.5f;
+	R_offboard[3] = 1.0f;
+	R_offboard[4] = 1.0f;
+	R_offboard[5] = 1.0f;
+	R_offboard[6] = 1.0f;
 
 	// sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
@@ -219,7 +229,7 @@ void initEkf(timeUs_t currentTimeUs) {
 
 	// initialize ekf
 	ekf_set_Q(Q);
-	ekf_set_R(R);
+	//ekf_set_R(R); // done in update step
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
@@ -280,31 +290,50 @@ void runEkf(timeUs_t currentTimeUs) {
 	ekf_predict(ekf_U, dt);
 
 	// UPDATE STEP 			(only when new measurement is available)
-	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
-        // todo: do rate limiting, otherwise higher mocap frequency will nuke our scheduler
-        lastUpdateTimestamp = extLatestMsgTime;
-		ekf_Z[0] = extPosNed.pos.V.X;
-		ekf_Z[1] = extPosNed.pos.V.Y;
-		ekf_Z[2] = extPosNed.pos.V.Z;
+    if (FLIGHT_MODE(OFFBOARD_POSE_MODE)) {
+	    if (cmpTimeUs(offboardLatestMsgTime, lastUpdateTimestamp) > 0) {
+            lastUpdateTimestamp = offboardLatestMsgTime;
 
-		ekf_Z[3] = (ekf_use_quat) * extPosNed.quat.w;
-		ekf_Z[4] = (ekf_use_quat) * extPosNed.quat.x;
-		ekf_Z[5] = (ekf_use_quat) * extPosNed.quat.y;
-		ekf_Z[6] = (ekf_use_quat) * extPosNed.quat.z;
+		    ekf_Z[0] = offboardPosNed.pos.V.X;
+		    ekf_Z[1] = offboardPosNed.pos.V.Y;
+		    ekf_Z[2] = offboardPosNed.pos.V.Z;
 
-		// old update:
-		ekf_update(ekf_Z);
+            ekf_Z[3] = 0.; // unused anyway
+            ekf_Z[4] = 0.;
+            ekf_Z[5] = 0.;
+            ekf_Z[6] = 0.;
 
-		// new update that takes into account the time delay:
-		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
-		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
-		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
-	} 
-	// else {
-	// 	// no new measurement available, only predict
-	// 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-	// 	ekf_predict(ekf_U, dt);
-	// }
+            // settings for offboard
+            ekf_use_quat = false;
+            ekf_set_R(R_offboard); // set measurement covariance to offboard values
+
+            // finally, run update
+            ekf_update(ekf_Z);
+        }
+    } else {
+        // mocap/gps update, as configured in profile
+	    if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
+            lastUpdateTimestamp = extLatestMsgTime;
+
+		    ekf_Z[0] = offboardPosNed.pos.V.X;
+		    ekf_Z[1] = offboardPosNed.pos.V.Y;
+		    ekf_Z[2] = offboardPosNed.pos.V.Z;
+
+		    ekf_Z[3] = (ekf_use_quat) * extPosNed.quat.w;
+		    ekf_Z[4] = (ekf_use_quat) * extPosNed.quat.x;
+		    ekf_Z[5] = (ekf_use_quat) * extPosNed.quat.y;
+		    ekf_Z[6] = (ekf_use_quat) * extPosNed.quat.z;
+
+            // settings for mocap/gps
+            ekf_use_quat = ekfConfig()->use_quat_measurement;
+            ekf_set_R(R_extPos);
+
+            // finally, run update
+            ekf_update(ekf_Z);
+        }
+
+    }
+
 	lastTimeUs = currentTimeUs;
 }
 
