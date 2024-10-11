@@ -58,3 +58,6 @@ __pycache__
 
 # logs
 logs/
+
+# remote definition
+remote.env
