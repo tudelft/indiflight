@@ -159,10 +159,35 @@ void piSendIMU(void)
     piSendMsg(&piMsgImuTx, &serialWriter);
 }
 
+#include "flight/indi.h"
+
+void piSendEkfInputs(void)
+{
+    piMsgEkfInputsTx.time_us = (uint32_t) micros();
+    piMsgEkfInputsTx.x = acc.accADC[0];
+    piMsgEkfInputsTx.y = acc.accADC[1];
+    piMsgEkfInputsTx.z = acc.accADC[2];
+    piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[0] * 0.0005f );
+    piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[1] * 0.0005f );
+    piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[2] * 0.0005f );
+    piMsgEkfInputsTx.omega1 = (int16_t) indiRun.omega[0];
+    piMsgEkfInputsTx.omega2 = (int16_t) indiRun.omega[1];
+    piMsgEkfInputsTx.omega3 = (int16_t) indiRun.omega[2];
+    piMsgEkfInputsTx.omega4 = (int16_t) indiRun.omega[3];
+
+    piSendMsg(&piMsgEkfInputsTx, &serialWriter);
+}
+
+
 void processPiTelemetry(void)
 {
-    // could do rate limiting with the stream stuffs above
-    piSendIMU();
+    static unsigned int senderCount = 0;
+    if (senderCount++ % 2 == 0) {
+        // rate limiting
+        senderCount = 1;
+        //piSendIMU();
+        piSendEkfInputs();
+    }
 }
 
 pi_parse_states_t p_telem;
