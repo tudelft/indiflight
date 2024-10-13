@@ -621,25 +621,6 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
 };
 
-typedef enum BlackboxState {
-    BLACKBOX_STATE_DISABLED = 0,
-    BLACKBOX_STATE_STOPPED,
-    BLACKBOX_STATE_PREPARE_LOG_FILE,
-    BLACKBOX_STATE_SEND_HEADER,
-    BLACKBOX_STATE_SEND_MAIN_FIELD_HEADER,
-    BLACKBOX_STATE_SEND_GPS_H_HEADER,
-    BLACKBOX_STATE_SEND_GPS_G_HEADER,
-    BLACKBOX_STATE_SEND_SLOW_HEADER,
-    BLACKBOX_STATE_SEND_SYSINFO,
-    BLACKBOX_STATE_CACHE_FLUSH,
-    BLACKBOX_STATE_PAUSED,
-    BLACKBOX_STATE_RUNNING,
-    BLACKBOX_STATE_SHUTTING_DOWN,
-    BLACKBOX_STATE_START_ERASE,
-    BLACKBOX_STATE_ERASING,
-    BLACKBOX_STATE_ERASED
-} BlackboxState;
-
 
 typedef struct blackboxMainState_s {
     uint32_t time;
@@ -743,6 +724,10 @@ typedef struct blackboxSlowState_s {
 extern boxBitmask_t rcModeActivationMask;
 
 static BlackboxState blackboxState = BLACKBOX_STATE_DISABLED;
+BlackboxState blackboxGetState(void)
+{
+    return blackboxState;
+}
 
 static uint32_t blackboxLastArmingBeep = 0;
 static uint32_t blackboxLastFlightModeFlags = 0; // New event tracking of flight modes
@@ -2729,6 +2714,13 @@ STATIC_UNIT_TESTED void blackboxLogIteration(timeUs_t currentTimeUs)
     blackboxDeviceFlush();
 }
 
+static bool shouldStartBecauseEkfInitialized = false;
+void blackboxStartBecauseEkfInitialized(void) {
+    if (blackboxState == BLACKBOX_STATE_STOPPED) {
+        shouldStartBecauseEkfInitialized = true;
+    }
+}
+
 /**
  * Call each flight loop iteration to perform blackbox logging.
  */
@@ -2737,9 +2729,14 @@ void blackboxUpdate(timeUs_t currentTimeUs)
 {
     static BlackboxState cacheFlushNextState;
 
+    if (ARMING_FLAG(ARMED)) {
+        // once armed, do not care about this
+        shouldStartBecauseEkfInitialized = false;
+    }
+
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
-        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW)) {
+        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW) || shouldStartBecauseEkfInitialized) {
             blackboxOpen();
             blackboxStart();
         }
@@ -2857,7 +2854,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
         if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
-        } else if ((!ARMING_FLAG(ARMED)) && (throwState == THROW_STATE_IDLE) && !startedLoggingInTestMode) {
+        } else if ((!ARMING_FLAG(ARMED)) && (throwState == THROW_STATE_IDLE) && !startedLoggingInTestMode && (!shouldStartBecauseEkfInitialized)) {
             blackboxFinish();
         } else {
             blackboxLogIteration(currentTimeUs);

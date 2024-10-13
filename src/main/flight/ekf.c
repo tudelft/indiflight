@@ -32,6 +32,7 @@
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "blackbox/blackbox.h"
 
 #include <stdbool.h>
 
@@ -67,6 +68,10 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
 
 bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
+
+#define EKF_ON_GROUND_DURING_INIT_TIME_US 2000000 // 2 seconds no touchy touchy
+#define EKF_ON_GROUND_INTERVAL_US 50000 // 20 Hz on ground updates
+bool ekf_on_ground = false;
 
 float ekf_Z[N_MEASUREMENTS] = {0.};
 float ekf_U[N_INPUTS] = {0.};
@@ -130,9 +135,17 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 
 extern bool ekf_use_quat;
 
+// manual init points for long oval
+#define EKF_SQRT22 (0.7071067f)
+static fp_vector_t ekf_init_pos = { .V.X=1.5f, .V.Y=-7.f, .V.Z=0.f };
+static fp_quaternion_t ekf_init_quat = { .w = EKF_SQRT22, .x = 0.f, .y = 0.f, .z = EKF_SQRT22 }; // yaw 90 deg east
+static timeUs_t ekf_init_time;
+
 bool isInitializedEkf(void) {
     return ekf_initialized;
 }
+
+static float R[N_MEASUREMENTS];
 
 void initEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
@@ -159,23 +172,28 @@ void initEkf(timeUs_t currentTimeUs) {
 	};
 
 	// measurement noise covariance
-	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
-		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
-		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
-		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
-		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
-	};
+	R[0] = ((float) ekfConfig()->meas_noise_position[0]) * 1e-6f; // posN
+	R[1] = ((float) ekfConfig()->meas_noise_position[1]) * 1e-6f; // posE
+	R[2] = ((float) ekfConfig()->meas_noise_position[2]) * 1e-6f; // posD
+	R[3] = ((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f; // qw
+	R[4] = ((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f; // qx
+	R[5] = ((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f; // qy
+	R[6] = ((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f;// qz
 
 	// sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
-		extPosNed.pos.V.X,
-		extPosNed.pos.V.Y,
-		extPosNed.pos.V.Z,
+		//extPosNed.pos.V.X,
+		//extPosNed.pos.V.Y,
+		//extPosNed.pos.V.Z,
+        ekf_init_pos.V.X,
+        ekf_init_pos.V.Y,
+        ekf_init_pos.V.Z,
 		0., 0., 0., // vel
-        1., 0., 0., 0., // quaternion
+        // 1.f, 0.f, 0.f, 0.f, // quat
+        ekf_init_quat.w,
+        ekf_init_quat.x,
+        ekf_init_quat.y,
+        ekf_init_quat.z,
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
@@ -187,12 +205,13 @@ void initEkf(timeUs_t currentTimeUs) {
 		1e-2f, 1e-2f, 1e-2f, 1e-2f, 1e-2f, 1e-2f // acc and gyro biases (to turn off bias estimation, set these to 0)!
 	};
 
-    if (ekf_use_quat) {
-		X0[6] = extPosNed.quat.w;
-		X0[7] = extPosNed.quat.x;
-		X0[8] = extPosNed.quat.y;
-		X0[9] = extPosNed.quat.z;
-    } else {
+    //if (ekf_use_quat) { // use ekf_init_quat now, see above
+    //    X0[6] = extPosNed.quat.w;
+    //    X0[7] = extPosNed.quat.x;
+    //    X0[8] = extPosNed.quat.y;
+    //    X0[9] = extPosNed.quat.z;
+    //} else {
+    if (!ekf_use_quat) {
         P_diag0[13] = 0.f; // turn off gyro bias estimation
         P_diag0[14] = 0.f; // turn off gyro bias estimation
         P_diag0[15] = 0.f; // turn off gyro bias estimation
@@ -207,7 +226,12 @@ void initEkf(timeUs_t currentTimeUs) {
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
+    ekf_on_ground = true;
 	lastTimeUs = currentTimeUs;
+    ekf_init_time = currentTimeUs;
+
+    // start blackbox
+    blackboxStartBecauseEkfInitialized();
 }
 
 void runEkf(timeUs_t currentTimeUs) {
@@ -227,6 +251,36 @@ void runEkf(timeUs_t currentTimeUs) {
 	// PREDICTION STEP
 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
 	ekf_predict(ekf_U, dt);
+
+    static timeUs_t lastOnGroundUpdateTimeUs = 0;
+    if (ekf_on_ground && cmpTimeUs(currentTimeUs, ekf_init_time) < EKF_ON_GROUND_DURING_INIT_TIME_US) {
+        if ((!lastOnGroundUpdateTimeUs) || (cmpTimeUs(currentTimeUs, lastOnGroundUpdateTimeUs) > EKF_ON_GROUND_INTERVAL_US)) {
+            ekf_Z[0] = ekf_init_pos.V.X;
+            ekf_Z[1] = ekf_init_pos.V.Y;
+            ekf_Z[2] = ekf_init_pos.V.Z;
+
+            ekf_Z[3] = ekf_init_quat.w;
+            ekf_Z[4] = ekf_init_quat.x;
+            ekf_Z[5] = ekf_init_quat.y;
+            ekf_Z[6] = ekf_init_quat.z;
+
+            // set R very confident
+	        float Rlocal[N_STATES] = { 0.0001f, 0.0001f, 0.0001f, 0.0001f, 0.001f, 0.001f, 0.001f };
+            ekf_set_R(Rlocal);
+
+            ekf_update(ekf_Z);
+            lastOnGroundUpdateTimeUs = currentTimeUs;
+        }
+	    lastTimeUs = currentTimeUs;
+        return;
+    } else {
+        if (ekf_on_ground) {
+            // set back to real R
+            ekf_set_R(R);
+        }
+        ekf_on_ground = false;
+        // lets continue with real measurements
+    }
 
 	// UPDATE STEP 			(only when new measurement is available)
 	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {

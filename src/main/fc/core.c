@@ -475,6 +475,12 @@ void updateArmingStatus(void)
         }
 #endif
 
+        if (blackboxGetState() != BLACKBOX_STATE_RUNNING) {
+            setArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        }
+
         if (isArmingDisabled()) {
             warningLedFlash();
         } else {
