@@ -88,7 +88,7 @@ void checkNewPos(void) {
         // }
 
         // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(micros(), currentMsgTimeReceived);
+        timeDelta_t delta = cmpTimeUs(micros(), extLatestMsgTimeReceived);
         if (delta > EXT_POS_TIMEOUT_US) {
             // signal lost
             extPosState = EXT_POS_NO_SIGNAL;
