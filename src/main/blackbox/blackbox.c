@@ -72,6 +72,7 @@
 #include "flight/nn_control.h"
 #include "flight/catapult.h"
 #include "flight/throw.h"
+#include "flight/drone_models/drone_model.h"
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -432,6 +433,13 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_gyro_b",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_gyro_b",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_gyro_b",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+
+#ifdef USE_EKF_DRONE_MODEL
+    {"acc_modeled",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"acc_modeled",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"acc_modeled",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+#endif
+
 #endif
 
 #ifdef USE_LEARNER
@@ -710,6 +718,9 @@ typedef struct blackboxMainState_s {
     int16_t ekf_quat[4];
     int16_t ekf_acc_b[XYZ_AXIS_COUNT];
     int16_t ekf_gyro_b[XYZ_AXIS_COUNT];
+#ifdef USE_EKF_DRONE_MODEL
+    int16_t ekf_acc_modeled[3];
+#endif
 #endif
 #ifdef USE_LEARNER
     int16_t motor_rls_x[BLACKBOX_LEARNER_N][BLACKBOX_LEARNER_MOTOR_RLS_N];
@@ -1123,6 +1134,9 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_gyro_b, XYZ_AXIS_COUNT);
+#ifdef USE_EKF_DRONE_MODEL
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_modeled, 3);
+#endif
     }
 #endif
 #ifdef USE_LEARNER
@@ -1418,6 +1432,10 @@ static void writeInterframe(void)
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_gyro_b, blackboxLast->ekf_gyro_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+#ifdef USE_EKF_DRONE_MODEL
+        arraySubInt16(deltas16, blackboxCurrent->ekf_acc_modeled, blackboxLast->ekf_acc_modeled, 3);
+        blackboxWriteSigned16VBArray(deltas16, 3);
+#endif
     }
 #else
     UNUSED(deltas16);
@@ -1893,6 +1911,11 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
     blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
     blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[15])); // mdeg/s
+#ifdef USE_EKF_DRONE_MODEL
+    float acc_modeled[3];
+    get_modeled_acceleration(&acc_modeled[0], &acc_modeled[1], &acc_modeled[2]);
+    blackboxCurrent->ekf_acc_modeled[0] = lrintf(acc_modeled[0] * METER_TO_MM); // mm/s^2
+#endif
 #endif
 
 #ifdef USE_LEARNER

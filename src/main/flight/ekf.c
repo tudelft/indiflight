@@ -32,6 +32,7 @@
 #include "sensors/acceleration.h"   // for acc
 #include "imu.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "flight/indi.h"			// for omega
 
 #include <stdbool.h>
 
@@ -49,6 +50,11 @@
 
 #ifndef USE_GPS_PI
 #error "USE_EKF requires USE_GPS_PI"
+#endif
+
+#ifdef USE_EKF_DRONE_MODEL
+#pragma message "You are compiling with drone model in EKF"
+#include "flight/drone_models/drone_model.h"
 #endif
 
 PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
@@ -70,6 +76,7 @@ timeUs_t lastTimeUs = 0;
 
 float ekf_Z[N_MEASUREMENTS] = {0.};
 float ekf_U[N_INPUTS] = {0.};
+float ekf_acc_modeled[3] = {0.};
 
 // EKF history buffers
 #define EKF_HISTORY_SIZE 10 // 10 --> at 500Hz this is 20ms
@@ -132,15 +139,45 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 void ekf_predict_drone_model(float U[N_INPUTS], float dt) {
 	// instead of feeding in the accelerometer measurement, we now feed a weighted sum of acc measurement and acc modeled
 
-	// MEASURED
+	// MEASURED ACCEL
 	float ax_measured = U[0];
 	float ay_measured = U[1];
 	float az_measured = U[2];
 
-	// MODELED
-	float ax_modeled = 0.0f;
-	float ay_modeled = 0.0f;
-	float az_modeled = 0.0f;
+	// MODELED ACCEL
+	// get body velocity needed for the drone model
+	// get estimated world velocity (NED)
+	fp_vector_t vel = {
+		.V.X = velEstNed.V.X,
+		.V.Y = velEstNed.V.Y,
+		.V.Z = velEstNed.V.Z
+	};
+	// get estimated attitude quaternion body->world (NED)
+	fp_quaternion_t quat;
+	getAttitudeQuaternion(&quat);
+	// invert the quaternion to get world->body
+	quat.x = -quat.x;
+	quat.y = -quat.y;
+	quat.z = -quat.z;
+	// rotate the velocity to body frame
+	rotate_vector_with_quaternion(&vel, &quat);
+
+	// compute modeled acceleration
+	compute_modeled_acceleration(
+		vel.V.X, vel.V.Y, vel.V.Z,
+		(float) indiRun.omega[0],
+		(float) indiRun.omega[1],
+		(float) indiRun.omega[2],
+		(float) indiRun.omega[3],
+		DEGREES_TO_RADIANS(gyro.gyroADCf[0]), // TODO: figure out if we need gyroADCf or gyroADC
+		DEGREES_TO_RADIANS(gyro.gyroADCf[1]),
+		DEGREES_TO_RADIANS(gyro.gyroADCf[2])
+	);
+	// get modeled acceleration
+	float ax_modeled;
+	float ay_modeled;
+	float az_modeled;
+	get_modeled_acceleration(&ax_modeled, &ay_modeled, &az_modeled);
 
 	// FUSED
 	float alpha = 0.5f; // 1. -> only use acc modeled, 0. -> only use acc measured
@@ -151,7 +188,7 @@ void ekf_predict_drone_model(float U[N_INPUTS], float dt) {
 	U[0] = ax_fused;
 	U[1] = ay_fused;
 	U[2] = az_fused;
-	
+
 	ekf_predict(U, dt);
 }
 
