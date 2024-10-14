@@ -12,11 +12,11 @@ void compute_modeled_acceleration(float vbx, float vby, float vbz,
     (void) q;
     (void) r;
     (void) vbz;
-
-    // estimated parameters based on data
-    static float k_x = -5e-5;
-    static float k_y = -5e-5;
-    static float k_omega = -1;
+    // estimated parameters based on data from dummy drone
+    // 'k_w': -1.94e-06, 'k_x': -5.67e-05, 'k_y': -6.59e-05,
+    static float k_x = -5.67e-05;
+    static float k_y = -6.59e-05;
+    static float k_omega = -1.94e-06;
 
     ax_modeled = k_x*vbx*(omega0+omega1+omega2+omega3);
     ay_modeled = k_y*vby*(omega0+omega1+omega2+omega3);
