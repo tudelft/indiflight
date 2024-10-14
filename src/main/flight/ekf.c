@@ -128,6 +128,34 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 	}
 }
 
+// ekf predict step that uses drone model
+void ekf_predict_drone_model(float U[N_INPUTS], float dt) {
+	// instead of feeding in the accelerometer measurement, we now feed a weighted sum of acc measurement and acc modeled
+
+	// MEASURED
+	float ax_measured = U[0];
+	float ay_measured = U[1];
+	float az_measured = U[2];
+
+	// MODELED
+	float ax_modeled = 0.0f;
+	float ay_modeled = 0.0f;
+	float az_modeled = 0.0f;
+
+	// FUSED
+	float alpha = 0.5f; // 1. -> only use acc modeled, 0. -> only use acc measured
+	float ax_fused = alpha * ax_modeled + (1.0f - alpha) * ax_measured;
+	float ay_fused = alpha * ay_modeled + (1.0f - alpha) * ay_measured;
+	float az_fused = alpha * az_modeled + (1.0f - alpha) * az_measured;
+
+	U[0] = ax_fused;
+	U[1] = ay_fused;
+	U[2] = az_fused;
+	
+	ekf_predict(U, dt);
+}
+
+
 extern bool ekf_use_quat;
 
 bool isInitializedEkf(void) {
@@ -226,7 +254,16 @@ void runEkf(timeUs_t currentTimeUs) {
 
 	// PREDICTION STEP
 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+#ifdef USE_EKF_DRONE_MODEL
+	// 1) drone model should only be used when we are not on the ground
+	if (ekf_get_X()[2] < -0.20f) {
+		ekf_predict_drone_model(ekf_U, dt);
+	} else {
+		ekf_predict(ekf_U, dt);
+	}
+#else
 	ekf_predict(ekf_U, dt);
+#endif
 
 	// UPDATE STEP 			(only when new measurement is available)
 	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
