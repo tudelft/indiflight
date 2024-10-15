@@ -106,7 +106,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     lastCall = currentTimeUs;
 
     // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED)
+    bool disableConditions = false //ARMING_FLAG(ARMED)
 #ifndef USE_THROWING_WITHOUT_POSITION
         || !FLIGHT_MODE(POSITION_MODE)
 #endif

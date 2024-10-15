@@ -663,7 +663,12 @@ void runLearningQueryStateMachine(timeUs_t current) {
     bool disableConditions = !FLIGHT_MODE(LEARNER_MODE)
             || !(learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW));
 
-    bool enableConditions = !ARMING_FLAG(ARMED) && !disableConditions;
+    if (disableConditions) {
+        learningQueryState = LEARNING_QUERY_IDLE;
+    }
+
+    bool enableConditions = true//!ARMING_FLAG(ARMED) 
+        && !disableConditions;
 
 doMore:
     switch (learningQueryState) {
