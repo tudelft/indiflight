@@ -9,9 +9,9 @@
 #include "common/maths.h"
 #include <stdbool.h>
 
-bool ekf_use_quat = false;
+bool ekf_use_quat = true;
 
-float ekf_Q[N_PROC_NOISES];         // Kalman filter process noise covariance matrix (diagonal)
+float ekf_Q[N_PROC_NOISES];    // Kalman filter process noise covariance matrix (diagonal)
 float ekf_R[N_MEASUREMENTS];   // Kalman filter measurement noise covariance matrix (diagonal)
 
 // state
@@ -87,11 +87,16 @@ void ekf_set_P_diag(float P_diag[N_STATES]) {
     }
 }
 
-//void ekf_set_P(float P0[N_STATES*(N_STATES+1)/2]) {
-//    for (int i=0; i<N_STATES*(N_STATES+1)/2; i++) {
-//        P[i] = P0[i];
-//    }
-//}
+void normalize_quaternion(float* q) {
+    float norm = q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3];
+    if (norm > 1e-4f) {
+        float inorm = 1.f / sqrtf(norm);
+        q[0] *= inorm;
+        q[1] *= inorm;
+        q[2] *= inorm;
+        q[3] *= inorm;
+    }
+}
 
 void ekf_predict(float U[N_INPUTS], float dt) {
     // PREDICTION STEP X_new, P_new = ...
@@ -624,21 +629,11 @@ void ekf_predict(float U[N_INPUTS], float dt) {
     X = X_new;
     X_new = swap_ptr;
 
+    normalize_quaternion(X+6);
+
     swap_ptr = P;
     P = P_new;
     P_new = swap_ptr;
-}
-
-
-void normalize_quaternion(float* q) {
-    float norm = q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3];
-    if (norm > 1e-4f) {
-        float inorm = 1.f / sqrtf(norm);
-        q[0] *= inorm;
-        q[1] *= inorm;
-        q[2] *= inorm;
-        q[3] *= inorm;
-    }
 }
 
 void ekf_update(float Z[N_MEASUREMENTS]) {
@@ -829,9 +824,6 @@ void ekf_update(float Z[N_MEASUREMENTS]) {
 	HP[109] = P[127]*ekf_use_quat;
 	HP[110] = P[128]*ekf_use_quat;
 	HP[111] = P[129]*ekf_use_quat;
-
-    // renorm quat
-    normalize_quaternion(X+6);
 
     // we have symmetric S and PHT in col major.
     // Solve K as K^T = invS * H*P, as we have columns of HP. We solve columns of K^T, which are actually rows of K
