@@ -475,11 +475,11 @@ void updateArmingStatus(void)
         }
 #endif
 
-        if (blackboxGetState() != BLACKBOX_STATE_RUNNING) {
-            setArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
-        } else {
-            unsetArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
-        }
+        //if (blackboxGetState() != BLACKBOX_STATE_RUNNING) {
+        //    setArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        //} else {
+        unsetArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        //}
 
         if (isArmingDisabled()) {
             warningLedFlash();
@@ -1102,9 +1102,9 @@ void processRxModes(timeUs_t currentTimeUs)
             baroSetGroundLevel();
             baro.altitude = 0; // set this now, or else EKF won't reset properly
 #endif
-#ifdef USE_EKF
-            initEkf(currentTimeUs);
-#endif
+//#ifdef USE_EKF
+//            initEkf(currentTimeUs);
+//#endif
         }
     }
 

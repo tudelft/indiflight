@@ -290,6 +290,9 @@ void runEkf(timeUs_t currentTimeUs) {
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
+    // run fallback
+    imuUpdateAttitude(currentTimeUs);
+
 	// de-initialize EKF if no signal and either not armed, or not using ekf in flight
     if ((extPosState == EXT_POS_NO_SIGNAL) 
             && ( !ARMING_FLAG(ARMED) 

@@ -47,7 +47,7 @@
 
 #ifndef USE_EKF
 #error "USE_POS_CTL requires the use of USE_EKF"
-#enif
+#endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
 
