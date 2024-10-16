@@ -102,9 +102,9 @@ void processKey(uint8_t key) {
 #endif
 #ifdef USE_EKF
         case KEY_I: 
-            if (!ARMING_FLAG(ARMED)) {
-                initEkf(micros());
-            }
+            //if (!ARMING_FLAG(ARMED)) {
+            //    initEkf(micros());
+            //}
             break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER

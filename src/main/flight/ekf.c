@@ -136,9 +136,6 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 extern bool ekf_use_quat;
 
 // manual init points for long oval
-#define EKF_SQRT22 (0.7071067f)
-static fp_vector_t ekf_init_pos = { .V.X=1.5f, .V.Y=-7.f, .V.Z=0.f };
-static fp_quaternion_t ekf_init_quat = { .w = EKF_SQRT22, .x = 0.f, .y = 0.f, .z = EKF_SQRT22 }; // yaw 90 deg east
 static timeUs_t ekf_init_time;
 
 bool isInitializedEkf(void) {
@@ -182,18 +179,14 @@ void initEkf(timeUs_t currentTimeUs) {
 
 	// sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
-		//extPosNed.pos.V.X,
-		//extPosNed.pos.V.Y,
-		//extPosNed.pos.V.Z,
-        ekf_init_pos.V.X,
-        ekf_init_pos.V.Y,
-        ekf_init_pos.V.Z,
+		extPosNed.pos.V.X,
+		extPosNed.pos.V.Y,
+		extPosNed.pos.V.Z,
 		0., 0., 0., // vel
-        // 1.f, 0.f, 0.f, 0.f, // quat
-        ekf_init_quat.w,
-        ekf_init_quat.x,
-        ekf_init_quat.y,
-        ekf_init_quat.z,
+        extPosNed.quat.w,
+        extPosNed.quat.x,
+        extPosNed.quat.y,
+        extPosNed.quat.z,
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
@@ -226,7 +219,6 @@ void initEkf(timeUs_t currentTimeUs) {
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
-    ekf_on_ground = true;
 	lastTimeUs = currentTimeUs;
     ekf_init_time = currentTimeUs;
 
@@ -252,36 +244,6 @@ void runEkf(timeUs_t currentTimeUs) {
 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
 	ekf_predict(ekf_U, dt);
 
-    static timeUs_t lastOnGroundUpdateTimeUs = 0;
-    if (ekf_on_ground && cmpTimeUs(currentTimeUs, ekf_init_time) < EKF_ON_GROUND_DURING_INIT_TIME_US) {
-        if ((!lastOnGroundUpdateTimeUs) || (cmpTimeUs(currentTimeUs, lastOnGroundUpdateTimeUs) > EKF_ON_GROUND_INTERVAL_US)) {
-            ekf_Z[0] = ekf_init_pos.V.X;
-            ekf_Z[1] = ekf_init_pos.V.Y;
-            ekf_Z[2] = ekf_init_pos.V.Z;
-
-            ekf_Z[3] = ekf_init_quat.w;
-            ekf_Z[4] = ekf_init_quat.x;
-            ekf_Z[5] = ekf_init_quat.y;
-            ekf_Z[6] = ekf_init_quat.z;
-
-            // set R very confident
-	        float Rlocal[N_STATES] = { 0.0001f, 0.0001f, 0.0001f, 0.0001f, 0.001f, 0.001f, 0.001f };
-            ekf_set_R(Rlocal);
-
-            ekf_update(ekf_Z);
-            lastOnGroundUpdateTimeUs = currentTimeUs;
-        }
-	    lastTimeUs = currentTimeUs;
-        return;
-    } else {
-        if (ekf_on_ground) {
-            // set back to real R
-            ekf_set_R(R);
-        }
-        ekf_on_ground = false;
-        // lets continue with real measurements
-    }
-
 	// UPDATE STEP 			(only when new measurement is available)
 	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
         lastUpdateTimestamp = extLatestMsgTime;
@@ -293,6 +255,21 @@ void runEkf(timeUs_t currentTimeUs) {
 		ekf_Z[4] = (ekf_use_quat) * extPosNed.quat.x;
 		ekf_Z[5] = (ekf_use_quat) * extPosNed.quat.y;
 		ekf_Z[6] = (ekf_use_quat) * extPosNed.quat.z;
+
+        static bool haveResetR = false;
+        if (cmpTimeUs(currentTimeUs, ekf_init_time) < EKF_ON_GROUND_DURING_INIT_TIME_US) {
+            // assumed on ground and sending constant setpoints --> low covariance to converge states quickly
+            // set R very confident, but not for pitch/roll... todo: rather write a custom update function for yaw-only
+	        float Rlocal[N_STATES] = { 0.0001f, 0.0001f, 0.0001f, 0.001f, R[4], R[5], 0.001f };
+            ekf_set_R(Rlocal);
+            haveResetR = false;
+        } else {
+            // set back to real R
+            if (!haveResetR) {
+                ekf_set_R(R);
+                haveResetR = true;
+            }
+        }
 
 		// old update:
 		ekf_update(ekf_Z);
@@ -315,6 +292,10 @@ void updateEkf(timeUs_t currentTimeUs) {
     if (extPosState == EXT_POS_NO_SIGNAL) {
         ekf_initialized = false;
     } else if (!ekf_initialized) {
+        // Auto-initialize only if we are not armed
+        if (!ARMING_STATE(ARMED)) {
+            initEkf(currentTimeUs);
+        }
         // NEVER EVER auto-reinitialize EKF. bad things will happen. use a switch or the keyboard
 /*
         // when ekf is not initialized, we need to wait for the first external position message
