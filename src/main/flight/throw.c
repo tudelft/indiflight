@@ -116,9 +116,6 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 #ifdef USE_INDI
         || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
 #endif
-#ifdef USE_EKF
-        || ( ( ekfConfig()->use_position_estimate || ekfConfig()->use_attitude_estimate ) && !isInitializedEkf() ) // loss of position or anything like that. isInitializedEkf latches until home button is pressed again
-#endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {

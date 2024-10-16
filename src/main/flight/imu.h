@@ -47,13 +47,12 @@ typedef struct imuRuntimeConfig_s {
 
 void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
 
-void setAttitudeWithEuler(float roll, float pitch, float yaw);
 void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
 
 float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);
-void setAttitudeWithQuaternion(const fp_quaternion_t * q);
 void imuUpdateAttitude(timeUs_t currentTimeUs);
+void attitudeDecider(void);
 
 void imuInit(void);
 

@@ -46,6 +46,10 @@ catapult_state_t catapultState = CATAPULT_IDLE;
 #error "muse use catapult with USE_POS_CTL"
 #endif
 
+#ifndef USE_EKF
+#error "must use catapult with USE_EKF"
+#endif
+
 // extern
 fp_quaternion_t attSpNedFromCat = { 1.f, 0.f, 0.f, 0.f };
 fp_vector_t spfSpBodyFromCat = { .A = { 0.f, 0.f, 0.f } };
@@ -161,12 +165,6 @@ void runCatapultStateMachine(timeUs_t current) {
                 || (posSetpointState == EXT_POS_NO_SIGNAL)
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
-#endif
-#ifdef USE_EKF
-        || ( ( ekfConfig()->use_position_estimate || ekfConfig()->use_attitude_estimate ) && !isInitializedEkf() ) // loss of position or anything like that
-#endif
-#if defined(USE_EKF) && false
-                || !ekf_is_healthy() // TODO: implement this!
 #endif
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);

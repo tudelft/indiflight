@@ -45,6 +45,10 @@
 #error "USE_POS_CTL requires the use of USE_INDI"
 #endif
 
+#ifndef USE_EKF
+#error "USE_POS_CTL requires the use of USE_EKF"
+#enif
+
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
 
 void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {

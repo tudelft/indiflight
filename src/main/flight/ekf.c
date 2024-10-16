@@ -66,6 +66,8 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
     .meas_delay = 0,
 ); 
 
+fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
+
 bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
 
@@ -288,56 +290,44 @@ void runEkf(timeUs_t currentTimeUs) {
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
-	// reset ekf EXT_POS_NO_SIGNAL
-    if (extPosState == EXT_POS_NO_SIGNAL) {
+	// de-initialize EKF if no signal and either not armed, or not using ekf in flight
+    if ((extPosState == EXT_POS_NO_SIGNAL) 
+            && ( !ARMING_FLAG(ARMED) 
+                    || ( !FLIGHT_MODE(POSITION_MODE)
+                             && !FLIGHT_MODE(VELOCITY_MODE)
+                             && !FLIGHT_MODE(CATAPULT_MODE)
+                             && !FLIGHT_MODE(NN_MODE)
+                        )
+                )) {
         ekf_initialized = false;
-    } else if (!ekf_initialized) {
+    } else if (!ekf_initialized && !ARMING_FLAG(ARMED)) {
         // Auto-initialize only if we are not armed
-        if (!ARMING_STATE(ARMED)) {
-            initEkf(currentTimeUs);
-        }
-        // NEVER EVER auto-reinitialize EKF. bad things will happen. use a switch or the keyboard
-/*
-        // when ekf is not initialized, we need to wait for the first external position message
-        if (extPosState != EXT_POS_NO_SIGNAL) {
-            // INIT EKF
-            if (ekfConfig()->use_quat_measurement) {
-                // auto re-init only when we have an absolute source of heading?
-                initEkf(currentTimeUs);
-            }
-        }
-*/
+        initEkf(currentTimeUs);
     } else {
-        // ekf is initialized and POSITION_MODE, we can run the ekf
+        // ekf is initialized, we can run it
 		runEkf(currentTimeUs);
-    }
 
-    // run fallback in advance so it doesnt lose sync
-    imuUpdateAttitude(currentTimeUs);
-
-    // update system state with EKF data, if possible and configured
-    if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
-        // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 
-        if (ekfConfig()->use_attitude_estimate) {
-            fp_quaternion_t q = { .w = ekf_X[6], .x = ekf_X[7], .y = ekf_X[8], .z = ekf_X[9], };
-            setAttitudeWithQuaternion(&q);
-        }
+        // update ekf states
+        qEkf.w = ekf_X[6];
+        qEkf.x = ekf_X[7];
+        qEkf.y = ekf_X[8];
+        qEkf.z = ekf_X[9];
 
-        if (ekfConfig()->use_position_estimate) {
-            fp_vector_t posNed_set;
-            posNed_set.V.X = ekf_X[0];
-            posNed_set.V.Y = ekf_X[1];
-            posNed_set.V.Z = ekf_X[2];
+        attitudeDecider(); // trigger attitude update
 
-            fp_vector_t velNed_set;
-            velNed_set.V.X = ekf_X[3];
-            velNed_set.V.Y = ekf_X[4];
-            velNed_set.V.Z = ekf_X[5];
+        fp_vector_t posNed_set;
+        posNed_set.V.X = ekf_X[0];
+        posNed_set.V.Y = ekf_X[1];
+        posNed_set.V.Z = ekf_X[2];
 
-            setPositionState(posNed_set, velNed_set);
-        }
+        fp_vector_t velNed_set;
+        velNed_set.V.X = ekf_X[3];
+        velNed_set.V.Y = ekf_X[4];
+        velNed_set.V.Z = ekf_X[5];
+
+        setPositionState(posNed_set, velNed_set); // update system position state
     }
 }
 

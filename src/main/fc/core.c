@@ -1074,13 +1074,9 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (extPosState >= EXT_POS_STILL_VALID) {
-#ifdef USE_EKF
-                if (ekfConfig()->use_position_estimate && isInitializedEkf())
-#endif
-                {
-                    ENABLE_FLIGHT_MODE(POSITION_MODE);
-                }
+            if (isInitializedEkf())
+            {
+                ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
     } else {
@@ -1090,6 +1086,10 @@ void processRxModes(timeUs_t currentTimeUs)
         }
 #endif
         DISABLE_FLIGHT_MODE(POSITION_MODE);
+    }
+
+    if (!isInitializedEkf() && !ARMING_FLAG(ARMED)) {
+        DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
     }
 #endif
 

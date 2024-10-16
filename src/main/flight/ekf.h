@@ -28,6 +28,7 @@
 #define EKF_H
 
 #include "common/time.h"			// for timeUs_t
+#include "common/maths.h"			// for timeUs_t
 #include "ekf_calc.h"
 
 #include "pg/pg.h"
@@ -46,6 +47,8 @@ typedef struct ekfConfig_s {
 } ekfConfig_t;
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
+
+extern fp_quaternion_t qEkf;
 
 bool isInitializedEkf(void);
 void initEkf(timeUs_t currentTimeUs);
