@@ -563,9 +563,12 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         // indi->actLimit[act] = 0.6;
         //                    inv y-scale        a-scale           config scale
-        indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0*fxSpfRls.n + act];
-        indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[1*fxSpfRls.n + act];
-        indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[2*fxSpfRls.n + act];
+        //indi->actG1_fx[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[0*fxSpfRls.n + act];
+        //indi->actG1_fy[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[1*fxSpfRls.n + act];
+        //indi->actG1_fz[act]    = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxSpfRls.X[2*fxSpfRls.n + act];
+        indi->actG1_fx[act]    = 0;
+        indi->actG1_fy[act]    = 0;
+        indi->actG1_fz[act]    = -800;
         indi->actG1_roll[act]  = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[0*fxRateDotRls.n + act];
         indi->actG1_pitch[act] = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[1*fxRateDotRls.n + act];
         indi->actG1_yaw[act]   = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRateDotRls.X[2*fxRateDotRls.n + act];

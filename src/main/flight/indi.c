@@ -157,7 +157,7 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
             && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
         for (int i=0; i < indiRun.actNum; i++) {
