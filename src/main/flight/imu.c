@@ -666,11 +666,19 @@ void imuSetAttitudeQuat(float w, float x, float y, float z)
     q.y = y;
     q.z = z;
 
-    imuComputeRotationMatrix();
+    quaternionProducts_of_quaternion(&qP, &q);
+    rotationMatrix_of_quaternionProducts(&rMat, &qP);
+
+    fp_euler_t euler_fp;
+    fp_euler_of_quaternionProducts(&euler_fp, &qP);
+    i16_euler_of_fp_euler(&attitude, &euler_fp);
+
+    // correct yaw to not be negative
+    if (attitude.angles.yaw < 0) {
+        attitude.angles.yaw += 3600;
+    }
 
     attitudeIsEstablished = true;
-
-    imuUpdateEulerAngles();
 
     IMU_UNLOCK;
 }
