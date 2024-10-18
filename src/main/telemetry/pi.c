@@ -152,9 +152,9 @@ void piSendIMU(void)
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
     piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
     piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
-    piMsgImuTx.x = GRAVITYf * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.y = GRAVITYf * ((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.z = GRAVITYf * ((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.x = GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.y = GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.z = GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G);
     
     piSendMsg(&piMsgImuTx, &serialWriter);
 }
@@ -164,9 +164,9 @@ void piSendIMU(void)
 void piSendEkfInputs(void)
 {
     piMsgEkfInputsTx.time_us = (uint32_t) micros();
-    piMsgEkfInputsTx.x = acc.accADC[0];
-    piMsgEkfInputsTx.y = acc.accADC[1];
-    piMsgEkfInputsTx.z = acc.accADC[2];
+    piMsgEkfInputsTx.x = acc.accADCf[0];
+    piMsgEkfInputsTx.y = acc.accADCf[1];
+    piMsgEkfInputsTx.z = acc.accADCf[2];
     piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[0] * 0.0005f );
     piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[1] * 0.0005f );
     piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCf[2] * 0.0005f );
