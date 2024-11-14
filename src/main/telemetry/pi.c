@@ -1,7 +1,7 @@
 /*
- * Configure serial port to parse pi-messages and provide facilities to send
+ * Configure serial port to interface with teensy actuator board https://github.com/tudelft/t4_actuators_board/
  *
- * Copyright 2023 Till Blaha (Delft University of Technology)
+ * Copyright 2024 Till Blaha (Delft University of Technology)
  *
  * This file is part of Indiflight.
  *

@@ -93,6 +93,7 @@
 #include "io/vtx_control.h"
 #include "io/vtx_rtc6705.h"
 #include "io/hil.h"
+#include "io/t4.h"
 
 #include "msp/msp_serial.h"
 
@@ -1480,8 +1481,10 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
 
     // this is the disarm safety!
     if (!ARMING_FLAG(ARMED)) {
-        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++)
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
             motor[i] = motor_disarmed[i];
+            motor_normalized[i] = scaleRangef(motor_disarmed[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+        }
     }
 
 #ifdef HIL_BUILD
@@ -1494,6 +1497,11 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
         writeServos();
     }
 #endif
+#ifdef USE_ACTUATORS_T4
+    sendActuatorsT4();
+    handleActuatorsT4(); // is this the best place?
+#endif
+
     writeMotors();
 
 #endif
