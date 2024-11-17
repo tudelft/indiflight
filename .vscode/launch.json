@@ -68,19 +68,63 @@
         {
             "cwd": "${workspaceRoot}",
             "executable": "obj/main/indiflight_STM32H743.elf",
-            "name": "Cortex OpenOCD",
-            "request": "launch",
-            "preLaunchTask": "start-openocd",
+            "name": "Pi Cortex OpenOCD",
+            "request": "attach",
+            "preLaunchTask": "start-openocd-pi",
             "type": "cortex-debug",
             "liveWatch": {
                 "enabled": true,
                 "samplesPerSecond": 2
             },
             "servertype": "external",
-            "gdbTarget": "10.0.0.1:3333",
+            "gdbTarget": "${input:REMOTE_IP}:3333",
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "objdumpPath": "/usr/bin/objdump"
+        },
+        {
+            "cwd": "${workspaceRoot}",
+            "executable": "obj/main/indiflight_STM32H743.elf",
+            "name": "Orin Cortex OpenOCD",
+            "request": "attach",
+            "preLaunchTask": "start-openocd-orin",
+            "type": "cortex-debug",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 2
+            },
+            "servertype": "external",
+            "gdbTarget": "${input:REMOTE_IP}:3333",
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "none",
+            "objdumpPath": "/usr/bin/objdump",
+        },
+        {
+            "cwd": "${workspaceRoot}",
+            "executable": "obj/main/indiflight_STM32H743.elf",
+            "name": "Segger Local",
+            "request": "launch",
+            "type": "cortex-debug",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 2
+            },
+            "servertype": "jlink",
+            "serverpath": "/usr/bin/JLinkGDBServerCLExe",
+            "serverArgs": [],
+            "device": "STM32H743VI",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "none",
+            "objdumpPath": "/usr/bin/objdump",
+        }
+    ],
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "REMOTE_IP",
+            "description": "Please provide the ip of the remote to be debugged",
+            "default": ""
         }
     ]
 }

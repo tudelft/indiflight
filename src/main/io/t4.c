@@ -29,6 +29,10 @@
 
 #if defined(USE_ACTUATORS_T4)
 
+#ifndef USE_SERVOS
+#error "USE_ACTUATORS_T4 requires USE_SERVOS"
+#endif
+
 #include "common/maths.h"
 #include "common/axis.h"
 #include "common/color.h"
@@ -50,6 +54,7 @@
 
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
+#include "flight/servos.h"
 #include "flight/pid.h"
 #include "flight/imu.h"
 #include "flight/failsafe.h"
@@ -81,12 +86,6 @@
 static serialPort_t *t4Port = NULL;
 static const serialPortConfig_t *portConfig;
 
-//static bool piTelemetryEnabled =  false;
-//static portSharing_e t4PortSharing;
-
-// wrapper for serialWrite
-//static void serialWriter(uint8_t byte) { serialWrite(piPort, byte); }
-
 void freeActuatorsT4Port(void)
 {
     closeSerialPort(t4Port);
@@ -96,7 +95,6 @@ void freeActuatorsT4Port(void)
 void initActuatorsT4(void)
 {
     portConfig = findSerialPortConfig(FUNCTION_ACTUATORS_T4);
-    //t4PortSharing = determinePortSharing(portConfig, FUNCTION_ACTUATORS_T4);
 }
 
 #define BLINK_ONCE delay(500); LED1_ON; delay(100); LED1_OFF; delay(100)
@@ -174,7 +172,8 @@ void handleActuatorsT4(void)
                 break;
             case T4_STX_FOUND:
                 *(t4_out_buf_u8view++) = byte; // insert byte into the buffer
-                if ((uint8_t *) &t4_out_buf + sizeof(struct ActuatorsT4Out) - 1 - t4_out_buf_u8view) {
+                checksum += byte;
+                if ((uint8_t *) &t4_out_buf + sizeof(struct ActuatorsT4Out) - 1 - t4_out_buf_u8view == 0) {
                     // next byte is checksum
                     parser = T4_WAITING_FOR_CHECKSUM;
                 }
@@ -184,6 +183,17 @@ void handleActuatorsT4(void)
                 if (byte == checksum) {
                     // success
                     memcpy(&t4_out, &t4_out_buf, sizeof(struct ActuatorsT4Out));
+
+                    // hardcode for now
+                    servo_feedback[0] = t4_out.servo_1_angle;
+                    servo_feedback[1] = t4_out.servo_2_angle;
+#ifdef USE_CLI_DEBUG_PRINT
+                    static unsigned printCounter = 1;
+                    if (printCounter++ % 100 == 0) {
+                        printCounter = 1;
+                        cliDebugPrintLinef("Servo position %d cdeg %d cdeg", servo_feedback[0], servo_feedback[2]);
+                    }
+#endif
                 }
                 parser = T4_IDLE;
                 break;
