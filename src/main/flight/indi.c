@@ -415,7 +415,7 @@ void getMotorCommands(timeUs_t current) {
     for (int i = 0; i < indiRun.actNum; i++) {
 
         // needed later as well, not just for fallback
-        float invThresh = 0.1f * indiRun.actMaxOmega[i];
+        float invThresh = (0.1f * indiRun.actMaxOmega[i] > 1e-3f) ? 0.1f * indiRun.actMaxOmega[i] : 1.f;
         omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
     }
 
@@ -477,8 +477,8 @@ void getMotorCommands(timeUs_t current) {
     float du_pref[MAXU];
 
     for (int i=0; i < indiRun.actNum; i++) {
-        // todo: what if negative u are possible?
-        du_min[i]  = 0.f - doIndi * indiRun.uState_fs[i];
+        // todo: manage servos better
+        du_min[i]  = -indiRun.actLimit[i] * (i >= 2) - doIndi * indiRun.uState_fs[i];
         du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState_fs[i];
         du_pref[i] = 0.f - doIndi * indiRun.uState_fs[i];
     }
@@ -537,9 +537,9 @@ void getMotorCommands(timeUs_t current) {
         if (as_exit_code < AS_NAN_FOUND_Q) {
             indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
 #ifdef USE_LEARNER
-            indiRun.u[i] = constrainf(indiRun.u[i] + uDeltaFromNullex[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+            indiRun.u[i] = constrainf(indiRun.u[i] + uDeltaFromNullex[i], (i >= 2) * -indiRun.actLimit[i], indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
 #else
-            indiRun.u[i] = constrainf(indiRun.u[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+            indiRun.u[i] = constrainf(indiRun.u[i], (i >= 2) * -indiRun.actLimit[i], indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
 #endif
         }
 
@@ -559,7 +559,7 @@ void indiUpdateActuatorState( float* d ) {
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
 #if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
-        if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
+        if ((i < 2) && (isDshotTelemetryActive() || getDshotTelemetry(i))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
             indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
             indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));

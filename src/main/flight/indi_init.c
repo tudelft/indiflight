@@ -140,8 +140,8 @@ void initIndiRuntime(void) {
     // ---- INDI actuator config
     indiRun.actNum = MIN(p->actNum, MAXU);
     for (int i = 0; i < MAXU; i++) {
-        indiRun.actHoverOmega[i] = ((float) MAX(100U, p->actHoverRpm[i])) / SECONDS_PER_MINUTE * 2.f * M_PIf;
-        float maxRpm = (float) MAX(100U, p->actMaxRpm[i]);
+        indiRun.actHoverOmega[i] = ((float) MAX(0U, p->actHoverRpm[i])) / SECONDS_PER_MINUTE * 2.f * M_PIf;
+        float maxRpm = (float) MAX(0U, p->actMaxRpm[i]);
         indiRun.actMaxOmega[i]  = maxRpm / SECONDS_PER_MINUTE * 2.f * M_PIf;
         indiRun.actMaxOmega2[i] = sq( indiRun.actMaxOmega[i] );
         indiRun.actTimeConstS[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
@@ -193,6 +193,10 @@ void initIndiRuntime(void) {
         indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
         indiRun.uState_fs[i] = 0.f; // sync-filtered estiamted force state
         updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
+        if (i >= 2) {
+            indiRun.lin[i].k = 0.f;
+            indiRun.lin[i].A = 0.f; // turn off for servos
+        }
         indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s

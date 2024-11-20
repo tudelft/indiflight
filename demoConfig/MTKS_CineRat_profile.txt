@@ -219,9 +219,9 @@ set osd_rtc_date_time_pos = 2091
 set osd_log_status_pos = 2540
 set osd_canvas_width = 30
 set osd_canvas_height = 13
-set gyro_1_sensor_align = CW180
+set gyro_1_sensor_align = CW0
 set gyro_1_align_pitch = 0
-set gyro_1_align_yaw = 1800
+set gyro_1_align_yaw = 0
 set rpm_filter_min_hz = 60
 set gps_provider = UBLOX
 set gps_auto_baud = ON
@@ -288,6 +288,9 @@ set learner_apply_hover_rotation = 1
 # Neural Nets
 set nn_rate_denom = 2
 
+set align_board_pitch = 90
+set rpm_filter_harmonics = 0
+
 profile 0
 
 # profile 0
@@ -318,8 +321,8 @@ indiprofile 0
 # indiprofile 0
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 3000, 3000, 1000
-set indi_rate_gains     =  230,  230,  150
+set indi_attitude_gains = 1000, 1000, 300
+set indi_rate_gains     =  80,  80,  50
 
 # deg/s
 set indi_attitude_max_tilt_rate = 800
@@ -330,13 +333,13 @@ set indi_attitude_max_yaw_rate = 500
 set indi_manual_max_upwards_accel = 30
 
 # deg
-set indi_manual_max_tilt = 45
+set indi_manual_max_tilt = 30
 
 set indi_manual_use_coordinated_yaw = 1
 
 # --- indi config ---
-set indi_use_increment = 1
-set indi_use_rpm_dot_feedback = 1
+set indi_use_increment = 0 # todo: enable this after testing
+set indi_use_rpm_dot_feedback = 0 # todo: check if this can be enabled
 set indi_act_num = 4
 set indi_sync_lowpass_hz = 15
 
@@ -344,33 +347,33 @@ set indi_sync_lowpass_hz = 15
 set indi_wls_axes_weights = 1,1,50,50,50,5
 
 # actuators (1 to 4, could be up to 8)
-set indi_wls_act_penalties = 1,1,1,1
+set indi_wls_act_penalties = 5,5,1,1
 set indi_wls_act_preferred_state = 0,0,0,0
 
 # --- actuators: fields can have up to 8 elements ---
 # rpm
-set indi_act_time_constant_ms = 25, 25, 25, 25
-set indi_act_max_rpm = 40000, 40000, 40000, 40000
-set indi_act_hover_rpm = 20000, 20000, 20000, 20000
+set indi_act_time_constant_ms = 30, 30, 60, 60
+set indi_act_max_rpm = 30000, 30000, 0, 0
+set indi_act_hover_rpm = 16000, 16000, 0, 0
 
 # %
-set indi_act_nonlinearity = 50, 50, 50, 50
+set indi_act_nonlinearity = 50, 50, 0, 0
 
 # in %. upper bounded by motor_output_limit
-set indi_act_limit = 100, 100, 100, 100
+set indi_act_limit = 50, 50, 60, 60
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -1050, -1050, -1050, -1050
-set indi_act_g1_roll = -4000, -4000, 4000, 4000
-set indi_act_g1_pitch = -2600, 2600, -2600, 2600
-set indi_act_g1_yaw = -510, 510, 510, -510
+set indi_act_g1_fz = -850, -850, 0, 0
+set indi_act_g1_roll = 6000, -6000, 0, 0
+set indi_act_g1_pitch = 0, 0, -800, 800
+set indi_act_g1_yaw = 600, -600, -800, -800
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
-set indi_act_g2_pitch = 0,0,0,0
-set indi_act_g2_yaw = -100, 100, 100, -100
+set indi_act_g2_pitch = 0,0,0,0 # use these?
+set indi_act_g2_yaw = -100, 100, 0, 0
 
 indiprofile 1
 
