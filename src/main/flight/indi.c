@@ -437,7 +437,7 @@ void getMotorCommands(timeUs_t current) {
     if (indiRun.bypassControl) { return; }
 
     // use INDI only when in the air, solve linearized global problem otherwise
-    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
+    bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
     // compute pseudocontrol
     indiRun.dv[0] = 0.f;
@@ -532,7 +532,7 @@ void getMotorCommands(timeUs_t current) {
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
-        indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+        indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], -1.f * (i >= 2), 1.f);
 
         if (as_exit_code < AS_NAN_FOUND_Q) {
             indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];

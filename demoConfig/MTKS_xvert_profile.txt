@@ -205,7 +205,7 @@ set blackbox_high_resolution = ON
 set blackbox_sample_rate = 1/4
 set dshot_bidir = ON
 set motor_pwm_protocol = DSHOT600
-set motor_poles = 12
+set motor_poles = 14
 set failsafe_delay = 5
 set ibata_scale = 280
 set pid_process_denom = 4
@@ -335,13 +335,13 @@ set indi_manual_max_upwards_accel = 30
 # deg
 set indi_manual_max_tilt = 30
 
-set indi_manual_use_coordinated_yaw = 1
+set indi_manual_use_coordinated_yaw = 0
 
 # --- indi config ---
-set indi_use_increment = 0 # todo: enable this after testing
+set indi_use_increment = 1 # todo: enable this after testing
 set indi_use_rpm_dot_feedback = 0 # todo: check if this can be enabled
 set indi_act_num = 4
-set indi_sync_lowpass_hz = 15
+set indi_sync_lowpass_hz = 5
 
 # fx, fy, fz, roll, pitch, yaw
 set indi_wls_axes_weights = 1,1,50,50,50,5
@@ -360,20 +360,22 @@ set indi_act_hover_rpm = 16000, 16000, 0, 0
 set indi_act_nonlinearity = 50, 50, 0, 0
 
 # in %. upper bounded by motor_output_limit
-set indi_act_limit = 50, 50, 60, 60
+set indi_act_limit = 70, 70, 100, 100
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -850, -850, 0, 0
-set indi_act_g1_roll = 6000, -6000, 0, 0
-set indi_act_g1_pitch = 0, 0, -800, 800
-set indi_act_g1_yaw = 600, -600, -800, -800
+set indi_act_g1_fz = -2000, -2000, 0, 0
+set indi_act_g1_roll = 2000, -2000, 0, 0
+set indi_act_g1_pitch = 0, 0, -500, 500
+set indi_act_g1_yaw = -29, 29, -170, -170
+#set indi_act_g1_yaw = 1000, -1000, -170, -170
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
 set indi_act_g2_pitch = 0,0,0,0 # use these?
-set indi_act_g2_yaw = -100, 100, 0, 0
+#set indi_act_g2_yaw = -100, 100, 0, 0
+set indi_act_g2_yaw = 0, 0, 0, 0
 
 indiprofile 1
 

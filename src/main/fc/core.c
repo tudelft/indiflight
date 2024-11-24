@@ -1588,7 +1588,7 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         indiController(currentTimeUs);
 
         for (int i = 0; i < numMotors; i++)
-            motor_normalized[i] = constrainf(indiRun.d[i], 0., 1.);
+            motor_normalized[i] = constrainf(indiRun.d[i], -1. * (i >= 2), 1.);
 
     } else
 #endif 

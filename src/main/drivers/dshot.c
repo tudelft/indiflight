@@ -321,7 +321,8 @@ bool isDshotTelemetryActive(void)
 #endif
     const unsigned motorCount = motorDeviceCount();
     if (motorCount) {
-        for (unsigned i = 0; i < motorCount; i++) {
+        for (unsigned i = 0; i < 2; i++) {
+            // todo: horrible hack
             if (!isDshotMotorTelemetryActive(i)) {
                 return false;
             }
