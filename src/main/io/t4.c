@@ -128,8 +128,8 @@ void sendActuatorsT4(void)
     in.servo_arm = 0xFFFF; // arm all servos
 
     // todo: fix this hardcoding
-    in.servo_1_cmd = (int16_t) (motor_normalized[2] * 60.f * 100.f);
-    in.servo_2_cmd = (int16_t) (motor_normalized[3] * 60.f * 100.f);
+    in.servo_1_cmd = (int16_t) (motor_normalized[2] * 100.f * 100.f);
+    in.servo_2_cmd = (int16_t) (motor_normalized[3] * 100.f * 100.f);
 
     // write to serial port with checksum
     serialWrite(t4Port, START_BYTE_ACTUATORS_T4);
