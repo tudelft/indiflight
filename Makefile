@@ -521,6 +521,15 @@ st-flash_$(TARGET): $(TARGET_BIN)
 ## st-flash          : flash firmware (.bin) onto flight controller
 st-flash: st-flash_$(TARGET)
 
+jlink_flash:
+	$(V0) $(MAKE) $(TARGET_HEX)
+	echo "loadfile $(TARGET_HEX)\n exit" > .jlink-commandfile
+ifeq ($(TARGET),STM32H743)
+	$(V0) JLinkExe -AutoConnect 1 -ExitOnError 1 -NoGui 1 -Device $(TARGET)VI -If SWD -Speed 4000 -CommandFile .jlink-commandfile
+else
+	@echo "target not yet implemented for jlink flashing"
+endif
+
 ifneq ($(OPENOCD_COMMAND),)
 openocd-gdb: $(TARGET_ELF)
 	$(V0) $(OPENOCD_COMMAND) & $(CROSS_GDB) $(TARGET_ELF) -ex "target remote localhost:3333" -ex "load"

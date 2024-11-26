@@ -191,7 +191,7 @@ void handleActuatorsT4(void)
                     static unsigned printCounter = 1;
                     if (printCounter++ % 100 == 0) {
                         printCounter = 1;
-                        cliDebugPrintLinef("Servo position %d cdeg %d cdeg", servo_feedback[0], servo_feedback[2]);
+                        cliDebugPrintLinef("Servo position %d cdeg %d cdeg", servo_feedback[0], servo_feedback[1]);
                     }
 #endif
                 }

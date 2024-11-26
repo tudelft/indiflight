@@ -1498,7 +1498,11 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
     }
 #endif
 #ifdef USE_ACTUATORS_T4
-    sendActuatorsT4();
+    static unsigned servoCounter = 0;
+    if (++servoCounter % 8 == 0) {
+        sendActuatorsT4();
+        servoCounter = 0;
+    }
     handleActuatorsT4(); // is this the best place?
 #endif
 
