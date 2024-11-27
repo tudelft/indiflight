@@ -143,6 +143,7 @@ feature TELEMETRY
 #serial 0 64 115200 57600 0 115200 # RC
 #serial 3 2 115200 115200 0 115200 # GPS
 #serial 1 262144 115200 57600 0 115200 # PI
+serial 0 262144 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
 #serial 6 524288 115200 57600 0 115200 # HIL
@@ -231,7 +232,7 @@ set gps_ublox_use_galileo = ON
 # ekf (these are the defaults)
 set ekf_use_attitude_estimate = 1
 set ekf_use_position_estimate = 1
-set ekf_use_quat = 0
+set ekf_use_quat = 1
 set ekf_proc_noise_acc       = 500000, 500000, 500000
 set ekf_proc_noise_gyro      = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias  = 20, 20, 20
@@ -360,7 +361,7 @@ set indi_act_hover_rpm = 16000, 16000, 0, 0
 set indi_act_nonlinearity = 50, 50, 0, 0
 
 # in %. upper bounded by motor_output_limit. 100% servos --> 100 deg either way
-set indi_act_limit = 40, 40, 45, 45
+set indi_act_limit = 55, 55, 45, 45
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 #set indi_act_g1_fx = 0,0,0,0
@@ -427,18 +428,18 @@ positionprofile 0
 set position_horizontal_p = 30
 set position_horizontal_i = 2
 set position_horizontal_d = 30
-set position_max_horizontal_speed = 2000
-set position_max_horizontal_accel = 10000
+set position_max_horizontal_speed = 100 # cm/s
+set position_max_horizontal_accel = 700 # cm/s/s
 set position_max_tilt = 180
 set position_vertical_p = 50
 set position_vertical_i = 5
 set position_vertical_d = 40
-set position_max_upwards_speed = 500
-set position_max_downwards_speed = 500
-set position_max_upwards_accel = 2000
-set position_max_downwards_accel = 800
+set position_max_upwards_speed = 100
+set position_max_downwards_speed = 50  # real slow for tailsitter
+set position_max_upwards_accel = 1500
+set position_max_downwards_accel = 200 # real slow for tailsitter
 set position_yaw_p = 50
-set position_use_thrust_attenuation = 1
+set position_use_thrust_attenuation = 0
 
 positionprofile 1
 
