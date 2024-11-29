@@ -27,12 +27,14 @@
 #include "target.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include "common/maths.h"
 #include "common/time.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/servos.h"
 #include "fc/init.h"
 #include "fc/runtime_config.h"
 #include "flight/mixer.h"
@@ -78,6 +80,13 @@ void setMotorSpeed(const float *omega, const int n) {
     int lim = MIN(n, getMotorCount());
     for (int motor = 0; motor < lim; motor++) {
         motorOmegaValues[motor] = omega[motor];
+    }
+}
+
+void setServoAngle(const int16_t *angles, const int n) {
+    int lim = MIN(n, MAX_SUPPORTED_SERVOS);
+    for (int servo = 0; servo < lim; servo++) {
+        servo_feedback[servo] = angles[servo];
     }
 }
 

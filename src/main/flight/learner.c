@@ -887,11 +887,6 @@ doMore:
                         && (motorStates[motor+1].queryState == MOTOR_QUERY_ZERO)
                         && ( (time_in_query + 1e3 * c->overlapMs) > 1e3 * (c->stepMs + c->rampMs) ) ) {
                     resetMotorQueryState(current, motorStates, motor + 1, true);
-                    // FIXME
-                    //uint8_t* p = NULL;
-                    //*p = 0; // generate crash
-                    //__asm("b ."); // generate hang
-                    //while (1) __asm("nop"); // another hang 
                 }
 
                 // protect somewhat against gyro overrun, probably wont work because of filter delays
@@ -921,6 +916,11 @@ doMoreMotors:
                     }
                     case MOTOR_QUERY_DONE: { break; }
                 }
+            }
+
+            if ((motorStates[0].queryState == MOTOR_QUERY_DONE) && (motorStates[1].queryState == MOTOR_QUERY_DONE)) {
+                outputFromLearningQuery[0] = 0.3f;
+                outputFromLearningQuery[1] = 0.3f;
             }
 
             bool allMotorsDone = true;
@@ -966,6 +966,7 @@ doMoreMotors:
     }
 
     for (int motor = 0; motor < c->numAct; motor++) {
+
         outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
     }
 }

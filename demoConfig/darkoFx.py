@@ -22,9 +22,9 @@ z_motor = [0., 0.]
 mdir = [-1, 1]
 
 
-lam = 0.8 # flap flow deflection ratio
+lam = 0.65 # flap flow deflection ratio
 
-m_total = 560e-3
+m_total = 600e-3  # 560 + landing gear + Pi zero
 D_prop = 5*25.4e-3
 A_prop = np.pi * D_prop**2 / 4
 rho = 1.225
@@ -34,13 +34,13 @@ G = 9.81
 T_hover = m_total * G
 
 D2R = np.pi / 180.
-delta_servo_max = 45 * D2R
-delta_flap_max = 45 * D2R
-flap_CP_z = 0.12
+delta_servo_max = 100 * D2R # theoretical max angle in t4.c
+delta_flap_max = 100 * D2R
+flap_CP_z = 0.10
 flap_CP_y = y_motor[1]
 
-M_pitch_flap_max = np.sin(delta_flap_max) * lam * 0.5*T_hover * flap_CP_z
-M_yaw_flap_max = np.sin(delta_flap_max) * lam * 0.5*T_hover * flap_CP_y
+M_pitch_flap_max = delta_flap_max * lam * 0.5*T_hover * flap_CP_z
+M_yaw_flap_max = delta_flap_max * lam * 0.5*T_hover * flap_CP_y
 
 #M_roll_motor_max = 
 #F_motor_max = 

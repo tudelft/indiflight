@@ -284,7 +284,7 @@ set learner_randomize_misalignment = 0
 
 set learner_apply_indi_profile = 1
 set learner_apply_position_profile = 1
-set learner_apply_hover_rotation = 1
+set learner_apply_hover_rotation = 0
 
 # Neural Nets
 set nn_rate_denom = 2
@@ -361,7 +361,7 @@ set indi_act_hover_rpm = 16000, 16000, 0, 0
 set indi_act_nonlinearity = 50, 50, 0, 0
 
 # in %. upper bounded by motor_output_limit. 100% servos --> 100 deg either way
-set indi_act_limit = 55, 55, 45, 45
+set indi_act_limit = 60, 60, 45, 45
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 #set indi_act_g1_fx = 0,0,0,0
@@ -374,8 +374,8 @@ set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
 set indi_act_g1_fz = -2500, -2500, 0, 0
 set indi_act_g1_roll = 2000, -2000, 0, 0
-set indi_act_g1_pitch = 0, 0, -700, 700
-set indi_act_g1_yaw = -29, 29, -230, -230
+set indi_act_g1_pitch = 0, 0, -1300, 1300
+set indi_act_g1_yaw = -29, 29, -400, -400
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0

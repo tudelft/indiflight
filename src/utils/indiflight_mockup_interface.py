@@ -45,14 +45,13 @@ class flightModeFlags():
     NN_MODE          = (1 << 17)
 
 class flightLogDisarmReason():
-    DISARM_REASON_SWITCH = 4
     DISARM_REASON_SYSTEM = 255
 
 class boxId():
     # not for flight modes
     BOXARM = (1 << 0)
-    BOXPREARM = (1 << 34)
-    BOXTHROWTOARM = (1 << 35)
+    BOXPREARM = (1 << 35)
+    BOXTHROWTOARM = (1 << 36)
 
 hid_codes = {
     'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,
@@ -68,6 +67,7 @@ hid_codes = {
 
 # ctypes stuff
 float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
+int16_ptr = np.ctypeslib.ndpointer(dtype=ct.c_int16, ndim=1)
 timeUs_t = ct.c_uint32
 
 class IndiflightSITLMockup():
@@ -80,6 +80,7 @@ class IndiflightSITLMockup():
         self.acc = np.zeros(3, dtype=ct.c_float)
         self.motorOmega = np.zeros(self.N, dtype=ct.c_float)
         self.motorCommands = np.zeros(self.N, dtype=ct.c_float)
+        self.servoFeedback = np.zeros(self.N, dtype=ct.c_int16)
 
         self.pos = np.zeros(3, dtype=ct.c_float)
         self.vel = np.zeros(3, dtype=ct.c_float)
@@ -108,6 +109,7 @@ class IndiflightSITLMockup():
         # argtypes
         self.lib.setImu.argtypes = [float_ptr, float_ptr]
         self.lib.setMotorSpeed.argtypes = [float_ptr, ct.c_int]
+        self.lib.setServoAngle.argtypes = [int16_ptr, ct.c_int]
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
@@ -179,6 +181,14 @@ class IndiflightSITLMockup():
         self.motorOmega[:n] = omega
         self.lib.setMotorSpeed(self.motorOmega, n)
 
+    def sendServoAngles(self, angles):
+        n = len(angles)
+        if n > self.N:
+            raise TypeError("too many elements in angles. Must be at most self.N")
+
+        self.servoFeedback[:n] = np.clip(angles * 180. / np.pi * 100., -32767, 32768) # convert to centi-degree and protect against overflow
+        self.lib.setServoAngle(self.servoFeedback, n)
+
     def sendMocap(self, pos, vel, quat):
         self.pos[:] = pos
         self.vel[:] = vel
@@ -226,7 +236,7 @@ class IndiflightSITLMockup():
     def arm(self):
         self.armingFlags.value = 1
 
-    def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SWITCH):
+    def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SYSTEM):
         self.lib.disarm(reason) # also marks blackbox finished
         self.lib.blackboxUpdate()
         self.lib.blackboxUpdate() # call twice to flush all blackbox state changes
