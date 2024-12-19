@@ -19,10 +19,10 @@ x_motor = [0., 0.]
 y_motor = [-0.13, 0.13]
 z_motor = [0., 0.]
 
-mdir = [-1, 1]
+mdir = [1, -1]
 
 
-lam = 0.65 # flap flow deflection ratio
+lam = 0.50 # flap flow deflection ratio
 
 m_total = 600e-3  # 560 + landing gear + Pi zero
 D_prop = 5*25.4e-3
@@ -55,9 +55,9 @@ T_max = T_max_race * (rpm_max / rpm_max_race)**2
 F1 = np.zeros((6, 4))
 F1[2, :2] = -T_max
 F1[3, :2] = -np.asarray(y_motor) * T_max
-F1[4, 2:] = (M_pitch_flap_max, -M_pitch_flap_max)
+F1[4, 2:] = (-M_pitch_flap_max, M_pitch_flap_max)
 F1[5, :2] = T_max * -np.asarray(mdir) * 0.002
-F1[5, 2:] = (M_yaw_flap_max, M_yaw_flap_max)
+F1[5, 2:] = (-M_yaw_flap_max, -M_yaw_flap_max)
 
 Ixx = 1/12 * (b**2 + mac**2) * m_frame  +  2 * (m_motor * y_motor[1]**2 + m_servo * y_servo**2) + m_bat * 0.05**2
 Iyy = 1/12 * mac**2 * m_frame  +  2 * (m_motor * 0.02**2 + m_servo * 0.05**2) + m_bat * 0.05**2

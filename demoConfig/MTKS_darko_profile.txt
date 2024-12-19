@@ -322,8 +322,8 @@ indiprofile 0
 # indiprofile 0
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 1000, 1000, 300
-set indi_rate_gains     =  80,  80,  50
+set indi_attitude_gains = 700, 200, 200
+set indi_rate_gains     =  80,  70,  70
 
 # deg/s
 set indi_attitude_max_tilt_rate = 800
@@ -372,10 +372,10 @@ set indi_act_limit = 60, 60, 45, 45
 #set indi_act_g1_yaw = -29, 29, -250, -250
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -2500, -2500, 0, 0
-set indi_act_g1_roll = 2000, -2000, 0, 0
-set indi_act_g1_pitch = 0, 0, -1300, 1300
-set indi_act_g1_yaw = -29, 29, -400, -400
+set indi_act_g1_fz = -2400, -2400, 0, 0
+set indi_act_g1_roll = 1900, -1900, 0, 0
+set indi_act_g1_pitch = 0, 0, -1000, 1000
+set indi_act_g1_yaw = -29, 29, -380, -380
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
@@ -425,7 +425,7 @@ set indi_wls_act_penalties = 1,1,1,1
 positionprofile 0
 
 # positionprofile 0
-set position_horizontal_p = 30
+set position_horizontal_p = 22
 set position_horizontal_i = 2
 set position_horizontal_d = 30
 set position_max_horizontal_speed = 100 # cm/s
