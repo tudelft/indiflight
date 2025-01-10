@@ -125,7 +125,7 @@ typedef struct indiRuntime_s {
     bool useConstantG2;
     bool useRpmFeedback;
     bool useRpmDotFeedback;
-    fp_vector_t maxRateSp;          // maximum rate setpoint in deg/s
+    fp_vector_t maxRateSp;          // maximum rate setpoint in rad/s
     // ---- INDI actuator config
     uint8_t actNum;
     /*

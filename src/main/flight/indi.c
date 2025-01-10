@@ -411,12 +411,18 @@ void getMotorCommands(timeUs_t current) {
 
 
     // use INDI only when in the air, solve linearized global problem otherwise
-    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
+    bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
+
+    // estimated specific force in z --> TODO, FIXME, HACK, BEUN
+    float f_est = 0.f;
+    for (int i = 0; i < indiRun.actNum; i++) {
+        f_est += indiRun.actG1[2][i] * indiRun.uState_fs[i];
+    }
 
     // compute pseudocontrol
     indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
-    indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
+    indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * f_est; // - doIndi * indiRun.spf_fs.V.Z;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
