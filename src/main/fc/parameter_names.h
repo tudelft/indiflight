@@ -134,6 +134,7 @@
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
+#define PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ "indi_use_accel_for_thrust"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"

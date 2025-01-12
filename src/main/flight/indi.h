@@ -58,6 +58,7 @@ typedef struct indiProfile_s {
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
     // ---- general INDI config
     uint8_t useIncrement;          // bool: use incremental law. NDI (or more precisely linDI) otherwise
+    uint8_t useAccelForSpfz;       // bool: if false, estimate current thrust using actuator model and effectiveness matrix, not accelero
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
     // ---- INDI actuator config
     uint8_t actNum;                 // number of actuators
@@ -122,10 +123,11 @@ typedef struct indiRuntime_s {
     float manualMaxTilt; // rad
     // ---- general INDI config
     bool useIncrement;
+    bool useAccelForSpfz;
     bool useConstantG2;
     bool useRpmFeedback;
     bool useRpmDotFeedback;
-    fp_vector_t maxRateSp;          // maximum rate setpoint in deg/s
+    fp_vector_t maxRateSp;          // maximum rate setpoint in rad/s
     // ---- INDI actuator config
     uint8_t actNum;
     /*

@@ -2395,6 +2395,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL, "%d",            indiProfile->manualMaxUpwardsSpf);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_TILT, "%d",                     indiProfile->manualMaxTilt);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_INCREMENT, "%d",                       indiProfile->useIncrement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ, "%d",                  indiProfile->useAccelForSpfz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK, "%d",                indiProfile->useRpmDotFeedback);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_NUM, "%d",                             indiProfile->actNum);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS, "%d,%d,%d,%d",       indiProfile->actTimeConstMs[0],

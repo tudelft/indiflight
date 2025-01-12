@@ -63,6 +63,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->manualMaxTilt = 45; // degrees
     // ---- general INDI config
     indiProfile->useIncrement = true;
+    indiProfile->useAccelForSpfz = true;
     indiProfile->useRpmDotFeedback = true;
     // ---- INDI actuator config
     indiProfile->actNum = 4;
@@ -131,6 +132,7 @@ void initIndiRuntime(void) {
     indiRun.manualMaxTilt = DEGREES_TO_RADIANS(p->manualMaxTilt);
     // ---- general INDI config
     indiRun.useIncrement = (bool) p->useIncrement;
+    indiRun.useAccelForSpfz = (bool) p->useAccelForSpfz;
     indiRun.useConstantG2 = (bool) p->useConstantG2;
     indiRun.useRpmFeedback = (bool) p->useRpmFeedback;
     indiRun.useRpmDotFeedback = (bool) p->useRpmDotFeedback;
