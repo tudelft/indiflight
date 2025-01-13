@@ -228,16 +228,11 @@ feature RX_SPI
 # master
 set dshot_burst = AUTO
 set dshot_bitbang = OFF
-set rx_spi_protocol = FRSKY_X
-set rx_spi_bus = 3
-set motor_pwm_protocol = DSHOT600
 set current_meter = ADC
 set battery_meter = ADC
-set ibata_scale = 179
 set beeper_inversion = ON
 set beeper_od = OFF
 set system_hse_mhz = 8
-set max7456_spi_bus = 2
 set gyro_1_bustype = SPI
 set gyro_1_spibus = 1
 set gyro_1_sensor_align = CW0FLIP
@@ -252,7 +247,7 @@ set craft_name = meteor
 feature TELEMETRY
 
 # serial
-serial 0 262144 115200 57600 0 115200
+#serial 0 262144 115200 57600 0 115200
 serial 1 64 115200 57600 0 115200
 
 # rx
@@ -307,22 +302,13 @@ set blackbox_high_resolution = ON
 set blackbox_sample_rate = 1/4
 set dshot_bidir = ON
 set dshot_idle_value = 800
-set motor_pwm_protocol = DSHOT600
+set motor_pwm_protocol = DSHOT300
 set motor_poles = 12
 set motor_output_reordering = 3,2,1,0,4,5,6,7
 set failsafe_delay = 5
-set ibata_scale = 280
+set ibata_scale = 470
 set pid_process_denom = 3
 set simplified_gyro_filter_multiplier = 40
-set osd_rssi_pos = 2080
-set osd_ah_sbar_pos = 2286
-set osd_ah_pos = 2158
-set osd_mah_drawn_pos = 2528
-set osd_avg_cell_voltage_pos = 2552
-set osd_rtc_date_time_pos = 2091
-set osd_log_status_pos = 2540
-set osd_canvas_width = 30
-set osd_canvas_height = 13
 set rpm_filter_min_hz = 60
 
 # ekf (these are the defaults)
@@ -568,5 +554,4 @@ indiprofile 0
 # restore original position profile selection
 positionprofile 0
 
-# save configuration
-set pilot_name = 0c87f51+dirty
+batch end
