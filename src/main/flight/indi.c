@@ -216,7 +216,6 @@ void getSetpoints(timeUs_t current) {
         indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
 
     } else {
-        indiRun.controlAttitude = false;
         // acro
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
@@ -225,6 +224,37 @@ void getSetpoints(timeUs_t current) {
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
+
+        // launch control
+        static float launchAngle = 0.f;
+        if (isLaunchControlActive()) {
+            if (ARMING_FLAG(ARMED)) {
+                launchAngle += getRcDeflection(PITCH) * 1.f / indiRun.indiFrequency;
+            } else {
+                launchAngle = 0.;
+            }
+
+            indiRun.controlAttitude = true;
+            indiRun.spfSpBody.V.Z = 0.f; // thrust
+            indiRun.rateSpBodyCommanded.V.Y = 0.f; // pitch
+
+            fp_vector_t axis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f, };
+            fp_quaternion_t attSpYaw;
+            quaternion_of_axis_angle(&attSpYaw, &axis, launchAngle);
+            float Psi = getYawWithoutSingularity();
+            fp_quaternion_t yawNed = {
+                .w = cos_approx(Psi/2.f),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx(Psi/2.f),
+            };
+            indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        } else {
+            launchAngle = 0.f;
+
+            indiRun.controlAttitude = false;
+        }
+
     }
 }
 

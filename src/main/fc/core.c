@@ -1304,7 +1304,7 @@ bool isTouchingGround(void) {
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
     }
 
-    return (accHigh && throttleLow && gyroLow);
+    return (accHigh && throttleLow && gyroLow && !isLaunchControlActive());
 }
 
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)

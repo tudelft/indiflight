@@ -259,10 +259,11 @@ beacon -RX_SET
 
 # aux
 aux 0 0 0 900 1300 0 0
-aux 1 1 3 900 2100 0 0
+aux 1 1 2 900 1700 0 0
 aux 2 58 2 900 1300 0 0
 aux 3 36 5 1700 2100 0 0
 aux 4 56 1 900 1300 0 0
+aux 5 49 4 1700 2100 0 0
 
 # ledstrip
 
@@ -301,7 +302,7 @@ set blackbox_disable_debug = ON
 set blackbox_high_resolution = ON
 set blackbox_sample_rate = 1/4
 set dshot_bidir = ON
-set dshot_idle_value = 800
+set dshot_idle_value = 1000
 set motor_pwm_protocol = DSHOT300
 set motor_poles = 12
 set motor_output_reordering = 3,2,1,0,4,5,6,7
@@ -310,6 +311,7 @@ set ibata_scale = 470
 set pid_process_denom = 3
 set simplified_gyro_filter_multiplier = 40
 set rpm_filter_min_hz = 60
+set small_angle = 45
 
 # ekf (these are the defaults)
 set imu_process_denom = 3
@@ -409,10 +411,10 @@ set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
 # N/kg
-set indi_manual_max_upwards_accel = 30
+set indi_manual_max_upwards_accel = 40
 
 # deg
-set indi_manual_max_tilt = 45
+set indi_manual_max_tilt = 55
 
 set indi_manual_use_coordinated_yaw = 1
 
@@ -432,7 +434,7 @@ set indi_wls_act_preferred_state = 0,0,0,0
 
 # --- actuators: fields can have up to 8 elements ---
 # rpm -- guesswork
-set indi_act_time_constant_ms = 25, 25, 25, 25
+set indi_act_time_constant_ms = 35, 35, 35, 35
 set indi_act_max_rpm = 80000, 80000, 80000, 80000
 set indi_act_hover_rpm = 40000, 40000, 40000, 40000
 
@@ -446,8 +448,8 @@ set indi_act_limit = 100, 100, 100, 100
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
 set indi_act_g1_fz = -1000, -1000, -1000, -1000
-set indi_act_g1_roll = -8000, -8000, 8000, 8000
-set indi_act_g1_pitch = -4300, 4300, -4300, 4300
+set indi_act_g1_roll = -6000, -6000, 6000, 6000
+set indi_act_g1_pitch = -5000, 5000, -5000, 5000
 set indi_act_g1_yaw = 1510, -1510, -1510, 1510
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
