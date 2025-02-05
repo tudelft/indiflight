@@ -450,7 +450,7 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && false) { // trashcan hack: throw while armed
             // Intended behaviour: 
             // 1. display "THROW_NOT_READY" when RC throwtoarm switch selected, 
             //    but conditions not met (throwState == IDLE). This is intended
