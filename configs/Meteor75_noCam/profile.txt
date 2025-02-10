@@ -245,9 +245,9 @@ set craft_name = meteor
 
 # features
 feature TELEMETRY
+feature LED_STRIP
 
 # serial
-#serial 0 262144 115200 57600 0 115200
 serial 1 64 115200 57600 0 115200
 
 # rx
@@ -267,6 +267,13 @@ aux 2 58 2 900 1300 0 0
 aux 3 36 5 1700 2100 0 0
 aux 4 56 1 900 1300 0 0
 aux 5 49 4 1700 2100 0 0
+
+# led
+led 0 5,7::C:2
+led 1 6,7::L:0
+led 2 7,7::L:0
+led 3 8,7::L:0
+led 4 9,7::C:2
 
 # ledstrip
 
@@ -289,7 +296,7 @@ set dyn_notch_q = 500
 set gyro_lpf1_dyn_min_hz = 0
 set gyro_lpf1_dyn_max_hz = 250
 set acc_calibration = 0,0,0,1
-set acc_offset = 10, 0, -5 
+set acc_offset = 12, 0, -8
 set acc_lpf_hz = 50
 set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
@@ -339,27 +346,27 @@ set catapult_rotation_time = 150
 set catapult_upwards_accel = 20
 
 set throw_to_arm_acc_high = 20
-set throw_to_arm_acc_clip = 45
+set throw_to_arm_acc_clip = 50
 set throw_to_arm_acc_low = 20
 set throw_to_arm_gyro_high = 600
-set throw_to_arm_momentum_thresh = 400
-set throw_to_arm_release_delay_ms = 75
+set throw_to_arm_momentum_thresh = 300
+set throw_to_arm_release_delay_ms = 150
 
 # 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
 set learner_mode = 6
 set learner_num_actuators = 4
-set learner_delay_time_ms = 250
+set learner_delay_time_ms = 10
 set learner_step_time_ms = 30
 set learner_ramp_time_ms = 60
 set learner_overlap_time_ms = 30
-set learner_step_amplitude = 25
-set learner_ramp_amplitude = 50
-set learner_gyro_max = 1600
+set learner_step_amplitude = 20
+set learner_ramp_amplitude = 40
+set learner_gyro_max = 1800
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
-set learner_zeta_rate = 90
-set learner_zeta_attitude = 80
+set learner_zeta_rate = 80
+set learner_zeta_attitude = 70
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 # new stuff
@@ -414,7 +421,7 @@ set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
 # N/kg
-set indi_manual_max_upwards_accel = 40
+set indi_manual_max_upwards_accel = 255
 
 # deg
 set indi_manual_max_tilt = 55
