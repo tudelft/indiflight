@@ -1499,7 +1499,7 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
 #endif
 #ifdef USE_ACTUATORS_T4
     static unsigned servoCounter = 0;
-    if (++servoCounter % 8 == 0) {
+    if (++servoCounter % 4 == 0) {
         sendActuatorsT4();
         servoCounter = 0;
     }

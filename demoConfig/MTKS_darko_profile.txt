@@ -142,8 +142,8 @@ feature TELEMETRY
 # serial
 #serial 0 64 115200 57600 0 115200 # RC
 #serial 3 2 115200 115200 0 115200 # GPS
-#serial 1 262144 115200 57600 0 115200 # PI
-serial 0 262144 115200 57600 0 115200 # PI
+#serial 0 262144 115200 57600 0 115200 # PI
+serial 3 262144 115200 57600 115200 115200 # ESP
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
 #serial 6 524288 115200 57600 0 115200 # HIL
@@ -322,7 +322,7 @@ indiprofile 0
 # indiprofile 0
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 700, 200, 200
+set indi_attitude_gains = 700, 500, 200
 set indi_rate_gains     =  80,  70,  70
 
 # deg/s
@@ -370,18 +370,29 @@ set indi_act_limit = 60, 60, 45, 45
 #set indi_act_g1_roll = 1500, -1500, 0, 0
 #set indi_act_g1_pitch = 0, 0, -800, 800
 #set indi_act_g1_yaw = -29, 29, -250, -250
-set indi_act_g1_fx = 0,0,0,0
+
+#set indi_act_g1_fx = 0,0,0,0
+#set indi_act_g1_fy = 0,0,0,0
+#set indi_act_g1_fz = -2850, -2850, 0, 0
+#set indi_act_g1_roll = 1900, -1900, 0, 0
+#set indi_act_g1_pitch = 0, 0, -600, 600
+#set indi_act_g1_yaw = -32, 32, -316, -316
+
+# global model linearized around hover
+set indi_act_g1_fx = 331, 331, -384, 384
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -2400, -2400, 0, 0
-set indi_act_g1_roll = 1900, -1900, 0, 0
-set indi_act_g1_pitch = 0, 0, -1000, 1000
-set indi_act_g1_yaw = -29, 29, -380, -380
+set indi_act_g1_fz = -2087, -2087, 0, 0
+set indi_act_g1_roll = 2622, -2622, 0, 0
+set indi_act_g1_pitch = 0, 0, -614, 614
+set indi_act_g1_yaw = 647, -647, -523, -523
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
 set indi_act_g2_pitch = 0,0,0,0 # use these?
 #set indi_act_g2_yaw = -100, 100, 0, 0
-set indi_act_g2_yaw = 0, 0, 0, 0
+
+# from global libearized model
+set indi_act_g2_yaw = 132, -132, 0, 0  
 
 indiprofile 1
 

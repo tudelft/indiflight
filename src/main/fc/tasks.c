@@ -460,7 +460,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_TELEMETRY
-    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(2000), TASK_PRIORITY_LOW),
+    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(50), TASK_PRIORITY_LOW),
 #endif
 
 #ifdef HIL_BUILD

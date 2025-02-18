@@ -24,7 +24,8 @@ mdir = [1, -1]
 
 lam = 0.50 # flap flow deflection ratio
 
-m_total = 600e-3  # 560 + landing gear + Pi zero
+#m_total = 600e-3  # 560 + landing gear + Pi zero
+m_total = 500e-3  # 560 + landing gear + Pi zero
 D_prop = 5*25.4e-3
 A_prop = np.pi * D_prop**2 / 4
 rho = 1.225
