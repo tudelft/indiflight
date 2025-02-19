@@ -379,20 +379,22 @@ set indi_act_limit = 60, 60, 45, 45
 #set indi_act_g1_yaw = -32, 32, -316, -316
 
 # global model linearized around hover
-set indi_act_g1_fx = 331, 331, -384, 384
-set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -2087, -2087, 0, 0
-set indi_act_g1_roll = 2622, -2622, 0, 0
-set indi_act_g1_pitch = 0, 0, -614, 614
-set indi_act_g1_yaw = 647, -647, -523, -523
+set indi_act_g1_fx    =   305,   305,  -239,   239
+set indi_act_g1_fy    =     0,     0,     0,     0
+set indi_act_g1_fz    = -1886, -1886,     0,     0
+set indi_act_g1_roll  =  2385, -2385,     0,     0
+set indi_act_g1_pitch =     0,     0,  -736,   736
+set indi_act_g1_yaw   =   503,  -503,  -638,  -638
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
-set indi_act_g2_roll = 0,0,0,0
-set indi_act_g2_pitch = 0,0,0,0 # use these?
-#set indi_act_g2_yaw = -100, 100, 0, 0
+#set indi_act_g2_roll  =    0,    0,    0,    0
+#set indi_act_g2_pitch =    0,    0,    0,    0
+#set indi_act_g2_yaw   = -100, +100,    0,    0
 
 # from global libearized model
-set indi_act_g2_yaw = 132, -132, 0, 0  
+set indi_act_g2_roll  =    0,    0,    0,    0
+set indi_act_g2_pitch =    0,    0,    0,    0
+set indi_act_g2_yaw   =  115, -115,    0,    0  
 
 indiprofile 1
 
