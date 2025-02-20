@@ -40,6 +40,7 @@
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
 #include "flight/imu.h"
+#include "flight/servos.h"
 #include "flight/pid.h"
 #include "flight/mixer_init.h"
 #include "flight/pos_ctl.h"
@@ -449,6 +450,49 @@ void getMotorCommands(timeUs_t current) {
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
+
+    if (indiRun.tailsUseScheduled) {
+        float d_eff[2];
+        for (int i = 0; i < 2; i++) {
+            d_eff[i] = DEGREES_TO_RADIANS(0.01f * ((float)servo_feedback[i]) );
+            d_eff[i] -= indiRun.tailsD0[i];
+        }
+
+        for (int motor = 0; motor < 2; motor++) {
+            float sindp = sinf(d_eff[motor]);
+
+            indiRun.actG1[0][motor] = ( indiRun.tailsCxw + indiRun.tailsCxd * sindp );
+            indiRun.actG1[1][motor] = ( indiRun.tailsCyw + 0.f                      );
+            indiRun.actG1[2][motor] = ( indiRun.tailsCzw + 0.f                      );
+            indiRun.actG1[3][motor] = ( indiRun.tailsClw + 0.f                      ) * ((motor==0) ? +1.f : -1.f);
+            indiRun.actG1[4][motor] = ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
+            indiRun.actG1[5][motor] = ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
+            for (int axis = 0; axis < 6; axis++) {
+                indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
+            }
+
+            indiRun.actG2[0][motor] = 0.f;
+            indiRun.actG2[1][motor] = 0.f;
+            indiRun.actG2[2][motor] = 0.f;
+            indiRun.actG2[3][motor] = 0.f;
+            indiRun.actG2[4][motor] = 0.f;
+            indiRun.actG2[5][motor] = indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
+        }
+        for (int servo = 0; servo < 2; servo++) {
+            float cosdp = cosf(d_eff[servo]);
+
+            indiRun.actG1[0][2+servo] = indiRun.tailsCxd * cosdp;
+            indiRun.actG1[1][2+servo] = 0.f;
+            indiRun.actG1[2][2+servo] = 0.f;
+            indiRun.actG1[3][2+servo] = 0.f;
+            indiRun.actG1[4][2+servo] = indiRun.tailsCmd * cosdp;
+            indiRun.actG1[5][2+servo] = indiRun.tailsCnd * cosdp * ((servo==0) ? +1.f : -1.f);
+            for (int axis = 0; axis < 6; axis++) {
+                float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim; // todo: add vz velocity here?
+            }
+        }
+    }
 
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {

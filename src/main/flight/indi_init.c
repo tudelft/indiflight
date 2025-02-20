@@ -96,6 +96,20 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- Filtering config
     indiProfile->imuSyncLp2Hz = 15;
 
+    // ---- Tailsitter
+    indiProfile->tails_use_scheduled = false;
+    indiProfile->tails_use_sine = true;
+    indiProfile->tails_cxw = 0;
+    indiProfile->tails_cyw = 0;
+    indiProfile->tails_czw = 0;
+    indiProfile->tails_clw = 0;
+    indiProfile->tails_cmw = 0;
+    indiProfile->tails_cnw = 0;
+    indiProfile->tails_cnwd = 0;
+    indiProfile->tails_cxd = 0;
+    indiProfile->tails_cmd = 0;
+    indiProfile->tails_cnd = 0;
+
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
     indiProfile->attRateDenom = 4;
@@ -177,6 +191,23 @@ void initIndiRuntime(void) {
 
     // ---- Filtering config
     indiRun.imuSyncLp2Hz = (float) constrainu(p->imuSyncLp2Hz, 1, 5e5 / gyro.targetLooptime);
+
+    // ---- tailsitter
+    indiRun.tailsUseScheduled = (bool) p->tails_use_scheduled;
+    indiRun.tailsUseSine = (bool) p->tails_use_sine;
+    indiRun.tailsD0[0]= DEGREES_TO_RADIANS( ((float) p->tails_d0[0]) * 1e-2f );
+    indiRun.tailsD0[1]= DEGREES_TO_RADIANS( ((float) p->tails_d0[1]) * 1e-2f );
+    indiRun.tailsCxw  = ((float) p->tails_cxw)  * 1e-9f;
+    indiRun.tailsCyw  = ((float) p->tails_cyw)  * 1e-9f;
+    indiRun.tailsCzw  = ((float) p->tails_czw)  * 1e-9f;
+    indiRun.tailsClw  = ((float) p->tails_clw)  * 1e-8f;
+    indiRun.tailsCmw  = ((float) p->tails_cmw)  * 1e-8f;
+    indiRun.tailsCnw  = ((float) p->tails_cnw)  * 1e-8f;
+    indiRun.tailsCnwd = ((float) p->tails_cnwd) * 1e-5f;
+    indiRun.tailsCxd  = ((float) p->tails_cxw)  * 1e-8f;
+    indiRun.tailsCmd  = ((float) p->tails_cmw)  * 1e-8f;
+    indiRun.tailsCnd  = ((float) p->tails_cnw)  * 1e-8f;
+
     // ---- WLS config
     indiRun.wlsAlgo = (activeSetAlgoChoice) p->wlsAlgo;
     indiRun.useWls = (bool) p->useWls;

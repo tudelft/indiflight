@@ -154,6 +154,19 @@
 #define PARAM_NAME_INDI_WLS_AXES_WEIGHTS "indi_wls_axes_weights"
 #define PARAM_NAME_INDI_WLS_ACT_PENALTIES "indi_wls_act_penalties"
 #define PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE "indi_wls_act_preferred_state"
+#define PARAM_NAME_INDI_TAILS_USE_SCHEDULED "indi_tails_use_scheduled"
+#define PARAM_NAME_INDI_TAILS_USE_SINE      "indi_tails_use_sine"
+#define PARAM_NAME_INDI_TAILS_D0            "indi_tails_d0"
+#define PARAM_NAME_INDI_TAILS_CXW           "indi_tails_cxw"
+#define PARAM_NAME_INDI_TAILS_CYW           "indi_tails_cyw"
+#define PARAM_NAME_INDI_TAILS_CZW           "indi_tails_czw"
+#define PARAM_NAME_INDI_TAILS_CLW           "indi_tails_clw"
+#define PARAM_NAME_INDI_TAILS_CMW           "indi_tails_cmw"
+#define PARAM_NAME_INDI_TAILS_CNW           "indi_tails_cnw"
+#define PARAM_NAME_INDI_TAILS_CNWD          "indi_tails_cnwd"
+#define PARAM_NAME_INDI_TAILS_CXD           "indi_tails_cxd"
+#define PARAM_NAME_INDI_TAILS_CMD           "indi_tails_cmd"
+#define PARAM_NAME_INDI_TAILS_CND           "indi_tails_cnd"
 #endif
 
 #ifdef USE_LOCAL_POSITION

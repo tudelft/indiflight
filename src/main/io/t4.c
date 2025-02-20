@@ -129,7 +129,7 @@ void sendActuatorsT4(void)
 
     // todo: fix this hardcoding
     in.servo_1_cmd = (int16_t) (motor_normalized[2] * 100.f * 100.f);
-    in.servo_2_cmd = (int16_t) (motor_normalized[3] * 100.f * 100.f);
+    in.servo_2_cmd = (int16_t) (-motor_normalized[3] * 100.f * 100.f);
 
     // write to serial port with checksum
     serialWrite(t4Port, START_BYTE_ACTUATORS_T4);
@@ -185,8 +185,8 @@ void handleActuatorsT4(void)
                     memcpy(&t4_out, &t4_out_buf, sizeof(struct ActuatorsT4Out));
 
                     // hardcode for now
-                    servo_feedback[0] = t4_out.servo_1_angle;
-                    servo_feedback[1] = t4_out.servo_2_angle;
+                    servo_feedback[0] = t4_out.servo_1_angle; // centidegree
+                    servo_feedback[1] = -t4_out.servo_2_angle; // flipped in tailsitter
 #ifdef USE_CLI_DEBUG_PRINT
                     static unsigned printCounter = 1;
                     if (printCounter++ % 100 == 0) {

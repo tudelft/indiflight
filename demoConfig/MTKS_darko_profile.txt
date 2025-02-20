@@ -379,12 +379,12 @@ set indi_act_limit = 60, 60, 45, 45
 #set indi_act_g1_yaw = -32, 32, -316, -316
 
 # global model linearized around hover
-set indi_act_g1_fx    =   305,   305,  -239,   239
+set indi_act_g1_fx    =   296,   296,  -275,   275
 set indi_act_g1_fy    =     0,     0,     0,     0
-set indi_act_g1_fz    = -1886, -1886,     0,     0
-set indi_act_g1_roll  =  2385, -2385,     0,     0
-set indi_act_g1_pitch =     0,     0,  -736,   736
-set indi_act_g1_yaw   =   503,  -503,  -638,  -638
+set indi_act_g1_fz    = -1850, -1850,     0,     0
+set indi_act_g1_roll  =  2339, -2339,     0,     0
+set indi_act_g1_pitch =     0,     0,  -735,   735
+set indi_act_g1_yaw   =  -494,   494,  -638,  -638
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 #set indi_act_g2_roll  =    0,    0,    0,    0
@@ -394,7 +394,26 @@ set indi_act_g1_yaw   =   503,  -503,  -638,  -638
 # from global libearized model
 set indi_act_g2_roll  =    0,    0,    0,    0
 set indi_act_g2_pitch =    0,    0,    0,    0
-set indi_act_g2_yaw   =  115, -115,    0,    0  
+set indi_act_g2_yaw   = -116,  116,    0,    0  
+
+# tailsitter stuff. set scheduled if you want to use these parameters instead of the g1/g2 above
+set indi_tails_use_scheduled = 1
+set indi_tails_use_sine = 1
+
+set indi_tails_d0 = 871, 1642  # centi-degrees. elevon angle at which motor thrust doesnt give rise to x force
+
+set indi_tails_cxw = 0       # * 1e9
+set indi_tails_cyw = 0
+set indi_tails_czw = -2645
+set indi_tails_clw = 3343    # * 1e8
+set indi_tails_cmw = -1132
+set indi_tails_cnw = -277
+
+set indi_tails_cnwd = 115    # * 1e5
+
+set indi_tails_cxd =   -95   # * 1e8
+set indi_tails_cmd = -2563
+set indi_tails_cnd = -2225
 
 indiprofile 1
 

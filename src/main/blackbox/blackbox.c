@@ -2579,6 +2579,19 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actG2_yaw[1],
                                                                                               indiProfile->actG2_yaw[2],
                                                                                               indiProfile->actG2_yaw[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SCHEDULED, "%d",                 indiProfile->tails_use_scheduled);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SINE     , "%d",                 indiProfile->tails_use_sine);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_D0           , "%d,%d",              indiProfile->tails_d0[0], indiProfile->tails_d0[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXW          , "%d",                 indiProfile->tails_cxw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CYW          , "%d",                 indiProfile->tails_cyw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CZW          , "%d",                 indiProfile->tails_czw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CLW          , "%d",                 indiProfile->tails_clw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMW          , "%d",                 indiProfile->tails_cmw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNW          , "%d",                 indiProfile->tails_cnw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNWD         , "%d",                 indiProfile->tails_cnwd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXD          , "%d",                 indiProfile->tails_cxd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMD          , "%d",                 indiProfile->tails_cmd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CND          , "%d",                 indiProfile->tails_cnd);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_SYNC_LOWPASS_HZ, "%d",                     indiProfile->imuSyncLp2Hz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_AXES_WEIGHTS, "%d,%d,%d,%d,%d,%d",     indiProfile->wlsWv[0],
                                                                                               indiProfile->wlsWv[1],

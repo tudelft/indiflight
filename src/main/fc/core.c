@@ -1610,7 +1610,7 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 #endif
 
     for (int i = 0; i < numMotors; i++)
-        motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+        motor[i] = scaleRangef(motor_normalized[i], -1. * (i >= 2), 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
 
     for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++)
         motor[i] = motor_disarmed[i];
