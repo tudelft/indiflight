@@ -204,9 +204,9 @@ void initIndiRuntime(void) {
     indiRun.tailsCmw  = ((float) p->tails_cmw)  * 1e-8f;
     indiRun.tailsCnw  = ((float) p->tails_cnw)  * 1e-8f;
     indiRun.tailsCnwd = ((float) p->tails_cnwd) * 1e-5f;
-    indiRun.tailsCxd  = ((float) p->tails_cxw)  * 1e-8f;
-    indiRun.tailsCmd  = ((float) p->tails_cmw)  * 1e-8f;
-    indiRun.tailsCnd  = ((float) p->tails_cnw)  * 1e-8f;
+    indiRun.tailsCxd  = ((float) p->tails_cxd)  * 1e-8f;
+    indiRun.tailsCmd  = ((float) p->tails_cmd)  * 1e-8f;
+    indiRun.tailsCnd  = ((float) p->tails_cnd)  * 1e-8f;
 
     // ---- WLS config
     indiRun.wlsAlgo = (activeSetAlgoChoice) p->wlsAlgo;

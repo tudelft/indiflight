@@ -322,8 +322,8 @@ indiprofile 0
 # indiprofile 0
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 700, 500, 200
-set indi_rate_gains     =  80,  70,  70
+set indi_attitude_gains = 700, 500, 300
+set indi_rate_gains     =  70,  70,  70
 
 # deg/s
 set indi_attitude_max_tilt_rate = 800
@@ -334,7 +334,7 @@ set indi_attitude_max_yaw_rate = 500
 set indi_manual_max_upwards_accel = 30
 
 # deg
-set indi_manual_max_tilt = 30
+set indi_manual_max_tilt = 40
 
 set indi_manual_use_coordinated_yaw = 0
 
@@ -342,7 +342,7 @@ set indi_manual_use_coordinated_yaw = 0
 set indi_use_increment = 1 # todo: enable this after testing
 set indi_use_rpm_dot_feedback = 0 # todo: check if this can be enabled
 set indi_act_num = 4
-set indi_sync_lowpass_hz = 5
+set indi_sync_lowpass_hz = 10
 
 # fx, fy, fz, roll, pitch, yaw
 set indi_wls_axes_weights = 1,1,50,50,50,5
@@ -353,12 +353,12 @@ set indi_wls_act_preferred_state = 0,0,0,0
 
 # --- actuators: fields can have up to 8 elements ---
 # rpm
-set indi_act_time_constant_ms = 30, 30, 50, 50
-set indi_act_max_rpm = 30000, 30000, 0, 0
-set indi_act_hover_rpm = 16000, 16000, 0, 0
+set indi_act_time_constant_ms = 33, 33, 50, 50
+set indi_act_max_rpm = 26000, 26000, 0, 0
+set indi_act_hover_rpm = 13000, 13000, 0, 0
 
 # %
-set indi_act_nonlinearity = 50, 50, 0, 0
+set indi_act_nonlinearity = 40, 40, 0, 0
 
 # in %. upper bounded by motor_output_limit. 100% servos --> 100 deg either way
 set indi_act_limit = 60, 60, 45, 45
@@ -379,12 +379,19 @@ set indi_act_limit = 60, 60, 45, 45
 #set indi_act_g1_yaw = -32, 32, -316, -316
 
 # global model linearized around hover
-set indi_act_g1_fx    =   296,   296,  -275,   275
+#set indi_act_g1_fx    =   307,   307,  -235,  -235
+#set indi_act_g1_fy    =     0,     0,     0,     0
+#set indi_act_g1_fz    = -1688, -1688,  -101,  -157
+#set indi_act_g1_roll  =  1549, -1549,     0,     0
+#set indi_act_g1_pitch =     0,     0,  -782,  -782
+#set indi_act_g1_yaw   =  -196,  +196,  -422,   422
+
+set indi_act_g1_fx    =   307,   307,  -235,  -235
 set indi_act_g1_fy    =     0,     0,     0,     0
-set indi_act_g1_fz    = -1850, -1850,     0,     0
-set indi_act_g1_roll  =  2339, -2339,     0,     0
-set indi_act_g1_pitch =     0,     0,  -735,   735
-set indi_act_g1_yaw   =  -494,   494,  -638,  -638
+set indi_act_g1_fz    = -1688, -1688,     0,     0
+set indi_act_g1_roll  =  1549, -1549,     0,     0
+set indi_act_g1_pitch =     0,     0,  -782,  -782
+set indi_act_g1_yaw   =     0,     0,  -422,   422
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 #set indi_act_g2_roll  =    0,    0,    0,    0
@@ -394,26 +401,42 @@ set indi_act_g1_yaw   =  -494,   494,  -638,  -638
 # from global libearized model
 set indi_act_g2_roll  =    0,    0,    0,    0
 set indi_act_g2_pitch =    0,    0,    0,    0
-set indi_act_g2_yaw   = -116,  116,    0,    0  
+#set indi_act_g2_yaw   =  -82,  +82,    0,    0
+set indi_act_g2_yaw   =    0,    0,    0,    0  
 
 # tailsitter stuff. set scheduled if you want to use these parameters instead of the g1/g2 above
-set indi_tails_use_scheduled = 1
+set indi_tails_use_scheduled = 0
 set indi_tails_use_sine = 1
 
-set indi_tails_d0 = 871, 1642  # centi-degrees. elevon angle at which motor thrust doesnt give rise to x force
+#set indi_tails_d0 = 871, 1642  # centi-degrees. elevon angle at which motor thrust doesnt give rise to x force
+#
+#set indi_tails_cxw = 0       # * 1e9
+#set indi_tails_cyw = 0
+#set indi_tails_czw = -2645
+#set indi_tails_clw = 3343    # * 1e8
+#set indi_tails_cmw = -1132
+#set indi_tails_cnw = -277
+#
+#set indi_tails_cnwd = 115    # * 1e5
+#
+#set indi_tails_cxd =   -95   # * 1e8
+#set indi_tails_cmd = -2563
+#set indi_tails_cnd = -2225
 
-set indi_tails_cxw = 0       # * 1e9
+set indi_tails_d0 = 1519, 2519
+
+set indi_tails_cxw = 0
 set indi_tails_cyw = 0
-set indi_tails_czw = -2645
-set indi_tails_clw = 3343    # * 1e8
-set indi_tails_cmw = -1132
-set indi_tails_cnw = -277
+set indi_tails_czw = -2603
+set indi_tails_clw = 2389
+set indi_tails_cmw = -1573
+set indi_tails_cnw = -545
 
-set indi_tails_cnwd = 115    # * 1e5
+set indi_tails_cnwd = 81
 
-set indi_tails_cxd =   -95   # * 1e8
-set indi_tails_cmd = -2563
-set indi_tails_cnd = -2225
+set indi_tails_cxd = -82
+set indi_tails_cmd = -2726
+set indi_tails_cnd = -1469
 
 indiprofile 1
 
@@ -449,7 +472,7 @@ set indi_act_g2_roll = -98, 98, 98, -98
 set indi_act_g2_pitch = -12, 12, 12, -12
 set indi_act_g2_yaw = -8, 8, 8, -8
 
-set indi_sync_lowpass_hz = 15
+set indi_sync_lowpass_hz = 5
 set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 

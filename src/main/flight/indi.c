@@ -70,7 +70,7 @@
 #endif
 
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 1);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -421,7 +421,8 @@ void getMotorCommands(timeUs_t current) {
     }
 
     // get motor acceleration
-    for (int i = 0; i < indiRun.actNum; i++) {
+    //for (int i = 0; i < indiRun.actNum; i++) {
+    for (int i = 0; i < 2; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
         if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback ) {
             indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
@@ -441,7 +442,7 @@ void getMotorCommands(timeUs_t current) {
     bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
     // compute pseudocontrol
-    indiRun.dv[0] = 0.f;
+    indiRun.dv[0] = 0.f - doIndi * indiRun.spf_fs.V.X;
     indiRun.dv[1] = 0.f;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
     //indiRun.dv[0] = spfBodyDeltaFromNullex.V.X;
@@ -465,18 +466,15 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG1[1][motor] = ( indiRun.tailsCyw + 0.f                      );
             indiRun.actG1[2][motor] = ( indiRun.tailsCzw + 0.f                      );
             indiRun.actG1[3][motor] = ( indiRun.tailsClw + 0.f                      ) * ((motor==0) ? +1.f : -1.f);
-            indiRun.actG1[4][motor] = ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
-            indiRun.actG1[5][motor] = ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
+            indiRun.actG1[4][motor] = 0 * ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
+            indiRun.actG1[5][motor] = 0 * ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
             for (int axis = 0; axis < 6; axis++) {
                 indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
             }
 
             indiRun.actG2[0][motor] = 0.f;
             indiRun.actG2[1][motor] = 0.f;
-            indiRun.actG2[2][motor] = 0.f;
-            indiRun.actG2[3][motor] = 0.f;
-            indiRun.actG2[4][motor] = 0.f;
-            indiRun.actG2[5][motor] = indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
+            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
         }
         for (int servo = 0; servo < 2; servo++) {
             float cosdp = cosf(d_eff[servo]);
@@ -487,16 +485,18 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG1[3][2+servo] = 0.f;
             indiRun.actG1[4][2+servo] = indiRun.tailsCmd * cosdp;
             indiRun.actG1[5][2+servo] = indiRun.tailsCnd * cosdp * ((servo==0) ? +1.f : -1.f);
+
+            float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {
-                float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
                 indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim; // todo: add vz velocity here?
+                indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
             }
         }
     }
 
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {
-        for (int i=0; i < indiRun.actNum; i++) {
+        for (int i=0; i < 2; i++) {
             indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
         }
     }
