@@ -156,7 +156,7 @@
 #define PARAM_NAME_INDI_WLS_ACT_PREFERRED_STATE "indi_wls_act_preferred_state"
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 #define PARAM_NAME_POSITION_HORIZONTAL_P "position_horizontal_p"
 #define PARAM_NAME_POSITION_HORIZONTAL_I "position_horizontal_i"
 #define PARAM_NAME_POSITION_HORIZONTAL_D "position_horizontal_d"

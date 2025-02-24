@@ -41,7 +41,7 @@
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "fc/tasks.h"
 #include "scheduler/scheduler.h"
 
@@ -49,8 +49,8 @@
 #error "MOCKUP target requires USE_TELEMETRY_PI"
 #endif
 
-#ifndef USE_POS_CTL
-#error "MOCKUP target requires USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "MOCKUP target requires USE_LOCAL_POSITION"
 #endif
 
 #ifndef USE_ACC
@@ -82,11 +82,11 @@ void setMotorSpeed(const float *omega, const int n) {
 }
 
 void setMocap(const float *pos, const float *vel, const float *q) {
-    extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
+    posMeasState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    posLatestMsgTime = micros();
     for (int axis = 0; axis < 3; axis++) {
-        extPosNed.pos.A[axis] = pos[axis];
-        extPosNed.vel.A[axis] = vel[axis];
+        posMeasNed.pos.A[axis] = pos[axis];
+        posMeasNed.vel.A[axis] = vel[axis];
     }
     fp_euler_t eulers;
     fp_quaternion_t quat;
@@ -98,14 +98,14 @@ void setMocap(const float *pos, const float *vel, const float *q) {
     fp_quaternionProducts_t qP;
     quaternionProducts_of_quaternion(&qP, &quat);
     fp_euler_of_quaternionProducts (&eulers, &qP);
-    extPosNed.att.angles.roll = eulers.angles.roll;
-    extPosNed.att.angles.pitch = eulers.angles.pitch;
-    extPosNed.att.angles.yaw = eulers.angles.yaw;
+    posMeasNed.att.angles.roll = eulers.angles.roll;
+    posMeasNed.att.angles.pitch = eulers.angles.pitch;
+    posMeasNed.att.angles.yaw = eulers.angles.yaw;
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {
-    posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
+    posSpState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    posLatestMsgTime = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];
@@ -149,9 +149,9 @@ void tick(const timeDelta_t dtUs)
 
     getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
 
-    if (cmpTimeUs(currentTimeUs, extLatestMsgTime) > EXT_POS_TIMEOUT_US) {
-        extPosState = EXT_POS_NO_SIGNAL;
+    if (cmpTimeUs(currentTimeUs, posLatestMsgTime) > LOCAL_POS_TIMEOUT_US) {
+        posMeasState = LOCAL_POS_NO_SIGNAL;
     } else {
-        extPosState = EXT_POS_STILL_VALID;
+        posMeasState = LOCAL_POS_STILL_VALID;
     }
 }

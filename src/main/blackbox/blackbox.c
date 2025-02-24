@@ -76,7 +76,7 @@
 #include "io/beeper.h"
 #include "io/gps.h"
 #include "io/serial.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -355,16 +355,16 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"omega_dot",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 #endif
 
-#if USE_POS_CTL
+#if USE_LOCAL_POSITION
     {"pos",         0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"extTime",     -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 
-    {"extPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"posSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"posSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -684,10 +684,10 @@ typedef struct blackboxMainState_s {
     uint16_t omegaUnfiltered[MAXU];
     int16_t omega_dot[MAXU];
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     uint32_t extTime; // will be in ms, so must be more than 32bit
-    int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int32_t localPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
@@ -895,7 +895,7 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
 #endif
 
     case CONDITION(POS):
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
         return isFieldEnabled(FIELD_SELECT(POS));
 #else
         return false;
@@ -1094,11 +1094,11 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->omega_dot, MAXU);
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
         blackboxWriteUnsignedVB(blackboxCurrent->extTime);
-        blackboxWriteSignedVBArray(blackboxCurrent->extPos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->localPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
@@ -1353,14 +1353,14 @@ static void writeInterframe(void)
     UNUSED(deltas16);
 #endif // USE_INDI
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         blackboxWriteUnsignedVB(blackboxCurrent->extTime - blackboxLast->extTime);
 
-        arraySubInt32(deltas, blackboxCurrent->extPos, blackboxLast->extPos, XYZ_AXIS_COUNT);
+        arraySubInt32(deltas, blackboxCurrent->localPos, blackboxLast->localPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         arraySubInt32(deltas, blackboxCurrent->posSp, blackboxLast->posSp, XYZ_AXIS_COUNT);
@@ -1828,32 +1828,32 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
-    blackboxCurrent->extTime = lrintf(extPosNed.time_us);
-    blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
-    blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
-    blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
+    blackboxCurrent->extTime = lrintf(posMeasNed.time_us);
+    blackboxCurrent->localPos[0] = lrintf(posMeasNed.pos.V.X * METER_TO_MM);
+    blackboxCurrent->localPos[1] = lrintf(posMeasNed.pos.V.Y * METER_TO_MM);
+    blackboxCurrent->localPos[2] = lrintf(posMeasNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->posSp[0] = lrintf(posSpNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->posSp[1] = lrintf(posSpNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->posSp[2] = lrintf(posSpNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->vel[0] = lrintf(velEstNed.V.X * METER_TO_CM);
     blackboxCurrent->vel[1] = lrintf(velEstNed.V.Y * METER_TO_CM);
     blackboxCurrent->vel[2] = lrintf(velEstNed.V.Z * METER_TO_CM);
-    blackboxCurrent->extVel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
-    blackboxCurrent->extVel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
-    blackboxCurrent->extVel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->extVel[0] = lrintf(posMeasNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->extVel[1] = lrintf(posMeasNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->extVel[2] = lrintf(posMeasNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->velSp[0] = lrintf(posSpNed.vel.V.X * METER_TO_CM);
     blackboxCurrent->velSp[1] = lrintf(posSpNed.vel.V.Y * METER_TO_CM);
     blackboxCurrent->velSp[2] = lrintf(posSpNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->accSp[0] = lrintf(accSpNedFromPos.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNedFromPos.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNedFromPos.V.Z * METER_TO_CM);
-    blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
-    blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
-    blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
+    blackboxCurrent->extAtt[0] = lrintf(posMeasNed.att.angles.roll * 1000.f); // milirad
+    blackboxCurrent->extAtt[1] = lrintf(posMeasNed.att.angles.pitch * 1000.f); // milirad
+    blackboxCurrent->extAtt[2] = lrintf(posMeasNed.att.angles.yaw * 1000.f); // milirad
 #ifdef USE_VIO_POSE
     blackboxCurrent->vioTime = lrintf(vioPosNed.time_us);
     blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
@@ -2091,7 +2091,7 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_INDI
     const indiProfile_t *indiProfile = indiProfiles(systemConfig()->indiProfileIndex);
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     const positionProfile_t *posProfile = positionProfiles(systemConfig()->positionProfileIndex);
 #endif
 
@@ -2465,7 +2465,7 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->u_pref[2],
                                                                                               indiProfile->u_pref[3]);
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_D, "%d",  posProfile->horz_d);

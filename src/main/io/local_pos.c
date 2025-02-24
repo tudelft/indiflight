@@ -23,7 +23,7 @@
 
 
 #include "pi-messages.h"
-#include "external_pos.h"
+#include "local_pos.h"
 #include "common/maths.h"
 #include "drivers/time.h"
 #include "common/time.h"
@@ -33,52 +33,52 @@
 #include "flight/imu.h"
 #include "io/gps.h"
 
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION_PI
 
 #ifndef USE_TELEMETRY_PI
-#error "USE_GPS_PI requires the use of USE_TELEMETRY_PI"
+#error "USE_LOCAL_POSITION_PI requires the use of USE_TELEMETRY_PI"
 #endif
 
 //extern
-ext_pos_ned_t extPosNed;
-ext_pos_state_t extPosState = EXT_POS_NO_SIGNAL;
-timeUs_t extLatestMsgTime = 0;
+local_pos_ned_t posMeasNed;
+local_pos_state_t posMeasState = LOCAL_POS_NO_SIGNAL;
+timeUs_t posLatestMsgTime = 0;
 
 vio_pos_ned_t vioPosNed;
-ext_pos_state_t vioPosState = EXT_POS_NO_SIGNAL;
+local_pos_state_t vioPosState = LOCAL_POS_NO_SIGNAL;
 timeUs_t vioLatestMsgTime = 0;
 
-pos_setpoint_ned_t posSpNed;
-ext_pos_state_t posSetpointState = EXT_POS_NO_SIGNAL;
+local_pos_sp_ned_t posSpNed;
+local_pos_state_t posSpState = LOCAL_POS_NO_SIGNAL;
 
 
 void checkNewPos(void) {
     if (piMsgExternalPoseRxState < PI_MSG_RX_STATE_NONE) {
         // data (already) message available
         timeUs_t currentMsgTime = piMsgExternalPoseRx->time_us;
-        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, extLatestMsgTime);
+        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, posLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
-            extPosState = EXT_POS_NEW_MESSAGE;
-            extLatestMsgTime = currentMsgTime;
+            posMeasState = LOCAL_POS_NEW_MESSAGE;
+            posLatestMsgTime = currentMsgTime;
         } else {
             // assume still valid for now
-            extPosState = EXT_POS_STILL_VALID;
+            posMeasState = LOCAL_POS_STILL_VALID;
         }
 
         // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(micros(), extLatestMsgTime);
-        if (delta > EXT_POS_TIMEOUT_US) {
+        timeDelta_t delta = cmpTimeUs(micros(), posLatestMsgTime);
+        if (delta > LOCAL_POS_TIMEOUT_US) {
             // signal lost
-            extPosState = EXT_POS_NO_SIGNAL;
+            posMeasState = LOCAL_POS_NO_SIGNAL;
         }
     } else {
         // data (noy yet) message available
-        extPosState = EXT_POS_NO_SIGNAL;
+        posMeasState = LOCAL_POS_NO_SIGNAL;
     }
 }
 
-void getExternalPos(timeUs_t current) {
+void getLocalPos(timeUs_t current) {
     UNUSED(current);
 
 #ifdef USE_GPS
@@ -89,17 +89,17 @@ void getExternalPos(timeUs_t current) {
 
     checkNewPos();
 
-    switch (extPosState) {
-        case EXT_POS_NEW_MESSAGE:
+    switch (posMeasState) {
+        case LOCAL_POS_NEW_MESSAGE:
             // time stamp
-            extPosNed.time_us = piMsgExternalPoseRx->time_us;
+            posMeasNed.time_us = piMsgExternalPoseRx->time_us;
             // process new message (should be NED)
-            extPosNed.pos.V.X = piMsgExternalPoseRx->ned_x;
-            extPosNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
-            extPosNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
-            extPosNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
-            extPosNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
-            extPosNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
+            posMeasNed.pos.V.X = piMsgExternalPoseRx->ned_x;
+            posMeasNed.pos.V.Y = piMsgExternalPoseRx->ned_y;
+            posMeasNed.pos.V.Z = piMsgExternalPoseRx->ned_z;
+            posMeasNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
+            posMeasNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
+            posMeasNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
             fp_euler_t eulers;
             fp_quaternion_t quat;
             // the quaternion x,y,z should be NED
@@ -110,15 +110,15 @@ void getExternalPos(timeUs_t current) {
             fp_quaternionProducts_t qP;
             quaternionProducts_of_quaternion(&qP, &quat);
             fp_euler_of_quaternionProducts (&eulers, &qP);
-            extPosNed.att.angles.roll = eulers.angles.roll;
-            extPosNed.att.angles.pitch = eulers.angles.pitch;
-            extPosNed.att.angles.yaw = eulers.angles.yaw;
+            posMeasNed.att.angles.roll = eulers.angles.roll;
+            posMeasNed.att.angles.pitch = eulers.angles.pitch;
+            posMeasNed.att.angles.yaw = eulers.angles.yaw;
 
             sensorsSet(SENSOR_GPS);
             ENABLE_STATE(GPS_FIX);
             ENABLE_STATE(GPS_FIX_EVER);
             break;
-        case EXT_POS_NO_SIGNAL:
+        case LOCAL_POS_NO_SIGNAL:
             DISABLE_STATE(GPS_FIX);
             break;
         default:
@@ -134,22 +134,22 @@ void checkNewVioPos(void) {
         timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
         if (deltaMsgs != 0) {
             // new message available
-            vioPosState = EXT_POS_NEW_MESSAGE;
+            vioPosState = LOCAL_POS_NEW_MESSAGE;
             vioLatestMsgTime = currentMsgTime;
         } else {
             // assume still valid for now
-            vioPosState = EXT_POS_STILL_VALID;
+            vioPosState = LOCAL_POS_STILL_VALID;
         }
 
         // regardless of new or old message, we may have timeout
         timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
         if (delta > VIO_POS_TIMEOUT_US) {
             // signal lost
-            vioPosState = EXT_POS_NO_SIGNAL;
+            vioPosState = LOCAL_POS_NO_SIGNAL;
         }
     } else {
         // data (noy yet) message available
-        vioPosState = EXT_POS_NO_SIGNAL;
+        vioPosState = LOCAL_POS_NO_SIGNAL;
     }
 }
 
@@ -157,10 +157,10 @@ void getVioPos(timeUs_t current) {
     UNUSED(current);
 
     checkNewVioPos();
-    if (vioPosState == EXT_POS_NO_SIGNAL)
+    if (vioPosState == LOCAL_POS_NO_SIGNAL)
         return;
 
-    if (vioPosState == EXT_POS_NEW_MESSAGE) {
+    if (vioPosState == LOCAL_POS_NEW_MESSAGE) {
         // time stamp
         vioPosNed.time_us = piMsgVioPoseRx->time_us;
         // process new message from UNKNOWN REFERENCE FRAME to NED
@@ -218,10 +218,10 @@ void getPosSetpoint(timeUs_t current) {
             posSpNed.vel.V.Z = piMsgPosSetpointRx->ned_zd;
             posSpNed.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
             posSpNed.trackPsi = true;
-            posSetpointState = EXT_POS_NEW_MESSAGE;
-        } else if (posSetpointState != EXT_POS_NO_SIGNAL) {
+            posSpState = LOCAL_POS_NEW_MESSAGE;
+        } else if (posSpState != LOCAL_POS_NO_SIGNAL) {
             // if not no-signalled by other means, just keep this
-            posSetpointState = EXT_POS_STILL_VALID;
+            posSpState = LOCAL_POS_STILL_VALID;
         }
     }
 }

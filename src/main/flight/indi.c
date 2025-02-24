@@ -53,7 +53,7 @@
 #include "solveActiveSet.h"
 #include "flight/learner.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/beeper.h"
 
 #include "pg/pg.h"
@@ -165,7 +165,7 @@ void getSetpoints(timeUs_t current) {
         }
     } else
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
         indiRun.attSpNed = attSpNedFromPos;
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;

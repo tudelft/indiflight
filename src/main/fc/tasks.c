@@ -70,7 +70,7 @@
 #include "io/beeper.h"
 #include "io/dashboard.h"
 #include "io/flashfs.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
 #include "io/piniobox.h"
@@ -346,12 +346,16 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_GPS_PI
-static void taskGpsPi(timeUs_t currentTimeUs)
+#ifdef USE_LOCAL_POSITION_PI
+static void taskLocalPosition(timeUs_t currentTimeUs)
 {
-    getExternalPos(currentTimeUs);
+    getLocalPos(currentTimeUs);
     getFakeGps(currentTimeUs);
     getPosSetpoint(currentTimeUs);
+}
+static void taskPosCtl(timeUs_t currentTimeUs)
+{
+    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -360,13 +364,6 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 {
     UNUSED(currentTimeUs);
     processKeyboard();
-}
-#endif
-
-#ifdef USE_POS_CTL
-static void taskPosCtl(timeUs_t currentTimeUs)
-{
-    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -470,16 +467,13 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_GPS_PI
-    [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#ifdef USE_LOCAL_POSITION_PI
+    [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_POS_CTL
-    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_EKF
@@ -650,17 +644,14 @@ void tasksInit(void)
     setTaskEnabled(TASK_HIL, true);
 #endif
 
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION
     // todo! CHECK OTHER FLAGS for consistency
-    setTaskEnabled(TASK_GPS_PI, true);
+    setTaskEnabled(TASK_LOCAL_POSITION, true);
+    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_TELEMETRY_PI
     setTaskEnabled(TASK_KEYBOARD, true);
-#endif
-
-#ifdef USE_POS_CTL
-    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_EKF

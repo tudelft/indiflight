@@ -46,7 +46,7 @@
 #include "flight/pid.h"
 
 #include "io/gps.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 
 #include "scheduler/scheduler.h"
 
@@ -239,10 +239,10 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     UNUSED(useMag);
 #endif
 
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION_PI
     // external position transmits psi
     if (useExtPosYaw) {
-        float yawI = extPosNed.att.angles.yaw;
+        float yawI = posMeasNed.att.angles.yaw;
         while (yawI >  M_PIf) {
             yawI -= (2.0f * M_PIf);
         }
@@ -323,7 +323,7 @@ static void imuMahonyAHRSupdate(float dt, float gx, float gy, float gz,
     attitudeIsEstablished = true;
 }
 
-#if defined(USE_GPS_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
+#if defined(USE_LOCAL_POSITION_PI) && (!defined(SIMULATOR_BUILD) || defined(USE_IMU_CALC))
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 static bool posHasBeenInvalid = true;
@@ -336,11 +336,11 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, float
         return;
     }
 
-    bool posValid = (extPosState >= EXT_POS_STILL_VALID);
+    bool posValid = (posMeasState >= LOCAL_POS_STILL_VALID);
     if (posValid && posHasBeenInvalid) {
         // regained position after longer period on DR: reset position and velocity
-        velEstNed = extPosNed.vel;
-        posEstNed = extPosNed.pos;
+        velEstNed = posMeasNed.vel;
+        posEstNed = posMeasNed.pos;
         posHasBeenInvalid = false;
         return;
     }
@@ -353,13 +353,13 @@ static void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, float
     rotate_vector_with_rotationMatrix(&aNed, &rMat);
     aNed.V.Z += acc.dev.acc_1G; // remove gravity from accelerometer
 
-    fp_vector_t velErrorNed = extPosNed.vel;
+    fp_vector_t velErrorNed = posMeasNed.vel;
     VEC3_SCALAR_MULT_ADD(velErrorNed, -1.0f, velEstNed);
 
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*acc.dev.acc_1G_rec*GRAVITYf, aNed);
     VEC3_SCALAR_MULT_ADD(velEstNed, dt*Kp, velErrorNed);
 
-    fp_vector_t posErrorNed = extPosNed.pos;
+    fp_vector_t posErrorNed = posMeasNed.pos;
     VEC3_SCALAR_MULT_ADD(posErrorNed, -1.0f, posEstNed);
 
     VEC3_SCALAR_MULT_ADD(posEstNed, dt, velEstNed);
@@ -578,8 +578,8 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
     }
 
     useAcc = imuIsAccelerometerHealthy(acc.accADCf); // all smoothed accADCf values are within 20% of 1G
-#ifdef USE_GPS_PI
-    bool useExtPosYaw = (extPosState >= EXT_POS_STILL_VALID);
+#ifdef USE_LOCAL_POSITION_PI
+    bool useExtPosYaw = (posMeasState >= LOCAL_POS_STILL_VALID);
 #else
     bool useExtPosYaw = false;
 #endif
@@ -593,7 +593,7 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
 
     imuUpdateEulerAngles();
 
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION_PI
     float KpPos = 8.f*Kp;
     imuUpdateDeadReckoning(((float) deltaT) * 1e-6f,
         acc.accADCf[X], acc.accADCf[Y], acc.accADCf[Z], KpPos, 0.f);

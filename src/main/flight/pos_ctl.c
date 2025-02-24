@@ -26,7 +26,7 @@
 
 #include "pos_ctl.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/imu.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
@@ -35,14 +35,14 @@
 #include "flight/indi.h"
 #include "flight/trajectory_tracker.h"
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 
-#ifndef USE_GPS_PI
-#error "USE_POS_CTL can currently only be used with USE_GPS_PI"
+#ifndef USE_LOCAL_POSITION_PI
+#error "USE_LOCAL_POSITION can currently only be used with USE_LOCAL_POSITION_PI"
 #endif
 
 #ifndef USE_INDI
-#error "USE_POS_CTL requires the use of USE_INDI"
+#error "USE_LOCAL_POSITION requires the use of USE_INDI"
 #endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
@@ -125,9 +125,9 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
-    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, extLatestMsgTime);
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posLatestMsgTime);
 
-    if ((posSetpointState == EXT_POS_NO_SIGNAL) 
+    if ((posSpState == LOCAL_POS_NO_SIGNAL) 
         || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
         // panic and level craft in slight downwards motion
         accSpNedFromPos.V.X = 0.f;
@@ -139,7 +139,7 @@ void updatePosCtl(timeUs_t current) {
         posSpNed.trackPsi = false;
 
         // latch reactivation until new actual setpoint arrives
-        posSetpointState = EXT_POS_NO_SIGNAL;
+        posSpState = LOCAL_POS_NO_SIGNAL;
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
         // more than 0.5 sec but less than 2 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
@@ -151,7 +151,7 @@ void updatePosCtl(timeUs_t current) {
 #endif
         {
             posSpNed.pos = posEstNed; // hold position
-            posSetpointState = EXT_POS_NEW_MESSAGE;
+            posSpState = LOCAL_POS_NEW_MESSAGE;
 
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
@@ -188,7 +188,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // pos error = pos setpoint - pos estimate
     fp_vector_t posError = posSpNed.pos;
-    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // extPosNed.pos
+    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // posMeasNed.pos
 
     // vel setpoint = posGains * posError
     posSpNed.vel.V.X = posError.V.X * horzPCasc;
@@ -202,7 +202,7 @@ void posGetAccSpNed(timeUs_t current) {
 
     // vel error = vel setpoint - vel estimate
     fp_vector_t velError = posSpNed.vel;
-    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, extPosNed.vel);
+    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
     static bool accSpXYSaturated = true;
@@ -338,4 +338,4 @@ bool isWeathervane = false;
 // 1. velocity control..
 // 2. weathervaning
 
-#endif // USE_POS_CTL
+#endif // USE_LOCAL_POSITION

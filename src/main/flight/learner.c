@@ -131,7 +131,7 @@ void initLearner(void) {
     learnerConfigMutable()->numAct = MIN(LEARNING_MAX_ACT, learnerConfigMutable()->numAct);
 
     indiProfileLearned = indiProfilesMutable(INDI_PROFILE_COUNT-1);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     positionProfileLearned = positionProfilesMutable(POSITION_PROFILE_COUNT-1);
 #endif
     initLearnerRuntime();
@@ -766,7 +766,7 @@ doMoreMotors:
 
             if (learnRun.applyIndiProfileAfterQuery)
                 changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             if (learnRun.applyPositionProfileAfterQuery)
                 changePositionProfile(POSITION_PROFILE_COUNT-1); 
 #endif

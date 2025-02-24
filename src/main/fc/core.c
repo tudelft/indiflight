@@ -82,7 +82,7 @@
 #include "flight/nn_control.h"
 
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/pidaudio.h"
 #include "io/serial.h"
@@ -1053,7 +1053,7 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (IS_RC_MODE_ACTIVE(BOXPOSCTL)) {// && sensors(SENSOR_ACC)) {
         // logic can be improved by considering ext_pos_state. this logic means
         // that whenever external pos drops out, we will get a 1 0 0 0 attitude
@@ -1067,7 +1067,7 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (extPosState >= EXT_POS_STILL_VALID) {
+            if (posMeasState >= LOCAL_POS_STILL_VALID) {
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1113,7 +1113,7 @@ void processRxModes(timeUs_t currentTimeUs)
             // reset to manually tuned parameters on transition
             if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
                 changeIndiProfile(0);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
                 changePositionProfile(0);
 #endif

@@ -25,7 +25,7 @@
 
 #include <math.h>
 #include "flight/imu.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "flight/indi.h"
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
@@ -33,8 +33,8 @@
 
 #ifdef USE_TRAJECTORY_TRACKER
 
-#ifndef USE_POS_CTL
-#error "USE_TRAJECTORY_TRACKER only works in combination with USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "USE_TRAJECTORY_TRACKER only works in combination with USE_LOCAL_POSITION"
 #endif
 
 // state of trajectory tracker:
@@ -198,7 +198,7 @@ void initTrajectoryTracker(void) {
     posSpNed.pos.V.Z = tt_pos_ref[2];
     posSpNed.psi = tt_yaw_ref;
     posSpNed.trackPsi = true;
-    posSetpointState = EXT_POS_NEW_MESSAGE;
+    posSpState = LOCAL_POS_NEW_MESSAGE;
 }
 
 void setSpeedTrajectoryTracker(float speed) {
@@ -286,7 +286,7 @@ void updateTrajectoryTracker(timeUs_t current) {
         // overwrite yawSetpoint (from pos_ctl.c)
         posSpNed.psi = tt_yaw_ref;
 
-        posSetpointState = EXT_POS_NEW_MESSAGE;
+        posSpState = LOCAL_POS_NEW_MESSAGE;
 
         // overwrite rateSpBody 
         if (posSpNed.trackPsi) {
