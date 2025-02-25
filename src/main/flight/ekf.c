@@ -45,8 +45,8 @@
 #error "USE_EKF requires USE_GYRO"
 #endif
 
-#ifndef USE_LOCAL_POSITION_PI
-#error "USE_EKF requires USE_LOCAL_POSITION_PI"
+#ifndef USE_LOCAL_POSITION
+#error "USE_EKF requires USE_LOCAL_POSITION"
 #endif
 
 PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
@@ -60,6 +60,9 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
     .meas_noise_angles = { 100, 100, 100 },
     .meas_delay = 0,
 ); 
+
+fp_vector_t posEstNed = {0};
+fp_vector_t velEstNed = {0};
 
 bool ekf_initialized = false;
 timeUs_t lastTimeUs = 0;
@@ -250,7 +253,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 		runEkf(currentTimeUs);
     }
 
-    // run fallback in advance so it doesnt lose sync
+    // run fallback in advance so it doesnt lose sync --> todo, move somewhere else, so this file doesnt need to include imu.h
     imuUpdateAttitude(currentTimeUs);
 
     // update system state with EKF data, if possible and configured
@@ -258,26 +261,20 @@ void updateEkf(timeUs_t currentTimeUs) {
         // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 
-        if (ekfConfig()->use_attitude_estimate) {
-            fp_quaternion_t q;
-            fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
-            quaternion_of_fp_euler(&q, &e);
-            setAttitudeWithQuaternion(&q);
-        }
+        // convert attitude to quat and call the decider
+        fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
+        quaternion_of_fp_euler(&qEkf, &e);
 
-        if (ekfConfig()->use_position_estimate) {
-            fp_vector_t posNed_set;
-            posNed_set.V.X = ekf_X[0];
-            posNed_set.V.Y = ekf_X[1];
-            posNed_set.V.Z = ekf_X[2];
+        attitudeDecider();
 
-            fp_vector_t velNed_set;
-            velNed_set.V.X = ekf_X[3];
-            velNed_set.V.Y = ekf_X[4];
-            velNed_set.V.Z = ekf_X[5];
+        // update position
+        posEstNed.V.X = ekf_X[0];
+        posEstNed.V.Y = ekf_X[1];
+        posEstNed.V.Z = ekf_X[2];
 
-            setPositionState(posNed_set, velNed_set);
-        }
+        velEstNed.V.X = ekf_X[3];
+        velEstNed.V.Y = ekf_X[4];
+        velEstNed.V.Z = ekf_X[5];
     }
 }
 

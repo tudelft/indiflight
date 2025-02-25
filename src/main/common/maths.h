@@ -146,6 +146,7 @@ void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, const fp_quat
 void rotate_vector_with_quaternion(fp_vector_t *v, const fp_quaternion_t *q);
 fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A);
 fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
+void quaternion_integrate_body_rates(fp_quaternion_t* q, const fp_vector_t* w, float dt);
 
 // vector operation primitives
 
@@ -154,6 +155,12 @@ fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
     _orig.V.X += _sc * _add.V.X; \
     _orig.V.Y += _sc * _add.V.Y; \
     _orig.V.Z += _sc * _add.V.Z; \
+}
+
+#define VEC3_ELEM_MULT(_orig, _gains) { \
+    _orig.V.X *= _gains.V.X; \
+    _orig.V.Y *= _gains.V.Y; \
+    _orig.V.Z *= _gains.V.Z; \
 }
 
 #define VEC3_ELEM_MULT_ADD(_orig, _gains, _add) { \

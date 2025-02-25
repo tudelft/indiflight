@@ -42,7 +42,7 @@ catapult_state_t catapultState = CATAPULT_IDLE;
 #endif
 
 #ifndef USE_LOCAL_POSITION
-#error "muse use catapult with USE_LOCAL_POSITION"
+#error "must use catapult with USE_LOCAL_POSITION"
 #endif
 
 // extern

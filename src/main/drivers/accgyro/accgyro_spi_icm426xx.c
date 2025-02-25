@@ -254,8 +254,8 @@ void icm426xxGyroInit(gyroDev_t *gyro)
     spiWriteReg(dev, ICM426XX_RA_GYRO_CONFIG_STATIC5, (aafConfig.deltSqr >> 8) | (aafConfig.bitshift << 4));
 
     // Configure acc Anti-Alias Filter for 1kHz sample rate (see tasks.c)
-    //aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_258HZ);
-    aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_126HZ);
+    aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_258HZ);
+    //aafConfig = getGyroAafConfig(gyroModel, AAF_CONFIG_126HZ);
     setUserBank(dev, ICM426XX_BANK_SELECT2);
     spiWriteReg(dev, ICM426XX_RA_ACCEL_CONFIG_STATIC2, aafConfig.delt << 1);
     spiWriteReg(dev, ICM426XX_RA_ACCEL_CONFIG_STATIC3, aafConfig.deltSqr & 0xFF);

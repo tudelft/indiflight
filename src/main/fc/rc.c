@@ -583,7 +583,7 @@ FAST_CODE void processRcCommand(void)
             DEBUG_SET(DEBUG_ANGLERATE, axis, lrintf(angleRate));
         }
         // adjust raw setpoint steps to camera angle (mixing Roll and Yaw)
-        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX) && !FLIGHT_MODE(HEADFREE_MODE)) {
+        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX)) {
             scaleRawSetpointToFpvCamAngle();
         }
     }
@@ -654,23 +654,6 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
                 fix12_t throttleScaler = qConstruct(rcCommand[THROTTLE] - 1000, 1000);
                 rcCommand[THROTTLE] = rxConfig()->midrc + qMultiply(throttleScaler, PWM_RANGE_MAX - rxConfig()->midrc);
             }
-        }
-    }
-    if (FLIGHT_MODE(HEADFREE_MODE)) {
-        static fp_vector_t  rcCommandBuff;
-
-        rcCommandBuff.V.X = rcCommand[ROLL];
-        rcCommandBuff.V.Y = rcCommand[PITCH];
-        if ((!FLIGHT_MODE(ANGLE_MODE) && (!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommandBuff.V.Z = rcCommand[YAW];
-        } else {
-            rcCommandBuff.V.Z = 0;
-        }
-        imuQuaternionHeadfreeTransformVectorEarthToBody(&rcCommandBuff);
-        rcCommand[ROLL] = rcCommandBuff.V.X;
-        rcCommand[PITCH] = rcCommandBuff.V.Y;
-        if ((!FLIGHT_MODE(ANGLE_MODE)&&(!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommand[YAW] = rcCommandBuff.V.Z;
         }
     }
 }

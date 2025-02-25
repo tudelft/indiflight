@@ -1,7 +1,7 @@
 /*
- * Configure serial port to parse pi-messages and provide facilities to send
+ * Interface to run a subset of Indiflight without real-time scheduler
  *
- * Copyright 2023 Till Blaha (Delft University of Technology)
+ * Copyright 2024 Till Blaha (Delft University of Technology)
  *
  * This file is part of Indiflight.
  *
@@ -21,19 +21,15 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-/*
-(C) tblaha 2023
- */
+#ifndef MOCKUP_MAIN_H
+#define MOCKUP_MAIN_H
 
-#pragma once
+void setImu(const float *g, const float *a);
+void setMotorSpeed(const float *omega, const int n);
+void setMocap(const float *pos, const float *vel, const float *q);
+void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us);
+void setPosSetpoint(const float *pos, const float yaw);
+void getMotorOutputCommands(float *cmd, int n);
+void tick(void);
 
-#include <string.h>
-
-void initPiTelemetry(void);
-void handlePiTelemetry(void);
-void checkPiTelemetryState(void);
-
-void freePiTelemetryPort(void);
-void configurePiTelemetryPort(void);
-
-void piSendIMU(void);
+#endif // MOCKUP_MAIN_H

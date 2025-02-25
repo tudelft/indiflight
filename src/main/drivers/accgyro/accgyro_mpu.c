@@ -145,6 +145,7 @@ static void mpuIntExtiHandler(extiCallbackRec_t *cb)
         gyro->gyroSyncEXTI = gyro->gyroLastEXTI + gyro->gyroDmaMaxDuration;
     }
     gyro->gyroLastEXTI = nowCycles;
+    gyro->gyroLastEXTIUs = micros();
 
     if (gyro->gyroModeSPI == GYRO_EXTI_INT_DMA) {
         spiSequence(&gyro->dev, gyro->segments);

@@ -58,6 +58,9 @@
 #endif
 
 #if defined(MOCKUP)
+#ifdef HIL_BUILD
+#error "cannot have both MOCKUP and HIL_BUILD defined"
+#endif
 #undef USE_DSHOT
 #undef USE_SDCARD
 #undef USE_OSD

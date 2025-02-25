@@ -1019,7 +1019,7 @@ const clivalue_t valueTable[] = {
     { "imu_dcm_kp",                 VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 32000 }, PG_IMU_CONFIG, offsetof(imuConfig_t, dcm_kp) },
     { "imu_dcm_ki",                 VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 32000 }, PG_IMU_CONFIG, offsetof(imuConfig_t, dcm_ki) },
     { "small_angle",                VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 180 }, PG_IMU_CONFIG, offsetof(imuConfig_t, small_angle) },
-    { "imu_process_denom",          VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 1, 4 }, PG_IMU_CONFIG, offsetof(imuConfig_t, imu_process_denom) },
+    { "imu_process_denom",          VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 1, 128 }, PG_IMU_CONFIG, offsetof(imuConfig_t, imu_process_denom) },
 
 // PG_ARMING_CONFIG
     { "auto_disarm_delay",          VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 60 }, PG_ARMING_CONFIG, offsetof(armingConfig_t, auto_disarm_delay) },

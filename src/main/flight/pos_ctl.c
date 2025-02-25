@@ -37,10 +37,6 @@
 
 #ifdef USE_LOCAL_POSITION
 
-#ifndef USE_LOCAL_POSITION_PI
-#error "USE_LOCAL_POSITION can currently only be used with USE_LOCAL_POSITION_PI"
-#endif
-
 #ifndef USE_INDI
 #error "USE_LOCAL_POSITION requires the use of USE_INDI"
 #endif
@@ -258,8 +254,8 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
 
     // thrust setpoint in body frame for a multicopter:
     float spfSpLength = VEC3_LENGTH(spfSpNed);
-    spfSpBodyFromPos.V.X = 0.;
-    spfSpBodyFromPos.V.Y = 0.;
+    spfSpBodyFromPos.V.X = 0.f;
+    spfSpBodyFromPos.V.Y = 0.f;
     spfSpBodyFromPos.V.Z = -spfSpLength;
 
     if (spfSpLength < 1e-6) {
@@ -267,10 +263,10 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
         // from yawing towards the commanded headingSp
         if (posSpNed.trackPsi) {
             fp_quaternion_t yawNed = {
-                .w = cos_approx( (posSpNed.psi - Psi) / 2.f ),
+                .w = cos_approx( 0.5f * (posSpNed.psi - Psi) ),
                 .x = 0.f,
                 .y = 0.f,
-                .z = sin_approx( (posSpNed.psi - Psi) / 2.f ),
+                .z = sin_approx( 0.5f * (posSpNed.psi - Psi) ),
             };
 
             attSpNedFromPos = chain_quaternion(&attitude_q, &yawNed);
@@ -313,7 +309,7 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
 
     VEC3_CROSS(x, starboardSp, z);
-    if (VEC3_LENGTH(x) < 1e-6) {
+    if (VEC3_LENGTH(x) < 1e-6f) {
         // thrust is perp to the heading, so our nose should point towards
         // the heading
         x = headingSp;

@@ -620,7 +620,6 @@ void tryArm(void)
         if (isModeActivationConditionPresent(BOXPREARM)) {
             ENABLE_ARMING_FLAG(WAS_ARMED_WITH_PREARM);
         }
-        imuQuaternionHeadfreeOffsetSet();
 
 #if defined(USE_DYN_NOTCH_FILTER)
         resetMaxFFT();
@@ -1067,7 +1066,8 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (posMeasState >= LOCAL_POS_STILL_VALID) {
+            if (isInitializedEkf())
+            {
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1079,7 +1079,28 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
+
+    if (!isInitializedEkf() && !ARMING_FLAG(ARMED)) {
+        DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+    }
 #endif
+
+    if (!ARMING_FLAG(ARMED)) {
+        if (IS_RC_MODE_ACTIVE(BOXRESETHOME)) {
+            // uninit ekf here?
+#ifdef USE_GPS
+            GPS_reset_home_position();
+#endif
+#ifdef USE_BARO
+            baroSetGroundLevel();
+            baro.altitude = 0; // set this now, or else EKF won't reset properly
+#endif
+//#ifdef USE_EKF
+//            initEkf(currentTimeUs);
+//#endif
+        }
+    }
+
 
 #ifdef USE_VEL_CTL
     if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {
@@ -1197,18 +1218,6 @@ void processRxModes(timeUs_t currentTimeUs)
             DISABLE_FLIGHT_MODE(MAG_MODE);
         }
 #endif
-        if (IS_RC_MODE_ACTIVE(BOXHEADFREE) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
-            if (!FLIGHT_MODE(HEADFREE_MODE)) {
-                ENABLE_FLIGHT_MODE(HEADFREE_MODE);
-            }
-        } else {
-            DISABLE_FLIGHT_MODE(HEADFREE_MODE);
-        }
-        if (IS_RC_MODE_ACTIVE(BOXHEADADJ) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
-            if (imuQuaternionHeadfreeOffsetSet()) {
-               beeper(BEEPER_RX_SET);
-            }
-        }
     }
 #endif
 
@@ -1216,10 +1225,6 @@ void processRxModes(timeUs_t currentTimeUs)
         ENABLE_FLIGHT_MODE(PASSTHRU_MODE);
     } else {
         DISABLE_FLIGHT_MODE(PASSTHRU_MODE);
-    }
-
-    if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE) {
-        DISABLE_FLIGHT_MODE(HEADFREE_MODE);
     }
 
 #ifdef USE_TELEMETRY

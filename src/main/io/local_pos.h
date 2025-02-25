@@ -70,13 +70,6 @@ extern local_pos_ned_t posMeasNed;
 extern local_pos_state_t posMeasState;
 extern timeUs_t posLatestMsgTime;
 
-// structs used for VIO_POSE message
-#ifdef USE_VIO_POSE
-extern vio_pos_ned_t vioPosNed;
-extern local_pos_state_t vioPosState;
-extern timeUs_t vioLatestMsgTime;
-#endif
-
 // structs used for POS_SETPOINT message
 extern local_pos_sp_ned_t posSpNed;
 extern local_pos_state_t posSpState;
@@ -84,18 +77,10 @@ extern local_pos_state_t posSpState;
 #define LOCAL_POS_FREQ 50
 #define LOCAL_POS_TIMEOUT_US 300000
 
-#ifdef USE_VIO_POSE
-#define VIO_POS_TIMEOUT_US 30000000
-#endif
-
 #define POS_SETPOINT_OUTDATED_US 1000000
 
 void checkNewPos(void);
 void getLocalPos(timeUs_t current);
-#ifdef USE_VIO_POSE
-void checkNewVioPos(void);
-void getVioPos(timeUs_t current);
-#endif
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
 #endif

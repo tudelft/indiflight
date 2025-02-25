@@ -10,7 +10,7 @@ DEVICE_FLAGS    =
 LD_SCRIPT       = src/main/target/SITL/pg.ld
 STARTUP_SRC     =
 
-TARGET_FLAGS    = -D$(TARGET)
+TARGET_FLAGS    = -D$(TARGET) -Wno-double-promotion -Wno-misleading-indentation
 MCU_FLASH_SIZE  := 2048
 
 ARM_SDK_PREFIX  =

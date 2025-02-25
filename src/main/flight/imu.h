@@ -26,8 +26,6 @@
 #include "pg/pg.h"
 
 // Exported symbols
-extern bool canUseGPSHeading;
-
 extern i16_euler_t attitude;
 extern fp_rotationMatrix_t rMat;
 
@@ -47,13 +45,10 @@ typedef struct imuRuntimeConfig_s {
 
 void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
 
-void setAttitudeWithEuler(float roll, float pitch, float yaw);
-void setPositionState(fp_vector_t posEstNed_set, fp_vector_t velEstNed_set);
-
 float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);
-void setAttitudeWithQuaternion(const fp_quaternion_t * q);
 void imuUpdateAttitude(timeUs_t currentTimeUs);
+void attitudeDecider(void);
 
 void imuInit(void);
 
@@ -65,13 +60,4 @@ void imuSetHasNewData(uint32_t dt);
 #endif
 #endif
 
-bool imuQuaternionHeadfreeOffsetSet(void);
-void imuQuaternionHeadfreeTransformVectorEarthToBody(fp_vector_t * v);
-bool shouldInitializeGPSHeading(void);
 bool isUpright(void);
-
-#ifdef USE_LOCAL_POSITION_PI
-extern fp_vector_t posEstNed;
-extern fp_vector_t velEstNed;
-//void imuUpdateDeadReckoning(float dt, float ax, float ay, float az, const float Kp);
-#endif

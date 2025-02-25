@@ -57,6 +57,7 @@
 #include "io/gimbal.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
+#include "io/local_pos.h"
 
 #include "rx/rx.h"
 
@@ -147,15 +148,17 @@ void checkPiTelemetryState(void)
 
 void piSendIMU(void)
 {
-    piMsgImuTx.time_us = micros();
+    piMsgImuTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
     piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
     piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
     piMsgImuTx.x = GRAVITYf * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
     piMsgImuTx.y = GRAVITYf * ((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
     piMsgImuTx.z = GRAVITYf * ((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
-    
-    piSendMsg(&piMsgImuTx, &serialWriter);
+
+    if (piPort) {
+        piSendMsg(&piMsgImuTx, &serialWriter);
+    }
 }
 
 void processPiTelemetry(void)
@@ -168,28 +171,24 @@ pi_parse_states_t p_telem;
 
 void processPiUplink(void)
 {
-#ifdef PI_BETAFLIGHT_DEBUG
-    static unsigned int i = 0;
-    if (++i > 3) {
-        i = 0;
-        LED1_TOGGLE;
-        cliPrintLinef("%10d", piStats[PI_PARSE_INVOKE]);
-    }
-#endif
     if (piPort) {
         while (serialRxBytesWaiting(piPort)) {
-            piParse(&p_telem, serialRead(piPort));
+            uint8_t msgId = piParse(&p_telem, serialRead(piPort));
+#if defined(USE_LOCAL_POSITION)
+            if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
+                // immediately trigger position update
+                getLocalPos(0);
+            }
+#else
+            UNUSED(msgId);
+#endif
         }
     }
 }
 
 void handlePiTelemetry(void)
 {
-    if (!piTelemetryEnabled) {
-        return;
-    }
-
-    if (!piPort) {
+    if (!piTelemetryEnabled || !piPort) {
         return;
     }
 

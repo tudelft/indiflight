@@ -33,10 +33,10 @@
 #include "flight/imu.h"
 #include "io/gps.h"
 
-#ifdef USE_LOCAL_POSITION_PI
+#ifdef USE_LOCAL_POSITION
 
-#ifndef USE_TELEMETRY_PI
-#error "USE_LOCAL_POSITION_PI requires the use of USE_TELEMETRY_PI"
+#ifndef USE_EKF
+#error "USE_LOCAL_POSITION must be used with USE_EKF"
 #endif
 
 //extern
@@ -125,61 +125,6 @@ void getLocalPos(timeUs_t current) {
             break;
     }
 }
-
-#ifdef USE_VIO_POSE
-void checkNewVioPos(void) {
-    if (piMsgVioPoseRxState < PI_MSG_RX_STATE_NONE) {
-        // data (already) message available
-        timeUs_t currentMsgTime = piMsgVioPoseRx->time_us;
-        timeDelta_t deltaMsgs = cmpTimeUs(currentMsgTime, vioLatestMsgTime);
-        if (deltaMsgs != 0) {
-            // new message available
-            vioPosState = LOCAL_POS_NEW_MESSAGE;
-            vioLatestMsgTime = currentMsgTime;
-        } else {
-            // assume still valid for now
-            vioPosState = LOCAL_POS_STILL_VALID;
-        }
-
-        // regardless of new or old message, we may have timeout
-        timeDelta_t delta = cmpTimeUs(micros(), vioLatestMsgTime);
-        if (delta > VIO_POS_TIMEOUT_US) {
-            // signal lost
-            vioPosState = LOCAL_POS_NO_SIGNAL;
-        }
-    } else {
-        // data (noy yet) message available
-        vioPosState = LOCAL_POS_NO_SIGNAL;
-    }
-}
-
-void getVioPos(timeUs_t current) {
-    UNUSED(current);
-
-    checkNewVioPos();
-    if (vioPosState == LOCAL_POS_NO_SIGNAL)
-        return;
-
-    if (vioPosState == LOCAL_POS_NEW_MESSAGE) {
-        // time stamp
-        vioPosNed.time_us = piMsgVioPoseRx->time_us;
-        // process new message from UNKNOWN REFERENCE FRAME to NED
-        vioPosNed.x = piMsgVioPoseRx->x;
-        vioPosNed.y = piMsgVioPoseRx->y;
-        vioPosNed.z = piMsgVioPoseRx->z;
-        vioPosNed.vx = piMsgVioPoseRx->vx;
-        vioPosNed.vy = piMsgVioPoseRx->vy;
-        vioPosNed.vz = piMsgVioPoseRx->vz;
-        vioPosNed.p = piMsgVioPoseRx->p;
-        vioPosNed.q = piMsgVioPoseRx->q;
-        vioPosNed.r = piMsgVioPoseRx->r;
-        vioPosNed.qw = piMsgVioPoseRx->qw;
-        vioPosNed.qx = piMsgVioPoseRx->qx;
-        vioPosNed.qy = piMsgVioPoseRx->qy;
-        vioPosNed.qz = piMsgVioPoseRx->qz;
-    }
-}
-#endif
 
 void getFakeGps(timeUs_t current) {
     // not that critical, because this is only for display purposes

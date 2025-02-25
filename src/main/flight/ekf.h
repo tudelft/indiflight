@@ -54,4 +54,8 @@ PG_DECLARE(ekfConfig_t, ekfConfig);
 
 void updateEkf(timeUs_t currentTimeUs);
 
+extern fp_vector_t posEstNed;
+extern fp_vector_t velEstNed;
+extern fp_quaternion_t qEkf;
+
 #endif // EKF_H

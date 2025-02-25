@@ -33,7 +33,6 @@ class flightModeFlags():
     ANGLE_MODE       = (1 << 0)
     HORIZON_MODE     = (1 << 1)
     MAG_MODE         = (1 << 2)
-    HEADFREE_MODE    = (1 << 6)
     PASSTHRU_MODE    = (1 << 8)
     FAILSAFE_MODE    = (1 << 10)
     GPS_RESCUE_MODE  = (1 << 11)
@@ -123,9 +122,6 @@ class IndiflightSITLMockup():
         # also, this actually is a packed struct of multiple uint32.
         # ain't nobody got time for that. we support first 64 rc boxes
         self.rcModeActivationMask = self.getVariableReference(ct.c_uint64, "rcModeActivationMask") 
-
-        # disable logging by default
-        self.setLogging( False )
 
     def getVariableReference(self, type, variable):
         return type.in_dll(self.lib, variable)

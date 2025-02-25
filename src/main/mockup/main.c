@@ -125,9 +125,11 @@ void getMotorOutputCommands(float *cmd, int n) {
     }
 }
 
-void tick(const timeDelta_t dtUs)
+#define MOCKUP_TICK_DT_US 125
+
+void tick(void)
 {
-    clock_tick( dtUs );
+    clock_tick( MOCKUP_TICK_DT_US );
     timeUs_t currentTimeUs = micros();
 
     unsetArmingDisabled(0xffffffff); // disable all, always

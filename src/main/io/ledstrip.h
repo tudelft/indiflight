@@ -96,7 +96,6 @@ typedef enum {
 
 typedef enum {
     LED_MODE_ORIENTATION = 0,
-    LED_MODE_HEADFREE,
     LED_MODE_HORIZON,
     LED_MODE_ANGLE,
     LED_MODE_MAG,

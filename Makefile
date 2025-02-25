@@ -103,12 +103,42 @@ endif
 
 include $(ROOT)/make/targets.mk
 
+REVISION ?=
+
+ifeq ($(REVISION),)
 GITHASH := $(shell git log -1 --format="%h")
 DIRTYFLAG =
 ifneq ($(shell git diff --shortstat),)
 DIRTYFLAG = +dirty
 endif
-REVISION := $(GITHASH)$(DIRTYFLAG)
+REVISION = $(GITHASH)$(DIRTYFLAG)
+endif
+
+check_dirty : 
+ifneq (,$(findstring dirty,$(REVISION)))
+ifeq ($(TARGET), MOCKUP)
+	@echo "Uncommited changes. Continuing with build!"
+else
+	@echo "Uncommited changes. Continue with build? [y/N]"; \
+		read answer; \
+		if [ "$$answer" != "y" ]; then \
+		  echo "Aborting target"; \
+		  exit 1; \
+		fi
+endif
+endif
+ifeq ($(TARGET), MOCKUP)
+	@echo "!!!! NOT CLEANED !!!!. Continuing with build!"
+else
+	@if [ -d $(TARGET_OBJ_DIR) ]; then \
+		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N]"; \
+			read answer; \
+			if [ "$$answer" != "y" ]; then \
+			  echo "Aborting target"; \
+			  exit 1; \
+			fi \
+	fi
+endif
 
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )
@@ -533,13 +563,13 @@ $(TARGETS_ZIP):
 	$(V0) $(MAKE) hex TARGET=$(subst _zip,,$@)
 	$(V0) $(MAKE) zip TARGET=$(subst _zip,,$@)
 
-zip:
+zip: check_dirty
 	$(V0) zip $(TARGET_ZIP) $(TARGET_HEX)
 
-binary:
+binary: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_BIN)
 
-hex:
+hex: check_dirty
 ifeq ($(TARGET),MOCKUP)
 # generate shared library instead
 	$(V0) $(MAKE) -j $(TARGET_SO)
@@ -547,10 +577,10 @@ else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
 endif
 
-dfu:
+dfu: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_DFU)
 
-so:
+so: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_SO)
 
 TARGETS_REVISION = $(addsuffix _rev,$(VALID_TARGETS))

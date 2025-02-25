@@ -70,6 +70,7 @@
 #include "flight/ekf.h"
 #include "flight/learner.h"
 #include "flight/nn_control.h"
+#include "flight/trajectory_tracker.h"
 #include "flight/catapult.h"
 #include "flight/throw.h"
 
@@ -77,6 +78,7 @@
 #include "io/gps.h"
 #include "io/serial.h"
 #include "io/local_pos.h"
+#include "io/keyboard.h"
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -374,9 +376,9 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"vel",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"vel",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
-    {"extVel",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extVel",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extVel",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"velSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"velSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -386,30 +388,21 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"accSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"accSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
-    {"extAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+#ifdef USE_TELEMETRY_PI
+    {"latest_key_pressed", -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 #endif
-#ifdef USE_VIO_POSE
-    {"vioTime",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
-    
-    {"vioPos",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioPos",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioPos",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioVel",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioVel",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioVel",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioQuat",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioRate",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioRate",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioRate",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+#ifdef USE_TRAJECTORY_TRACKER
+    {"tt_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 #endif
+#ifdef USE_NN_CONTROL
+    {"nn_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+#endif
+
+#endif // USE_LOCAL_POS
 #ifdef USE_EKF
     {"ekf_pos",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_pos",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -431,7 +424,6 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_gyro_b",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_gyro_b",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 #endif
-
 #ifdef USE_LEARNER
     {"motor_0_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -690,18 +682,20 @@ typedef struct blackboxMainState_s {
     int32_t localPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t localVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
-    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
-#ifdef USE_VIO_POSE
-    uint32_t vioTime;           // will be in ms, so must be more than 32bit
-    int32_t vioPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
-    int16_t vioVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t vioQuat[4];
-    int16_t vioRate[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t localAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
+#ifdef USE_TELEMETRY_PI
+    uint8_t latest_key_pressed;
 #endif
+#ifdef USE_TRAJECTORY_TRACKER
+    uint8_t tt_active;
 #endif
+#ifdef USE_NN_CONTROL
+    uint8_t nn_active;
+#endif
+#endif // USE_LOCAL_POSITION
 #ifdef USE_EKF
     int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
@@ -1101,16 +1095,18 @@ static void writeIntraframe(void)
         blackboxWriteSignedVBArray(blackboxCurrent->localPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->localVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
-#ifdef USE_VIO_POSE
-        blackboxWriteUnsignedVB(blackboxCurrent->vioTime);
-        blackboxWriteSignedVBArray(blackboxCurrent->vioPos, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioVel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioQuat, 4);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioRate, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->localAtt, XYZ_AXIS_COUNT);
+#ifdef USE_TELEMETRY_PI
+        blackboxWriteUnsignedVB(blackboxCurrent->latest_key_pressed);
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        blackboxWriteUnsignedVB(blackboxCurrent->tt_active);
+#endif
+#ifdef USE_NN_CONTROL
+        blackboxWriteUnsignedVB(blackboxCurrent->nn_active);
 #endif
     }
 #endif
@@ -1369,7 +1365,7 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->vel, blackboxLast->vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->extVel, blackboxLast->extVel, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->localVel, blackboxLast->localVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->velSp, blackboxLast->velSp, XYZ_AXIS_COUNT);
@@ -1378,22 +1374,17 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
-#ifdef USE_VIO_POSE
-        blackboxWriteUnsignedVB(blackboxCurrent->vioTime - blackboxLast->vioTime);
-
-        arraySubInt32(deltas, blackboxCurrent->vioPos, blackboxLast->vioPos, XYZ_AXIS_COUNT);
-        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
-
-        arraySubInt16(deltas16, blackboxCurrent->vioVel, blackboxLast->vioVel, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->localAtt, blackboxLast->localAtt, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->vioQuat, blackboxLast->vioQuat, 4);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
-
-        arraySubInt16(deltas16, blackboxCurrent->vioRate, blackboxLast->vioRate, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+#ifdef USE_TELEMETRY_PI
+        blackboxWriteUnsignedVB(blackboxCurrent->latest_key_pressed - blackboxLast->latest_key_pressed);
+#endif
+#ifdef USE_NN_CONTROL
+        blackboxWriteUnsignedVB(blackboxCurrent->nn_active - blackboxLast->nn_active);
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        blackboxWriteUnsignedVB(blackboxCurrent->tt_active - blackboxLast->tt_active);
 #endif
     }
 #else
@@ -1842,33 +1833,26 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->vel[0] = lrintf(velEstNed.V.X * METER_TO_CM);
     blackboxCurrent->vel[1] = lrintf(velEstNed.V.Y * METER_TO_CM);
     blackboxCurrent->vel[2] = lrintf(velEstNed.V.Z * METER_TO_CM);
-    blackboxCurrent->extVel[0] = lrintf(posMeasNed.vel.V.X * METER_TO_CM);
-    blackboxCurrent->extVel[1] = lrintf(posMeasNed.vel.V.Y * METER_TO_CM);
-    blackboxCurrent->extVel[2] = lrintf(posMeasNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->localVel[0] = lrintf(posMeasNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->localVel[1] = lrintf(posMeasNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->localVel[2] = lrintf(posMeasNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->velSp[0] = lrintf(posSpNed.vel.V.X * METER_TO_CM);
     blackboxCurrent->velSp[1] = lrintf(posSpNed.vel.V.Y * METER_TO_CM);
     blackboxCurrent->velSp[2] = lrintf(posSpNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->accSp[0] = lrintf(accSpNedFromPos.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNedFromPos.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNedFromPos.V.Z * METER_TO_CM);
-    blackboxCurrent->extAtt[0] = lrintf(posMeasNed.att.angles.roll * 1000.f); // milirad
-    blackboxCurrent->extAtt[1] = lrintf(posMeasNed.att.angles.pitch * 1000.f); // milirad
-    blackboxCurrent->extAtt[2] = lrintf(posMeasNed.att.angles.yaw * 1000.f); // milirad
-#ifdef USE_VIO_POSE
-    blackboxCurrent->vioTime = lrintf(vioPosNed.time_us);
-    blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
-    blackboxCurrent->vioPos[1] = lrintf(vioPosNed.y * METER_TO_MM);
-    blackboxCurrent->vioPos[2] = lrintf(vioPosNed.z * METER_TO_MM);
-    blackboxCurrent->vioVel[0] = lrintf(vioPosNed.vx * METER_TO_CM);
-    blackboxCurrent->vioVel[1] = lrintf(vioPosNed.vy * METER_TO_CM);
-    blackboxCurrent->vioVel[2] = lrintf(vioPosNed.vz * METER_TO_CM);
-    blackboxCurrent->vioQuat[0] = lrintf(vioPosNed.qw * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[1] = lrintf(vioPosNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[2] = lrintf(vioPosNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[3] = lrintf(vioPosNed.qz * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioRate[0] = lrintf(RADIANS_TO_DEGREES(vioPosNed.p));
-    blackboxCurrent->vioRate[1] = lrintf(RADIANS_TO_DEGREES(vioPosNed.q));
-    blackboxCurrent->vioRate[2] = lrintf(RADIANS_TO_DEGREES(vioPosNed.r));
+    blackboxCurrent->localAtt[0] = lrintf(posMeasNed.att.angles.roll * 1000.f); // milirad
+    blackboxCurrent->localAtt[1] = lrintf(posMeasNed.att.angles.pitch * 1000.f); // milirad
+    blackboxCurrent->localAtt[2] = lrintf(posMeasNed.att.angles.yaw * 1000.f); // milirad
+#ifdef USE_TELEMETRY_PI
+    blackboxCurrent->latest_key_pressed = lrintf(latestKeyPressed());
+#endif
+#ifdef USE_NN_CONTROL
+    blackboxCurrent->nn_active = lrintf(nn_is_active());
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+    blackboxCurrent->tt_active = lrintf(isActiveTrajectoryTracker());
 #endif
 #endif
 
@@ -2484,6 +2468,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
 #endif
+        BLACKBOX_PRINT_HEADER_LINE("imu_process_denom", "%d",  imuConfig()->imu_process_denom);
 #ifdef USE_EKF
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE, "%d",  ekfConfig()->use_attitude_estimate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_POSITION_ESTIMATE, "%d",  ekfConfig()->use_position_estimate);

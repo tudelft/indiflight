@@ -373,6 +373,20 @@ FAST_CODE fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis) {
     return res;
 }
 
+// fwd euler integrate body rates w over interval dt: q <-- q + 0.5dt * q * (0 w)
+void quaternion_integrate_body_rates(fp_quaternion_t* q, const fp_vector_t* w, float dt)
+{
+    fp_quaternion_t buffer = *q;
+    QUAT_SCALAR_MULT(buffer, (0.5f*dt));
+
+    q->w += (-buffer.x * w->V.X - buffer.y * w->V.Y - buffer.z * w->V.Z);
+    q->x += (+buffer.w * w->V.X + buffer.y * w->V.Z - buffer.z * w->V.Y);
+    q->y += (+buffer.w * w->V.Y - buffer.x * w->V.Z + buffer.z * w->V.X);
+    q->z += (+buffer.w * w->V.Z + buffer.x * w->V.Y - buffer.y * w->V.X);
+
+    QUAT_NORMALIZE((*q));
+}
+
 // columns major. upper factor
 #ifdef STM32H7
 FAST_CODE
