@@ -63,7 +63,7 @@
 
 #include "flight/mixer.h"
 #include "flight/pid.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/position.h"
 
 #include "rx/rx.h"

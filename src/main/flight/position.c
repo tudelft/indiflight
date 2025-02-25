@@ -34,7 +34,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/position.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/pid.h"
 
 #include "io/gps.h"

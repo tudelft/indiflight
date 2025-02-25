@@ -33,7 +33,7 @@
 
 // Sub menus
 
-#include "cms/cms_menu_imu.h"
+#include "cms/cms_menu_ahrs.h"
 #include "cms/cms_menu_blackbox.h"
 #include "cms/cms_menu_failsafe.h"
 #include "cms/cms_menu_firmware.h"
@@ -221,7 +221,7 @@ static const OSD_Entry menuMainEntries[] =
 {
     {"-- MAIN --",  OME_Label, NULL, NULL},
 
-    {"PROFILE",     OME_Submenu,  cmsMenuChange, &cmsx_menuImu},
+    {"PROFILE",     OME_Submenu,  cmsMenuChange, &cmsx_menuAhrs},
     {"FEATURES",    OME_Submenu,  cmsMenuChange, &cmsx_menuFeatures},
 #ifdef USE_OSD
     {"OSD",         OME_Submenu,  cmsMenuChange, &cmsx_menuOsd},

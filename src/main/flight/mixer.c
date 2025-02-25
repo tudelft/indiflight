@@ -49,7 +49,7 @@
 
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer_init.h"
 #include "flight/mixer_tricopter.h"
 #include "flight/pid.h"

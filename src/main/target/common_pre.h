@@ -96,8 +96,8 @@
 #ifndef USE_BLACKBOX
 #define USE_BLACKBOX
 #endif
-#ifndef USE_IMU_CALC
-#define USE_IMU_CALC
+#ifndef USE_AHRS_CALC
+#define USE_AHRS_CALC
 #endif
 #endif
 
@@ -302,7 +302,7 @@ extern uint8_t _dmaram_end__;
 #if !defined(SIMULATOR_BUILD)
 #define USE_GYRO_REGISTER_DUMP  // Adds gyroregisters command to cli to dump configured register values
 #endif
-//#define USE_IMU_CALC
+//#define USE_AHRS_CALC
 
 // all the settings for classic build
 #if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD)

@@ -21,11 +21,11 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef LOCAL_POS_H
+#define LOCAL_POS_H
 
 #include "drivers/time.h"
 #include "common/maths.h"
-
-#ifdef USE_LOCAL_POSITION_PI
 
 typedef enum {
     LOCAL_POS_NO_SIGNAL,
@@ -83,4 +83,5 @@ void checkNewPos(void);
 void getLocalPos(timeUs_t current);
 void getFakeGps(timeUs_t current);
 void getPosSetpoint(timeUs_t current);
-#endif
+
+#endif // LOCAL_POS_H

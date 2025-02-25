@@ -41,7 +41,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/feedforward.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid_init.h"

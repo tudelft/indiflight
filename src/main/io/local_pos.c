@@ -28,9 +28,10 @@
 #include "drivers/time.h"
 #include "common/time.h"
 #include "io/gps.h"
+#include "io/local_pos.h"
 #include "fc/runtime_config.h"
 #include "sensors/sensors.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "io/gps.h"
 
 #ifdef USE_LOCAL_POSITION

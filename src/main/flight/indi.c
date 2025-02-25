@@ -39,7 +39,7 @@
 #include "fc/rc.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/pid.h"
 #include "flight/mixer_init.h"
 #include "flight/pos_ctl.h"

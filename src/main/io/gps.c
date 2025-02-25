@@ -53,7 +53,7 @@
 //#include "fc/gps_lap_timer.h"
 #include "fc/runtime_config.h"
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/pid.h"
 #include "flight/gps_rescue.h"
 

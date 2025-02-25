@@ -29,34 +29,34 @@
 extern i16_euler_t attitude;
 extern fp_rotationMatrix_t rMat;
 
-typedef struct imuConfig_s {
+typedef struct ahrsConfig_s {
     uint16_t dcm_kp;                        // DCM filter proportional gain ( x 10000)
     uint16_t dcm_ki;                        // DCM filter integral gain ( x 10000)
     uint8_t small_angle;
-    uint8_t imu_process_denom;
-} imuConfig_t;
+    uint8_t ahrs_process_denom;
+} ahrsConfig_t;
 
-PG_DECLARE(imuConfig_t, imuConfig);
+PG_DECLARE(ahrsConfig_t, ahrsConfig);
 
-typedef struct imuRuntimeConfig_s {
+typedef struct ahrsRuntimeConfig_s {
     float dcm_ki;
     float dcm_kp;
-} imuRuntimeConfig_t;
+} ahrsRuntimeConfig_t;
 
-void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
+void ahrsConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value);
 
 float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);
-void imuUpdateAttitude(timeUs_t currentTimeUs);
-void attitudeDecider(void);
+void ahrsDecider(void);
+void ahrsUpdate(timeUs_t currentTimeUs);
 
-void imuInit(void);
+void ahrsInit(void);
 
 #ifdef SIMULATOR_BUILD
-void imuSetAttitudeRPY(float roll, float pitch, float yaw);  // in deg
-void imuSetAttitudeQuat(float w, float x, float y, float z);
-#if defined(SIMULATOR_IMU_SYNC)
-void imuSetHasNewData(uint32_t dt);
+void ahrsSetAttitudeRPY(float roll, float pitch, float yaw);  // in deg
+void ahrsSetAttitudeQuat(float w, float x, float y, float z);
+#if defined(SIMULATOR_AHRS_SYNC)
+void ahrsSetHasNewData(uint32_t dt);
 #endif
 #endif
 

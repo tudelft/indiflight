@@ -84,7 +84,7 @@
 
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/pid_init.h"
@@ -1362,7 +1362,7 @@ case MSP_NAME:
     case MSP_ARMING_CONFIG:
         sbufWriteU8(dst, armingConfig()->auto_disarm_delay);
         sbufWriteU8(dst, 0);
-        sbufWriteU8(dst, imuConfig()->small_angle);
+        sbufWriteU8(dst, ahrsConfig()->small_angle);
         break;
 
     case MSP_RC_TUNING:
@@ -2666,7 +2666,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         armingConfigMutable()->auto_disarm_delay = sbufReadU8(src);
         sbufReadU8(src); // reserved
         if (sbufBytesRemaining(src)) {
-          imuConfigMutable()->small_angle = sbufReadU8(src);
+          ahrsConfigMutable()->small_angle = sbufReadU8(src);
         }
         break;
 

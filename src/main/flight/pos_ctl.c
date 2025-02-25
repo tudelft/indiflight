@@ -27,7 +27,8 @@
 #include "pos_ctl.h"
 
 #include "io/local_pos.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
+#include "flight/ekf.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"

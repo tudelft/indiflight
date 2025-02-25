@@ -75,6 +75,9 @@
 #define KEY_DOWN        0x50
 
 #ifdef USE_TELEMETRY_PI
+
+uint8_t key = 0;
+
 void processKey(uint8_t key) {
     // 0 = go to center
     // 1 = initTrajectoryTracker
@@ -88,7 +91,7 @@ void processKey(uint8_t key) {
     // 9 = kill
 
     switch (key) {
-#ifdef USE_LOCAL_POSITION_PI
+#ifdef USE_LOCAL_POSITION
         case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpState = LOCAL_POS_NEW_MESSAGE; break;
         case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSpState = LOCAL_POS_NEW_MESSAGE; break;
 #endif
@@ -120,4 +123,9 @@ void processKeyboard(void) {
         }
     }
 }
+
+uint8_t latestKeyPressed(void) {
+    return key;
+}
+
 #endif

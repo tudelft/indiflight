@@ -41,7 +41,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/pid.h"
 #include "flight/position.h"
 
@@ -467,7 +467,7 @@ static void performSanityChecks(void)
         rescueState.intent.secondsFailing = constrain(rescueState.intent.secondsFailing, 0, 15);
         if (rescueState.intent.secondsFailing == 15) {
 #ifdef USE_MAG
-            //If there is a mag and has not been disabled, we have to assume is healthy and has been used in imu.c
+            //If there is a mag and has not been disabled, we have to assume is healthy and has been used in ahrs.c
             if (sensors(SENSOR_MAG) && gpsRescueConfig()->useMag && !magForceDisable) {
                 //Try again with mag disabled
                 magForceDisable = true;

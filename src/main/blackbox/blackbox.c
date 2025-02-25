@@ -64,7 +64,7 @@
 #include "flight/servos.h"
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/indi.h"
 #include "flight/pos_ctl.h"
 #include "flight/ekf.h"
@@ -2468,7 +2468,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
 #endif
-        BLACKBOX_PRINT_HEADER_LINE("imu_process_denom", "%d",  imuConfig()->imu_process_denom);
+        BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE, "%d",  ekfConfig()->use_attitude_estimate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_POSITION_ESTIMATE, "%d",  ekfConfig()->use_position_estimate);

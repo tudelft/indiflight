@@ -69,7 +69,7 @@
 #include "flight/dyn_notch_filter.h"
 #endif
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/position.h"
 

@@ -41,7 +41,7 @@
 
 
 #include "flight/position.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 
 #include "io/serial.h"
 #include "io/gps.h"

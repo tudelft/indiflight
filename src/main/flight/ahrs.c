@@ -18,7 +18,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Inertial Measurement Unit (IMU)
+// Attitude and Heading Reference System (AHRS)
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -42,7 +42,7 @@
 
 #include "flight/ekf.h"
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 
@@ -60,22 +60,22 @@
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_MULTITHREAD)
 #include <stdio.h>
 #include <pthread.h>
-#include "imu.h"
+#include "ahrs.h"
 
-static pthread_mutex_t imuUpdateLock;
+static pthread_mutex_t ahrsUpdateLock;
 
-#if defined(SIMULATOR_IMU_SYNC)
-static uint32_t imuDeltaT = 0;
-static bool imuUpdated = false;
+#if defined(SIMULATOR_AHRS_SYNC)
+static uint32_t ahrsDeltaT = 0;
+static bool ahrsUpdated = false;
 #endif
 
-#define IMU_LOCK pthread_mutex_lock(&imuUpdateLock)
-#define IMU_UNLOCK pthread_mutex_unlock(&imuUpdateLock)
+#define AHRS_LOCK pthread_mutex_lock(&ahrsUpdateLock)
+#define AHRS_UNLOCK pthread_mutex_unlock(&ahrsUpdateLock)
 
 #else
 
-#define IMU_LOCK
-#define IMU_UNLOCK
+#define AHRS_LOCK
+#define AHRS_UNLOCK
 
 #endif
 
@@ -95,7 +95,7 @@ static float throttleAngleScale;
 static int throttleAngleValue;
 static float smallAngleCosZ = 0;
 
-static imuRuntimeConfig_t imuRuntimeConfig;
+static ahrsRuntimeConfig_t ahrsRuntimeConfig;
 
 #if defined(USE_ACC)
 STATIC_UNIT_TESTED bool attitudeIsEstablished = false;
@@ -113,13 +113,13 @@ static fp_quaternion_t qMahony = QUATERNION_INITIALIZE;
 static fp_quaternionProducts_t qPMahony = QUATERNION_PRODUCTS_INITIALIZE;
 static fp_rotationMatrix_t rMatMahony = ROTATION_MATRIX_INITIALIZE;
 
-PG_REGISTER_WITH_RESET_TEMPLATE(imuConfig_t, imuConfig, PG_IMU_CONFIG, 2);
+PG_REGISTER_WITH_RESET_TEMPLATE(ahrsConfig_t, ahrsConfig, PG_AHRS_CONFIG, 2);
 
-PG_RESET_TEMPLATE(imuConfig_t, imuConfig,
+PG_RESET_TEMPLATE(ahrsConfig_t, ahrsConfig,
     .dcm_kp = 2500,                // 1.0 * 10000
     .dcm_ki = 0,                   // 0.003 * 10000
     .small_angle = 25,
-    .imu_process_denom = 2
+    .ahrs_process_denom = 2
 );
 
 static float calculateThrottleAngleScale(uint16_t throttle_correction_angle)
@@ -127,54 +127,57 @@ static float calculateThrottleAngleScale(uint16_t throttle_correction_angle)
     return (1800.0f / M_PIf) * (900.0f / throttle_correction_angle);
 }
 
-void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value)
+void ahrsConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correction_value)
 {
-    imuRuntimeConfig.dcm_kp = imuConfig()->dcm_kp / 10000.0f;
-    imuRuntimeConfig.dcm_ki = imuConfig()->dcm_ki / 10000.0f;
+    ahrsRuntimeConfig.dcm_kp = ahrsConfig()->dcm_kp / 10000.0f;
+    ahrsRuntimeConfig.dcm_ki = ahrsConfig()->dcm_ki / 10000.0f;
 
-    smallAngleCosZ = cos_approx(degreesToRadians(imuConfig()->small_angle));
+    smallAngleCosZ = cos_approx(degreesToRadians(ahrsConfig()->small_angle));
 
     throttleAngleScale = calculateThrottleAngleScale(throttle_correction_angle);
     throttleAngleValue = throttle_correction_value;
 }
 
-void imuInit(void)
+void ahrsInit(void)
 {
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_MULTITHREAD)
-    if (pthread_mutex_init(&imuUpdateLock, NULL) != 0) {
-        printf("Create imuUpdateLock error!\n");
+    if (pthread_mutex_init(&ahrsUpdateLock, NULL) != 0) {
+        printf("Create ahrsUpdateLock error!\n");
     }
 #endif
 }
 
 #if defined(USE_ACC)
-static void imuMahonyAHRSupdate(float dt, fp_vector_t* rate, bool useAcc, fp_vector_t* acc, bool useMag,
+static void mahonyUpdate(float dt, fp_vector_t* rate, bool useAcc, fp_vector_t* acc, bool useMag,
                                 const float dcmKpGain)
 {
     const float rate_norm = VEC3_LENGTH((*rate)); // rad/s
     const float acc_norm  = VEC3_LENGTH((*acc));
 
-    fp_vector_t e           = { .V.X = 0.f, .V.Y = 0.f, .V.Z = 0.f }; // rotation error
-    static fp_vector_t eint = { .V.X = 0.f, .V.Y = 0.f, .V.Z = 0.f }; // rotation error integral
+    fp_vector_t e           = { 0 }; // rotation error
+    static fp_vector_t eint = { 0 }; // rotation error integral
 
     // global z in body frame
-    fp_vector_t zB = { .V.X = rMatMahony.m[2][X], .V.X = rMatMahony.m[2][Y], .V.Z = rMatMahony.m[2][Z]};
+    fp_vector_t zB = { 0 };
+    zB.V.X = rMatMahony.m[2][X];
+    zB.V.X = rMatMahony.m[2][Y];
+    zB.V.Z = rMatMahony.m[2][Z];
 
 #ifdef USE_MAG
     // Use measured magnetic field vector
-    fp_vector_t mag = { .V.X = mag.magADC[X], .V.Y = mag.magADC[Y], .V.Z = mag.magADC[Z] };
-    float mag_norm = VEC3_LENGTH(mag);
+    fp_vector_t m = { .V.X = mag.magADC[X], .V.Y = mag.magADC[Y], .V.Z = mag.magADC[Z] };
+    float mag_norm = VEC3_LENGTH(m);
     if (useMag && mag_norm > 0.01f) {
         // Normalise magnetometer measurement
-        VEC3_NORMALIZE(mag);
+        VEC3_NORMALIZE(m);
 
         // For magnetometer correction we make an assumption that magnetic field is perpendicular to gravity (ignore Z-component in EF).
         // This way magnetic field will only affect heading and wont mess roll/pitch angles
-        rotate_vector_with_rotationMatrix(&mag, &rMatMahony); // measured mag field vector in EF 
-        const float bx = VEC3_XY_LENGTH(mag);                 // reference mag field vector heading due North in EF (assuming Z-component is zero)
+        rotate_vector_with_rotationMatrix(&m, &rMatMahony); // measured mag field vector in EF 
+        const float bx = VEC3_XY_LENGTH(m);                 // reference mag field vector heading due North in EF (assuming Z-component is zero)
 
         // magnetometer error is cross product between estimated magnetic north and measured magnetic north (calculated in EF)
-        const float ez_ef = (mag->V.Y * bx); // assuming mz = 0
+        const float ez_ef = (m.V.Y * bx); // assuming mz = 0
 
         // Rotate mag error vector back to BF and accumulate
         VEC3_SCALAR_MULT_ADD(e, ez_ef, zB); // e += ez_ef * zB
@@ -195,7 +198,7 @@ static void imuMahonyAHRSupdate(float dt, fp_vector_t* rate, bool useAcc, fp_vec
     }
 
     // Compute and apply integral feedback if enabled
-    if (imuRuntimeConfig.dcm_ki > 0.0f) {
+    if (ahrsRuntimeConfig.dcm_ki > 0.0f) {
         // Stop integrating if spinning beyond the certain limit
         if (rate_norm < DEGREES_TO_RADIANS(SPIN_RATE_LIMIT)) {
             VEC3_SCALAR_MULT_ADD(eint, dt, e);
@@ -206,26 +209,26 @@ static void imuMahonyAHRSupdate(float dt, fp_vector_t* rate, bool useAcc, fp_vec
 
     // Apply proportional and integral feedback
     VEC3_SCALAR_MULT_ADD((*rate), dcmKpGain, e);
-    VEC3_SCALAR_MULT_ADD((*rate), imuRuntimeConfig.dcm_ki, eint);
+    VEC3_SCALAR_MULT_ADD((*rate), ahrsRuntimeConfig.dcm_ki, eint);
 
     // Integrate rate of change of quaternion
     quaternion_integrate_body_rates(&qMahony, rate, dt);
 }
 
-static bool imuIsAccelerometerHealthy(fp_vector_t *accAverage)
+static bool ahrsIsAccelerometerHealthy(fp_vector_t *accAverage)
 {
     // Accept accel readings only in range 0.85g - 1.15g
     float accMagnitude = VEC3_LENGTH((*accAverage));
     return (0.85f < accMagnitude) && (accMagnitude < 1.15f);
 }
 
-// Calculate the dcmKpGain to use. When armed, the gain is imuRuntimeConfig.dcm_kp * 1.0 scaling.
+// Calculate the dcmKpGain to use. When armed, the gain is ahrsRuntimeConfig.dcm_kp * 1.0 scaling.
 // When disarmed after initial boot, the scaling is set to 10.0 for the first 20 seconds to speed up initial convergence.
 // After disarming we want to quickly reestablish convergence to deal with the attitude estimation being incorrect due to a crash.
 //   - wait for a 250ms period of low gyro activity to ensure the craft is not moving
 //   - use a large dcmKpGain value for 500ms to allow the attitude estimate to quickly converge
 //   - reset the gain back to the standard setting
-static float imuCalcKpGain(timeUs_t currentTimeUs, bool useAcc, fp_vector_t *gyroAverage)
+static float ahrsCalcKpGain(timeUs_t currentTimeUs, bool useAcc, fp_vector_t *gyroAverage)
 {
     static bool lastArmState = false;
     static timeUs_t gyroQuietPeriodTimeEnd = 0;
@@ -275,7 +278,7 @@ static float imuCalcKpGain(timeUs_t currentTimeUs, bool useAcc, fp_vector_t *gyr
     if (attitudeResetActive) {
         ret = ATTITUDE_RESET_KP_GAIN;
     } else {
-        ret = imuRuntimeConfig.dcm_kp;
+        ret = ahrsRuntimeConfig.dcm_kp;
         if (!armState) {
             ret *= 10.0f; // Scale the kP to generally converge faster when disarmed.
         }
@@ -300,10 +303,10 @@ static int calculateThrottleAngleCorrection(void)
     return lrintf(throttleAngleValue * sin_approx(angle / (900.0f * M_PIf / 2.0f)));
 }
 
-FAST_CODE void attitudeDecider(void) {
+FAST_CODE void ahrsDecider(void) {
 #ifdef USE_EKF
     if (isInitializedEkf() 
-#ifdef USE_IMU_FALLBACK_LOGIC
+#ifdef USE_AHRS_FALLBACK_LOGIC
     && (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE) || FLIGHT_MODE(NN_MODE) || FLIGHT_MODE(CATAPULT_MODE))
 #endif
         ) {
@@ -332,40 +335,44 @@ FAST_CODE void attitudeDecider(void) {
     attitudeIsEstablished = true;
 }
 
-void imuUpdateAttitude(timeUs_t currentTimeUs)
+void ahrsUpdate(timeUs_t currentTimeUs)
 {
-    static timeUs_t previousIMUUpdateTime = 0;
-    timeDelta_t deltaT = cmpTimeUs(currentTimeUs, previousIMUUpdateTime);
-    previousIMUUpdateTime = currentTimeUs;
+    // ----- check if we even need to calculate anything
+#if defined(SIMULATOR_BUILD) && !defined(USE_AHRS_CALC) // no AHRS calcs necessary, return early
+    UNUSED(gyroGetFilteredDownsampled);
+    UNUSED(ahrsIsAccelerometerHealthy);
+    UNUSED(compassIsHealthy);
+    UNUSED(ahrsCalcKpGain);
+    UNUSED(mahonyUpdate);
+    UNUSED(ahrsDecider);
+    return;
+#endif // we need to calculate AHRS
+
+    static timeUs_t previousAHRSUpdateTime = 0;
+    timeDelta_t deltaT = cmpTimeUs(currentTimeUs, previousAHRSUpdateTime);
+    previousAHRSUpdateTime = currentTimeUs;
 
     if (sensors(SENSOR_ACC) && acc.isAccelUpdatedAtLeastOnce && deltaT < 100000) {
-
-        // ----- check if we even need to calculate anything
-#if defined(SIMULATOR_BUILD) && !defined(USE_IMU_CALC) // no AHRS calcs necessary, return early
-    UNUSED(imuIsAccelerometerHealthy);
-    UNUSED(imuCalcKpGain);
-#else // we need to calculate AHRS
-
-#if defined(SIMULATOR_BUILD) && defined(SIMULATOR_IMU_SYNC)
-        if (imuUpdated == false) {
-            IMU_UNLOCK;
+#if defined(SIMULATOR_BUILD) && defined(SIMULATOR_AHRS_SYNC)
+        if (ahrsUpdated == false) {
+            AHRS_UNLOCK;
             return;
         }
-        imuUpdated = false;
+        ahrsUpdated = false;
 
-//        printf("[imu]deltaT = %u, imuDeltaT = %u, currentTimeUs = %u, micros64_real = %lu\n", deltaT, imuDeltaT, currentTimeUs, micros64_real());
-        deltaT = imuDeltaT;
+//        printf("[ahrs]deltaT = %u, ahrsDeltaT = %u, currentTimeUs = %u, micros64_real = %lu\n", deltaT, ahrsDeltaT, currentTimeUs, micros64_real());
+        deltaT = ahrsDeltaT;
 #endif
 
         // ----- perpare input data
-        IMU_LOCK;
+        AHRS_LOCK;
         fp_vector_t gyroAverage = {0};
         for (int axis = 0; axis < XYZ_AXIS_COUNT; ++axis) {
             gyroAverage.A[axis] = DEGREES_TO_RADIANS(gyroGetFilteredDownsampled(axis));
         }
 
         fp_vector_t accAverage = { .V.X = acc.accADCf[X], .V.Y = acc.accADCf[Y], .V.Z = acc.accADCf[Z] };
-        bool useAcc = imuIsAccelerometerHealthy(&accAverage);
+        bool useAcc = ahrsIsAccelerometerHealthy(&accAverage);
 
 #ifdef USE_MAG
         bool useMag = (sensors(SENSOR_MAG) && compassIsHealthy());
@@ -373,11 +380,11 @@ void imuUpdateAttitude(timeUs_t currentTimeUs)
         bool useMag = false;
 #endif
 
-        float Kp = imuCalcKpGain(currentTimeUs, useAcc, &gyroAverage);
+        float Kp = ahrsCalcKpGain(currentTimeUs, useAcc, &gyroAverage);
 
         // ----- calculate gain and perform attitude update
-        imuMahonyAHRSupdate(deltaT * 1e-6f, &gyroAverage, useAcc, &accAverage, useMag, Kp);
-        IMU_UNLOCK;
+        mahonyUpdate(1e-6f*deltaT, &gyroAverage, useAcc, &accAverage, useMag, Kp);
+        AHRS_UNLOCK;
 
         // ----- Pre-compute rotation matrix from quaternion
         quaternionProducts_of_quaternion(&qPMahony, &qMahony);
@@ -391,7 +398,7 @@ void imuUpdateAttitude(timeUs_t currentTimeUs)
         mixerSetThrottleAngleCorrection(throttleAngleCorrection);
 
         // ----- assign, if used. this also calculates euler angles, and rMat
-        attitudeDecider();
+        ahrsDecider();
     } else {
         if (!sensors(SENSOR_ACC) || !acc.isAccelUpdatedAtLeastOnce) {
             acc.accADCf[X] = 0;
@@ -420,20 +427,20 @@ void getAttitudeQuaternion(fp_quaternion_t *quat)
 }
 
 #ifdef SIMULATOR_BUILD
-void imuSetAttitudeRPY(float roll, float pitch, float yaw)
+void ahrsSetAttitudeRPY(float roll, float pitch, float yaw)
 {
-    IMU_LOCK;
+    AHRS_LOCK;
 
     attitude.angles.roll = roll * 10;
     attitude.angles.pitch = pitch * 10;
     attitude.angles.yaw = yaw * 10;
 
-    IMU_UNLOCK;
+    AHRS_UNLOCK;
 }
 
-void imuSetAttitudeQuat(float w, float x, float y, float z)
+void ahrsSetAttitudeQuat(float w, float x, float y, float z)
 {
-    IMU_LOCK;
+    AHRS_LOCK;
 
     q.w = w;
     q.x = x;
@@ -452,18 +459,18 @@ void imuSetAttitudeQuat(float w, float x, float y, float z)
 
     attitudeIsEstablished = true;
 
-    IMU_UNLOCK;
+    AHRS_UNLOCK;
 }
 #endif
-#if defined(SIMULATOR_BUILD) && defined(SIMULATOR_IMU_SYNC)
-void imuSetHasNewData(uint32_t dt)
+#if defined(SIMULATOR_BUILD) && defined(SIMULATOR_AHRS_SYNC)
+void ahrsSetHasNewData(uint32_t dt)
 {
-    IMU_LOCK;
+    AHRS_LOCK;
 
-    imuUpdated = true;
-    imuDeltaT = dt;
+    ahrsUpdated = true;
+    ahrsDeltaT = dt;
 
-    IMU_UNLOCK;
+    AHRS_UNLOCK;
 }
 #endif
 

@@ -54,7 +54,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/position.h"
@@ -346,7 +346,7 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_LOCAL_POSITION_PI
+#ifdef USE_LOCAL_POSITION
 static void taskLocalPosition(timeUs_t currentTimeUs)
 {
     getLocalPos(currentTimeUs);
@@ -421,7 +421,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_ACC
     [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
-    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, imuUpdateAttitude, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
+    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, ahrsUpdate, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
 #endif
 
     [TASK_RX] = DEFINE_TASK("RX", NULL, rxUpdateCheck, taskUpdateRxMain, TASK_PERIOD_HZ(33), TASK_PRIORITY_HIGH), // If event-based scheduling doesn't work, fallback to periodic scheduling
@@ -467,7 +467,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_LOCAL_POSITION_PI
+#ifdef USE_LOCAL_POSITION
     [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif

@@ -33,11 +33,11 @@
 
 // use simulatior's attitude directly
 // disable this if wants to test AHRS algorithm
-//#undef USE_IMU_CALC
+//#undef USE_AHRS_CALC
 
 //#define SIMULATOR_ACC_SYNC
 //#define SIMULATOR_GYRO_SYNC
-//#define SIMULATOR_IMU_SYNC
+//#define SIMULATOR_AHRS_SYNC
 //#define SIMULATOR_GYROPID_SYNC
 
 // file name to save config

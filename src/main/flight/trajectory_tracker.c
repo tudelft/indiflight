@@ -24,7 +24,8 @@
 #include "trajectory_tracker.h"
 
 #include <math.h>
-#include "flight/imu.h"
+#include "flight/ahrs.h"
+#include "flight/ekf.h"
 #include "io/local_pos.h"
 #include "flight/indi.h"
 #include "pos_ctl.h"

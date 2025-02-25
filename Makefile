@@ -114,24 +114,20 @@ endif
 REVISION = $(GITHASH)$(DIRTYFLAG)
 endif
 
-check_dirty : 
-ifneq (,$(findstring dirty,$(REVISION)))
-ifeq ($(TARGET), MOCKUP)
-	@echo "Uncommited changes. Continuing with build!"
+check_dirty :
+ifeq (y,$(YES))
+	@echo "Skipping dirty-checks"
 else
-	@echo "Uncommited changes. Continue with build? [y/N]"; \
+ifneq (,$(findstring dirty,$(REVISION)))
+	@echo "Uncommited changes. Continue with build? [y/N] (pass YES=y to skip)"; \
 		read answer; \
 		if [ "$$answer" != "y" ]; then \
 		  echo "Aborting target"; \
 		  exit 1; \
 		fi
 endif
-endif
-ifeq ($(TARGET), MOCKUP)
-	@echo "!!!! NOT CLEANED !!!!. Continuing with build!"
-else
 	@if [ -d $(TARGET_OBJ_DIR) ]; then \
-		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N]"; \
+		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N] (pass YES=y to skip)"; \
 			read answer; \
 			if [ "$$answer" != "y" ]; then \
 			  echo "Aborting target"; \

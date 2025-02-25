@@ -49,7 +49,7 @@
 #include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/position.h"
 
 #include "io/gps.h"

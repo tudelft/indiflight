@@ -42,10 +42,6 @@
 #error "USE_NN_CONTROL requires the use of USE_EKF"
 #endif
 
-//#ifndef USE_LOCAL_POSITION_PI  // implicit in EKF
-//#error "USE_NN_CONTROL requires the use of USE_LOCAL_POSITION_PI"
-//#endif
-
 #ifndef USE_LOCAL_POSITION
 #error "USE_NN_CONTROL requires the use of USE_LOCAL_POSITION"
 #endif

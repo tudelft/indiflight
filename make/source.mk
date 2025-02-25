@@ -97,7 +97,7 @@ COMMON_SRC = \
             flight/failsafe.c \
             flight/gps_rescue.c \
             flight/dyn_notch_filter.c \
-            flight/imu.c \
+            flight/ahrs.c \
             flight/feedforward.c \
             flight/mixer.c \
             flight/mixer_init.c \
@@ -160,7 +160,7 @@ COMMON_SRC = \
             cms/cms_menu_failsafe.c \
             cms/cms_menu_firmware.c \
             cms/cms_menu_gps_rescue.c\
-            cms/cms_menu_imu.c \
+            cms/cms_menu_ahrs.c \
             cms/cms_menu_ledstrip.c \
             cms/cms_menu_main.c \
             cms/cms_menu_misc.c \
@@ -283,7 +283,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             fc/rc_controls.c \
             fc/runtime_config.c \
             flight/dyn_notch_filter.c \
-            flight/imu.c \
+            flight/ahrs.c \
             flight/mixer.c \
             flight/pid.c \
             flight/pos_ctl.c \
@@ -377,7 +377,7 @@ SIZE_OPTIMISED_SRC := $(SIZE_OPTIMISED_SRC) \
             cms/cms_menu_failsafe.c \
             cms/cms_menu_firmware.c \
             cms/cms_menu_gps_rescue.c\
-            cms/cms_menu_imu.c \
+            cms/cms_menu_ahrs.c \
             cms/cms_menu_ledstrip.c \
             cms/cms_menu_main.c \
             cms/cms_menu_misc.c \

@@ -137,16 +137,14 @@ typedef enum {
 #ifdef USE_TELEMETRY
     TASK_TELEMETRY,
 #endif
-#ifdef HIL_BUILD
-    TASK_HIL,
-#endif
-#ifdef USE_LOCAL_POSITION_PI
-    TASK_LOCAL_POSITION,
-#endif
 #ifdef USE_TELEMETRY_PI
     TASK_KEYBOARD,
 #endif
+#ifdef HIL_BUILD
+    TASK_HIL,
+#endif
 #ifdef USE_LOCAL_POSITION
+    TASK_LOCAL_POSITION,
     TASK_POS_CTL,
 #endif
 #ifdef USE_EKF

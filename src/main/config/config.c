@@ -48,7 +48,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/pid_init.h"
@@ -193,7 +193,7 @@ static void activateConfig(void)
     accInitFilters();
 #endif
 
-    imuConfigure(throttleCorrectionConfig()->throttle_correction_angle, throttleCorrectionConfig()->throttle_correction_value);
+    ahrsConfigure(throttleCorrectionConfig()->throttle_correction_angle, throttleCorrectionConfig()->throttle_correction_value);
 
 #if defined(USE_LED_STRIP_STATUS_MODE)
     reevaluateLedConfig();

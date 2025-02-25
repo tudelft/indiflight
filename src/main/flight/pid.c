@@ -47,7 +47,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/rpm_filter.h"
 #include "flight/feedforward.h"

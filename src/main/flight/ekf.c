@@ -30,7 +30,7 @@
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
 #include "sensors/gyro.h"			// for gyro
 #include "sensors/acceleration.h"   // for acc
-#include "imu.h"                    // for fallback if no GPS
+#include "ahrs.h"                    // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
 
 #include "pg/pg_ids.h"              // for config
@@ -61,6 +61,7 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
     .meas_delay = 0,
 ); 
 
+fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 
@@ -125,6 +126,10 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 			break;
 		}
 	}
+}
+
+bool isInitializedEkf(void) {
+    return ekf_initialized;
 }
 
 void initEkf(timeUs_t currentTimeUs) {
@@ -253,8 +258,8 @@ void updateEkf(timeUs_t currentTimeUs) {
 		runEkf(currentTimeUs);
     }
 
-    // run fallback in advance so it doesnt lose sync --> todo, move somewhere else, so this file doesnt need to include imu.h
-    imuUpdateAttitude(currentTimeUs);
+    // run fallback in advance so it doesnt lose sync --> todo, move somewhere else, so this file doesnt need to include ahrs.h
+    ahrsUpdate(currentTimeUs);
 
     // update system state with EKF data, if possible and configured
     if (ekf_initialized && (posMeasState != LOCAL_POS_NO_SIGNAL)) {
@@ -265,7 +270,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
         quaternion_of_fp_euler(&qEkf, &e);
 
-        attitudeDecider();
+        ahrsDecider();
 
         // update position
         posEstNed.V.X = ekf_X[0];

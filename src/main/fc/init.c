@@ -96,7 +96,7 @@
 #include "fc/tasks.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
@@ -796,7 +796,7 @@ void init(void)
     LED0_OFF;
     LED1_OFF;
 
-    imuInit();
+    ahrsInit();
 
     failsafeInit();
 

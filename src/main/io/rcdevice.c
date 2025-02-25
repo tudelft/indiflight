@@ -30,7 +30,7 @@
 
 #include "drivers/time.h"
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 
 #include "io/serial.h"
 

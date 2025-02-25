@@ -35,7 +35,7 @@
 
 #include "cms/cms.h"
 #include "cms/cms_types.h"
-#include "cms/cms_menu_imu.h"
+#include "cms/cms_menu_ahrs.h"
 
 #include "common/utils.h"
 
@@ -117,7 +117,7 @@ static const char *pidProfileNamePtrs[PID_PROFILE_COUNT];
 static char rateProfileNames[CONTROL_RATE_PROFILE_COUNT][MAX_PROFILE_NAME_LENGTH + PROFILE_INDEX_STRING_ADDITIONAL_SIZE];
 static const char *rateProfileNamePtrs[CONTROL_RATE_PROFILE_COUNT];
 
-static const void *cmsx_menuImu_onEnter(displayPort_t *pDisp)
+static const void *cmsx_menuAhrs_onEnter(displayPort_t *pDisp)
 {
     UNUSED(pDisp);
 
@@ -140,7 +140,7 @@ static const void *cmsx_menuImu_onEnter(displayPort_t *pDisp)
     return NULL;
 }
 
-static const void *cmsx_menuImu_onExit(displayPort_t *pDisp, const OSD_Entry *self)
+static const void *cmsx_menuAhrs_onExit(displayPort_t *pDisp, const OSD_Entry *self)
 {
     UNUSED(pDisp);
     UNUSED(self);
@@ -1028,7 +1028,7 @@ CMS_Menu cmsx_menuCopyProfile = {
 
 #endif
 
-static const OSD_Entry cmsx_menuImuEntries[] =
+static const OSD_Entry cmsx_menuAhrsEntries[] =
 {
     { "-- PROFILE --", OME_Label, NULL, NULL},
 
@@ -1056,15 +1056,15 @@ static const OSD_Entry cmsx_menuImuEntries[] =
     {NULL, OME_END, NULL, NULL}
 };
 
-CMS_Menu cmsx_menuImu = {
+CMS_Menu cmsx_menuAhrs = {
 #ifdef CMS_MENU_DEBUG
-    .GUARD_text = "XIMU",
+    .GUARD_text = "XAHRS",
     .GUARD_type = OME_MENU,
 #endif
-    .onEnter = cmsx_menuImu_onEnter,
-    .onExit = cmsx_menuImu_onExit,
+    .onEnter = cmsx_menuAhrs_onEnter,
+    .onExit = cmsx_menuAhrs_onExit,
     .onDisplayUpdate = NULL,
-    .entries = cmsx_menuImuEntries,
+    .entries = cmsx_menuAhrsEntries,
 };
 
 #endif // CMS

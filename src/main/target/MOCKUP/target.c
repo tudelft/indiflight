@@ -50,7 +50,7 @@
 const timerHardware_t timerHardware[1]; // unused
 
 #include "drivers/accgyro/accgyro_fake.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 
 #include "config/feature.h"
 #include "config/config.h"
@@ -132,7 +132,7 @@ int lockMainPID(void)
 //    fakeGyroSet(fakeGyroDev, x, y, z);
 ////    printf("[gyr]%lf,%lf,%lf\n", pkt->imu_angular_velocity_rpy[0], pkt->imu_angular_velocity_rpy[1], pkt->imu_angular_velocity_rpy[2]);
 //
-//#if !defined(USE_IMU_CALC)
+//#if !defined(USE_AHRS_CALC)
 //#if defined(SET_IMU_FROM_EULER)
 //    // set from Euler
 //    double w = pkt->imu_orientation_quat[0];
@@ -157,15 +157,15 @@ int lockMainPID(void)
 //    double t3 = +2.0 * (w * z + x * y);
 //    double t4 = +1.0 - 2.0 * (ysqr + z * z);
 //    zf = atan2(t3, t4) * RAD2DEG;
-//    imuSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
+//    ahrsSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
 //#else
-//    imuSetAttitudeQuat(pkt->imu_orientation_quat[0], pkt->imu_orientation_quat[1], pkt->imu_orientation_quat[2], pkt->imu_orientation_quat[3]);
+//    ahrsSetAttitudeQuat(pkt->imu_orientation_quat[0], pkt->imu_orientation_quat[1], pkt->imu_orientation_quat[2], pkt->imu_orientation_quat[3]);
 //#endif
 //#endif
 //
-//#if defined(SIMULATOR_IMU_SYNC)
-//    imuSetHasNewData(deltaSim*1e6);
-//    imuUpdateAttitude(micros());
+//#if defined(SIMULATOR_AHRS_SYNC)
+//    ahrsSetHasNewData(deltaSim*1e6);
+//    ahrsUpdate(micros());
 //#endif
 //
 //

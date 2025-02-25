@@ -28,6 +28,7 @@
 #define EKF_H
 
 #include "common/time.h"			// for timeUs_t
+#include "common/maths.h"
 #include "ekf_calc.h"
 
 #include "pg/pg.h"
@@ -52,6 +53,7 @@ typedef struct ekfConfig_s {
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
 
+bool isInitializedEkf(void);
 void updateEkf(timeUs_t currentTimeUs);
 
 extern fp_vector_t posEstNed;
