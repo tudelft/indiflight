@@ -7,3 +7,6 @@
 [submodule "lib/main/clapack"]
 	path = lib/main/clapack
 	url = https://www.github.com/tudelft/clapack.git
+[submodule "support/groundstation/ext/UnifiedMocapClient"]
+	path = support/groundstation/ext/UnifiedMocapClient
+	url = https://github.com/tudelft/UnifiedOptitrackClients/

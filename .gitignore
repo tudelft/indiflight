@@ -62,5 +62,6 @@ logs/
 # remote definition
 remote.env
 .githash
-logs-*
+logs-*/
 .jlink-commandfile
+build*/
