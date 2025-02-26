@@ -1,0 +1,7 @@
+Flask==3.0.3
+numba==0.60.0
+numpy==2.0.1
+pyserial==3.5
+scipy==1.14.0
+netifaces==0.11.0
+tqdm @ git+https://github.com/tblaha/tqdm.git@ddca2c8aae3bac58fec43ccd7c2b7c639cd832fc

@@ -76,6 +76,12 @@ include $(ROOT)/make/system-id.mk
 # developer preferences, edit these at will, they'll be gitignored
 -include $(ROOT)/make/local.mk
 
+BOARD         ?= MTKS-H743
+TARGET        ?= $(shell grep '^define TARGET=' configs/board/$(BOARD).txt | awk '{print $$2}')
+BOARD_OPTIONS = $(shell grep '^#define' configs/board/$(BOARD).txt | awk '{print "\047"$$2"\047" }')
+CRAFT         ?= CineRat
+CRAFT_OPTIONS = $(shell grep '^#define' configs/craft/$(CRAFT).txt | awk '{print "\047"$$2"\047" }')
+
 # pre-build sanity checks
 include $(ROOT)/make/checks.mk
 
@@ -271,11 +277,14 @@ CFLAGS     += $(ARCH_FLAGS) \
               -DUSE_STDPERIPH_DRIVER \
               -D$(TARGET) \
               $(TARGET_FLAGS) \
+			  -DCLOUD_BUILD \
               -D'__FORKNAME__="$(FORKNAME)"' \
               -D'__TARGET__="$(TARGET)"' \
               -D'__REVISION__="$(REVISION)"' \
               -pipe \
               -MMD -MP \
+			  $(addprefix -D,$(BOARD_OPTIONS)) \
+			  $(addprefix -D,$(CRAFT_OPTIONS)) \
               $(EXTRA_FLAGS)
 
 ASFLAGS     = $(ARCH_FLAGS) \

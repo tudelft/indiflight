@@ -110,7 +110,7 @@ class IndiflightSITLMockup():
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
-        self.lib.tick.argtypes = [timeUs_t]
+        self.lib.tick.argtypes = []
         self.lib.processCharacterInteractive.argtypes = [ct.c_char]
         self.lib.processKey.argtypes = [ct.c_uint8]
         self.lib.disarm.argtypes = [ct.c_uint8]
@@ -229,9 +229,9 @@ class IndiflightSITLMockup():
         self.armingFlags.value = 0 # make extra sure
 
 #%% finally: tick the inner loop controls
-    def tick(self, dtUs):
+    def tick(self):
         # ToDo: timing of IMU and EKF stuff is now really hardcoded
-        self.lib.tick( dtUs )
+        self.lib.tick()
 
 
 if __name__=="__main__":

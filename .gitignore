@@ -62,3 +62,4 @@ logs/
 # remote definition
 remote.env
 .githash
+logs-*
