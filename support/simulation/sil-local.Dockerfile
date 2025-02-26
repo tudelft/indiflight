@@ -39,16 +39,7 @@ COPY PyNDIflight /PyNDIflight
 EXPOSE 5000
 
 #ENV EXTRA="-Wno-double-promotion -Wno-misleading-indentation"
+ADD --chmod=755 entrypoint.sh /entrypoint.sh
 
-RUN echo "#!/bin/bash" > /entrypoint.sh &&                      \
-    echo "set -e" >> /entrypoint.sh &&                          \
-    echo "cd /indiflight" >> /entrypoint.sh &&                  \
-    echo 'make -j TARGET=MOCKUP DEBUG=GDB EXTRA_FLAGS_CMDLINE="$EXTRA"' >> /entrypoint.sh && \
-    echo "cd /" >> /entrypoint.sh &&                            \
-    echo '/usr/bin/python3 /sim.py "$@";' >> /entrypoint.sh &&                      \
-    chmod +x /entrypoint.sh
-
-WORKDIR /
-ENTRYPOINT [ "/entrypoint.sh", \
-    "--sil", "/indiflight/obj/main/indiflight_MOCKUP.so", \
-    "--sil-profile-txt", "/profile.txt"]
+WORKDIR /indiflight
+ENTRYPOINT [ "/entrypoint.sh" ]

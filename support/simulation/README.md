@@ -15,6 +15,7 @@ the purpose of testing and debugging estimation and control code, but not
 debugging device drivers, schedulers, or interfaces. We call such a build a 
 `MOCKUP`, as it's not the whole package.
 
+<!--
 ### Quickstart using Docker
 
 (tested on Ubuntu 22.04, install docker like https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
@@ -54,7 +55,7 @@ pyndiflight                                                       # Container ta
     docker cp $(docker ps -alq):/logs/. ./logs/
 
 NB: logs are not persistent (unless you mount another volume to `:/logs`)
-
+-->
 
 ### Development setup using Docker
 
@@ -63,52 +64,57 @@ at container runtime.
 
 #### Step 1 -- Build indiflight docker builder
 
-Clone the indiflight firmware repo (https://github.com/tudelft/indiflight), 
-and build the builder container as indicated in its `README.md`.
+From the root of the indiflight repo (see toplevel `README.md` for me info):
+
+    docker build . -t indiflight-builder
+
 
 #### Step 2 -- Build local pyndiflight docker container
 
-**NOTE**: Run all following commands from the root folder of this repo.
+From the root of the indiflight repo:
 
-    docker build . -t pyndiflight-local -f ./Simulation/sil-local.Dockerfile
+    docker build support/simulation -t pyndiflight-local -f ./support/simulation/sil-local.Dockerfile
 
 If you want to debug the indiflight code using GDB, you can use this instead:
 
-    docker build . -t pyndiflight-local-gdb -f ./Simulation/sil-local-gdb.Dockerfile
+    docker build support/simulation -t pyndiflight-local-gdb -f ./support/simulation/sil-local-gdb.Dockerfile
 
-(rebuild it only when `indiflight` build container or `PyNDIflight` simulation
+(rebuild it only when `indiflight-builder` container or `PyNDIflight/**` simulation
 code changes)
+
 
 #### Step 3 -- Run the container and open http://localhost:5000
 
-Don't forget to provide a `make/local.mk` file in the `indiflight` repo (see
-its `README`). Also enable `USE_THROW_TO_ARM` and `USE_LEARNER`, for the
-example simulation to make sense.
+From root of this repo:
 
-    docker run -it -p 5000:5000 -p 3333:3333                             \
-        -v ./Simulation/exampleQuadSim.py:/sim.py                        \
-        -v ./Simulation/config/exampleINDIflightProfile.txt:/profile.txt \
-        -v <path/to/indiflight>:/indiflight                              \
-        pyndiflight-local --throw --learn --sil-log
+    docker run -it -p 5000:5000 -p 3333:3333      \
+        -v ./:/indiflight                         \
+        -e YES=y -e DEBUG=GDB                     \
+        -e SIM=exampleQuadSim -e PROFILE=CineRat  \
+        pyndiflight-local                         \
+            --throw --learn
 
 Explanation of arguments:
-
 ```
--it                                                               # ensure proper printing of status bar
--p 5000:5000 -p 3333:3333                                         # Map ports for visualisation and, if used gdbserver
--v ./Simulation/exampleQuadSim.py:/sim.py                         # Map simulation script into container
--v ./Simulation/config/exampleINDIflightProfile.txt:/profile.txt  # Map runtime config into container
--v <path/to/indiflight>:/indiflight                               # Map indiflight into the container
-pyndiflight-local                                                 # Container tag (see build command)
---throw --learn --sil-log                                         # see ./exampleQuadSim.py --help
+-it                                       # "interactive": ensure proper printing of status bar
+-p 5000:5000 -p 3333:3333                 # Map ports for visualisation and, if used gdbserver
+-v ./:/indiflight                         # Map firmware into container
+-e YES=y -e DEBUG=GDB                     # Set make options (YES skips checks for unclean cache / gitwd, DEBUG compiles symbols)
+-e SIM=exampleQuadSim -e PROFILE=CineRat  # set sim script and profile
+pyndiflight-local                         # Container tag (see build command)
+--throw --learn                           # see ./exampleQuadSim.py --help
 ```
 
-To debug INDIflight, replace `pyndiflight-local` with `pyndiflight-local-gdb`.
+To debug INDIflight, add `-e GDBSERVER=y` to the command above.
+This require that `-e DEBUG=GDB` was also passed to make sense.
 This will launch a `gdbserver` that you can connect to, e.g. from VSCode. In
 the `indiflight` repo, there is a `launch.json` configuration that can be 
-started from within VSCode. 
+started from within VSCode.
 
-#### Step 4 -- Connect to the debug server from VSCode
+
+#### (Step 4 -- Connect to the debug server from VSCode)
+
+**ONLY IF YOU STARTED WITH GDBSERVER TURNED ON**
 
 Open a VSCode window in the `indiflight` repo that you cloned. Install the 
 `Native Debug` extension and run the `MOCKUP docker` debug launch configuration.
@@ -121,9 +127,7 @@ in `indiflight` for the arguments used.
 
 #### Step 5 -- Get log from latest container
 
-    docker cp $(docker ps -alq):/logs/. ./logs/
-
-NB: logs are not persistent (unless you mount another volume to `:/logs`)
+They should just appear in `./logs-mockup`
 
 
 ### Software architecture and limitations
@@ -141,6 +145,8 @@ following tasks:
 
 
 ## Hardware in the Loop simulation
+
+**NB: currently unmaintained**
 
 With HIL simulation, Indiflight runs on the target hardware as it would during 
 flight. However, a serial communications link provides simulated sensor values

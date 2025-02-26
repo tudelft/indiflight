@@ -63,3 +63,4 @@ logs/
 remote.env
 .githash
 logs-*
+.jlink-commandfile

@@ -40,7 +40,7 @@ if __name__=="__main__":
     parser.add_argument("--sil", required=False, type=str, metavar="LIBRARY", default=None, help="Load INDIflight interface as shared library.")
     parser.add_argument("--sil-profile-txt", required=False, type=str, metavar="PROFILE.txt", help="Import these profile settings into the SIL")
     # further arguments
-    parser.add_argument("--sil-log", required=False, action="store_true", help="Write Indiflight logs into ./logs")
+    parser.add_argument("--sil-no-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-mockup")  # enabled by default now
     parser.add_argument("--hil", required=False, type=str, metavar="DEVICE", help="Use INDIflight hardware interface. Use either --hil or --sil")
     parser.add_argument("--hil-baud", required=False, choices=SUPPORTED_BAUDS, type=int, default=921600, help="HIL baudrate ")
     parser.add_argument("--mocap", required=False, nargs=2, metavar=("IP", "PORT"), help="Stream mocap UDP packets to this IP/hostname and port")
@@ -89,7 +89,7 @@ if __name__=="__main__":
     #%% Generate craft
     mc = MultiRotor()
     # approx model of CineRat 3inch race drone
-    mc.setInertia(m=0.41, I=0.2*np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
+    mc.setInertia(m=0.41, I=0.75*np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
     mc.addRotor(Rotor(r=[-0.05, +0.0635, 0.0], Tmax=4.5, dir='lh', Izz=1e-7)) # RR
     mc.addRotor(Rotor(r=[+0.05, +0.0635, 0.0], Tmax=4.5, dir='rh', Izz=1e-7)) # FR
     mc.addRotor(Rotor(r=[-0.05, -0.0635, 0.0], Tmax=4.5, dir='rh', Izz=1e-7)) # RL
@@ -104,7 +104,7 @@ if __name__=="__main__":
     #%% craft interfaces
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
-    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
+    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
 
     mocap = Mocap(mc, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(mc, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -114,9 +114,7 @@ if __name__=="__main__":
     #%% indiflight configuration, if software in the loop
     if sil is not None:
         sil.mockup.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
-        sil.mockup.setLogging( args.sil_log )
-        if args.sil_log:
-            os.makedirs('./logs', exist_ok=True)
+        sil.mockup.setLogging( not args.sil_no_log )
 
         sil.sendMocap()
         sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
@@ -152,7 +150,7 @@ if __name__=="__main__":
 
 
     #%% run loop
-    dt = 0.000125 # 8kHz
+    dt = 0.001 # 8kHz
     T = 1000. # seconds
     dt_rt = None if args.no_real_time else 1*dt
     start_trajectory = False

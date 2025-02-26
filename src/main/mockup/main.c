@@ -125,7 +125,7 @@ void getMotorOutputCommands(float *cmd, int n) {
     }
 }
 
-#define MOCKUP_TICK_DT_US 125
+#define MOCKUP_TICK_DT_US 1000
 
 void tick(void)
 {

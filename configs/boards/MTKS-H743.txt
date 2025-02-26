@@ -14,7 +14,9 @@
 #define USE_PINIO
 
 
-######## MANUFACTURER DEFAULTS
+##########################
+# BOARD DEFAULT SETTINGS #
+##########################
 
 defaults nosave
 
@@ -148,4 +150,3 @@ set gyro_1_align_pitch = 0
 set gyro_2_spibus = 4
 set gyro_2_sensor_align = CW180
 set gyro_2_align_pitch = 0
-set align_board_yaw = 180

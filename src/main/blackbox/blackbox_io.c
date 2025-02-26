@@ -123,7 +123,7 @@ static struct {
     } state;
 } blackboxSITLFile;
 
-#define LOGFILE_DIR "./logs"
+#define LOGFILE_DIR "./logs-mockup"
 #define LOGFILE_PREFIX "LOG"
 #define LOGFILE_SUFFIX ".BFL"
 

@@ -76,11 +76,22 @@ include $(ROOT)/make/system-id.mk
 # developer preferences, edit these at will, they'll be gitignored
 -include $(ROOT)/make/local.mk
 
-BOARD         ?= MTKS-H743
-TARGET        ?= $(shell grep '^define TARGET=' configs/board/$(BOARD).txt | awk '{print $$2}')
-BOARD_OPTIONS = $(shell grep '^#define' configs/board/$(BOARD).txt | awk '{print "\047"$$2"\047" }')
-CRAFT         ?= CineRat
-CRAFT_OPTIONS = $(shell grep '^#define' configs/craft/$(CRAFT).txt | awk '{print "\047"$$2"\047" }')
+BOARD ?=
+ifeq ($(BOARD),)
+BOARD_OPTIONS =
+else
+BOARD_OPTIONS = $(shell grep '^#define' configs/boards/$(BOARD).txt | awk '{print "\047"$$2"\047" }')
+ifeq ($(TARGET),)
+TARGET = $(shell grep '^#define TARGET=' configs/boards/$(BOARD).txt | cut -f2- -d=)
+endif
+endif
+
+PROFILE ?=
+ifeq ($(PROFILE),)
+PROFILE_OPTIONS =
+else
+PROFILE_OPTIONS = $(shell grep '^#define' configs/profiles/$(PROFILE).txt | awk '{print "\047"$$2"\047" }')
+endif
 
 # pre-build sanity checks
 include $(ROOT)/make/checks.mk
@@ -284,7 +295,7 @@ CFLAGS     += $(ARCH_FLAGS) \
               -pipe \
               -MMD -MP \
 			  $(addprefix -D,$(BOARD_OPTIONS)) \
-			  $(addprefix -D,$(CRAFT_OPTIONS)) \
+			  $(addprefix -D,$(PROFILE_OPTIONS)) \
               $(EXTRA_FLAGS)
 
 ASFLAGS     = $(ARCH_FLAGS) \
@@ -348,7 +359,7 @@ TARGET_MAP      = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).map
 
 TARGET_EXST_HASH_SECTION_FILE = $(TARGET_OBJ_DIR)/exst_hash_section.bin
 
-TARGET_EF_HASH      := $(shell echo -n "$(EXTRA_FLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
+TARGET_EF_HASH      := $(shell echo -n "$(C_FLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
 TARGET_EF_HASH_FILE := $(TARGET_OBJ_DIR)/.efhash_$(TARGET_EF_HASH)
 
 CLEAN_ARTIFACTS := $(TARGET_BIN)
@@ -555,6 +566,16 @@ st-flash_$(TARGET): $(TARGET_BIN)
 
 ## st-flash          : flash firmware (.bin) onto flight controller
 st-flash: st-flash_$(TARGET)
+
+## flash with Segger hardware (e.g. jlink edu mini. need to install extra software)
+jlink_flash:
+	$(V0) $(MAKE) $(TARGET_HEX)
+	echo "loadfile $(TARGET_HEX)\n exit" > .jlink-commandfile
+ifeq ($(TARGET),STM32H743)
+	$(V0) JLinkExe -AutoConnect 1 -ExitOnError 1 -NoGui 1 -Device $(TARGET)VI -If SWD -Speed 4000 -CommandFile .jlink-commandfile
+else
+	@echo "target not yet implemented for jlink flashing"
+endif
 
 ifneq ($(OPENOCD_COMMAND),)
 openocd-gdb: $(TARGET_ELF)
