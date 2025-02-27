@@ -33,6 +33,7 @@
 #include "sensors/gyro.h"			// for gyro
 #include "sensors/acceleration.h"   // for acc
 #include "ahrs.h"                   // for fallback if no GPS
+#include "telemetry/pi.h"
 #include "pi-messages.h"            // for keeping track of message times
 #include "sensors/barometer.h"
 #include "flight/indi.h"
@@ -224,12 +225,12 @@ void runEkf(timeUs_t currentTimeUs) {
     static timeUs_t lastUpdateTimestamp = 0;
 	// PREDICTION STEP
     // FRD frame's, which we have now everywhere in INDIFlight
-	ekf_U[0] = GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G);
-	ekf_U[1] = GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G);
-	ekf_U[2] = GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G);
-	ekf_U[3] = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
-	ekf_U[4] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
-	ekf_U[5] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
+	ekf_U[0] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[0];
+	ekf_U[1] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[1];
+	ekf_U[2] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[2];
+	ekf_U[3] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[0] );
+	ekf_U[4] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[1] );
+	ekf_U[5] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[2] );
 
 	// add to history (will be used in the update step)
 	// ekf_add_to_history(currentTimeUs * 1e-6);
@@ -286,6 +287,11 @@ void runEkf(timeUs_t currentTimeUs) {
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
+#ifdef USE_TELEMETRY_PI
+    // send ekf inputs, if configured
+    piSendEkfInputs();
+#endif
+
 	// reset ekf LOCAL_POS_NO_SIGNAL
     if (posMeasState == LOCAL_POS_NO_SIGNAL) {
         ekf_initialized = false;

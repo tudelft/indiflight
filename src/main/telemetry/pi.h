@@ -36,4 +36,5 @@ void checkPiTelemetryState(void);
 void freePiTelemetryPort(void);
 void configurePiTelemetryPort(void);
 
+void piSendEkfInputs(void);
 void piSendIMU(void);

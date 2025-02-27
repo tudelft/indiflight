@@ -732,8 +732,9 @@ void init(void)
     // Now reset the targetLooptime as it's possible for the validation to change the pid_process_denom
     gyroSetTargetLooptime(pidConfig()->pid_process_denom);
 
-    // Finally initialize the gyro filtering
+    // Finally initialize the gyro and acceleromter filtering
     gyroInitFilters();
+    accInitFilters();
 
     pidInit(currentPidProfile);
 #ifdef USE_INDI

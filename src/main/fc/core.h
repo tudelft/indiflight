@@ -84,8 +84,11 @@ void processRxModes(timeUs_t currentTimeUs);
 void updateArmingStatus(void);
 
 void resetInnerLoopCounter(void);
-void taskGyroSample(timeUs_t currentTimeUs);
-bool gyroFilterReady(void);
+void taskImuSample(timeUs_t currentTimeUs);
+
+void taskEkf(timeUs_t currentTimeUs);
+bool filterReady(void);
+bool stateEstimationReady(void);
 bool innerLoopReady(void);
 void taskFiltering(timeUs_t currentTimeUs);
 void taskMainInnerLoop(timeUs_t currentTimeUs);

@@ -39,6 +39,7 @@
 #include "pg/rx.h"
 
 #include "drivers/accgyro/accgyro.h"
+#include "drivers/dshot.h"
 #include "drivers/sensor.h"
 #include "drivers/time.h"
 #include "drivers/light_led.h"
@@ -50,6 +51,7 @@
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/ahrs.h"
+#include "flight/indi.h"
 #include "flight/failsafe.h"
 #include "flight/position.h"
 
@@ -149,22 +151,48 @@ void checkPiTelemetryState(void)
 void piSendIMU(void)
 {
     piMsgImuTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
-    piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
-    piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
-    piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
-    piMsgImuTx.x = GRAVITYf * ((float)acc.accADC[0]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.y = GRAVITYf * ((float)acc.accADC[1]) / ((float)acc.dev.acc_1G);
-    piMsgImuTx.z = GRAVITYf * ((float)acc.accADC[2]) / ((float)acc.dev.acc_1G);
+    piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[0]);
+    piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[1]);
+    piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[2]);
+    piMsgImuTx.x = GRAVITYf * acc.accADCafterRpm[0] * acc.dev.acc_1G_rec;
+    piMsgImuTx.y = GRAVITYf * acc.accADCafterRpm[1] * acc.dev.acc_1G_rec;
+    piMsgImuTx.z = GRAVITYf * acc.accADCafterRpm[2] * acc.dev.acc_1G_rec;
 
     if (piPort) {
         piSendMsg(&piMsgImuTx, &serialWriter);
     }
 }
 
+void piSendEkfInputs(void)
+{
+    piMsgEkfInputsTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
+    piMsgEkfInputsTx.x = 2048.f * acc.accADCafterRpm[0] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.y = 2048.f * acc.accADCafterRpm[1] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.z = 2048.f * acc.accADCafterRpm[2] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[0] * 0.0005f );
+    piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[1] * 0.0005f );
+    piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[2] * 0.0005f );
+#ifdef USE_DSHOT_TELEMETRY
+    piMsgEkfInputsTx.omega1 = (int16_t) indiRun.omega[0];
+    piMsgEkfInputsTx.omega2 = (int16_t) indiRun.omega[1];
+    piMsgEkfInputsTx.omega3 = (int16_t) indiRun.omega[2];
+    piMsgEkfInputsTx.omega4 = (int16_t) indiRun.omega[3];
+#else
+    piMsgEkfInputsTx.omega1 = 0;
+    piMsgEkfInputsTx.omega2 = 0;
+    piMsgEkfInputsTx.omega3 = 0;
+    piMsgEkfInputsTx.omega4 = 0;
+#endif
+
+    if (piPort) {
+        piSendMsg(&piMsgEkfInputsTx, &serialWriter);
+    }
+}
+
 void processPiTelemetry(void)
 {
-    // could do rate limiting with the stream stuffs above
-    piSendIMU();
+    // handled event based now, whenever there is stuff to be send, those functions
+    // call piSendEkfInputs, or similar. More boilerplate, but lower latency
 }
 
 pi_parse_states_t p_telem;

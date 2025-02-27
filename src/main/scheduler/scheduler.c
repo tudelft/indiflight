@@ -242,8 +242,8 @@ void rescheduleTask(taskId_e taskId, timeDelta_t newPeriodUs)
     task->attribute->desiredPeriodUs = MAX(SCHEDULER_DELAY_LIMIT, newPeriodUs);  // Limit delay to 100us (10 kHz) to prevent scheduler clogging
 
     // Catch the case where the gyro loop is adjusted
-    if (taskId == TASK_GYRO) {
-        desiredPeriodCycles = (int32_t)clockMicrosToCycles((uint32_t)getTask(TASK_GYRO)->attribute->desiredPeriodUs);
+    if (taskId == TASK_IMU) {
+        desiredPeriodCycles = (int32_t)clockMicrosToCycles((uint32_t)getTask(TASK_IMU)->attribute->desiredPeriodUs);
     }
 }
 
@@ -345,7 +345,7 @@ void schedulerInit(void)
     taskGuardDeltaDownCycles = clockMicrosToCycles(1) / TASK_GUARD_MARGIN_DOWN_STEP;
     taskGuardDeltaUpCycles = clockMicrosToCycles(1) / TASK_GUARD_MARGIN_UP_STEP;
 
-    desiredPeriodCycles = (int32_t)clockMicrosToCycles((uint32_t)getTask(TASK_GYRO)->attribute->desiredPeriodUs);
+    desiredPeriodCycles = (int32_t)clockMicrosToCycles((uint32_t)getTask(TASK_IMU)->attribute->desiredPeriodUs);
 
     lastTargetCycles = getCycleCounter();
 
@@ -458,10 +458,10 @@ FAST_CODE void scheduler(void)
 
     if (gyroEnabled) {
         // Realtime gyro/filtering/PID tasks get complete priority
-        task_t *gyroTask = getTask(TASK_GYRO);
+        task_t *imuTask = getTask(TASK_IMU);
         nowCycles = getCycleCounter();
 #if defined(UNIT_TEST)
-        lastTargetCycles = clockMicrosToCycles(gyroTask->lastExecutedAtUs);
+        lastTargetCycles = clockMicrosToCycles(imuTask->lastExecutedAtUs);
 #endif
         nextTargetCycles = lastTargetCycles + desiredPeriodCycles;
         schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
@@ -495,12 +495,24 @@ FAST_CODE void scheduler(void)
             DEBUG_SET(DEBUG_SCHEDULER_DETERMINISM, 0, clockCyclesTo10thMicros(cmpTimeCycles(nowCycles, lastTargetCycles)));
 #endif
             currentTimeUs = micros();
-            taskExecutionTimeUs += schedulerExecuteTask(gyroTask, currentTimeUs);
+            taskExecutionTimeUs += schedulerExecuteTask(imuTask, currentTimeUs);
 
-            if (gyroFilterReady()) {
+            bool filterInnerLoopShouldRun = filterReady(); // save running this function twice
+            if (filterInnerLoopShouldRun) {
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_FILTER), currentTimeUs);
             }
-            if (innerLoopReady()) {
+
+            if (stateEstimationReady()) {
+#ifdef USE_EKF
+                // if no position measurement available at all, then EKF runs 
+                // the fallback TASK_ATTITUDE itself
+                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_EKF), currentTimeUs);
+#else
+                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_ATTITUDE), currentTimeUs);
+#endif
+            }
+
+            if (filterInnerLoopShouldRun) {
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_INNER_LOOP), currentTimeUs);
             }
 
@@ -577,7 +589,7 @@ FAST_CODE void scheduler(void)
                 if (gyro->detectedEXTI >= terminalGyroLockCount) {
                     terminalGyroLockCount += GYRO_LOCK_COUNT;
 
-                    // Move the desired start time of the gyroTask
+                    // Move the desired start time of the imuTask
                     lastTargetCycles -= (accGyroSkew/GYRO_LOCK_COUNT);
                     DEBUG_SET(DEBUG_SCHEDULER_DETERMINISM, 3, clockCyclesTo10thMicros(accGyroSkew/GYRO_LOCK_COUNT));
                     accGyroSkew = 0;
@@ -730,5 +742,5 @@ uint16_t getAverageSystemLoadPercent(void)
 
 float schedulerGetCycleTimeMultiplier(void)
 {
-    return (float)clockMicrosToCycles(getTask(TASK_GYRO)->attribute->desiredPeriodUs) / desiredPeriodCycles;
+    return (float)clockMicrosToCycles(getTask(TASK_IMU)->attribute->desiredPeriodUs) / desiredPeriodCycles;
 }

@@ -367,11 +367,13 @@ retry:
 
 void accInitFilters(void)
 {
+    float filterDT = gyro.targetLooptime * 1e-6f; // filters are now run at pid rate
+
     // Only set the lowpass cutoff if the ACC sample rate is detected otherwise
     // the filter initialization is not defined (sample rate = 0)
     accelerationRuntime.accLpfCutHz = (acc.sampleRateHz) ? accelerometerConfig()->acc_lpf_hz : 0;
     if (accelerationRuntime.accLpfCutHz) {
-        const float k = pt2FilterGain(accelerationRuntime.accLpfCutHz, 1.0f / acc.sampleRateHz);
+        const float k = pt2FilterGain(accelerationRuntime.accLpfCutHz, filterDT);
         for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
             pt2FilterInit(&accelerationRuntime.accFilter[axis], k);
         }

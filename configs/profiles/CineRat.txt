@@ -109,7 +109,7 @@ set blackbox_disable_rssi = OFF
 set blackbox_disable_debug = ON
 set blackbox_disable_indi = OFF
 set blackbox_disable_pos = OFF
-set blackbox_disable_ekf = ON
+set blackbox_disable_ekf = OFF
 set blackbox_disable_learner = ON
 set blackbox_high_resolution = ON
 
@@ -133,7 +133,8 @@ set failsafe_delay = 5
 
 # scheduling
 set blackbox_sample_rate = 1/4
-set pid_process_denom = 4
+set pid_process_denom = 8
+set ahrs_process_denom = 8
 set gps_update_rate_hz = 15
 set nn_rate_denom = 2
 

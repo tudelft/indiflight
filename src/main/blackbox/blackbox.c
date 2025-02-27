@@ -413,9 +413,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_vel",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
-    {"ekf_att",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
     {"ekf_acc_b",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_acc_b",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -612,25 +613,6 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
 };
 
-typedef enum BlackboxState {
-    BLACKBOX_STATE_DISABLED = 0,
-    BLACKBOX_STATE_STOPPED,
-    BLACKBOX_STATE_PREPARE_LOG_FILE,
-    BLACKBOX_STATE_SEND_HEADER,
-    BLACKBOX_STATE_SEND_MAIN_FIELD_HEADER,
-    BLACKBOX_STATE_SEND_GPS_H_HEADER,
-    BLACKBOX_STATE_SEND_GPS_G_HEADER,
-    BLACKBOX_STATE_SEND_SLOW_HEADER,
-    BLACKBOX_STATE_SEND_SYSINFO,
-    BLACKBOX_STATE_CACHE_FLUSH,
-    BLACKBOX_STATE_PAUSED,
-    BLACKBOX_STATE_RUNNING,
-    BLACKBOX_STATE_SHUTTING_DOWN,
-    BLACKBOX_STATE_START_ERASE,
-    BLACKBOX_STATE_ERASING,
-    BLACKBOX_STATE_ERASED
-} BlackboxState;
-
 
 typedef struct blackboxMainState_s {
     uint32_t time;
@@ -700,7 +682,7 @@ typedef struct blackboxMainState_s {
 #ifdef USE_EKF
     int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t ekf_att[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t ekf_quat[4];
     int16_t ekf_acc_b[XYZ_AXIS_COUNT];
     int16_t ekf_gyro_b[XYZ_AXIS_COUNT];
 #endif
@@ -736,6 +718,10 @@ typedef struct blackboxSlowState_s {
 extern boxBitmask_t rcModeActivationMask;
 
 static BlackboxState blackboxState = BLACKBOX_STATE_DISABLED;
+BlackboxState blackboxGetState(void)
+{
+    return blackboxState;
+}
 
 static uint32_t blackboxLastArmingBeep = 0;
 static uint32_t blackboxLastFlightModeFlags = 0; // New event tracking of flight modes
@@ -1115,7 +1101,7 @@ static void writeIntraframe(void)
     if (testBlackboxCondition(CONDITION(EKF))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_att, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_gyro_b, XYZ_AXIS_COUNT);
     }
@@ -1400,8 +1386,8 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->ekf_vel, blackboxLast->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->ekf_att, blackboxLast->ekf_att, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->ekf_quat, blackboxLast->ekf_quat, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_acc_b, blackboxLast->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
@@ -1866,15 +1852,16 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_vel[0] = lrintf(ekf_X[3] * METER_TO_CM);
     blackboxCurrent->ekf_vel[1] = lrintf(ekf_X[4] * METER_TO_CM);
     blackboxCurrent->ekf_vel[2] = lrintf(ekf_X[5] * METER_TO_CM);
-    blackboxCurrent->ekf_att[0] = lrintf(ekf_X[6] * 1000); // milirad
-    blackboxCurrent->ekf_att[1] = lrintf(ekf_X[7] * 1000); // milirad
-    blackboxCurrent->ekf_att[2] = lrintf(ekf_X[8] * 1000); // milirad
+    blackboxCurrent->ekf_quat[0] = lrintf(ekf_X[6] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[1] = lrintf(ekf_X[7] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[2] = lrintf(ekf_X[8] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[3] = lrintf(ekf_X[9] * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
     blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
     blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
-    blackboxCurrent->ekf_gyro_b[0] = lrintf(RADIANS_TO_DEGREES(ekf_X[12])); // deg/s
-    blackboxCurrent->ekf_gyro_b[1] = lrintf(RADIANS_TO_DEGREES(ekf_X[13])); // deg/s
-    blackboxCurrent->ekf_gyro_b[2] = lrintf(RADIANS_TO_DEGREES(ekf_X[14])); // deg/s
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[12])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
 #endif
 
 #ifdef USE_LEARNER
@@ -2710,6 +2697,16 @@ STATIC_UNIT_TESTED void blackboxLogIteration(timeUs_t currentTimeUs)
     blackboxDeviceFlush();
 }
 
+#define EKF_TO_ARM_TIMEOUT (30000000) // 30 seconds
+static bool shouldRunBecauseEkfInitialized = false;
+static timeUs_t lastStartedBecauseEkfInitialized = 0;
+void blackboxStartBecauseEkfInitialized(void) {
+    if (blackboxState == BLACKBOX_STATE_STOPPED) {
+        shouldRunBecauseEkfInitialized = true;
+        lastStartedBecauseEkfInitialized = micros();
+    }
+}
+
 /**
  * Call each flight loop iteration to perform blackbox logging.
  */
@@ -2718,9 +2715,13 @@ void blackboxUpdate(timeUs_t currentTimeUs)
 {
     static BlackboxState cacheFlushNextState;
 
+    if (shouldRunBecauseEkfInitialized && (cmpTimeUs(currentTimeUs, lastStartedBecauseEkfInitialized) > EKF_TO_ARM_TIMEOUT)) {
+        shouldRunBecauseEkfInitialized = false;
+    }
+
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
-        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW)) {
+        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW) || shouldRunBecauseEkfInitialized) {
             blackboxOpen();
             blackboxStart();
         }
@@ -2836,7 +2837,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
     case BLACKBOX_STATE_RUNNING:
         // On entry to this state, blackboxIteration, blackboxPFrameIndex and blackboxIFrameIndex are reset to 0
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
-        if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
+        if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode  && !shouldRunBecauseEkfInitialized) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
         } else if ((!ARMING_FLAG(ARMED)) && (throwState == THROW_STATE_IDLE) && !startedLoggingInTestMode) {
             blackboxFinish();

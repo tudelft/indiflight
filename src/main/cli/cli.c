@@ -5009,14 +5009,14 @@ if (buildKey) {
 
     // Run status
 
-    const int gyroRate = getTaskDeltaTimeUs(TASK_GYRO) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_GYRO)));
+    const int imuRate = getTaskDeltaTimeUs(TASK_IMU) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_IMU)));
     int rxRate = getCurrentRxRefreshRate();
     if (rxRate != 0) {
         rxRate = (int)(1000000.0f / ((float)rxRate));
     }
     const int systemRate = getTaskDeltaTimeUs(TASK_SYSTEM) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_SYSTEM)));
     cliPrintLinef("CPU:%d%%, cycle time: %d, GYRO rate: %d, RX rate: %d, System rate: %d",
-            constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE), getTaskDeltaTimeUs(TASK_GYRO), gyroRate, rxRate, systemRate);
+            constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE), getTaskDeltaTimeUs(TASK_IMU), imuRate, rxRate, systemRate);
 
     // Battery meter
 

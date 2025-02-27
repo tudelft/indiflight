@@ -115,6 +115,7 @@
 #include "sensors/gyro.h"
 
 #include "telemetry/telemetry.h"
+#include "telemetry/pi.h"
 
 #include "core.h"
 
@@ -156,7 +157,7 @@ enum {
 int16_t magHold;
 #endif
 
-static FAST_DATA_ZERO_INIT uint8_t pidUpdateCounter;
+static FAST_DATA_ZERO_INIT uint32_t imuUpdateCounter;
 
 static bool flipOverAfterCrashActive = false;
 
@@ -474,6 +475,12 @@ void updateArmingStatus(void)
             unsetArmingDisabled(ARMING_DISABLED_WAITING_FOR_THROW);
         }
 #endif
+
+        //if (blackboxGetState() != BLACKBOX_STATE_RUNNING) {
+        //    setArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        //} else {
+        unsetArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
+        //}
 
         if (isArmingDisabled()) {
             warningLedFlash();
@@ -1194,14 +1201,7 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
-    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE) || true) {
-        //LED1_ON; // @tblaha this LED is used for debugging now.
-        // increase frequency of attitude task to reduce drift when in angle or horizon mode
-        rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)ahrsConfig()->ahrs_process_denom));
-    } else {
-        //LED1_OFF;
-        rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(100));
-    }
+    rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)ahrsConfig()->ahrs_process_denom));
 
     if (!IS_RC_MODE_ACTIVE(BOXPREARM) && ARMING_FLAG(WAS_ARMED_WITH_PREARM)) {
         DISABLE_ARMING_FLAG(WAS_ARMED_WITH_PREARM);
@@ -1423,19 +1423,32 @@ static FAST_CODE_NOINLINE void subTaskRcCommand(timeUs_t currentTimeUs)
     processRcCommand();
 }
 
-FAST_CODE void taskGyroSample(timeUs_t currentTimeUs)
+FAST_CODE void taskImuSample(timeUs_t currentTimeUs)
 {
-    UNUSED(currentTimeUs);
     gyroUpdate();
-    if (pidUpdateCounter % activePidLoopDenom == 0) {
-        pidUpdateCounter = 0;
-    }
-    pidUpdateCounter++;
+#ifdef USE_ACC
+    accUpdate(currentTimeUs);
+#ifdef USE_THROW_TO_ARM
+    updateThrowFallStateMachine(currentTimeUs);
+#endif
+#else
+    UNUSED(currentTimeUs);
+#endif
+    imuUpdateCounter++;
 }
 
-FAST_CODE bool gyroFilterReady(void)
+FAST_CODE bool filterReady(void)
 {
-    if (pidUpdateCounter % activePidLoopDenom == 0) {
+    if ((imuUpdateCounter % activePidLoopDenom) == 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+FAST_CODE bool stateEstimationReady(void)
+{
+    if ((imuUpdateCounter % ahrsConfig()->ahrs_process_denom) == 0) {
         return true;
     } else {
         return false;
@@ -1444,15 +1457,21 @@ FAST_CODE bool gyroFilterReady(void)
 
 FAST_CODE bool innerLoopReady(void)
 {
-    if ((pidUpdateCounter % activePidLoopDenom) == (activePidLoopDenom / 2)) {
-        return true;
-    }
-    return false;
+    return filterReady();
+}
+
+FAST_CODE void taskEkf(timeUs_t currentTimeUs)
+{
+    updateEkf(currentTimeUs);
 }
 
 FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
+
+#ifdef USE_ACC
+    accFiltering(currentTimeUs);
+#endif
 
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();

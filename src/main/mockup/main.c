@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include "common/maths.h"
 #include "common/time.h"
+#include "fc/core.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/indi.h"
@@ -37,6 +38,8 @@
 #include "fc/runtime_config.h"
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
+
+#include "mockup/main.h"
 
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
@@ -59,18 +62,10 @@
 
 void setImu(const float *g, const float *a) {
     // g in rad/s, a in N/kg
-
     for (int axis = 0; axis < 3; axis++) {
         gyro.gyroADC[axis]   = RADIANS_TO_DEGREES(g[axis]); // shouldnt be used
         acc.dev.ADCRaw[axis] = a[axis] / 9.81f * acc.dev.acc_1G; // input is in g
     }
-    gyroUpdate(); // rotate and pretend to downsample
-    getTask(TASK_FILTER)->attribute->taskFunc( micros() ); // filter gyro
-
-    accUpdate(micros());
-#ifdef USE_THROW_TO_ARM
-    updateThrowFallStateMachine(micros());
-#endif
 }
 
 void setMotorSpeed(const float *omega, const int n) {
@@ -84,6 +79,7 @@ void setMotorSpeed(const float *omega, const int n) {
 void setMocap(const float *pos, const float *vel, const float *q) {
     posMeasState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
     posLatestMsgTime = micros();
+    //posLatestMsgTimeReceived = micros();
     for (int axis = 0; axis < 3; axis++) {
         posMeasNed.pos.A[axis] = pos[axis];
         posMeasNed.vel.A[axis] = vel[axis];
@@ -94,9 +90,25 @@ void setMocap(const float *pos, const float *vel, const float *q) {
     posMeasNed.quat.z = q[3];
 }
 
+void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us) {
+    posMeasState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
+    posLatestMsgTime = micros();
+    //posLatestMsgTimeReceived = micros();
+    for (int axis = 0; axis < 3; axis++) {
+        posMeasNed.pos.A[axis] = pos[axis];
+        posMeasNed.vel.A[axis] = vel[axis];
+    }
+    posMeasNed.quat.w = q[0];
+    posMeasNed.quat.x = q[1];
+    posMeasNed.quat.y = q[2];
+    posMeasNed.quat.z = q[3];
+    posMeasNed.time_us = time_us;
+}
+
 void setPosSetpoint(const float *pos, const float yaw) {
     posSpState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
     posLatestMsgTime = micros();
+    //posLatestMsgTimeReceived = micros();
     // meters, NED. rad
     for (int axis = 0; axis < 3; axis++)
         posSpNed.pos.A[axis] = pos[axis];
@@ -116,7 +128,7 @@ void getMotorOutputCommands(float *cmd, int n) {
     }
 }
 
-#define MOCKUP_TICK_DT_US 1000
+#define MOCKUP_TICK_DT_US 125
 
 void tick(void)
 {
@@ -125,24 +137,36 @@ void tick(void)
 
     unsetArmingDisabled(0xffffffff); // disable all, always
 
-    static uint8_t counter = 0;
-    if (++counter % 2 == 1) {
-        // todo: make this demon nicer
-        counter = 1;
-        if (throwState == THROW_STATE_THROWN) {
-            // because we bypass updateArmingStatus, we need to do this here manually
-            armingFlags = 1;
-        }
-        getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
+    if (throwState == THROW_STATE_THROWN) {
+        // because we bypass updateArmingStatus, we need to do this here manually
+        armingFlags = 1;
+    }
+
+    /* copied from scheduler */
+    getTask(TASK_IMU)->attribute->taskFunc( currentTimeUs );
+
+    bool filterInnerLoopShouldRun = filterReady(); // save running this function twice
+    if (filterInnerLoopShouldRun) {
+        getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
+    }
+
+    if (stateEstimationReady()) {
 #ifdef USE_EKF
+        // if no position measurement available at all, then EKF runs 
+        // the fallback TASK_ATTITUDE itself
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
+#else
+        getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
 #endif
+        // addition in mockup, just run POS_CTL right after EKF
         getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
-    } 
+    }
 
-    getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
+    if (filterInnerLoopShouldRun) {
+        getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
+    }
 
-    if (cmpTimeUs(currentTimeUs, posLatestMsgTime) > LOCAL_POS_TIMEOUT_US) {
+    if ((posMeasState == LOCAL_POS_NO_SIGNAL) || (cmpTimeUs(currentTimeUs, posLatestMsgTime) > LOCAL_POS_TIMEOUT_US)) { // or received?
         posMeasState = LOCAL_POS_NO_SIGNAL;
     } else {
         posMeasState = LOCAL_POS_STILL_VALID;

@@ -174,16 +174,6 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
     batteryUpdateAlarms();
 }
 
-#ifdef USE_ACC
-static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
-{
-    accUpdate(currentTimeUs);
-#ifdef USE_THROW_TO_ARM
-    updateThrowFallStateMachine(currentTimeUs);
-#endif
-}
-#endif
-
 typedef enum {
     RX_STATE_CHECK,
     RX_STATE_MODES,
@@ -367,13 +357,6 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_EKF
-static void taskEkf(timeUs_t currentTimeUs)
-{
-    updateEkf(currentTimeUs);
-}
-#endif
-
 #ifdef USE_CAMERA_CONTROL
 static void taskCameraControl(uint32_t currentTime)
 {
@@ -415,13 +398,16 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_STACK_CHECK] = DEFINE_TASK("STACKCHECK", NULL, NULL, taskStackCheck, TASK_PERIOD_HZ(10), TASK_PRIORITY_LOWEST),
 #endif
 
-    [TASK_GYRO] = DEFINE_TASK("GYRO", NULL, NULL, taskGyroSample, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_IMU] = DEFINE_TASK("GYRO", NULL, NULL, taskImuSample, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+
+#ifdef USE_EKF
+    [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+#endif
 
 #ifdef USE_ACC
-    [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
-    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, ahrsUpdate, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
+    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, ahrsUpdate, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 #endif
 
     [TASK_RX] = DEFINE_TASK("RX", NULL, rxUpdateCheck, taskUpdateRxMain, TASK_PERIOD_HZ(33), TASK_PRIORITY_HIGH), // If event-based scheduling doesn't work, fallback to periodic scheduling
@@ -474,10 +460,6 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_EKF
-    [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -567,10 +549,10 @@ void tasksInit(void)
 #endif
 
     if (sensors(SENSOR_GYRO)) {
-        rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
+        rescheduleTask(TASK_IMU, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
         rescheduleTask(TASK_INNER_LOOP, gyro.targetLooptime);
-        setTaskEnabled(TASK_GYRO, true);
+        setTaskEnabled(TASK_IMU, true);
         setTaskEnabled(TASK_FILTER, true);
         setTaskEnabled(TASK_INNER_LOOP, true);
         schedulerEnableGyro();
@@ -578,8 +560,6 @@ void tasksInit(void)
 
 #if defined(USE_ACC)
     if (sensors(SENSOR_ACC) && acc.sampleRateHz) {
-        setTaskEnabled(TASK_ACCEL, true);
-        rescheduleTask(TASK_ACCEL, TASK_PERIOD_HZ(acc.sampleRateHz));
 #if !defined(USE_EKF)
         // attitude task is still run in ekf.c, as fallback
         setTaskEnabled(TASK_ATTITUDE, true);

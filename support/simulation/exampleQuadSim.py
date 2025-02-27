@@ -89,11 +89,11 @@ if __name__=="__main__":
     #%% Generate craft
     mc = MultiRotor()
     # approx model of CineRat 3inch race drone
-    mc.setInertia(m=0.41, I=0.75*np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
-    mc.addRotor(Rotor(r=[-0.05, +0.0635, 0.0], Tmax=4.5, dir='lh', Izz=1e-7)) # RR
-    mc.addRotor(Rotor(r=[+0.05, +0.0635, 0.0], Tmax=4.5, dir='rh', Izz=1e-7)) # FR
-    mc.addRotor(Rotor(r=[-0.05, -0.0635, 0.0], Tmax=4.5, dir='rh', Izz=1e-7)) # RL
-    mc.addRotor(Rotor(r=[+0.05, -0.0635, 0.0], Tmax=4.5, dir='lh', Izz=1e-7)) # FL
+    mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
+    mc.addRotor(Rotor(r=[-0.05, +0.0635, 0.0], Tmax=4.5, dir='lh', Izz=5e-7, tau=0.02)) # RR
+    mc.addRotor(Rotor(r=[+0.05, +0.0635, 0.0], Tmax=4.5, dir='rh', Izz=5e-7, tau=0.02)) # FR
+    mc.addRotor(Rotor(r=[-0.05, -0.0635, 0.0], Tmax=4.5, dir='rh', Izz=5e-7, tau=0.02)) # RL
+    mc.addRotor(Rotor(r=[+0.05, -0.0635, 0.0], Tmax=4.5, dir='lh', Izz=5e-7, tau=0.02)) # FL
     # some additional rotors
     #mc.addRotor(Rotor(r=[+0.0, -0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[0, -1., -1.]))
     #mc.addRotor(Rotor(r=[+0.0, +0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[0, 1., -1.]))
@@ -150,7 +150,7 @@ if __name__=="__main__":
 
 
     #%% run loop
-    dt = 0.001 # 8kHz
+    dt = 0.000125 # 8kHz
     T = 1000. # seconds
     dt_rt = None if args.no_real_time else 1*dt
     start_trajectory = False
@@ -169,6 +169,7 @@ if __name__=="__main__":
 
         if not heading and sim.t > 10. and sil is not None:
             sil.mockup.sendKeyboard('h')
+            heading = True
             # test recovery mode
             # sil.sendMocap = lambda *args: None
 

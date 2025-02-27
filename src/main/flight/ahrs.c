@@ -119,7 +119,7 @@ PG_RESET_TEMPLATE(ahrsConfig_t, ahrsConfig,
     .dcm_kp = 2500,                // 1.0 * 10000
     .dcm_ki = 0,                   // 0.003 * 10000
     .small_angle = 25,
-    .ahrs_process_denom = 2
+    .ahrs_process_denom = 16
 );
 
 static float calculateThrottleAngleScale(uint16_t throttle_correction_angle)

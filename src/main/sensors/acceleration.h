@@ -57,6 +57,8 @@ typedef struct acc_s {
     float accADC[XYZ_AXIS_COUNT];         // aligned, calibrated, scaled, but unfiltered data from the sensor
     float accADCafterRpm[XYZ_AXIS_COUNT]; // rpm-filtered, if enabled
     float accADCf[XYZ_AXIS_COUNT];        // also lowpass filtered
+    float sampleSum[XYZ_AXIS_COUNT];
+    uint8_t sampleCount;
     bool isAccelUpdatedAtLeastOnce;
 } acc_t;
 
@@ -94,6 +96,7 @@ bool accHasBeenCalibrated(void);
 void accStartCalibration(void);
 void resetRollAndPitchTrims(rollAndPitchTrims_t *rollAndPitchTrims);
 void accUpdate(timeUs_t currentTimeUs);
+void accFiltering(timeUs_t currentTimeUs);
 union flightDynamicsTrims_u;
 void setAccelerationTrims(union flightDynamicsTrims_u *accelerationTrimsToUse);
 void accInitFilters(void);

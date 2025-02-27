@@ -189,10 +189,10 @@
 #endif
 
 #if defined(STM32F4) || defined(STM32F7) || defined(STM32H7) || defined(STM32G4)
-#define TASK_GYROPID_DESIRED_PERIOD     125 // 125us = 8kHz
+#define TASK_IMUPID_DESIRED_PERIOD     125 // 125us = 8kHz
 #define SCHEDULER_DELAY_LIMIT           10
 #else
-#define TASK_GYROPID_DESIRED_PERIOD     1000 // 1000us = 1kHz
+#define TASK_IMUPID_DESIRED_PERIOD     1000 // 1000us = 1kHz
 #define SCHEDULER_DELAY_LIMIT           100
 #endif
 

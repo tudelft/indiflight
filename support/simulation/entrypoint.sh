@@ -21,6 +21,7 @@ fi
 echo ${GDBSERVER}
 echo ${GDBSERVER_CMD}
 
+#${GDBSERVER_CMD} /usr/bin/python3 -m cProfile -o profile.prof ./support/simulation/${SIM}.py   \
 ${GDBSERVER_CMD} /usr/bin/python3 ./support/simulation/${SIM}.py   \
     --sil ./obj/main/indiflight_MOCKUP.so                          \
     --sil-profile-txt ./configs/profiles/${PROFILE}.txt            \

@@ -111,7 +111,7 @@ typedef struct gyroDev_s {
     gyroModeSPI_e gyroModeSPI;
     uint32_t detectedEXTI;
     uint32_t gyroLastEXTI;
-    uint32_t gyroLastEXTIUs;
+    timeUs_t gyroLastEXTIUs;
     uint32_t gyroSyncEXTI;
     int32_t gyroShortPeriod;
     int32_t gyroDmaMaxDuration;
