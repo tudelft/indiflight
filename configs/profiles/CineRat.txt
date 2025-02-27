@@ -138,13 +138,13 @@ set gps_update_rate_hz = 15
 set nn_rate_denom = 2
 
 # ekf (these are the defaults)
-set ekf_use_attitude_estimate = 0
-set ekf_use_position_estimate = 0
-set ekf_use_angles = 1, 1, 1
-set ekf_proc_noise_acc = 5000, 5000, 5000
-set ekf_proc_noise_gyro = 1000, 1000, 1000
-set ekf_meas_noise_position = 10, 10, 10
-set ekf_meas_noise_angles = 100, 100, 100
+set ekf_use_quat = 1
+set ekf_proc_noise_acc = 500000, 500000, 500000
+set ekf_proc_noise_gyro = 100000, 100000, 100000
+set ekf_proc_noise_acc_bias = 100, 100, 100
+set ekf_proc_noise_gyro_bias = 10, 10, 10
+set ekf_meas_noise_position = 1000, 1000, 1000
+set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
 # filter setups

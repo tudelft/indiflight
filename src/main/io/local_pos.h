@@ -38,25 +38,8 @@ typedef struct __local_pos_ned_t {
     uint32_t time_us;
     fp_vector_t pos;
     fp_vector_t vel;
-    fp_euler_t att;
+    fp_quaternion_t quat;
 } local_pos_ned_t;
-
-typedef struct __vio_pos_ned_t {
-    uint32_t time_us;
-    float x;
-    float y;
-    float z;
-    float vx;
-    float vy;
-    float vz;
-    float p;
-    float q;
-    float r;
-    float qw;
-    float qx;
-    float qy;
-    float qz;
-} vio_pos_ned_t;
 
 typedef struct __local_pos_sp_ned_t {
     fp_vector_t pos;

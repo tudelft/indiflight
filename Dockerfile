@@ -14,12 +14,6 @@ RUN apt-get update && \
         sshpass \
     && apt-get clean
 
-# install python utilities
-RUN pip install --upgrade pip
-COPY lib/main/pi-protocol/python/requirements.txt requirements.txt
-RUN pip install -r requirements.txt && rm requirements.txt
-RUN pip install intelhex
-
 # install cross compiler
 COPY make/tools.mk tools.mk
 RUN mkdir -p /downloads && \
@@ -28,6 +22,19 @@ RUN mkdir -p /downloads && \
     rm tools.mk
 
 RUN cp -r /tools/*/* /usr/
+
+
+# install python utilities
+RUN pip install --upgrade pip
+
+COPY lib/main/pi-protocol/python/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+
+COPY lib/main/ekf_c_code_generation/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+
+RUN pip install intelhex
+
 
 # git config
 RUN git config --global --add safe.directory /indiflight

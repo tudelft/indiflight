@@ -10,3 +10,6 @@
 [submodule "support/groundstation/ext/UnifiedMocapClient"]
 	path = support/groundstation/ext/UnifiedMocapClient
 	url = https://github.com/tudelft/UnifiedOptitrackClients/
+[submodule "lib/main/ekf_c_code_generation"]
+	path = lib/main/ekf_c_code_generation
+	url = https://github.com/tudelft/ekf_c_code_generation

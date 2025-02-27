@@ -4,6 +4,8 @@
  * Copyright 2023 Robin Ferede (Delft University of Technology)
  * Copyright 2024 Till Blaha (Delft University of Technology)
  *     Improved integration with legacy estimator, added parameters
+ * Copyright 2025 Till Blaha (Delft University of Technology)
+ *     Upstream quaternion EKF, remove legacy estimator
  *
  * This file is part of Indiflight.
  *
@@ -25,40 +27,32 @@
 
 #include "ekf.h"
 
-#include "io/local_pos.h"  		// for posMeasNed
+#include "io/local_pos.h"  		    // for posMeasNed
 #include "fc/runtime_config.h"		// for FLIGHT_MODE
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
 #include "sensors/gyro.h"			// for gyro
 #include "sensors/acceleration.h"   // for acc
-#include "ahrs.h"                    // for fallback if no GPS
+#include "ahrs.h"                   // for fallback if no GPS
 #include "pi-messages.h"            // for keeping track of message times
+#include "sensors/barometer.h"
+#include "flight/indi.h"
+#include "drivers/dshot.h"
+#include <stdbool.h>
 
 #include "pg/pg_ids.h"              // for config
 
 #ifdef USE_EKF
 
-#ifndef USE_ACC
-#error "USE_EKF requires USE_ACC"
-#endif
-
-#ifndef USE_GYRO
-#error "USE_EKF requires USE_GYRO"
-#endif
-
-#ifndef USE_LOCAL_POSITION
-#error "USE_EKF requires USE_LOCAL_POSITION"
-#endif
-
-PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
-    .use_attitude_estimate = 0,
-    .use_position_estimate = 0,
-    .use_angle_measurements = { 1, 1, 1 },
-    .proc_noise_acc = { 5000, 5000, 5000 },
-    .proc_noise_gyro = { 1000, 1000, 1000 },
-    .meas_noise_position = { 10, 10, 10 },
-    .meas_noise_angles = { 100, 100, 100 },
-    .meas_delay = 0,
+    .use_quat_measurement = 1,
+    .proc_noise_acc       = { 500000, 500000, 500000 },
+    .proc_noise_gyro      = { 100000, 100000, 100000 },
+    .proc_noise_acc_bias  = { 100, 100, 100 },
+    .proc_noise_gyro_bias = { 10, 10, 10 },
+    .meas_noise_position  = { 1000, 1000, 1000 },
+    .meas_noise_quat      = { 50000, 50000, 50000, 50000 },
+    .meas_delay = 0
 ); 
 
 fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
@@ -133,54 +127,91 @@ bool isInitializedEkf(void) {
 }
 
 void initEkf(timeUs_t currentTimeUs) {
+    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
+        return;
+    }
+
 	// set ekf parameters
-	ekf_use_phi = ekfConfig()->use_angle_measurements[0];
-	ekf_use_theta = ekfConfig()->use_angle_measurements[1];
-	ekf_use_psi = ekfConfig()->use_angle_measurements[2];
+	bool use_quat = ekfConfig()->use_quat_measurement;
 
 	// process noise covariance
 	float Q[N_STATES] = {
-		((float) ekfConfig()->proc_noise_acc[0]) * 1e-4f, // ax
-		((float) ekfConfig()->proc_noise_acc[1]) * 1e-4f, // ay
-		((float) ekfConfig()->proc_noise_acc[2]) * 1e-4f, // az
-		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-4f, // p
-		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-4f, // q
-		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-4f // r
+		((float) ekfConfig()->proc_noise_acc[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc[2]) * 1e-6f, // az
+		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-6f, // r
+		((float) ekfConfig()->proc_noise_acc_bias[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc_bias[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc_bias[2]) * 1e-6f, // az 
+		((float) ekfConfig()->proc_noise_gyro_bias[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro_bias[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro_bias[2]) * 1e-6f // r
 	};
 
 	// measurement noise covariance
 	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-4f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-4f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-4f, // posD
-		((float) ekfConfig()->meas_noise_angles[0]) * 1e-4f, // phi
-		((float) ekfConfig()->meas_noise_angles[1]) * 1e-4f, // theta
-		((float) ekfConfig()->meas_noise_angles[2]) * 1e-4f, // psi
+		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
+		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
+		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
+		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
+		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
+		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
+		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
 	};
 
-	// sets initial state to the latest external pos and att
+    // sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
 		posMeasNed.pos.V.X,
 		posMeasNed.pos.V.Y,
 		posMeasNed.pos.V.Z,
 		0., 0., 0., // vel
-		posMeasNed.att.angles.roll,
-		posMeasNed.att.angles.pitch,
-		posMeasNed.att.angles.yaw,
+        1., 0., 0., 0., // quaternion
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
 	// sets initial covariance to 1
 	float P_diag0[N_STATES] = {
-		1., 1., 1., // pos
-		1., 1., 1., // vel
-		1., 1., 1., // att
-		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)!
+		1., 1., 1.,     // pos
+		1., 1., 1.,     // vel
+		1., 1., 1., 1., // att
+		1e-2f, 1e-2f, 1e-2f, // acc biases (to turn off bias estimation, set these to 0)!
+        1e-2f, 1e-2f, 1e-2f  // gyro biases (to turn off bias estimation, set these to 0)!
 	};
 
-    ekf_Z[5] = posMeasNed.att.angles.yaw;
-	
+    if (use_quat) {
+		X0[6] = posMeasNed.quat.w;
+		X0[7] = posMeasNed.quat.x;
+		X0[8] = posMeasNed.quat.y;
+		X0[9] = posMeasNed.quat.z;
+    } else {
+        P_diag0[13] = 0.f; // turn off gyro bias estimation
+        P_diag0[14] = 0.f; // turn off gyro bias estimation
+        P_diag0[15] = 0.f; // turn off gyro bias estimation
+        Q[13] = 0.f;
+        Q[14] = 0.f;
+        Q[15] = 0.f;
+    }
+
+#if defined(USE_BARO) && false  // todo: figure this out properly
+    // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion.
+    if (sensors(SENSOR_BARO)) {
+        float mean = 0.f;
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+        if (isDshotTelemetryActive()) { 
+            for (int i=0; i<indiRun.actNum; i++) {
+                mean += indiRun.omega_fs[i] / indiRun.actNum;
+            }
+        }
+#endif
+        //X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+        X0[2] = posMeasNed.pos.V.Z; //todo testingggg
+    }
+#endif
+
 	// initialize ekf
+    ekf_set_use_quat(use_quat);
 	ekf_set_Q(Q);
 	ekf_set_R(R);
 	ekf_set_X(X0);
@@ -212,20 +243,31 @@ void runEkf(timeUs_t currentTimeUs) {
         lastUpdateTimestamp = posLatestMsgTime;
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
-		ekf_Z[2] = posMeasNed.pos.V.Z;
-		ekf_Z[3] = posMeasNed.att.angles.roll;
-		ekf_Z[4] = posMeasNed.att.angles.pitch;
+#if defined(USE_BARO) && false // figure this out properly
+        if (sensors(SENSOR_BARO)) {
+            // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion
+            float mean = 0.f;
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+            if (isDshotTelemetryActive()) { 
+                for (int i=0; i<indiRun.actNum; i++) {
+                    mean += indiRun.omega_fs[i] / indiRun.actNum;
+                }
+            }
+#endif
+            float baroCalib = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+            DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
+            ekf_Z[2] = posMeasNed.pos.V.Z; //todo testingggg
+            //ekf_Z[2] = baroCalib; //todo testingggg
+        } else
+#endif
+        {// GPS
+		    ekf_Z[2] = posMeasNed.pos.V.Z;
+        }
 
-		// fix yaw discontinuity (rad)
-		float delta_psi = posMeasNed.att.angles.yaw - ekf_Z[5];
-		while (delta_psi > M_PI) {
-			delta_psi -= 2 * M_PI;
-		}
-		while (delta_psi < -M_PI) {
-			delta_psi += 2 * M_PI;
-		}
-
-		ekf_Z[5] += delta_psi;
+        ekf_Z[3] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.w;
+		ekf_Z[4] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.x;
+		ekf_Z[5] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.y;
+		ekf_Z[6] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.z;
 
 		// old update:
 		ekf_update(ekf_Z);
@@ -251,7 +293,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         // when ekf is not initialized, we need to wait for the first external position message
         if (posMeasState != LOCAL_POS_NO_SIGNAL) {
             // INIT EKF
-            initEkf(currentTimeUs);
+            initEkf(currentTimeUs); // todo: this safe on GPS? esp with SET_HOME?
         }
     } else {
         // ekf is initialized and POSITION_MODE, we can run the ekf
@@ -266,20 +308,14 @@ void updateEkf(timeUs_t currentTimeUs) {
         // additional safety check: use EKF only, if recent update from optitrack
         float *ekf_X = ekf_get_X();
 
-        // convert attitude to quat and call the decider
-        fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
-        quaternion_of_fp_euler(&qEkf, &e);
+        // set ekf quaternion
+        qEkf = (fp_quaternion_t) {ekf_X[6], ekf_X[7], ekf_X[8], ekf_X[9]};
 
         ahrsDecider();
 
         // update position
-        posEstNed.V.X = ekf_X[0];
-        posEstNed.V.Y = ekf_X[1];
-        posEstNed.V.Z = ekf_X[2];
-
-        velEstNed.V.X = ekf_X[3];
-        velEstNed.V.Y = ekf_X[4];
-        velEstNed.V.Z = ekf_X[5];
+        posEstNed = (fp_vector_t) { .V = {ekf_X[0], ekf_X[1], ekf_X[2]} };
+        velEstNed = (fp_vector_t) { .V = {ekf_X[3], ekf_X[4], ekf_X[5]} };
     }
 }
 

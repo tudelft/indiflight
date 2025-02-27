@@ -732,11 +732,21 @@ $(TARGET_EF_HASH_FILE):
 	@echo "EF HASH -> $(TARGET_EF_HASH_FILE)"
 	$(V1) touch $(TARGET_EF_HASH_FILE)
 
+### CODE GENERATED dependencies
+# prevent partial deletion of generated files
+# requires gnu make 4.3. "&" prevents this command from being run multiple times
+.PRECIOUS=$(PI_GEN_FILES) $(EKF_GEN_FILES)
+.SECONDARY=$(PI_GEN_FILES) $(EKF_GEN_FILES)
+
 # pi-protocol make script
-$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
-	@echo "generating pi protocol headers"
+$(PI_GEN_FILES) &: $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
+	@echo "#### generating pi protocol..."
 	cd lib/main/pi-protocol/ && make generate CONFIG=config.yaml
-	@echo "done"
+
+# ekf c code
+$(EKF_GEN_FILES) &: $(EKF_DIR)/generate_ekf.py $(wildcard $(EKF_DIR)/*.j2)
+	@echo "#### generating ekf..."
+	cd $(EKF_DIR) && python3 generate_ekf.py
 
 # rebuild everything when makefile changes or the extra flags have changed or pi-protocol has changed
 $(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildcard make/*) $(PI_GEN_FILES)

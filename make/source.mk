@@ -114,7 +114,6 @@ COMMON_SRC = \
             flight/servos.c \
             flight/servos_tricopter.c \
             flight/ekf.c \
-            flight/ekf_calc.c \
             flight/trajectory_tracker.c \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
@@ -509,6 +508,17 @@ SRC += $(PI_DIR)/pi-messages.c
 #SIZE_OPTIMISED_SRC += $(PI_DIR)/pi-protocol.c
 #SIZE_OPTIMISED_SRC += $(PI_DIR)/pi-messages.c
 endif
+
+# Do the same for ekf c code
+EKF_DIR = $(ROOT)/lib/main/ekf_c_code_generation
+EKF_BUILD_DIR = $(EKF_DIR)/build
+EKF_GEN_FILES = $(EKF_BUILD_DIR)/ekf_calc.h $(EKF_BUILD_DIR)/ekf_calc.c
+ifneq ($(EKF_DIR),)
+INCLUDE_DIRS += $(EKF_BUILD_DIR)
+SRC += $(EKF_GEN_FILES)
+SPEED_OPTIMISED_SRC += $(EKF_GEN_FILES)
+endif
+
 
 # Do the same for the ActiveSetCtlAlloc
 AS_SRC_DIR = $(ROOT)/lib/main/ActiveSetCtlAlloc/src

@@ -36,6 +36,14 @@
 
 #ifdef USE_LOCAL_POSITION
 
+#ifndef USE_ACC
+#error "USE_EKF requires USE_ACC"
+#endif
+
+#ifndef USE_GYRO
+#error "USE_EKF requires USE_GYRO"
+#endif
+
 #ifndef USE_EKF
 #error "USE_LOCAL_POSITION must be used with USE_EKF"
 #endif
@@ -44,10 +52,6 @@
 local_pos_ned_t posMeasNed;
 local_pos_state_t posMeasState = LOCAL_POS_NO_SIGNAL;
 timeUs_t posLatestMsgTime = 0;
-
-vio_pos_ned_t vioPosNed;
-local_pos_state_t vioPosState = LOCAL_POS_NO_SIGNAL;
-timeUs_t vioLatestMsgTime = 0;
 
 local_pos_sp_ned_t posSpNed;
 local_pos_state_t posSpState = LOCAL_POS_NO_SIGNAL;
@@ -101,19 +105,11 @@ void getLocalPos(timeUs_t current) {
             posMeasNed.vel.V.X = piMsgExternalPoseRx->ned_xd;
             posMeasNed.vel.V.Y = piMsgExternalPoseRx->ned_yd;
             posMeasNed.vel.V.Z = piMsgExternalPoseRx->ned_zd;
-            fp_euler_t eulers;
-            fp_quaternion_t quat;
             // the quaternion x,y,z should be NED
-            quat.w = piMsgExternalPoseRx->body_qi;
-            quat.x = piMsgExternalPoseRx->body_qx;
-            quat.y = piMsgExternalPoseRx->body_qy;
-            quat.z = piMsgExternalPoseRx->body_qz;
-            fp_quaternionProducts_t qP;
-            quaternionProducts_of_quaternion(&qP, &quat);
-            fp_euler_of_quaternionProducts (&eulers, &qP);
-            posMeasNed.att.angles.roll = eulers.angles.roll;
-            posMeasNed.att.angles.pitch = eulers.angles.pitch;
-            posMeasNed.att.angles.yaw = eulers.angles.yaw;
+            posMeasNed.quat.w = piMsgExternalPoseRx->body_qi;
+            posMeasNed.quat.x = piMsgExternalPoseRx->body_qx;
+            posMeasNed.quat.y = piMsgExternalPoseRx->body_qy;
+            posMeasNed.quat.z = piMsgExternalPoseRx->body_qz;
 
             sensorsSet(SENSOR_GPS);
             ENABLE_STATE(GPS_FIX);
