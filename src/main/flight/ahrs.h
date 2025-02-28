@@ -47,6 +47,10 @@ void ahrsConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correcti
 
 float getCosTiltAngle(void);
 void getAttitudeQuaternion(fp_quaternion_t * q);
+void getHoverAttitudeQuaternion(fp_quaternion_t *q);
+#ifdef USE_LEARNER
+void overrideAttitudeQuaternion(fp_quaternion_t *quat);
+#endif
 void ahrsDecider(void);
 void ahrsUpdate(timeUs_t currentTimeUs);
 

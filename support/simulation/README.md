@@ -99,17 +99,16 @@ Explanation of arguments:
 -it                                       # "interactive": ensure proper printing of status bar
 -p 5000:5000 -p 3333:3333                 # Map ports for visualisation and, if used gdbserver
 -v ./:/indiflight                         # Map firmware into container
--e YES=y -e DEBUG=GDB                     # Set make options (YES skips checks for unclean cache / gitwd, DEBUG compiles symbols)
+-e YES=y -e DEBUG=GDB -e GDBSERVER=n      # YES skips cache clean checks, DEBUG set -g -O0, GDBSERVER see below
 -e SIM=exampleQuadSim -e PROFILE=CineRat  # set sim script and profile
 pyndiflight-local                         # Container tag (see build command)
 --throw --learn                           # see ./exampleQuadSim.py --help
 ```
 
-To debug INDIflight, add `-e GDBSERVER=y` to the command above.
-This require that `-e DEBUG=GDB` was also passed to make sense.
-This will launch a `gdbserver` that you can connect to, e.g. from VSCode. In
-the `indiflight` repo, there is a `launch.json` configuration that can be 
-started from within VSCode.
+To debug INDIflight, set `-e DEBUG=GDB -e GDBSERVER=y` (note the `y`).
+This will launch a `gdbserver` in the container that you can connect to, e.g.
+from VSCode. In the `indiflight` repo, there is a `launch.json` configuration
+that can be started from within VSCode.
 
 
 #### (Step 4 -- Connect to the debug server from VSCode)

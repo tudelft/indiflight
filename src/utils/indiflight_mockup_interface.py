@@ -50,8 +50,8 @@ class flightLogDisarmReason():
 class boxId():
     # not for flight modes
     BOXARM = (1 << 0)
-    BOXPREARM = (1 << 34)
-    BOXTHROWTOARM = (1 << 35)
+    BOXPREARM = (1 << 35)
+    BOXTHROWTOARM = (1 << 36)
 
 hid_codes = {
     'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,

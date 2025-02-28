@@ -40,12 +40,12 @@ if __name__=="__main__":
     parser.add_argument("--sil", required=False, type=str, metavar="LIBRARY", default=None, help="Load INDIflight interface as shared library.")
     parser.add_argument("--sil-profile-txt", required=False, type=str, metavar="PROFILE.txt", help="Import these profile settings into the SIL")
     # further arguments
-    parser.add_argument("--sil-no-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-mockup")  # enabled by default now
     parser.add_argument("--hil", required=False, type=str, metavar="DEVICE", help="Use INDIflight hardware interface. Use either --hil or --sil")
     parser.add_argument("--hil-baud", required=False, choices=SUPPORTED_BAUDS, type=int, default=921600, help="HIL baudrate ")
     parser.add_argument("--mocap", required=False, nargs=2, metavar=("IP", "PORT"), help="Stream mocap UDP packets to this IP/hostname and port")
     parser.add_argument("--no-vis", required=False, action="store_true", help="Do not launch visualization webserver")
     parser.add_argument("--no-real-time", required=False, action="store_true", help="Run as fast as possible")
+    parser.add_argument("--no-sil-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-mockup")  # enabled by default now
     parser.add_argument("--catapult", required=False, action="store_true", help="Use catapult (sil-only)")
     parser.add_argument("--throw", required=False, action="store_true", help="Use throwing")
     parser.add_argument("--learn", required=False, action="store_true", help="Learn after throw/catapult (sil-only)")
@@ -105,6 +105,7 @@ if __name__=="__main__":
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
+    #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
 
     mocap = Mocap(mc, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(mc, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -114,7 +115,7 @@ if __name__=="__main__":
     #%% indiflight configuration, if software in the loop
     if sil is not None:
         sil.mockup.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
-        sil.mockup.setLogging( not args.sil_no_log )
+        sil.mockup.setLogging( not args.no_sil_log )
 
         sil.sendMocap()
         sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
@@ -132,6 +133,7 @@ if __name__=="__main__":
 
     #%% initial conditions
     mc.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
+    #mc.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0., 0.707])
     mc.setTwist(v=[0., 0., 0.], w=[0., 0., 0.])
 
     sim = Sim(mc, imu, mocap, hil, sil)
@@ -159,15 +161,15 @@ if __name__=="__main__":
         if not args.throw and sim.t > 1.:
             sil.mockup.arm() if sil else None
 
-        if not start_trajectory and sim.t > 5. and sil is not None:
+        if not start_trajectory and sim.t > 10. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
             sil.mockup.sendKeyboard('1')
-            if sim.t > 7.:
+            if sim.t > 15.:
                 for _ in range(8):
                     sil.mockup.sendKeyboard('3')
                 start_trajectory = True
 
-        if not heading and sim.t > 10. and sil is not None:
+        if not heading and sim.t > 18. and sil is not None:
             sil.mockup.sendKeyboard('h')
             heading = True
             # test recovery mode

@@ -162,8 +162,8 @@ void runCatapultStateMachine(timeUs_t current) {
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
 #endif
-#if defined(USE_EKF) && false
-                || !ekf_is_healthy() // TODO: implement this!
+#ifdef USE_EKF
+        || ( !isInitializedEkf() ) // loss of position or anything like that
 #endif
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);

@@ -41,6 +41,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/ekf.h"
+#include "flight/learner.h"
 #include "flight/gps_rescue.h"
 #include "flight/ahrs.h"
 #include "flight/mixer.h"
@@ -104,6 +105,7 @@ STATIC_UNIT_TESTED bool attitudeIsEstablished = false;
 // quaternion of sensor frame relative to earth frame
 STATIC_UNIT_TESTED fp_quaternion_t q = QUATERNION_INITIALIZE;
 STATIC_UNIT_TESTED fp_quaternionProducts_t qP = QUATERNION_PRODUCTS_INITIALIZE;
+static fp_quaternion_t qHover = QUATERNION_INITIALIZE;
 
 // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
 i16_euler_t attitude = EULER_INITIALIZE;
@@ -325,6 +327,13 @@ FAST_CODE void ahrsDecider(void) {
         qP = qPMahony;
         rMat = rMatMahony;
     }
+
+#ifdef USE_LEARNER
+    qHover = chain_quaternion(&q, &hoverAttitude);
+#else
+    qHover = q;
+#endif
+
     fp_euler_t euler_fp;
     fp_euler_of_quaternionProducts(&euler_fp, &qP);
     i16_euler_of_fp_euler(&attitude, &euler_fp);
@@ -425,6 +434,24 @@ void getAttitudeQuaternion(fp_quaternion_t *quat)
    quat->y = q.y;
    quat->z = q.z;
 }
+
+void getHoverAttitudeQuaternion(fp_quaternion_t *quat)
+{
+   quat->w = qHover.w;
+   quat->x = qHover.x;
+   quat->y = qHover.y;
+   quat->z = qHover.z;
+}
+
+#ifdef USE_LEARNER
+void overrideAttitudeQuaternion(fp_quaternion_t *quat)
+{
+   q.w = quat->w;
+   q.x = quat->x;
+   q.y = quat->y;
+   q.z = quat->z;
+}
+#endif
 
 #ifdef SIMULATOR_BUILD
 void ahrsSetAttitudeRPY(float roll, float pitch, float yaw)

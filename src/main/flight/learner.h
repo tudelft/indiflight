@@ -50,8 +50,13 @@ typedef struct learnerConfig_s {
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
     uint8_t actLimit;
+    int16_t rollMisalignment;
+    int16_t pitchMisalignment;
+    int16_t yawMisalignment;
+    uint8_t randomizeMisalignment;
     uint8_t applyIndiProfileAfterQuery;
     uint8_t applyPositionProfileAfterQuery;
+    uint8_t applyHoverRotationAfterQuery;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -86,16 +91,16 @@ typedef struct learningRuntime_s {
     float motorSqrtD[MAX_SUPPORTED_MOTORS];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
-    bool applyIndiProfileAfterQuery;
-    bool applyPositionProfileAfterQuery;
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;
 
-extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
+extern rls_t motorRls[MAX_SUPPORTED_MOTORS];
 extern rls_t imuRls;
-extern rls_parallel_t fxSpfRls;
-extern rls_parallel_t fxRateDotRls;
+//extern rls_parallel_t fxSpfRls;
+//extern rls_parallel_t fxRateDotRls;
+extern rls_t fxRls[6];
+extern fp_quaternion_t hoverAttitude;
 
 void initLearnerRuntime(void);
 
@@ -103,10 +108,23 @@ void initLearnerRuntime(void);
 // --- states and functions
 
 // learning stuff
+#define LEARNER_TIMINGS_NUM 7
+typedef struct learnerTimings_s {
+    timeUs_t start;
+    timeDelta_t filters;
+    timeDelta_t imu;
+    timeDelta_t fx;
+    timeDelta_t motor;
+    timeDelta_t gains;
+    timeDelta_t updating;
+    timeDelta_t hover;
+} learnerTimings_t;
+
+extern learnerTimings_t learnerTimings;
+
 void initLearner(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
-void updateGains(void);
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
 
 // query stuff
@@ -115,7 +133,6 @@ typedef enum query_state_e {
     LEARNING_QUERY_WAITING_FOR_LAUNCH = 0,
     LEARNING_QUERY_DELAY,
     LEARNING_QUERY_ACTIVE,
-    LEARNING_QUERY_APPLYING,
     LEARNING_QUERY_DONE
 } learning_query_state_t;
 

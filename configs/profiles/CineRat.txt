@@ -106,11 +106,11 @@ set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
 set blackbox_disable_bat = OFF
 set blackbox_disable_rssi = OFF
-set blackbox_disable_debug = ON
+set blackbox_disable_debug = OFF
 set blackbox_disable_indi = OFF
 set blackbox_disable_pos = OFF
 set blackbox_disable_ekf = OFF
-set blackbox_disable_learner = ON
+set blackbox_disable_learner = OFF
 set blackbox_high_resolution = ON
 
 # sensor calibration / alignment
@@ -118,7 +118,7 @@ set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 180
 set acc_calibration = 0,0,0,1
-set acc_offset = -10, -12, 8
+set acc_offset = 10, 12, 8
 
 # motor setup
 set dshot_bidir = ON
@@ -139,7 +139,7 @@ set gps_update_rate_hz = 15
 set nn_rate_denom = 2
 
 # ekf (these are the defaults)
-set ekf_use_quat = 1
+set ekf_use_quat = 0
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 100, 100, 100
@@ -317,7 +317,7 @@ positionprofile 2
 # set position_horizontal_i = 4
 # set position_horizontal_d = 45
 set position_max_horizontal_speed = 500
-set position_max_horizontal_accel = 500
+set position_max_horizontal_accel = 1000
 set position_max_tilt = 40
 # set position_vertical_p = 63
 # set position_vertical_i = 4
@@ -377,9 +377,9 @@ set learner_zeta_attitude = 80
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 
-set learner_roll_misalignment = -64
-set learner_pitch_misalignment = 24
-set learner_yaw_misalignment = -15
+set learner_roll_misalignment = 0
+set learner_pitch_misalignment = 0
+set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
 set learner_apply_indi_profile = 1
