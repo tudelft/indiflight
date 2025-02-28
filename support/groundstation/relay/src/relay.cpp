@@ -238,16 +238,16 @@ int main(int argc, char** argv) {
         bool newMessage = false;
         if (numBytes) {
             for (int i=0; i < numBytes; i++) {
-                if (piParse(&piParseStates, piBuffer[i]) == PI_MSG_IMU_ID) {
+                if (piParse(&piParseStates, piBuffer[i]) == PI_MSG_EKF_INPUTS_ID) {
                     newMessage = true;
                 }
             }
         }
 
-        if ((piMsgImuRxState == PI_MSG_RX_STATE_NONE) || (!newMessage)) {
+        if ((piMsgEkfInputsRxState == PI_MSG_RX_STATE_NONE) || (!newMessage)) {
             // cannot go on, no time information to timestamp gps msgs, or setpoints
             usleep(100); // reduce CPU load a bit
-            //continue;
+            continue;
         } else {
             newMessage = false;
         }
@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
             memcpy((uint8_t *)(&pose_der), optitrackBuffer+sizeof(unsigned int)+sizeof(pose_t), sizeof(pose_der_t));
 
             // proceed to send Fake GPS and External Pose
-            piMsgFakeGpsTx.time_us = piMsgImuRx->time_us;
+            piMsgFakeGpsTx.time_us = piMsgEkfInputsRx->time_us;
             static constexpr double CYBERZOO_LAT = 51.99071002805145;
             static constexpr double CYBERZOO_LON = 4.376727452462819;
             static constexpr double RE = 6378137.;
@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
             piMsgFakeGpsTx.numSat = 8;
             piSendMsg(&piMsgFakeGpsTx, &serialWriter);
 
-            piMsgExternalPoseTx.time_us = piMsgImuRx->time_us;
+            piMsgExternalPoseTx.time_us = piMsgEkfInputsRx->time_us;
             piMsgExternalPoseTx.ned_x   = pose.x;
             piMsgExternalPoseTx.ned_y   = pose.y;
             piMsgExternalPoseTx.ned_z   = pose.z;
@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
 
         if (setpointBytes > 0) {
             memcpy((uint8_t *)(&msgPosSetpoint)+PI_MSG_PAYLOAD_OFFSET, setpointBuffer, PI_MSG_POS_SETPOINT_PAYLOAD_LEN);
-            piMsgPosSetpointTx.time_us = piMsgImuRx->time_us;
+            piMsgPosSetpointTx.time_us = piMsgEkfInputsRx->time_us;
 
             piMsgPosSetpointTx.ned_x  = ntohf(msgPosSetpoint.ned_x);
             piMsgPosSetpointTx.ned_y  = ntohf(msgPosSetpoint.ned_y);
@@ -317,7 +317,7 @@ int main(int argc, char** argv) {
 
         if (keyboardBytes > 0) {
             memcpy((uint8_t *)(&msgKeyboard)+PI_MSG_PAYLOAD_OFFSET, keyboardBuffer, PI_MSG_KEYBOARD_PAYLOAD_LEN);
-            piMsgKeyboardTx.time_us = piMsgImuRx->time_us;
+            piMsgKeyboardTx.time_us = piMsgEkfInputsRx->time_us;
             piMsgKeyboardTx.key = msgKeyboard.key;
             piSendMsg(&piMsgKeyboardTx, &serialWriter);
             printf("relayed KEYBOARD \n");

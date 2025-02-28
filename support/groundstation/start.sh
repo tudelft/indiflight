@@ -30,8 +30,14 @@ echo_help_and_exit() {
     exit 1
 }
 
+source ../../remote.env
+
+if [[ -z $REMOTE_IP ]]; then
+    echo "../../remote.env has the contain a REMOTE_IP= statement"
+fi
+
 # check for arguments
-if [[ $# -gt 2 ]] || [[ $# -lt 1 ]]; then
+if [[ $# -gt 3 ]] || [[ $# -lt 2 ]]; then
     echo_help_and_exit
 fi
 
@@ -91,23 +97,23 @@ tmux send-keys -t $session:0.3 "relay/build/relay "
 #tmux send-keys -t $session:0.0 "./optitrack_forwarder/build/natnet2udp.py -ac $RB_ID 0 -f 20 -le right -an far -xs right -up z_up -udp $TEST_FLAG" ENTER
 #tmux send-keys -t $session:0.0 "./UnifiedOptitrackClients/build/mocap2udp -s $RB_ID --ac 0 -f 20 -i 10.0.0.1 -p 5005 -c NED $TEST_FLAG" ENTER
 if [[ -z $TEST_FLAG ]]; then
-    tmux send-keys -t $session:0.0 "./ext/UnifiedMocapClient/build/client optitrack udp -d 14 -f 20 -c NED -r far -n far -s $RB_ID -i 127.0.0.1" ENTER
+    tmux send-keys -t $session:0.0 "./ext/UnifiedMocapRouter/build/mocap-router optitrack udp -d 14 -f 20 -c NED -r far -n far -s $RB_ID -i $REMOTE_IP" ENTER
 else
-    tmux send-keys -t $session:0.0 "./ext/UnifiedMocapClient/build/client test udp -d 14 -f 20 -c NED -r far -n far -s 3 -i 127.0.0.1 --test_freq 20" ENTER
+    tmux send-keys -t $session:0.0 "./ext/UnifiedMocapRouter/build/mocap-router test udp -d 14 -f 20 -c NED -r far -n far -s 3 -i $REMOTE_IP --test_freq 20" ENTER
 fi
 
 # setpoints
-tmux send-keys -t $session:0.1 '/usr/bin/env python3 setpointSender.py --host 127.0.0.1 --pos 0 0 -1.0 --yaw 0'
+tmux send-keys -t $session:0.1 "/usr/bin/env python3 setpointSender.py --host $REMOTE_IP --pos 0 0 -1.0 --yaw 0"
 
 # keyboards
-#tmux send-keys -t $session:0.2 '/usr/bin/env python3 keyInputs.py --host 127.0.0.1' ENTER
-tmux send-keys -t $session:0.2 '/usr/bin/env python3 configMenu.py --host 127.0.0.1' ENTER
+#tmux send-keys -t $session:0.2 "/usr/bin/env python3 keyInputs.py --host $REMOTE_IP" ENTER
+tmux send-keys -t $session:0.2 "/usr/bin/env python3 configMenu.py --host $REMOTE_IP" ENTER
 
 # socat
-tmux send-keys -t $session:0.4 'sudo socat -d -d PTY,link=/dev/ttyDB,raw,echo=0,mode=666 TCP:dronebridge.local:5760' ENTER
+tmux send-keys -t $session:0.4 "sudo socat -d -d PTY,link=/dev/ttyDB,raw,echo=0,mode=666 TCP:dronebridge.local:5760" ENTER
 
 # ping
-tmux send-keys -t $session:0.5 'ping 192.168.2.1' ENTER
+tmux send-keys -t $session:0.5 "ping dronebridge.local" ENTER
 
 # periodically get stats by sending USER 1 signal to process
 #$ON_PI "while [[1]]; do; kill -USE2 `pidof connect`; sleep 5; done" &
