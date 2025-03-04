@@ -33,6 +33,7 @@
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
+#include "flight/ekf.h"
 
 #include "pg/pg_ids.h"
 
@@ -46,22 +47,20 @@ throwState_t throwState = THROW_STATE_IDLE;
 #error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
 
-#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_LOCAL_POSITION)
-#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_LOCAL_POSITION"
-#endif
-
 #pragma message "You are compiling with dangerous code!"
 
 
 // config
-PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 1);
 PG_RESET_TEMPLATE(throwConfig_t, throwConfig,
     .accHighThresh = 20,
     .accClipThresh = 45,     // m/s/s
     .accLowAgainThresh = 20, // m/s/s
     .gyroHighThresh = 600,   // deg/s
     .momentumThresh = 400,   // cm/s
-    .releaseDelayMs = 250   // ms
+    .releaseDelayMs = 250,   // ms
+    .idleBeforeThrow = 0,    // boolean
+    .allowManualModes = 0    // boolean
 );
 
 // ---externs
@@ -107,10 +106,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // disable state machines (and possibly abort throw/fall if in progress)
     bool disableConditions = ARMING_FLAG(ARMED)
-#ifndef USE_THROWING_WITHOUT_POSITION
-        || !FLIGHT_MODE(POSITION_MODE)
-#endif
-        || FLIGHT_MODE(CATAPULT_MODE) // downright dangerous to accidentally throw with catapult?
+        || FLIGHT_MODE(CATAPULT_MODE | NN_MODE) // downright dangerous to accidentally throw with catapult?
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
 #ifdef USE_INDI
         || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
@@ -131,16 +127,18 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             // enable if we dont disable, have accel, and no disable flags than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce &&
-                #ifdef USE_LOCAL_POSITION
-                    (
-#ifdef USE_THROWING_WITHOUT_POSITION
-                    !FLIGHT_MODE(POSITION_MODE) ||
+                && acc.isAccelUpdatedAtLeastOnce
+                && ( FLIGHT_MODE(POSITION_MODE) || throwConfig()->allowManualModes )
+#ifdef USE_LOCAL_POSITION
+                && ( !FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE) ||
+                        (
+                            isInitializedEkf()
+                            && (posMeasState >= LOCAL_POS_STILL_VALID)
+                            && (posSpState >= LOCAL_POS_STILL_VALID)
+                        )
+                    )
 #endif
-                    ( (posMeasState >= LOCAL_POS_STILL_VALID)
-                    && (posSpState >= LOCAL_POS_STILL_VALID) ) ) &&
-                #endif
-                true;
+                && true;
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;

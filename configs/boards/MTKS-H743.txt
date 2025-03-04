@@ -6,18 +6,19 @@
 
 ## ----- Basic info
 #define TARGET=STM32H743
-#define BOARD_NAME=MATEKH743
+#define BOARD_NAME=H743
 #define MANUFACTURER_ID=MTKS
 
 ## ----- Board peripheral hardware
 #define USE_GYRO
 #define USE_GYRO_SPI_ICM42688P
+#define USE_ACC
 #define USE_ACC_SPI_ICM42688P
 #define USE_SDCARD
 #define USE_MAX7456
 #define USE_PINIO
 
-# todo: add baro and magnetometer
+# todo: add baro
 
 
 ##########################
@@ -132,16 +133,12 @@ dma pin C06 0
 dma pin B08 0
 dma pin B09 0
 feature RX_SERIAL
-feature TELEMETRY
-feature OSD
 set baro_bustype = I2C
 set baro_i2c_device = 2
-set serialrx_provider = SBUS
 set blackbox_device = SDCARD
 set current_meter = ADC
 set battery_meter = ADC
-#set ibata_scale = 250
-set ibata_scale = 280
+set ibata_scale = 470
 set beeper_inversion = ON
 set beeper_od = OFF
 set beeper_frequency = 2500

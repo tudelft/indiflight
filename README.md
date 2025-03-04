@@ -60,7 +60,7 @@ As mentioned above, building needs a compile-time configuration for the board
 used and the features required. These need to be supplied as environment
 to the docker image:
 
-    docker run --previliged -it                \
+    docker run --privileged -it                \
         -v ./:/indiflight                      \
         -e BOARD=MTKS-H743 -e PROFILE=CineRat  \
         indiflight-builder

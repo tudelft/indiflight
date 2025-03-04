@@ -34,6 +34,8 @@ typedef struct throwConfig_s {
     uint16_t gyroHighThresh;   // deg/s
     uint16_t momentumThresh;   // cm/s
     uint16_t releaseDelayMs;   // ms
+    uint8_t idleBeforeThrow;   // bool
+    uint8_t allowManualModes;  // bool
 } throwConfig_t;
 
 PG_DECLARE(throwConfig_t, throwConfig);

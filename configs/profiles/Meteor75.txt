@@ -1,15 +1,14 @@
-# This file contains build flags and configuration for the CineRat 3inch drone
+# This file contains build flags and configuration for the Tinywhoop Meteor75.txt
 
 ###############
 # BUILD FLAGS #
 ###############
 
 ## ----- RC components
-#define USE_SERIALRX_SBUS
+#define USE_SERIALRX
 #define USE_SERIALRX_CRSF
 
 #define USE_TELEMETRY
-#define USE_TELEMETRY_SBUS
 #define USE_TELEMETRY_CRSF
 #define USE_TELEMETRY_PI
 
@@ -19,14 +18,10 @@
 
 ## ----- FPV features: LED and onscreen display
 #define USE_LED_STRIP
-#define USE_OSD
-#define USE_OSD_SD
-#define USE_OSD_HD
+## define USE_OSD # no OSD on this board
 
 ## ----- Outputs and logging
 #define USE_BLACKBOX
-## #define USE_SERVOS
-## #define USE_ACTUATORS_T4
 
 ## ----- Developer features
 ## #define USE_BENCHMARK
@@ -37,17 +32,17 @@
 
 ## ----- INDIFLIGHT features
 #define USE_INDI
-#define USE_EKF
-#define USE_LOCAL_POSITION
+## #define USE_EKF
+## #define USE_LOCAL_POSITION
 ## #define USE_LOCAL_POSITION_PI
 ## #define USE_LOCAL_POSITION_GPS
-#define USE_TRAJECTORY_TRACKER
+## #define USE_TRAJECTORY_TRACKER
 
 ## ----- DANGERZONE
 #define USE_THROW_TO_ARM
-#define USE_CATAPULT
+## #define USE_CATAPULT
 #define USE_LEARNER
-#define USE_NN_CONTROL
+## #define USE_NN_CONTROL
 
 
 ################################################
@@ -57,81 +52,67 @@
 ## ----- PERIPHERALS
 
 # feature
-feature GPS
 feature TELEMETRY
 feature LED_STRIP
-feature OSD
-
-# gps
-set gps_provider = UBLOX
-set gps_auto_baud = ON
-set gps_ublox_use_galileo = ON
 
 # serial ports
-serial 0 64 115200 57600 0 115200
-serial 1 262144 115200 57600 0 115200
-#serial 3 2 115200 115200 0 115200 # GPS
-serial 5 0 115200 57600 0 115200
-serial 6 524288 115200 57600 0 115200
+serial 0 262144 115200 57600 0 115200  # pi protocol
+serial 1 64 115200 57600 0 115200      # RX
 
 # rx
-set serialrx_provider = SBUS
+set serialrx_provider = CRSF
 
 # map
-#map TAER1234  # todo: which one is it here?
+map TAER1234
 
-# switch configs
-aux 0 0 1 1700 2100 0 0
-aux 1 1 3 900 2100 0 0
-aux 2 55 0 1700 2100 0 0
-aux 3 57 6 1300 1700 0 0
-aux 4 58 3 1300 1700 0 0
-aux 5 60 3 1700 2100 0 0
-#aux 5 13 7 1700 2100 0 0 ## beeper instead of NN
-aux 6 36 2 1700 2100 0 0
-aux 7 56 6 1700 2100 0 0
+# switch configs (Boxer i believe)
+aux 0 0 0 900 1300 0 0
+aux 1 1 2 900 1700 0 0
+aux 2 58 2 900 1300 0 0
+aux 3 36 5 1700 2100 0 0
+aux 4 56 1 900 1300 0 0
+aux 5 49 4 1700 2100 0 0
 
 # blackbox config
 set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
-set blackbox_disable_alt = OFF
+set blackbox_disable_alt = ON
 set blackbox_disable_bat = OFF
 set blackbox_disable_rssi = OFF
-set blackbox_disable_debug = OFF
+set blackbox_disable_debug = ON
 set blackbox_disable_indi = OFF
-set blackbox_disable_pos = OFF
-set blackbox_disable_ekf = OFF
+set blackbox_disable_pos = ON
+set blackbox_disable_ekf = ON
 set blackbox_disable_learner = OFF
 set blackbox_high_resolution = ON
-set debug_mode = BARO
+set debug_mode = NONE
 
 # sensor calibration / alignment
 set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 180
 set acc_calibration = 0,0,0,1
-set acc_offset = 10, 12, 8
+set acc_offset = 12, 0, -8
 
 # motor setup
 set dshot_bidir = ON
-set dshot_idle_value = 550
-set motor_pwm_protocol = DSHOT600
+set dshot_idle_value = 1000
+set motor_pwm_protocol = DSHOT300
 set motor_poles = 12
-set motor_output_reordering = 0,1,2,3,4,5,6,7
+set motor_output_reordering = 3,2,1,0,4,5,6,7
 
 # failsafes
 set failsafe_delay = 5
-set small_angle = 20   # angle at which to deny arming
+set small_angle = 45   # angle at which to deny arming
 
 
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 8       # relative to imu
-set ahrs_process_denom = 8      # relative to imu
-set nn_rate_denom = 1           # relative to pid
+set pid_process_denom = 3       # relative to imu
+set ahrs_process_denom = 9      # relative to imu
+set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
-set gps_update_rate_hz = 15
 
 # ekf (these are the defaults)
 set ekf_use_quat = 0
@@ -140,7 +121,7 @@ set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 100, 100, 100
 set ekf_proc_noise_gyro_bias = 10, 10, 10
 set ekf_meas_noise_position = 1000, 1000, 1000
-set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
+set ekf_meas_noise_quat = 500000, 500000, 500000, 500000
 set ekf_meas_delay = 0
 
 # filter setups
@@ -195,16 +176,16 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 3000, 3000, 1000
-set indi_rate_gains     =  230,  230,  150
+set indi_attitude_gains = 1500, 1500, 1000
+set indi_rate_gains     =  150,  150,  150
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
 set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
-set indi_manual_max_upwards_accel = 30  # N/kg
-set indi_manual_max_tilt = 45           # deg
+set indi_manual_max_upwards_accel = 40  # N/kg
+set indi_manual_max_tilt = 55           # deg
 set indi_manual_use_coordinated_yaw = 1
 
 # --- indi config ---
@@ -222,24 +203,24 @@ set indi_wls_act_penalties = 1,1,1,1
 set indi_wls_act_preferred_state = 0,0,0,0
 
 # --- actuators: fields can have up to 8 elements ---
-set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
-set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
-set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
+set indi_act_time_constant_ms = 35, 35, 35, 35       # ms
+set indi_act_max_rpm = 80000, 80000, 80000, 80000    # rpm
+set indi_act_hover_rpm = 40000, 40000, 40000, 40000  # rpm
 set indi_act_nonlinearity = 50, 50, 50, 50           # %
 set indi_act_limit = 100, 100, 100, 100              # %
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -1050, -1050, -1050, -1050
-set indi_act_g1_roll = -4000, -4000, 4000, 4000
-set indi_act_g1_pitch = -2600, 2600, -2600, 2600
-set indi_act_g1_yaw = -510, 510, 510, -510
+set indi_act_g1_fz = -1000, -1000, -1000, -1000
+set indi_act_g1_roll = -6000, -6000, 6000, 6000
+set indi_act_g1_pitch = -5000, 5000, -5000, 5000
+set indi_act_g1_yaw = 1510, -1510, -1510, 1510
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
 set indi_act_g2_pitch = 0,0,0,0
-set indi_act_g2_yaw = -100, 100, 100, -100
+set indi_act_g2_yaw = 110, -110, -110, 110
 
 
 indiprofile 2
@@ -353,26 +334,26 @@ set throw_to_arm_acc_high = 20
 set throw_to_arm_acc_clip = 45
 set throw_to_arm_acc_low = 20
 set throw_to_arm_gyro_high = 600
-set throw_to_arm_momentum_thresh = 400
+set throw_to_arm_momentum_thresh = 300
 set throw_to_arm_release_delay_ms = 150
-set throw_to_arm_idle_before_throw = 0
-set throw_to_arm_allow_manual_modes = 0
+set throw_to_arm_idle_before_throw = 1
+set throw_to_arm_allow_manual_modes = 1
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
 set learner_mode = 6
 set learner_num_actuators = 4
-set learner_delay_time_ms = 150
-set learner_step_time_ms = 50
-set learner_ramp_time_ms = 100
-set learner_overlap_time_ms = 50
-set learner_step_amplitude = 35
-set learner_ramp_amplitude = 70
-set learner_gyro_max = 1150
+set learner_delay_time_ms = 10
+set learner_step_time_ms = 30
+set learner_ramp_time_ms = 60
+set learner_overlap_time_ms = 30
+set learner_step_amplitude = 20
+set learner_ramp_amplitude = 40
+set learner_gyro_max = 1800
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
-set learner_zeta_rate = 90
-set learner_zeta_attitude = 80
+set learner_zeta_rate = 80
+set learner_zeta_attitude = 70
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 
@@ -388,39 +369,20 @@ set learner_apply_hover_rotation = 0
 
 ## ----- ONSCREEN DISPLAY
 
-set osd_rssi_pos = 2080
-set osd_ah_sbar_pos = 2286
-set osd_ah_pos = 2158
-set osd_mah_drawn_pos = 2528
-set osd_avg_cell_voltage_pos = 2552
-set osd_rtc_date_time_pos = 2091
-set osd_log_status_pos = 2540
-set osd_canvas_width = 30
-set osd_canvas_height = 13
-
 
 ## ----- LED STRIP, BEEPER, BEACON
-# ledstrip
 
-# beeper
-beeper -GYRO_CALIBRATED
-beeper -RX_LOST_LANDING
-beeper -DISARMING
-beeper -ARMING
-beeper -ARMING_GPS_FIX
-beeper -GPS_STATUS
-#beeper -RX_SET
-beeper -ACC_CALIBRATION
-beeper -ACC_CALIBRATION_FAIL
-beeper -DISARM_REPEAT
-beeper -ARMED
-beeper -SYSTEM_INIT
-beeper -ON_USB
-beeper -BLACKBOX_ERASE
-beeper -CRASH_FLIP
-beeper -CAM_CONNECTION_OPEN
-beeper -CAM_CONNECTION_CLOSE
-beeper -RC_SMOOTHING_INIT_FAIL
+# ledstrip
+set ledstrip_visual_beeper = ON  # todo: check if this works
+set ledstrip_visual_beeper_color = WHITE
+set ledstrip_grb_rgb = GRB
+set ledstrip_profile = STATUS
+set ledstrip_race_color = ORANGE
+set ledstrip_beacon_color = WHITE
+set ledstrip_beacon_period_ms = 500
+set ledstrip_beacon_percent = 50
+set ledstrip_beacon_armed_only = OFF
+set ledstrip_brightness = 70
 
 # beacon
 beacon -RX_LOST

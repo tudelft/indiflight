@@ -157,7 +157,7 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LEARNER
     if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState > LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
             && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
         for (int i=0; i < learnerConfig()->numAct; i++) {
@@ -219,7 +219,6 @@ void getSetpoints(timeUs_t current) {
         indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
 
     } else {
-        indiRun.controlAttitude = false;
         // acro
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
@@ -228,6 +227,36 @@ void getSetpoints(timeUs_t current) {
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
+
+        // launch control
+        static float launchAngle = 0.f;
+        if (isLaunchControlActive()) {
+            if (ARMING_FLAG(ARMED)) {
+                launchAngle += getRcDeflection(PITCH) * 1.f / indiRun.indiFrequency;
+            } else {
+                launchAngle = 0.;
+            }
+
+            indiRun.controlAttitude = true;
+            indiRun.spfSpBody.V.Z = 0.f; // thrust
+            indiRun.rateSpBodyCommanded.V.Y = 0.f; // pitch
+
+            fp_vector_t axis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f, };
+            fp_quaternion_t attSpYaw;
+            quaternion_of_axis_angle(&attSpYaw, &axis, launchAngle);
+            float Psi = getYawWithoutSingularity();
+            fp_quaternion_t yawNed = {
+                .w = cos_approx(Psi/2.f),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx(Psi/2.f),
+            };
+            indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        } else {
+            launchAngle = 0.f;
+
+            indiRun.controlAttitude = false;
+        }
     }
 }
 
@@ -419,12 +448,23 @@ void getMotorCommands(timeUs_t current) {
 
 
     // use INDI only when in the air, solve linearized global problem otherwise
-    bool doIndi = (!isTouchingGround()) && ARMING_FLAG(ARMED);
+    bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
+
+    float spfz = 0.f;
+    if (indiRun.useAccelForSpfz) {
+        spfz = indiRun.spf_fs.V.Z;
+    } else {
+        // define specific force using actuator model and effectiveness
+        // this should be equivalent to direct throtte-stick-to-thrust mapping, without feedback control
+        for (int i = 0; i < indiRun.actNum; i++) {
+            spfz += indiRun.actG1[2][i] * indiRun.uState_fs[i];
+        }
+    }
 
     // compute pseudocontrol
     indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
-    indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.Z;
+    indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * spfz;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;

@@ -776,10 +776,19 @@ void runLearningQueryStateMachine(timeUs_t current) {
         return;
     }
 
-    bool disableConditions = !FLIGHT_MODE(LEARNER_MODE)
-            || !(learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW));
+    bool disableConditions = !FLIGHT_MODE(LEARNER_MODE);
+            //|| !(learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW));
 
-    bool enableConditions = !ARMING_FLAG(ARMED) && !disableConditions;
+    if (disableConditions) {
+        learningQueryState = LEARNING_QUERY_IDLE;
+    }
+
+    bool enableConditions = !disableConditions
+        && (
+                ((learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT) && ARMING_FLAG(ARMED) && !isTouchingGround())
+                || ((learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW)) && !ARMING_FLAG(ARMED))
+                || ((learnerConfig()->mode & LEARN_AFTER_THROW) && throwConfig()->idleBeforeThrow && ARMING_FLAG(ARMED) && throwState == THROW_STATE_WAITING_FOR_THROW)
+            );
 
 doMore:
     switch (learningQueryState) {
@@ -804,9 +813,8 @@ doMore:
             }
             break;
         case LEARNING_QUERY_WAITING_FOR_LAUNCH: // catapult or throw
-            if (disableConditions) {
-                learningQueryState = LEARNING_QUERY_IDLE;
-                break;
+            if ( (learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT) ) {
+                learningQueryState = LEARNING_QUERY_DELAY; goto doMore;
             }
 
             if ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) {

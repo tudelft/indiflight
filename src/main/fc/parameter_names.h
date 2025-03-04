@@ -134,6 +134,7 @@
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
+#define PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ "indi_use_accel_for_thrust"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
@@ -206,6 +207,8 @@
 #define PARAM_NAME_THROW_TO_ARM_GYRO_HIGH "throw_to_arm_gyro_high"
 #define PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH "throw_to_arm_momentum_thresh"
 #define PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS "throw_to_arm_release_delay_ms"
+#define PARAM_NAME_THROW_TO_ARM_IDLE_BEFORE_THROW "throw_to_arm_idle_before_throw"
+#define PARAM_NAME_THROW_TO_ARM_ALLOW_MANUAL_MODES "throw_to_arm_allow_manual_modes"
 #endif
 
 #ifdef USE_LEARNER

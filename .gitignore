@@ -65,3 +65,4 @@ remote.env
 logs-*/
 .jlink-commandfile
 build*/
+!src/main/build

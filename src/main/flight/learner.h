@@ -70,10 +70,11 @@ typedef enum learner_loops_e {
 } learner_loops_t;
 
 typedef enum learning_mode_e {
-    LEARNING_OFF         = 0,
-    LEARN_DURING_FLIGHT  = 1 << 0,
-    LEARN_AFTER_CATAPULT = 1 << 1,
-    LEARN_AFTER_THROW    = 1 << 2,
+    LEARNING_OFF                    = 0,
+    LEARN_DURING_FLIGHT             = 1 << 0,
+    LEARN_AFTER_CATAPULT            = 1 << 1,
+    LEARN_AFTER_THROW               = 1 << 2,
+    LEARN_ALLOW_QUERY_DURING_FLIGHT = 1 << 3,
 } learner_mode_t;
 
 typedef struct learningRuntime_s {

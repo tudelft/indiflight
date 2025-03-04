@@ -452,7 +452,7 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && throwConfig()->idleBeforeThrow) {
             // Intended behaviour: 
             // 1. display "THROW_NOT_READY" when RC throwtoarm switch selected, 
             //    but conditions not met (throwState == IDLE). This is intended
@@ -1310,7 +1310,7 @@ bool isTouchingGround(void) {
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
     }
 
-    return (accHigh && throttleLow && gyroLow);
+    return (accHigh && throttleLow && gyroLow && !isLaunchControlActive());
 }
 
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)

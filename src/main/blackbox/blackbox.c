@@ -2469,6 +2469,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL, "%d",            indiProfile->manualMaxUpwardsSpf);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_TILT, "%d",                     indiProfile->manualMaxTilt);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_INCREMENT, "%d",                       indiProfile->useIncrement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ, "%d",                  indiProfile->useAccelForSpfz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK, "%d",                indiProfile->useRpmDotFeedback);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_NUM, "%d",                             indiProfile->actNum);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS, "%d,%d,%d,%d",       indiProfile->actTimeConstMs[0],
@@ -2600,6 +2601,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_GYRO_HIGH, "%d",  throwConfig()->gyroHighThresh);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH, "%d",  throwConfig()->momentumThresh);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS, "%d",  throwConfig()->releaseDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_IDLE_BEFORE_THROW, "%d",  throwConfig()->idleBeforeThrow);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ALLOW_MANUAL_MODES, "%d",  throwConfig()->allowManualModes);
 #endif
 #ifdef USE_LEARNER
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
