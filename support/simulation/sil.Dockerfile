@@ -27,15 +27,6 @@ RUN apt-get update \
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
-#COPY LogAnalysis/indiflightLogTools/requirements.txt /requirements2.txt
-#RUN pip install -r /requirements2.txt
-
-# copy sim code
-COPY PyNDIflight /PyNDIflight
-
-# copy data analysis code
-#COPY LogAnalysis/indiflightLogTools /indiflightLogTools
-
 EXPOSE 5000
 
 #ENV EXTRA="-Wno-double-promotion -Wno-misleading-indentation"
