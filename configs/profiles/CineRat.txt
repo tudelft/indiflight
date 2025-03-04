@@ -1,4 +1,8 @@
-######## FEATURE FLAGS
+# This file contains build flags and configuration for the CineRat 3inch drone
+
+###############
+# BUILD FLAGS #
+###############
 
 ## ----- RC components
 #define USE_SERIALRX
@@ -49,11 +53,12 @@
 #define USE_INERTIA_BY_THROWING
 
 
-#############################
-# START OF PROFILE SETTINGS #
-#############################
+################################################
+# CRAFT SETTINGS (formerly known as "profile") #
+################################################
 
-######## PERIPHERALS
+## ----- PERIPHERALS
+
 # feature
 feature GPS
 feature TELEMETRY
@@ -129,7 +134,7 @@ set motor_poles = 12
 set failsafe_delay = 5
 
 
-######## FLIGHT PERFORMANCE
+## ----- FLIGHT PERFORMANCE
 
 # scheduling
 set blackbox_sample_rate = 1/4
@@ -170,7 +175,7 @@ set thrust_linear = 55
 set simplified_dterm_filter = OFF
 
 
-######## RATE PROFILES
+## ----- RATE PROFILES
 
 rateprofile 0
 
@@ -194,7 +199,7 @@ set pitch_rate_limit = 1998
 set yaw_rate_limit = 1998
 
 
-######## INDI ATTITUDE CONTROLLER
+## ----- INDI ATTITUDE CONTROLLER
 
 indiprofile 0
 
@@ -283,7 +288,7 @@ set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
 
-######## POSITION CONTROL
+## ----- POSITION CONTROL
 
 positionprofile 0
 
@@ -331,14 +336,15 @@ set position_weathervane_p = 0
 set position_use_thrust_attenuation = 1
 
 
-######## SET DEFAULT PROFILES
+## ----- SET DEFAULT PROFILES
+
 profile 0
 rateprofile 0
 indiprofile 0
 positionprofile 0
 
 
-######## DANGERZONE
+## ----- DANGERZONE
 
 # catapult
 set catapult_target_altitude = 350
@@ -387,7 +393,7 @@ set learner_apply_position_profile = 1
 set learner_apply_hover_rotation = 1
 
 
-######## ONSCREEN DISPLAY
+## ----- ONSCREEN DISPLAY
 
 set osd_rssi_pos = 2080
 set osd_ah_sbar_pos = 2286

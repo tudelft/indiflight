@@ -71,16 +71,10 @@ From the root of the indiflight repo (see toplevel `README.md` for me info):
 
 #### Step 2 -- Build local pyndiflight docker container
 
-From the root of the indiflight repo:
+From the root of the indiflight repo (only once unless dependencies change):
 
-    docker build support/simulation -t pyndiflight-local -f ./support/simulation/sil-local.Dockerfile
+    docker build support/simulation -t pyndiflight-sil -f ./support/simulation/sil.Dockerfile
 
-If you want to debug the indiflight code using GDB, you can use this instead:
-
-    docker build support/simulation -t pyndiflight-local-gdb -f ./support/simulation/sil-local-gdb.Dockerfile
-
-(rebuild it only when `indiflight-builder` container or `PyNDIflight/**` simulation
-code changes)
 
 
 #### Step 3 -- Run the container and open http://localhost:5000
@@ -89,9 +83,9 @@ From root of this repo:
 
     docker run -it -p 5000:5000 -p 3333:3333      \
         -v ./:/indiflight                         \
-        -e YES=y -e DEBUG=GDB                     \
+        -e YES=y -e DEBUG=GDB -e GDBSERVER=n      \
         -e SIM=exampleQuadSim -e PROFILE=CineRat  \
-        pyndiflight-local                         \
+        pyndiflight-sil                           \
             --throw --learn
 
 Explanation of arguments:
@@ -101,11 +95,11 @@ Explanation of arguments:
 -v ./:/indiflight                         # Map firmware into container
 -e YES=y -e DEBUG=GDB -e GDBSERVER=n      # YES skips cache clean checks, DEBUG set -g -O0, GDBSERVER see below
 -e SIM=exampleQuadSim -e PROFILE=CineRat  # set sim script and profile
-pyndiflight-local                         # Container tag (see build command)
+pyndiflight-sil                           # Container tag (see build command)
 --throw --learn                           # see ./exampleQuadSim.py --help
 ```
 
-To debug INDIflight, set `-e DEBUG=GDB -e GDBSERVER=y` (note the `y`).
+To debug INDIflight in simulation, set `-e DEBUG=GDB -e GDBSERVER=y` (note the `y`).
 This will launch a `gdbserver` in the container that you can connect to, e.g.
 from VSCode. In the `indiflight` repo, there is a `launch.json` configuration
 that can be started from within VSCode.

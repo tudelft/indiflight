@@ -1,17 +1,23 @@
-######## BOARD DEFINES
+# This file contains build flags and default settings for the Mateksys H743 board
 
-## ----- Metadata
+###############
+# BUILD FLAGS #
+###############
+
+## ----- Basic info
 #define TARGET=STM32H743
 #define BOARD_NAME=MATEKH743
 #define MANUFACTURER_ID=MTKS
 
-## ----- Board hardware
+## ----- Board peripheral hardware
 #define USE_GYRO
 #define USE_GYRO_SPI_ICM42688P
 #define USE_ACC_SPI_ICM42688P
 #define USE_SDCARD
 #define USE_MAX7456
 #define USE_PINIO
+
+# todo: add baro and magnetometer
 
 
 ##########################

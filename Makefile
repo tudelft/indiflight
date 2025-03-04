@@ -294,6 +294,7 @@ CFLAGS     += $(ARCH_FLAGS) \
               -D'__REVISION__="$(REVISION)"' \
               -pipe \
               -MMD -MP \
+			  -Wno-deprecated-declarations \
 			  $(addprefix -D,$(BOARD_OPTIONS)) \
 			  $(addprefix -D,$(PROFILE_OPTIONS)) \
               $(EXTRA_FLAGS)
@@ -359,7 +360,7 @@ TARGET_MAP      = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).map
 
 TARGET_EXST_HASH_SECTION_FILE = $(TARGET_OBJ_DIR)/exst_hash_section.bin
 
-TARGET_EF_HASH      := $(shell echo -n "$(C_FLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
+TARGET_EF_HASH      := $(shell echo -n "$(CFLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
 TARGET_EF_HASH_FILE := $(TARGET_OBJ_DIR)/.efhash_$(TARGET_EF_HASH)
 
 CLEAN_ARTIFACTS := $(TARGET_BIN)

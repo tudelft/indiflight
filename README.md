@@ -1,85 +1,109 @@
 ![Indiflight](docs/assets/images/IndiflightLogoFull.png)
 
-This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras, or even offboard control is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
+This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing an Incremental Nonlinear Dynamic Inversion controller. Also, UART serial telemetry and uplink is improved, so that offboard position estimation via optical cameras is possible. This version is meant as research software into the control of UAV and is extremely experimental: you will probably hurt yourself or others if you just flash it and expect it to work.
 
 Supporting software:
-[![Github](https://img.shields.io/badge/Github-indiflight_support-blue?logo=github)](https://github.com/tudelft/indiflightSupport) Contains simulation, groundstation softare, information on research papers connected with Indiflight and  Documentation on Drone builds/setups.
+[![Github](https://img.shields.io/badge/Github-indiflight_support-blue?logo=github)](https://github.com/tudelft/indiflightSupport) Contains information on research papers connected with Indiflight and  Documentation on Drone builds/setups. N.B. until recently it also contained simulation and groundstation code, but this is know included in this repo.
 
-## Building using docker -- the preferred way
+## Introduction to Indiflight Configuration
 
-(tested on Ubuntu 22.04, install docker like https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
+INDIflight has compile-time configuration and run-time configuration.
 
-### Step 1 -- Create a docker image:
+- Compile-time configuration consists of macros that decide for which MCU chip to 
+build and which components are included in the firmware. One reason not to 
+simply include all features is to reduce firmware size, RAM usage and
+computation overhead. These compiler flags are just C compiler defines that usually 
+take the form `-DUSE_FEATUREXYZ`.
+- Run-time configuration are parameters that the firmware reads at boot from a
+separate onboard storage chip ("EEPROM"), but this chip can also be written to.
 
-    docker build . -t indiflight
+In INDIflight we now include both compile-time and run-time in the same files:
+
+- One file (`./configs/boards/*.txt`) contains compile-time and run-time 
+configuration for a specific flight control board, e.g. MCU type, compile-time 
+defines for sensors present on the board, run-time config for MCU pins, ...
+- another file (`./configs/profile/*.txt`) contains compile-time and run-time
+configuration for a certain drone configuration, including e.g. ESC setup,
+tuning, RC switch configuration, serial port setup, ...
+
+**N.B.** previously, a `local.mk` file was used to set the build arguments. This is
+not necessary anymore
+
+**N.B.2** we don't use "Manufacturer Defaults" anymore that used to be put by
+the manufacturer of a board into a special section of MCU chip flash memory 
+(not EEPROM!). After flashing INDIflight, the run-time config is "naked", 
+namely the defaults set with the `PG_RESET_TEMPLATE` and `PG_REGISTER_WITH_RESET_FN` macros in the c-code.
 
 
-### Step 2 -- Create a `make/local.mk`
+### Note on runtime configuration
 
-This defines the build configuration. For the Mateksys H743 you can use the 
-following file (to do that for other FCs, check https://github.com/betaflight/config/):
+The runtime parameters can be modified through:
+- the indiflight configurator interface. Install the `.deb` or `.apk` from [![Github](https://img.shields.io/badge/Github-indiflight_configurator-blue?logo=github)](https://github.com/tudelft/indiflight-configurator)
+- `set` commands, either via the indiflight configurator CLI, or loading `.txt` 
+files of `set` commands 
 
-```Makefile
-########## TARGET CONFIG
-TARGET = STM32H743
-EXTRA_FLAGS = $(EXTRA_FLAGS_CMDLINE) -D'BUILD_KEY=4880cd41e59e44642e41c3f6344b3993' -D'RELEASE_NAME=4.4.2' -D'BOARD_NAME=MATEKH743' -D'MANUFACTURER_ID=MTKS' -DCLOUD_BUILD -DUSE_GYRO -DUSE_GYRO_SPI_ICM42605 -DUSE_GYRO_SPI_ICM42688P -DUSE_GYRO_SPI_MPU6000 -DUSE_GYRO_SPI_MPU6500 -DUSE_ACC -DUSE_ACC_SPI_ICM42605 -DUSE_ACC_SPI_ICM42688P -DUSE_ACC_SPI_MPU6000 -DUSE_ACC_SPI_MPU6500 -DUSE_DSHOT -DUSE_LED_STRIP -DUSE_MAX7456 -DUSE_OSD -DUSE_OSD_HD -DUSE_OSD_SD -DUSE_PINIO -DUSE_BLACKBOX -DUSE_SDCARD -DUSE_SERIALRX -DUSE_SERIALRX_SBUS -DUSE_SERIALRX_CRSF -DUSE_TELEMETRY -DUSE_TELEMETRY_SMARTPORT
 
-########## FURTHER OPTIONS
-# Developer options
-#EXTRA_FLAGS += -DUSE_BENCHMARK -DUSE_STACK_CHECK
 
-# indi config:
-EXTRA_FLAGS += -DUSE_INDI
+## Building Indiflight
 
-# telemetry config:
-EXTRA_FLAGS += -DUSE_TELEMETRY -DUSE_TELEMETRY_PI -DPI_STATS -DPI_USE_PRINT_MSGS -DUSE_LOCAL_POSITION
+We're building with docker, because of the simplicity and reproducibility. So, first install docker engine, e.g. https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
 
-# higher level controllers / estimators
-#EXTRA_FLAGS += -DUSE_EKF
-EXTRA_FLAGS += -DUSE_LOCAL_POSITION -DUSE_VEL_CTL
-EXTRA_FLAGS += -DUSE_GPS
-EXTRA_FLAGS += -DUSE_TRAJECTORY_TRACKER
+Run all the commands below from the root of this repository.
 
-# DANGEROUS modes!!
-#EXTRA_FLAGS += -DUSE_ACCEL_RPM_FILTER 
-#EXTRA_FLAGS += -DUSE_THROW_TO_ARM -DUSE_THROWING_WITHOUT_POSITION
-#EXTRA_FLAGS += -DUSE_CATAPULT
-#EXTRA_FLAGS += -DUSE_LEARNER
-#EXTRA_FLAGS += -DUSE_NN_CONTROL
+### Step 1 -- Create a docker image of the builder
+
+    docker build . -t indiflight-builder
+
+### Step 2 -- Building
+
+As mentioned above, building needs a compile-time configuration for the board 
+used and the features required. These need to be supplied as environment
+to the docker image:
+
+    docker run --previliged -it                \
+        -v ./:/indiflight                      \
+        -e BOARD=MTKS-H743 -e PROFILE=CineRat  \
+        indiflight-builder
+
+The `.hex` binary is now available in `./obj`.
+
+### Step 3 -- Flashing
+
+You can flash the `.hex` using the indiflight configurator. If at any point you
+get the message "Load custom defaults?", click "No".
+
+
+### Step 4 -- Configuring
+
+In the configurator, go to "pid", click "load profile" and load first the board
+`.txt`, then do the same for the profile `.txt`.
+
+
+### Combine step 2, 3 and 4 in one
+
+Disconnect the indiflight configurator, then run (sometimes twice):
+
+    docker run --privileged -it                                      \
+        -v ./:/indiflight                                            \
+        -e BOARD=MTKS-H743 -e PROFILE=CineRat -e UPLOAD_PARAMETERS=y \
+        indiflight-builder dfu_flash
+
+(an error such as "could not download status" is fine)
+
+### Other useful arguments to the container
+
+Environment variables
+```sh
+-e DEBUG=INFO       # compiler optimisations but with debug symbols (run clean before!)
+-e DEBUG=GDB        # no compiler optimisations and with debug symbols (run clean before!)
+-e EXTRA_FLAGS=...  # pass additional defines to the c compiler
 ```
-
-### Step 3 -- First flash and configuration
-
-Run docker image, which outputs a `./obj/*.hex` file, which can be flashed via
-the [configurator](https://github.com/tudelft/indiflight-configurator) (**use "Full chip erase" option**):
-
-    docker run -v ./:/indiflight indiflight
-
-Now you still need to load a suitable profile via the [configurator](https://github.com/tudelft/indiflight-configurator) 
-that defines the runtime-config, which is board-dependent, but also drone-dependent.
-See https://github.com/tudelft/indiflightSupport for that.
-
-
-### Step 4 -- Subsequent compilations
-
-The next compilations can be much faster, without full chip erase, and even
-without the configurator at all. Boot the flight controller into DFU-mode by
-pressing the boot button while powering on. Then compile and flash at the same
-time:
-
-    docker run --privileged -v ./:/indiflight indiflight dfu_flash
-
-See below for how to use a companion computer to flash and debug even faster
-
-
-### Step 5 -- Other useful arguments to the container
 
 All arguments after the image tag `indiflight`, are directly passed to `make`. Examples are:
 ```sh
-clean                       # delete all relevant object files
-DEBUG=GDB                   # no optimisations and with debug symbols (run clean before!)
-DEBUG=GDB dfu_flash         # dito, but then flash via dfu after
-DEBUG=GDB remote_flash_swd  # dito, but then flash via swd on a companion computer
+clean             # delete all relevant object files
+dfu_flash         # dito, but then flash via dfu after
+remote_flash_swd  # dito, but then flash via swd on a companion computer
 ```
 
 
@@ -91,12 +115,34 @@ Furthermore, install:
 
     apt install gdb-multiarch binutils-multiarch sshpass
 
-If connected to the racebian raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash:
+Create a `remote.env` in the root of this repo:
+```sh
+REMOTE_IP=10.0.0.1  # ip
+REMOTE_USER=pi
+REMOTE_PASSWORD=pi
+REMOTE_NAME=pi      # arbitrary name
+```
 
-    docker run -v ./:/indiflight indiflight remote_flash_swd
-    #docker run -v ./:/indiflight indiflight DEBUG=GDB remote_flash_swd
+### Remote flash
 
-To debug within VScode, just hit `CTRL+SHIFT+D`, hit play and be a little bit patient (15sec or so? Then youll be taken to the start of `main()`).
+If connected to the racebian raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash (UPLOAD_PARAMETERS not supported):
+
+    docker run --privileged -it                \
+        -v ./:/indiflight                      \
+        -e BOARD=MTKS-H743 -e PROFILE=CineRat  \
+        indiflight-builder remote_flash_dfu  # or remote_flash_swd
+
+
+### Remote debug
+
+(unfortunately the credentials in `remote.env` are hardcoded in `.vscode/tasks.json` and `launch.json`)
+
+To debug within VScode:
+1. Build and flash with `-e DEBUG=GDB`
+2. Hit `CTRL+SHIFT+D`,
+3. Select "Cortex OpenOCD"
+4. Hit play and be a little bit patient (15sec or so? Then youll be taken to the start
+of `main()`).
 
 DO NOT CLICK ON `Global` variables, this froze and crashed by VScode.
 

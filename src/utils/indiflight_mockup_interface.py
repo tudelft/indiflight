@@ -73,6 +73,8 @@ class IndiflightSITLMockup():
     def __init__(self, libfile, N=4):
         self.libfile = libfile
         self.N = N
+        self.lib = None
+        self.lib_handle = None
 
         # arrays
         self.gyro = np.zeros(3, dtype=ct.c_float)
@@ -101,7 +103,22 @@ class IndiflightSITLMockup():
 
 #%% loading and config
     def _loadLibAndInit(self):
+        if self.lib_handle is not None:
+            del self.armingFlags
+            del self.flightModeFlags
+            del self.rcModeActivationMask
+            del self.lib
+
+            dlclose = ct.CDLL(None).dlclose
+            dlerror = ct.CDLL(None).dlerror
+            dlclose.argtypes = [ct.c_void_p]
+            dlerror.restype = ct.c_char_p
+
+            dlclose(self.lib_handle)
+            print(f"Closing lib returned error: {dlerror()}")
+
         self.lib = ct.CDLL( self.libfile )
+        self.lib_handle = self.lib._handle
         self.lib.init()
 
         # argtypes
@@ -139,7 +156,7 @@ class IndiflightSITLMockup():
         for char in "batch end\nsave\n":
             self.lib.processCharacterInteractive(bytes(char, 'utf-8'))
 
-        # realod lib
+        ## realod lib
         self._loadLibAndInit()
 
     def issueCliCommand(self, string):

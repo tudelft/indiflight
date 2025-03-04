@@ -1,6 +1,8 @@
 
 # Indiflight Support Groundstation
 
+**NOTE: THIS IS OUT OF DATE FOR NOW**
+
 This software is needed to control automatic flight of the drone without remote control. If you don't need this, don't bother with it!
 
 You will need a Raspberry PI Zero 2W, or comparable, companion computer mounted on the drone and connected to the flight controller as shown in [../Documentation/Drones/CineRat](../Documentation/Drones/CineRat).

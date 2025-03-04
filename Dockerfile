@@ -1,5 +1,8 @@
 FROM ubuntu:22.04
 
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ="Europe/Amsterdam"
+
 RUN apt-get update && \
     apt-get --no-install-recommends install -y \
         build-essential \
@@ -12,7 +15,8 @@ RUN apt-get update && \
         ssh \
         rsync \
         sshpass \
-    && apt-get clean
+        udev \
+    && rm -rf /usr/var/apt/lists/*
 
 # install cross compiler
 COPY make/tools.mk tools.mk
@@ -33,15 +37,9 @@ RUN pip install -r requirements.txt
 COPY lib/main/ekf_c_code_generation/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-RUN pip install intelhex
+RUN pip install intelhex pyserial tqdm
 
-
-# git config
 RUN git config --global --add safe.directory /indiflight
-
-RUN echo "#!/bin/bash" > /entrypoint.sh && \
-    echo "cd /indiflight" >> /entrypoint.sh && \
-    echo 'make -j "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
