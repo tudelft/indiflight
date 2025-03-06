@@ -454,6 +454,10 @@ serialPort_t *openSerialPort(
 
 void closeSerialPort(serialPort_t *serialPort)
 {
+    if (!serialPort) {
+        return;
+    }
+
     serialPortUsage_t *serialPortUsage = findSerialPortUsageByPort(serialPort);
     if (!serialPortUsage) {
         // already closed

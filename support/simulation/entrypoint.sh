@@ -11,6 +11,10 @@ if [[ -z ${SIM} ]]; then
     exit 1
 fi
 
+source /opt/ros/humble/setup.bash
+source /uros_ws/install/local_setup.bash
+export RMW_IMPLEMENTATION=rmw_microxrcedds
+
 make -j TARGET=MOCKUP
 
 GDBSERVER_CMD=
@@ -22,7 +26,7 @@ echo ${GDBSERVER}
 echo ${GDBSERVER_CMD}
 
 #${GDBSERVER_CMD} /usr/bin/python3 -m cProfile -o profile.prof ./support/simulation/${SIM}.py   \
-${GDBSERVER_CMD} /usr/bin/python3 ./support/simulation/${SIM}.py   \
+${GDBSERVER_CMD} /python-venv/bin/python3 ./support/simulation/${SIM}.py   \
     --sil ./obj/main/indiflight_MOCKUP.so                          \
     --sil-profile-txt ./configs/profiles/${PROFILE}.txt            \
     "$@"

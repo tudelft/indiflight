@@ -179,6 +179,7 @@
 #include "sensors/initialisation.h"
 
 #include "telemetry/telemetry.h"
+#include "telemetry/uros.h"
 
 #ifdef USE_HARDWARE_REVISION_DETECTION
 #include "hardware_revision.h"
@@ -1065,4 +1066,8 @@ void init(void)
     tasksInit();
 
     systemState |= SYSTEM_STATE_READY;
+
+#ifdef USE_UROS
+    urosInit();
+#endif
 }

@@ -6,6 +6,9 @@
         "mixer_init.h": "c",
         "indi.h": "c",
         "indi_init.h": "c",
-        "config_reset.h": "c"
+        "config_reset.h": "c",
+        "pose_stamped.h": "c",
+        "pose_stamped__struct.h": "c",
+        "ahrs.h": "c"
     },
 }

@@ -18,12 +18,12 @@
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
 if ! [ -f remote.env ]; then
-  echo "Fatal: start.sh expects a remote.env file with the following contents:
+  echo "Fatal: start.sh expects a remote.env in the root of the repo with the following contents:
 
 # NO SPACES BEFORE AND AFTER THE '='
 # NO quotation marks and no spaces in the variables
 REMOTE_NAME=CurrentUnusedCanBeEmpty
-REMOTE_IP=192.168.1.42
+REMOTE_IP=<ip>
 REMOTE_USER=<username>
 REMOTE_PASSWORD=<ssh_password>
     "

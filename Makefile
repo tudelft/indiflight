@@ -307,6 +307,8 @@ ASFLAGS     = $(ARCH_FLAGS) \
 
 ifeq ($(LD_FLAGS),)
 LD_FLAGS     = -lm \
+			  -L$(ROOT)/lib/main/micro_ros_arduino/src/cortex-m7/fpv5-sp-d16-hardfp \
+			  -lmicroros \
               -nostartfiles \
               --specs=nano.specs \
               -lc \

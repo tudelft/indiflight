@@ -75,7 +75,7 @@ get the message "Load custom defaults?", click "No".
 
 ### Step 4 -- Configuring
 
-In the configurator, go to "pid", click "load profile" and load first the board
+In the configurator, go to "presets", click "load profile" and load first the board
 `.txt`, then do the same for the profile `.txt`.
 
 

@@ -50,6 +50,8 @@
 #include "fc/tasks.h"
 #include "scheduler/scheduler.h"
 
+#include "telemetry/uros.h"
+
 #ifndef USE_TELEMETRY_PI
 #error "MOCKUP target requires USE_TELEMETRY_PI"
 #endif
@@ -164,6 +166,12 @@ void tick(void)
     bool filterInnerLoopShouldRun = filterReady(); // save running this function twice
     if (filterInnerLoopShouldRun) {
         getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
+#ifdef USE_UROS
+        static int i = 0;
+        if (++i % 16 == 0) {
+            urosUpdate(0);
+        }
+#endif
     }
 
     if (stateEstimationReady()) {

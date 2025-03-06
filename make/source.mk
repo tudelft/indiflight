@@ -212,6 +212,7 @@ COMMON_SRC = \
             telemetry/msp_shared.c \
             telemetry/ibus.c \
             telemetry/ibus_shared.c \
+            telemetry/uros.c \
             sensors/esc_sensor.c \
             io/vtx.c \
             io/vtx_rtc6705.c \
@@ -521,6 +522,21 @@ SRC += $(EKF_GEN_FILES)
 SPEED_OPTIMISED_SRC += $(EKF_GEN_FILES)
 endif
 
+INCLUDE_DIRS += $(ROOT)/lib/main/micro_ros_arduino/src
+
+#INCLUDE_DIRS += /opt/ros/humble/include/rcl
+#INCLUDE_DIRS += /opt/ros/humble/include/rcutils
+#INCLUDE_DIRS += /opt/ros/humble/include/rmw
+INCLUDE_DIRS += /opt/ros/humble/include/rcl_yaml_param_parser
+#INCLUDE_DIRS += /opt/ros/humble/include/rosidl_runtime_c
+#INCLUDE_DIRS += /opt/ros/humble/include/rosidl_typesupport_interface
+#INCLUDE_DIRS += /opt/ros/humble/include/rcl_action
+#INCLUDE_DIRS += /opt/ros/humble/include/action_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/unique_identifier_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/builtin_interfaces
+#INCLUDE_DIRS += /opt/ros/humble/include/std_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/lib
+#INCLUDE_DIRS += ../../../rclc/rclc/include
 
 # Do the same for the ActiveSetCtlAlloc
 AS_SRC_DIR = $(ROOT)/lib/main/ActiveSetCtlAlloc/src
