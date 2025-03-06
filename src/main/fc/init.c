@@ -131,6 +131,7 @@
 #include "io/vtx_smartaudio.h"
 #include "io/vtx_tramp.h"
 #include "io/hil.h"
+#include "io/t4.h"
 
 #include "msc/emfat_file.h"
 #ifdef USE_PERSISTENT_MSC_RTC
@@ -762,6 +763,11 @@ void init(void)
         servoDevInit(&servoConfig()->dev);
     }
     servosFilterInit();
+#endif
+
+#ifdef USE_ACTUATORS_T4
+    initActuatorsT4();
+    configureActuatorsT4Port();
 #endif
 
 #ifdef USE_PINIO

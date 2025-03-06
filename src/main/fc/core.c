@@ -93,6 +93,7 @@
 #include "io/vtx_control.h"
 #include "io/vtx_rtc6705.h"
 #include "io/hil.h"
+#include "io/t4.h"
 
 #include "msp/msp_serial.h"
 
@@ -1483,8 +1484,11 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
 
     // this is the disarm safety!
     if (!ARMING_FLAG(ARMED)) {
-        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++)
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
             motor[i] = motor_disarmed[i];
+            motor_normalized[i] = scaleRangef(motor_disarmed[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+            servo_normalized[i] = 0.f;
+        }
     }
 
 #ifdef HIL_BUILD
@@ -1497,6 +1501,15 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
         writeServos();
     }
 #endif
+#ifdef USE_ACTUATORS_T4
+    static unsigned servoCounter = 0;
+    if (++servoCounter % 4 == 0) {
+        sendActuatorsT4();
+        servoCounter = 0;
+    }
+    handleActuatorsT4(); // is this the best place?
+#endif
+
     writeMotors();
 
 #endif
@@ -1563,6 +1576,11 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         motor_normalized[motor] = 0.;
     }
 
+    uint8_t numServos = MAX_SUPPORTED_SERVOS; // todo: something better here?
+    for (int servo = 0; servo < MAX_SUPPORTED_SERVOS; servo++) {
+        motor_normalized[servo] = 0.;
+    }
+
 #ifdef USE_NN_CONTROL
     if (FLIGHT_MODE(NN_MODE)) {
         uint8_t rate_denom = MAX(1, nnConfig()->rate_denom);
@@ -1573,8 +1591,9 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
 
         float* nn_output = nn_get_motor_cmds();
-        for (int i = 0; i < numMotors; i++) 
+        for (int i = 0; i < numMotors; i++) {
             motor_normalized[i] = constrainf(nn_output[i], 0., 1.);
+        }
 
     } else
 #endif
@@ -1582,8 +1601,19 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     if (!FLIGHT_MODE(PID_MODE)) {
         indiController(currentTimeUs);
 
-        for (int i = 0; i < numMotors; i++)
-            motor_normalized[i] = constrainf(indiRun.d[i], 0., 1.);
+        int m = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actIsMotor[i]) && (m < numMotors)) {
+                motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
+            }
+        }
+
+        int s = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actIsServo[i]) && (s < numServos)) {
+                servo_normalized[s++] = constrainf(indiRun.d[i], -1., 1.);
+            }
+        }
 
     } else
 #endif 
@@ -1592,19 +1622,23 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         subTaskPidController(currentTimeUs);
         subTaskPidMixing(currentTimeUs);
 
-        for (int i = 0; i < numMotors; i++)
+        for (int i = 0; i < numMotors; i++) {
             motor_normalized[i] = scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+        }
     }
 
 #ifdef USE_INDI
-    indiUpdateActuatorState( motor_normalized );
+    indiUpdateActuatorState( motor_normalized, servo_normalized );
 #endif
 
-    for (int i = 0; i < numMotors; i++)
+    // get real motor outputs for the hardware implementation used
+    for (int i = 0; i < numMotors; i++) {
         motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+    }
 
-    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++)
+    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++) {
         motor[i] = motor_disarmed[i];
+    }
 
     subTaskInnerLoopApplyToActuators(currentTimeUs);
     subTaskInnerLoopTailEnd(currentTimeUs);

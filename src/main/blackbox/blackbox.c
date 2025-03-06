@@ -78,6 +78,7 @@
 #include "io/gps.h"
 #include "io/serial.h"
 #include "io/local_pos.h"
+#include "io/t4.h"
 #include "io/keyboard.h"
 
 #include "pg/pg.h"
@@ -275,6 +276,13 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 
     /* Tricopter tail servo */
     {"servo",       5, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(TRICOPTER)},
+
+#ifdef USE_ACTUATORS_T4
+    {"servo_feedback", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+#endif
 
     /* INDI stuff*/
 #ifdef USE_INDI
@@ -687,6 +695,9 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
+#ifdef USE_ACTUATORS_T4
+    int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
+#endif
 #ifdef USE_INDI
     int16_t quat[4];
     int16_t alpha[XYZ_AXIS_COUNT];
@@ -1107,6 +1118,10 @@ static void writeIntraframe(void)
         }
     }
 
+#ifdef USE_ACTUATORS_T4
+    blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
+#endif
+
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(INDI))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->quat, 4);
@@ -1321,6 +1336,10 @@ static void writeInterframe(void)
             blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
         }
     }
+#ifdef USE_ACTUATORS_T4
+    arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
+    blackboxWriteSigned16VBArray(deltas16, 4);
+#endif
 
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(INDI))) {
@@ -1847,6 +1866,12 @@ static void loadMainState(timeUs_t currentTimeUs)
 #ifdef USE_SERVOS
     //Tail servo for tricopters
     blackboxCurrent->servo[5] = servo[5];
+#endif
+
+#ifdef USE_ACTUATORS_T4
+    for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
+        blackboxCurrent->servo_feedback[i] = servo_feedback[i];
+    }
 #endif
 
 #ifdef USE_INDI
@@ -2484,10 +2509,22 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actNonlinearity[1],
                                                                                               indiProfile->actNonlinearity[2],
                                                                                               indiProfile->actNonlinearity[3]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_LIMIT, "%d,%d,%d,%d",                  indiProfile->actLimit[0],
-                                                                                              indiProfile->actLimit[1],
-                                                                                              indiProfile->actLimit[2],
-                                                                                              indiProfile->actLimit[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_MIN, "%d,%d,%d,%d",                    indiProfile->actMin[0],
+                                                                                              indiProfile->actMin[1],
+                                                                                              indiProfile->actMin[2],
+                                                                                              indiProfile->actMin[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_MAX, "%d,%d,%d,%d",                    indiProfile->actMax[0],
+                                                                                              indiProfile->actMax[1],
+                                                                                              indiProfile->actMax[2],
+                                                                                              indiProfile->actMax[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_IS_MOTOR, "%d,%d,%d,%d",               indiProfile->actIsMotor[0],
+                                                                                              indiProfile->actIsMotor[1],
+                                                                                              indiProfile->actIsMotor[2],
+                                                                                              indiProfile->actIsMotor[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_IS_SERVO, "%d,%d,%d,%d",               indiProfile->actIsServo[0],
+                                                                                              indiProfile->actIsServo[1],
+                                                                                              indiProfile->actIsServo[2],
+                                                                                              indiProfile->actIsServo[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FX, "%d,%d,%d,%d",                  indiProfile->actG1_fx[0],
                                                                                               indiProfile->actG1_fx[1],
                                                                                               indiProfile->actG1_fx[2],
@@ -2524,6 +2561,19 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actG2_yaw[1],
                                                                                               indiProfile->actG2_yaw[2],
                                                                                               indiProfile->actG2_yaw[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SCHEDULED, "%d",                 indiProfile->tails_use_scheduled);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SINE     , "%d",                 indiProfile->tails_use_sine);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_D0           , "%d,%d",              indiProfile->tails_d0[0], indiProfile->tails_d0[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXW          , "%d",                 indiProfile->tails_cxw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CYW          , "%d",                 indiProfile->tails_cyw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CZW          , "%d",                 indiProfile->tails_czw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CLW          , "%d",                 indiProfile->tails_clw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMW          , "%d",                 indiProfile->tails_cmw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNW          , "%d",                 indiProfile->tails_cnw);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNWD         , "%d",                 indiProfile->tails_cnwd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXD          , "%d",                 indiProfile->tails_cxd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMD          , "%d",                 indiProfile->tails_cmd);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CND          , "%d",                 indiProfile->tails_cnd);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_SYNC_LOWPASS_HZ, "%d",                     indiProfile->imuSyncLp2Hz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_AXES_WEIGHTS, "%d,%d,%d,%d,%d,%d",     indiProfile->wlsWv[0],
                                                                                               indiProfile->wlsWv[1],

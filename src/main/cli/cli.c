@@ -2379,7 +2379,7 @@ static void cliServoMix(const char *cmdName, char *cmdline)
 
         cliServoMix(cmdName, "reverse");
     } else {
-        enum {RULE = 0, TARGET, INPUT, RATE, SPEED, MIN, MAX, BOX, ARGS_COUNT};
+        enum {RULE = 0, ID, INPUT, RATE, SPEED, MIN, MAX, BOX, ARGS_COUNT};
         char *saveptr;
         char *ptr = strtok_r(cmdline, " ", &saveptr);
         while (ptr != NULL && check < ARGS_COUNT) {
@@ -2394,14 +2394,14 @@ static void cliServoMix(const char *cmdName, char *cmdline)
 
         int32_t i = args[RULE];
         if (i >= 0 && i < MAX_SERVO_RULES &&
-            args[TARGET] >= 0 && args[TARGET] < MAX_SUPPORTED_SERVOS &&
+            args[ID] >= 0 && args[ID] < MAX_SUPPORTED_SERVOS &&
             args[INPUT] >= 0 && args[INPUT] < INPUT_SOURCE_COUNT &&
             args[RATE] >= -100 && args[RATE] <= 100 &&
             args[SPEED] >= 0 && args[SPEED] <= MAX_SERVO_SPEED &&
             args[MIN] >= 0 && args[MIN] <= 100 &&
             args[MAX] >= 0 && args[MAX] <= 100 && args[MIN] < args[MAX] &&
             args[BOX] >= 0 && args[BOX] <= MAX_SERVO_BOXES) {
-            customServoMixersMutable(i)->targetChannel = args[TARGET];
+            customServoMixersMutable(i)->targetChannel = args[ID];
             customServoMixersMutable(i)->inputSource = args[INPUT];
             customServoMixersMutable(i)->rate = args[RATE];
             customServoMixersMutable(i)->speed = args[SPEED];

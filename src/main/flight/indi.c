@@ -45,6 +45,7 @@
 #include "flight/pos_ctl.h"
 #include "flight/catapult.h"
 #include "flight/rpm_filter.h"
+#include "flight/servos.h"
 #include "drivers/motor.h"
 #include "drivers/dshot.h"
 #include <math.h>
@@ -69,7 +70,7 @@
 #endif
 
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 1);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -419,18 +420,18 @@ void getMotorCommands(timeUs_t current) {
 #endif
 
     // get rotation speeds and accelerations from dshot, or fallback
-    float omega_inv[MAXU];
+    float omega_inv[MAXU] = {0}; // keep zero for servos
     for (int i = 0; i < indiRun.actNum; i++) {
-
-        // needed later as well, not just for fallback
-        float invThresh = 0.1f * indiRun.actMaxOmega[i];
-        omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
+        if (indiRun.actIsMotor[i]) {
+            float invThresh = 0.1f * indiRun.actMaxOmega[i];
+            omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
+        }
     }
 
     // get motor acceleration
     for (int i = 0; i < indiRun.actNum; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
-        if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback ) {
+        if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback && indiRun.actIsMotor[i]) {
             indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
             omega_prev[i] = indiRun.omega_fs[i];
             // probably do some limiting here
@@ -469,10 +470,55 @@ void getMotorCommands(timeUs_t current) {
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
 
+    if (indiRun.tailsUseScheduled) {
+        // N.B. this specific motor/servo assignment is enforced in indi_init for this case
+        float d_eff[2];
+        for (int i = 0; i < 2; i++) {
+            d_eff[i] = DEGREES_TO_RADIANS(0.01f * ((float)servo_feedback[i]) );
+            d_eff[i] -= indiRun.tailsD0[i];
+        }
+
+        for (int motor = 0; motor < 2; motor++) {
+            float sindp = sinf(d_eff[motor]);
+
+            indiRun.actG1[0][motor] = ( indiRun.tailsCxw + indiRun.tailsCxd * sindp );
+            indiRun.actG1[1][motor] = ( indiRun.tailsCyw + 0.f                      );
+            indiRun.actG1[2][motor] = ( indiRun.tailsCzw + 0.f                      );
+            indiRun.actG1[3][motor] = ( indiRun.tailsClw + 0.f                      ) * ((motor==0) ? +1.f : -1.f);
+            indiRun.actG1[4][motor] = 0 * ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
+            indiRun.actG1[5][motor] = 0 * ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
+            for (int axis = 0; axis < 6; axis++) {
+                indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
+            }
+
+            indiRun.actG2[0][motor] = 0.f;
+            indiRun.actG2[1][motor] = 0.f;
+            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
+        }
+        for (int servo = 0; servo < 2; servo++) {
+            float cosdp = cosf(d_eff[servo]);
+
+            indiRun.actG1[0][2+servo] = indiRun.tailsCxd * cosdp;
+            indiRun.actG1[1][2+servo] = 0.f;
+            indiRun.actG1[2][2+servo] = 0.f;
+            indiRun.actG1[3][2+servo] = 0.f;
+            indiRun.actG1[4][2+servo] = indiRun.tailsCmd * cosdp;
+            indiRun.actG1[5][2+servo] = indiRun.tailsCnd * cosdp * ((servo==0) ? +1.f : -1.f);
+
+            float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
+            for (int axis = 0; axis < 6; axis++) {
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim; // todo: add vz velocity here?
+                indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
+            }
+        }
+    }
+
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {
-        for (int i=0; i < getMotorCount(); i++) {
-            indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
+        for (int i=0; i < indiRun.actNum; i++) {
+            if (indiRun.actIsMotor[i]) {
+                indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
+            }
         }
     }
 
@@ -496,10 +542,9 @@ void getMotorCommands(timeUs_t current) {
     float du_pref[MAXU];
 
     for (int i=0; i < indiRun.actNum; i++) {
-        // todo: what if negative u are possible?
-        du_min[i]  = 0.f - doIndi * indiRun.uState_fs[i];
-        du_max[i]  = indiRun.actLimit[i] - doIndi * indiRun.uState_fs[i];
-        du_pref[i] = 0.f - doIndi * indiRun.uState_fs[i];
+        du_min[i]  = indiRun.actMin[i] - doIndi * indiRun.uState_fs[i];
+        du_max[i]  = indiRun.actMax[i] - doIndi * indiRun.uState_fs[i];
+        du_pref[i] = indiRun.u_pref[i] - doIndi * indiRun.uState_fs[i];
     }
 
     // setup problem
@@ -551,10 +596,15 @@ void getMotorCommands(timeUs_t current) {
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
-        indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+        if (indiRun.actIsMotor[i]) {
+            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+        } else if (indiRun.actIsServo[i]) {
+            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], -1.f, 1.f);
+        }
 
-        if (as_exit_code < AS_NAN_FOUND_Q)
-            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], 0.f, indiRun.actLimit[i]);// currentPidProfile->motor_output_limit * 0.01f);
+        if (as_exit_code < AS_NAN_FOUND_Q) {
+            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], indiRun.actMin[i], indiRun.actMax[i]);
+        }
 
         // apply lag filter to simulate spinup dynamics
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
@@ -566,15 +616,34 @@ void getMotorCommands(timeUs_t current) {
 // NB: this function MUST be invoked with the actual normalized motor commands
 //     at the same rate as getMotorCommands would be called. EVEN IF NOT IN 
 //     INDI MODE. Otherwise switching to INDI may result in a super high jerk.
-void indiUpdateActuatorState( float* d ) {
+void indiUpdateActuatorState( float* motors, float* servos ) {
+    int motor = 0;
+    int servo = 0;
     for (int i=0; i < indiRun.actNum; i++) {
-        float u = indiOutputCurve( &indiRun.lin[i], d[i] );
+        float d;
+        if (indiRun.actIsMotor[i]) {
+            if (motor >= getMotorCount()) { continue; }
+            d = motors[motor];
+        } else if (indiRun.actIsServo[i]) {
+            if (servo >= MAX_SUPPORTED_SERVOS) { continue; } // todo: fix the macro
+            d = servos[servo];
+        } else {
+            continue;
+        }
+
+        float u = indiOutputCurve( &indiRun.lin[i], d );
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
+        if (indiRun.actIsServo[i]) {
+            servo++;
+            continue;
+        }
+
+        // is motor, also get motor speed for control
 #if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
-        if (isDshotTelemetryActive() || getDshotTelemetry(i)) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
+        if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotTelemetry(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
             // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
-            indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(i);
+            indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(motor);
             indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
         } else
 #endif
@@ -585,6 +654,7 @@ void indiUpdateActuatorState( float* d ) {
 
             // fallback option 2: use actLag filter. TODO
         }
+        motor++;
     }
 }
 

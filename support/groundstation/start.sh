@@ -37,7 +37,7 @@ if [[ -z $REMOTE_IP ]]; then
 fi
 
 # check for arguments
-if [[ $# -gt 3 ]] || [[ $# -lt 2 ]]; then
+if [[ $# -gt 2 ]] || [[ $# -lt 1 ]]; then
     echo_help_and_exit
 fi
 

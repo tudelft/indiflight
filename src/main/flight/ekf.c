@@ -289,7 +289,11 @@ void runEkf(timeUs_t currentTimeUs) {
 void updateEkf(timeUs_t currentTimeUs) {
 #ifdef USE_TELEMETRY_PI
     // send ekf inputs, if configured
-    piSendEkfInputs();
+    static unsigned counter = 0;
+    if (++counter % 40 == 0) {
+        piSendEkfInputs();
+        counter = 0;
+    }
 #endif
 
 	// reset ekf LOCAL_POS_NO_SIGNAL

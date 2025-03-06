@@ -5,6 +5,7 @@
 ###############
 
 ## ----- RC components
+#define USE_SERIALRX
 #define USE_SERIALRX_SBUS
 #define USE_SERIALRX_CRSF
 
@@ -15,18 +16,18 @@
 
 ## ----- Other features
 #define USE_GPS
-#define USE_DSHOT
 
 ## ----- FPV features: LED and onscreen display
-#define USE_LED_STRIP
+## #define USE_LED_STRIP
 #define USE_OSD
 #define USE_OSD_SD
 #define USE_OSD_HD
 
 ## ----- Outputs and logging
-#define USE_BLACKBOX
+#define USE_DSHOT
 ## #define USE_SERVOS
 ## #define USE_ACTUATORS_T4
+#define USE_BLACKBOX
 
 ## ----- Developer features
 ## #define USE_BENCHMARK
@@ -59,13 +60,14 @@
 # feature
 feature GPS
 feature TELEMETRY
-feature LED_STRIP
+#feature LED_STRIP
 feature OSD
 
 # gps
 set gps_provider = UBLOX
 set gps_auto_baud = ON
 set gps_ublox_use_galileo = ON
+set gps_update_rate_hz = 15
 
 # serial ports
 serial 0 64 115200 57600 0 115200
@@ -127,19 +129,19 @@ set small_angle = 20   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 8       # relative to imu
-set ahrs_process_denom = 8      # relative to imu
-set nn_rate_denom = 1           # relative to pid
+set pid_process_denom = 4       # relative to imu
+set ahrs_process_denom = 4      # relative to imu
+set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
-set gps_update_rate_hz = 15
 
 # ekf (these are the defaults)
-set ekf_use_quat = 0
+set ekf_use_quat = 1
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 100, 100, 100
 set ekf_proc_noise_gyro_bias = 10, 10, 10
 set ekf_meas_noise_position = 1000, 1000, 1000
+#set ekf_meas_noise_position = 5000, 5000, 40000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
@@ -203,7 +205,7 @@ set indi_attitude_max_tilt_rate = 800
 set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
-set indi_manual_max_upwards_accel = 30  # N/kg
+set indi_manual_max_upwards_accel = 30  # N/kg (or 255 to set to max possible)
 set indi_manual_max_tilt = 45           # deg
 set indi_manual_use_coordinated_yaw = 1
 
@@ -217,16 +219,17 @@ set indi_sync_lowpass_hz = 15
 # fx, fy, fz, roll, pitch, yaw
 set indi_wls_axes_weights = 1,1,50,50,50,5
 
-# actuators (1 to 4, could be up to 8)
-set indi_wls_act_penalties = 1,1,1,1
-set indi_wls_act_preferred_state = 0,0,0,0
-
 # --- actuators: fields can have up to 8 elements ---
+set indi_act_is_motor = 1,1,1,1,0,0,0,0
+set indi_act_is_servo = 0,0,0,0,0,0,0,0
 set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
 set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
 set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
 set indi_act_nonlinearity = 50, 50, 50, 50           # %
-set indi_act_limit = 100, 100, 100, 100              # %
+set indi_act_min = 0, 0, 0, 0                        # % will be forced 0 for motors anyway
+set indi_act_max = 100, 100, 100, 100                # %
+set indi_wls_act_preferred_state = 0,0,0,0
+set indi_wls_act_penalties = 1,1,1,1
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
@@ -283,19 +286,24 @@ set indi_wls_act_penalties = 1,1,1,1
 
 positionprofile 0
 
+# gains * 10
 set position_horizontal_p = 30
 set position_horizontal_i = 2
 set position_horizontal_d = 30
-set position_max_horizontal_speed = 2000
-set position_max_horizontal_accel = 10000
-set position_max_tilt = 180
 set position_vertical_p = 50
 set position_vertical_i = 5
 set position_vertical_d = 40
+
+# max velocities in cm/s and cm/s^2
+set position_max_horizontal_speed = 2000
+set position_max_horizontal_accel = 10000
 set position_max_upwards_speed = 500
 set position_max_downwards_speed = 500
 set position_max_upwards_accel = 2000
 set position_max_downwards_accel = 800
+
+# max tilt, yaw gain * 10, thrust config
+set position_max_tilt = 180
 set position_yaw_p = 50
 set position_use_thrust_attenuation = 1
 
@@ -400,6 +408,7 @@ set osd_canvas_height = 13
 
 
 ## ----- LED STRIP, BEEPER, BEACON
+# led
 # ledstrip
 
 # beeper

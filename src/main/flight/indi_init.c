@@ -72,7 +72,10 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->actHoverRpm[i] = 20000;
         indiProfile->actMaxRpm[i] = 40000;
         indiProfile->actNonlinearity[i] = 50;
-        indiProfile->actLimit[i] = 100;
+        indiProfile->actMin[i] = 0;
+        indiProfile->actMax[i] = 100;
+        indiProfile->actIsMotor[i] = true;
+        indiProfile->actIsServo[i] = false;
         indiProfile->actG1_fx[i] = 0;
         indiProfile->actG1_fy[i] = 0;
         indiProfile->actG1_fz[i] = 0;
@@ -93,6 +96,20 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsWv[3] = 50; // roll
     indiProfile->wlsWv[4] = 50; // pitch
     indiProfile->wlsWv[5] = 5; // yaw
+
+    // ---- Tailsitter
+    indiProfile->tails_use_scheduled = false;
+    indiProfile->tails_use_sine = true;
+    indiProfile->tails_cxw = 0;
+    indiProfile->tails_cyw = 0;
+    indiProfile->tails_czw = 0;
+    indiProfile->tails_clw = 0;
+    indiProfile->tails_cmw = 0;
+    indiProfile->tails_cnw = 0;
+    indiProfile->tails_cnwd = 0;
+    indiProfile->tails_cxd = 0;
+    indiProfile->tails_cmd = 0;
+    indiProfile->tails_cnd = 0;
 
     // ---- Filtering config
     indiProfile->imuSyncLp2Hz = 15;
@@ -142,14 +159,22 @@ void initIndiRuntime(void) {
     // ---- INDI actuator config
     indiRun.actNum = MIN(p->actNum, MAXU);
     for (int i = 0; i < MAXU; i++) {
-        indiRun.actHoverOmega[i] = ((float) MAX(100U, p->actHoverRpm[i])) / SECONDS_PER_MINUTE * 2.f * M_PIf;
-        float maxRpm = (float) MAX(100U, p->actMaxRpm[i]);
+        indiRun.actHoverOmega[i] = ((float) MAX(0U, p->actHoverRpm[i])) / SECONDS_PER_MINUTE * 2.f * M_PIf;
+        float maxRpm = (float) MAX(0U, p->actMaxRpm[i]);
         indiRun.actMaxOmega[i]  = maxRpm / SECONDS_PER_MINUTE * 2.f * M_PIf;
         indiRun.actMaxOmega2[i] = sq( indiRun.actMaxOmega[i] );
         indiRun.actTimeConstS[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
         indiRun.actNonlinearity[i] = constrainu(p->actNonlinearity[i], 0, 100) * 0.01f;
-        unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actLimit[i]);
-        indiRun.actLimit[i] = constrainu(tmp, 0, 100) * 0.01f;
+        indiRun.actIsMotor[i] = (bool) p->actIsMotor[i];
+        indiRun.actIsServo[i] = (bool) p->actIsServo[i];
+        if (indiRun.actIsMotor[i]) {
+            unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actMax[i]);
+            indiRun.actMin[i] = 0.f; // hardcode for safety!
+            indiRun.actMax[i] = constrainu(tmp, 0, 100) * 0.01f;
+        } else {
+            indiRun.actMin[i] = constrain(p->actMin[i], -100, 100) * 0.01f;
+            indiRun.actMax[i] = constrain(p->actMax[i], -100, 100) * 0.01f;
+        }
         indiRun.actG1[0][i] = p->actG1_fx[i] * 0.01f;
         indiRun.actG1[1][i] = p->actG1_fy[i] * 0.01f;
         indiRun.actG1[2][i] = p->actG1_fz[i] * 0.01f;
@@ -177,6 +202,27 @@ void initIndiRuntime(void) {
         indiRun.manualMaxUpwardsSpf = (float) p->manualMaxUpwardsSpf;
     }
 
+    // ---- tailsitter
+    indiRun.tailsUseScheduled = (bool) p->tails_use_scheduled;
+    if (indiRun.tailsUseScheduled) {
+        // enforce motor/servo assignment: first 2 motor, then 2 servos
+        for (int m=0; m<indiRun.actNum; m++) {indiRun.actIsMotor[m]=(m<2) ? true : false;}
+        for (int s=0; s<indiRun.actNum; s++) {indiRun.actIsServo[s]=(s>=2 && s<4) ? true : false;}
+    }
+    indiRun.tailsUseSine = (bool) p->tails_use_sine;
+    indiRun.tailsD0[0]= DEGREES_TO_RADIANS( ((float) p->tails_d0[0]) * 1e-2f );
+    indiRun.tailsD0[1]= DEGREES_TO_RADIANS( ((float) p->tails_d0[1]) * 1e-2f );
+    indiRun.tailsCxw  = ((float) p->tails_cxw)  * 1e-9f;
+    indiRun.tailsCyw  = ((float) p->tails_cyw)  * 1e-9f;
+    indiRun.tailsCzw  = ((float) p->tails_czw)  * 1e-9f;
+    indiRun.tailsClw  = ((float) p->tails_clw)  * 1e-8f;
+    indiRun.tailsCmw  = ((float) p->tails_cmw)  * 1e-8f;
+    indiRun.tailsCnw  = ((float) p->tails_cnw)  * 1e-8f;
+    indiRun.tailsCnwd = ((float) p->tails_cnwd) * 1e-5f;
+    indiRun.tailsCxd  = ((float) p->tails_cxd)  * 1e-8f;
+    indiRun.tailsCmd  = ((float) p->tails_cmd)  * 1e-8f;
+    indiRun.tailsCnd  = ((float) p->tails_cnd)  * 1e-8f;
+
     // ---- Filtering config
     indiRun.imuSyncLp2Hz = (float) constrainu(p->imuSyncLp2Hz, 1, 5e5 / gyro.targetLooptime);
     // ---- WLS config
@@ -194,7 +240,12 @@ void initIndiRuntime(void) {
         indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
         indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
         indiRun.uState_fs[i] = 0.f; // sync-filtered estiamted force state
-        updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
+        if (indiRun.actIsMotor[i]) {
+            updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
+        } else if (indiRun.actIsServo[i]) {
+            indiRun.lin[i].k = 0.f;
+            indiRun.lin[i].A = 0.f;
+        }
         indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s

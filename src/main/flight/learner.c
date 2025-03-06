@@ -929,6 +929,12 @@ doMoreMotors:
                 }
             }
 
+            // tailsitter stuff
+            if ((motorStates[0].queryState == MOTOR_QUERY_DONE) && (motorStates[1].queryState == MOTOR_QUERY_DONE)) {
+                outputFromLearningQuery[0] = 0.3f;
+                outputFromLearningQuery[1] = 0.3f;
+            }
+
             bool allMotorsDone = true;
             for (int motor = 0; motor < c->numAct; motor++)
                 allMotorsDone &= (motorStates[motor].queryState == MOTOR_QUERY_DONE);

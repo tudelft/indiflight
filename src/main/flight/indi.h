@@ -70,7 +70,10 @@ typedef struct indiProfile_s {
     uint32_t actMaxRpm[MAXU];       // max rpm.
     uint32_t actHoverRpm[MAXU];     // approximate rpm in hover flight. FIXME: make an estimator for this
     uint8_t actNonlinearity[MAXU];  // motor nonlinearity percentage between (0, 100)
-    uint8_t actLimit[MAXU];         // limit motor output in percent (100 full power)
+    int8_t actMin[MAXU];         // limit motor output in percent (+100 full power)
+    int8_t actMax[MAXU];         // limit motor output in percent (+100 full power)
+    uint8_t actIsMotor[MAXU];         // which actuators are motors
+    uint8_t actIsServo[MAXU];         // which are servos
     int16_t actG1_fx[MAXU];      // actuator effectiveness (N/kg) / u * 100
     int16_t actG1_fy[MAXU];      // actuator effectiveness * 100
     int16_t actG1_fz[MAXU];      // actuator effectiveness * 100
@@ -86,6 +89,20 @@ typedef struct indiProfile_s {
     uint8_t wlsWv[MAXV];         // control objective weighing (1, 100)
     uint8_t wlsWu[MAXU];         // actuator penalties (1, 100)
     int8_t u_pref[MAXU];         // least energy consumption u * 100
+    // ---- tailsitter
+    uint8_t tails_use_scheduled;
+    uint8_t tails_use_sine;
+    int16_t tails_d0[2];
+    int16_t tails_cxw;
+    int16_t tails_cyw;
+    int16_t tails_czw;
+    int16_t tails_clw;
+    int16_t tails_cmw;
+    int16_t tails_cnw;
+    int16_t tails_cnwd;
+    int16_t tails_cxd;
+    int16_t tails_cmd;
+    int16_t tails_cnd;
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
@@ -139,7 +156,10 @@ typedef struct indiRuntime_s {
     float actHoverOmega[MAXU];   // rad/s
     float actTimeConstS[MAXU];   // sec
     float actNonlinearity[MAXU]; // - 
-    float actLimit[MAXU];        // 
+    float actMin[MAXU];        // 
+    float actMax[MAXU];        // 
+    bool actIsMotor[MAXU];        // 
+    bool actIsServo[MAXU];        // 
     float actG1[MAXV][MAXU];
     float actG2[3][MAXU];
     float G2_scaler[MAXU];
@@ -156,6 +176,20 @@ typedef struct indiRuntime_s {
     float wlsCondBound;
     float wlsTheta;
     uint8_t wlsNanLimit;
+    // ---- tailsitter config
+    bool tailsUseScheduled;
+    bool tailsUseSine;
+    float tailsD0[2];
+    float tailsCxw;
+    float tailsCyw;
+    float tailsCzw;
+    float tailsClw;
+    float tailsCmw;
+    float tailsCnw;
+    float tailsCnwd;
+    float tailsCxd;
+    float tailsCmd;
+    float tailsCnd;
     // ---- runtime values -- actauators
     float d[MAXU]; // command issued to the actuators on [-1, 1] scale
     float u[MAXU]; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
@@ -215,4 +249,4 @@ fp_vector_t coordinatedYaw(float yaw);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);
-void indiUpdateActuatorState( float* motor_normalized );
+void indiUpdateActuatorState( float* motor_normalized, float* servo_normalized );

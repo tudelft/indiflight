@@ -134,6 +134,8 @@ typedef struct servoProfile_s {
 } servoProfile_t;
 
 extern int16_t servo[MAX_SUPPORTED_SERVOS];
+extern float servo_normalized[MAX_SUPPORTED_SERVOS];
+extern int16_t servo_feedback[MAX_SUPPORTED_SERVOS]; // deci degrees
 
 bool isMixerUsingServos(void);
 void writeServos(void);

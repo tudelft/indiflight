@@ -1,5 +1,5 @@
 /*
- * Interface to run a subset of Indiflight without real-time scheduler
+ * Configure serial port to interface with teensy actuator board https://github.com/tudelft/t4_actuators_board/
  *
  * Copyright 2024 Till Blaha (Delft University of Technology)
  *
@@ -9,7 +9,7 @@
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option)
  * any later version.
- *
+ *c
  * Indiflight is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
@@ -21,16 +21,24 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MOCKUP_MAIN_H
-#define MOCKUP_MAIN_H
+#pragma once
 
-void setImu(const float *g, const float *a);
-void setMotorSpeed(const float *omega, const int n);
-void setMocap(const float *pos, const float *vel, const float *q);
-void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us);
-void setPosSetpoint(const float *pos, const float yaw);
-void getMotorOutputCommands(float *cmd, int n);
-void getServoOutputCommands(float *cmd, int n);
-void tick(void);
+#include "io/t4_protocol.h"
 
-#endif // MOCKUP_MAIN_H
+typedef enum {
+    T4_IDLE,
+    T4_STX_FOUND,
+    T4_WAITING_FOR_CHECKSUM,
+} t4_parse_state_t;
+
+
+extern struct ActuatorsT4Out t4_out;
+
+void initActuatorsT4(void);
+void handleActuatorsT4(void);
+void sendActuatorsT4(void);
+
+void freeActuatorsT4Port(void);
+void configureActuatorsT4Port(void);
+
+

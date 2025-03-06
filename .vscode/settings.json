@@ -5,6 +5,7 @@
         "*.ptx": "platformio-debug.asm",
         "mixer_init.h": "c",
         "indi.h": "c",
-        "indi_init.h": "c"
+        "indi_init.h": "c",
+        "config_reset.h": "c"
     },
 }

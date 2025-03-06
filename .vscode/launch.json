@@ -16,6 +16,28 @@
             "stopAtEntry": false,
         },
         {
+            "name": "J-Link Debug",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "jlink",
+            "device": "STM32H743VI", // e.g., STM32F103C8
+            "interface": "swd", // Use "jtag" for JTAG interface
+            //"runToMain": true,
+            "executable": "${workspaceFolder}/obj/main/indiflight_STM32H743.elf",
+            "serialNumber": "", // Optional: Specify the serial number of your J-Link if needed
+            //"interfaceSpeed": 4000, // Adjust speed if needed, e.g., 4000 for 4 MHz
+            //"preLaunchTask": "build", // Optionally, you can define a pre-launch task for building your project
+            //"postLaunchCommands": [
+            //    "monitor reset halt",
+            //    "monitor init"
+            //],
+            "cwd": "${workspaceFolder}"
+            //"gdbpath": "path/to/your/gdb", // Optional: Set the path to your GDB if it's not in your PATH
+            //"launchCompleteCommand": "exec-continue",
+            //"serverStarted": "Waiting for GDB connection",
+            //"showDevDebugOutput": true
+        },
+        {
             "cwd": "${workspaceRoot}",
             "executable": "obj/main/indiflight_STM32H743.elf",
             "name": "Cortex OpenOCD",

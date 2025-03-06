@@ -24,6 +24,22 @@
                 "revealProblems": "onProblem",
                 "close": true
             }
+        },
+        {
+            "label": "getLogs",
+            "command": "${workspaceFolder}/support/log_downloader/get_logs.sh",
+            "args": [
+                "${input:mirrorDestination}"
+            ],
+            "type": "shell",
+        },
+    ],
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "mirrorDestination",
+            "description": "Provide folder to dump all log files. WARNING: THE CONTENTS OF THIS FOLDER WILL BE OVERWRITTEN!",
+            "default": ""
         }
     ]
 }
