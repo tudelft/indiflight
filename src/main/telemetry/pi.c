@@ -195,21 +195,59 @@ void processPiTelemetry(void)
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
 }
 
+static void processNewMessage(uint8_t msgId) {
+    switch (msgId) {
+#ifdef USE_LOCAL_POSITION
+        case PI_MSG_EXTERNAL_POSE_ID: {
+            local_pos_ned_t pos;
+            pos.time_us = piMsgExternalPoseRx->time_us;
+            pos.source = LOCAL_POS_SOURCE_PI;
+            // process new message (should be NED)
+            pos.pos.V.X = piMsgExternalPoseRx->ned_x;
+            pos.pos.V.Y = piMsgExternalPoseRx->ned_y;
+            pos.pos.V.Z = piMsgExternalPoseRx->ned_z;
+            pos.vel.V.X = piMsgExternalPoseRx->ned_xd;
+            pos.vel.V.Y = piMsgExternalPoseRx->ned_yd;
+            pos.vel.V.Z = piMsgExternalPoseRx->ned_zd;
+            // the quaternion x,y,z should be NED
+            pos.quat.w = piMsgExternalPoseRx->body_qi;
+            pos.quat.x = piMsgExternalPoseRx->body_qx;
+            pos.quat.y = piMsgExternalPoseRx->body_qy;
+            pos.quat.z = piMsgExternalPoseRx->body_qz;
+            setLocalPosMeas(&pos);
+            break;
+        }
+        case PI_MSG_POS_SETPOINT_ID: {
+            local_pos_sp_ned_t sp;
+            sp.time_us = piMsgPosSetpointRx->time_us;
+            sp.source = LOCAL_POS_SOURCE_PI;
+            sp.pos.V.X = piMsgPosSetpointRx->ned_x;
+            sp.pos.V.Y = piMsgPosSetpointRx->ned_y;
+            sp.pos.V.Z = piMsgPosSetpointRx->ned_z;
+            sp.vel.V.X = piMsgPosSetpointRx->ned_xd;
+            sp.vel.V.Y = piMsgPosSetpointRx->ned_yd;
+            sp.vel.V.Z = piMsgPosSetpointRx->ned_zd;
+            sp.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
+            sp.trackPsi = true;
+            setLocalPosSp(&sp);
+            break;
+        }
+#endif
+    }
+}
+
 pi_parse_states_t p_telem;
 
 void processPiUplink(void)
 {
-    if (piPort) {
-        while (serialRxBytesWaiting(piPort)) {
-            uint8_t msgId = piParse(&p_telem, serialRead(piPort));
-#if defined(USE_LOCAL_POSITION)
-            if (msgId == PI_MSG_EXTERNAL_POSE_ID) {
-                // immediately trigger position update
-                getLocalPos(0);
-            }
-#else
-            UNUSED(msgId);
-#endif
+    if (!piPort) {
+        return;
+    }
+
+    while (serialRxBytesWaiting(piPort)) {
+        uint8_t msgId = piParse(&p_telem, serialRead(piPort));
+        if (msgId != PI_MSG_NONE_ID) {
+            processNewMessage(msgId);
         }
     }
 }

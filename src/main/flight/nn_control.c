@@ -66,6 +66,8 @@ void nn_init(void) {
 	posSpNed.psi = start_yaw;
     posSpNed.trackPsi = true;
     posSpState = LOCAL_POS_NEW_MESSAGE;
+    posSpNed.new = true;
+    posSpNed.time_us= micros();
 }
 
 void nn_activate(void) {

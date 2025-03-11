@@ -121,6 +121,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // throwing state machine
     bool enableConditions;
+    bool autoMode = FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE); // NN/catapult disabled already
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
@@ -128,17 +129,14 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce
-                && ( FLIGHT_MODE(POSITION_MODE) || throwConfig()->allowManualModes )
 #ifdef USE_LOCAL_POSITION
-                && ( !FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE) ||
-                        (
-                            isInitializedEkf()
-                            && (posMeasState >= LOCAL_POS_STILL_VALID)
-                            && (posSpState >= LOCAL_POS_STILL_VALID)
-                        )
-                    )
+                && ( (!autoMode && throwConfig()->allowManualModes)
+                        || (autoMode && isConvergedEkf()) )
+#else
+                && !autoMode
+                && throwConfig()->allowManualModes
 #endif
-                && true;
+                ;
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;

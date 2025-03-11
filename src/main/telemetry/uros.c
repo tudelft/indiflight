@@ -25,11 +25,34 @@
 
 #define RCLCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){ goto fail; }}
 
-// --- SERIAL PORT SETUP
+// clock_gettime, which is a dependency, see default_transport.cpp
+#define micro_rollover_useconds 4294967295
+int clock_gettime(clockid_t unused, struct timespec *tp) __attribute__ ((weak));
+int clock_gettime(clockid_t unused, struct timespec *tp) {
+    (void)unused;
+    static uint32_t rollover = 0;
+    static uint32_t last_measure = 0;
+
+    uint32_t m = micros();
+    rollover += (m < last_measure) ? 1 : 0;
+
+    uint64_t real_us = (uint64_t) (m + rollover * micro_rollover_useconds);
+    tp->tv_sec = real_us / 1000000;
+    tp->tv_nsec = (real_us % 1000000) * 1000;
+    last_measure = m;
+
+    return 0;
+}
+
+// --- UROS TRANSPORT SETUP
+#ifndef MOCKUP
+
 static serialPort_t *port = NULL;
 static const serialPortConfig_t *portConfig;
 
-static bool urosPortInit(void) {
+static bool custom_transport_open(struct uxrCustomTransport *transport) {
+    UNUSED(transport);
+
     portConfig = findSerialPortConfig(FUNCTION_UROS);
     if (!portConfig) {
         return false;
@@ -54,46 +77,16 @@ static bool urosPortInit(void) {
 
     return true;
 }
-
-static bool urosPortClose(void) {
-    if (!port)
-    closeSerialPort(port);
-    port = NULL;
-    return true;
-}
-
-// --- UROS TRANSPORT SETUP
-static bool urosIsInitialized = false;
-static rcl_node_t node;
-static rclc_executor_t executor;
-static rclc_support_t support;
-static rcl_allocator_t allocator;
-
-// micro xrce-DDS transport implementation (and clock_gettime, which is a dependency, see default_transport.cpp)
-#define micro_rollover_useconds 4294967295
-int clock_gettime(clockid_t unused, struct timespec *tp) __attribute__ ((weak));
-int clock_gettime(clockid_t unused, struct timespec *tp) {
-    (void)unused;
-    static uint32_t rollover = 0;
-    static uint32_t last_measure = 0;
-
-    uint32_t m = micros();
-    rollover += (m < last_measure) ? 1 : 0;
-
-    uint64_t real_us = (uint64_t) (m + rollover * micro_rollover_useconds);
-    tp->tv_sec = real_us / 1000000;
-    tp->tv_nsec = (real_us % 1000000) * 1000;
-    last_measure = m;
-
-    return 0;
-}
-static bool custom_transport_open(struct uxrCustomTransport *transport) {
-    UNUSED(transport);
-    return urosPortInit();
-}
 static bool custom_transport_close(struct uxrCustomTransport *transport) {
     UNUSED(transport);
-    return urosPortClose();
+    if (!port) {
+        return false;
+    }
+
+    closeSerialPort(port);
+    port = NULL;
+
+    return true;
 }
 static size_t custom_transport_write(struct uxrCustomTransport *transport, const uint8_t *buf, size_t len, uint8_t *err) {
     UNUSED(transport);
@@ -112,8 +105,17 @@ static size_t custom_transport_read(struct uxrCustomTransport *transport, uint8_
     }
     return i; // ?
 }
+#endif // MOCKUP
 
 // --- UROS config
+// objects
+static bool urosIsInitialized = false;
+static rcl_node_t node;
+static rclc_executor_t executor;
+static rclc_support_t support;
+static rcl_allocator_t allocator;
+
+// topics / messages
 static rcl_publisher_t pub_odom;
 static rcl_subscription_t sub_pose;
 static rcl_subscription_t sub_twist;
@@ -124,11 +126,13 @@ static geometry_msgs__msg__PoseStamped pub_msg_pose;
 // Callback function for subscriber
 static void sub_cb_pose(const void *msgin) {
     const geometry_msgs__msg__PoseStamped *msg = (const geometry_msgs__msg__PoseStamped *)msgin;
-    cliPrintLinef("Received Pose: %s\n", msg->header.stamp);
+    UNUSED(msg);
+    // cliPrintLinef("Received Pose: %s\n", msg->header.stamp);
 }
 static void sub_cb_twist(const void *msgin) {
     const geometry_msgs__msg__TwistStamped *msg = (const geometry_msgs__msg__TwistStamped *)msgin;
-    cliPrintLinef("Received Twist: %s\n", msg->header.stamp);
+    UNUSED(msg);
+    // cliPrintLinef("Received Twist: %s\n", msg->header.stamp);
 }
 
 // Custom transport implementation
@@ -136,6 +140,7 @@ static void sub_cb_twist(const void *msgin) {
 void urosInit(void) {
     urosIsInitialized = false;
 
+#ifndef MOCKUP
     // 7️⃣ Attach custom serial transport
     RCLCHECK( rmw_uros_set_custom_transport(
         true,
@@ -145,6 +150,7 @@ void urosInit(void) {
         custom_transport_write,
         custom_transport_read
     ));
+#endif
 
     // 1️⃣ Initialize allocator with static memory (no malloc)
     allocator = rcl_get_default_allocator();
@@ -190,7 +196,6 @@ fail:
     {
         rcl_error_state_t err;
         err = *rcutils_get_error_state();
-        cliPrintLinefeed();
         UNUSED(err);
         return;
     }
@@ -204,8 +209,8 @@ void urosUpdate(timeUs_t currentTimeUs) {
     // 8️⃣ publish some messages
     // Set message
     pub_msg_pose.header.stamp.sec = currentTimeUs / 1000000;
-    pub_msg_pose.header.stamp.nanosec = currentTimeUs % 1000000;
-    pub_msg_pose.header.frame_id.data = (char*) "world";
+    pub_msg_pose.header.stamp.nanosec = 1000 * (currentTimeUs % 1000000);
+    pub_msg_pose.header.frame_id.data = (char*) "map";
     pub_msg_pose.header.frame_id.size = strlen(pub_msg_pose.header.frame_id.data);
 
     fp_quaternion_t q;
@@ -228,7 +233,6 @@ fail:
     {
         rcl_error_state_t err;
         err = *rcutils_get_error_state();
-        cliPrintLinefeed();
         UNUSED(err);
         return;
     }

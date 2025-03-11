@@ -57,6 +57,7 @@ typedef enum {
 
 #define FALL_ACC_LOW_THRESH 3.f
 #define FALL_ACC_LOW_TIME_MS 400
+#define THROW_TO_ARM_EKF_DEINIT_TIME_US 3000000 // 3 seconds
 
 typedef enum {
     FALL_STATE_IDLE = -1,

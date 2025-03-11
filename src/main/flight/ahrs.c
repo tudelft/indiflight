@@ -307,13 +307,7 @@ static int calculateThrottleAngleCorrection(void)
 
 FAST_CODE void ahrsDecider(void) {
 #ifdef USE_EKF
-    if (isInitializedEkf() 
-#ifdef USE_AHRS_FALLBACK_LOGIC
-    && (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE) || FLIGHT_MODE(NN_MODE) || FLIGHT_MODE(CATAPULT_MODE))
-#endif
-        ) {
-        // we should only have POSITION_MODE when ekf is intialized, but just to be safe we check it
-
+    if (shouldBeUsedEkf() && isConvergedEkf()) {
         q.w = qEkf.w;
         q.x = qEkf.x;
         q.y = qEkf.y;
@@ -321,7 +315,7 @@ FAST_CODE void ahrsDecider(void) {
         quaternionProducts_of_quaternion(&qP, &q);
         rotationMatrix_of_quaternionProducts(&rMat, &qP);
     } else
-#endif // USE_EKF
+#endif
     {
         q = qMahony;
         qP = qPMahony;
@@ -353,7 +347,6 @@ void ahrsUpdate(timeUs_t currentTimeUs)
     UNUSED(compassIsHealthy);
     UNUSED(ahrsCalcKpGain);
     UNUSED(mahonyUpdate);
-    UNUSED(ahrsDecider);
     return;
 #endif // we need to calculate AHRS
 
@@ -405,9 +398,6 @@ void ahrsUpdate(timeUs_t currentTimeUs)
             throttleAngleCorrection = calculateThrottleAngleCorrection();
         }
         mixerSetThrottleAngleCorrection(throttleAngleCorrection);
-
-        // ----- assign, if used. this also calculates euler angles, and rMat
-        ahrsDecider();
     } else {
         if (!sensors(SENSOR_ACC) || !acc.isAccelUpdatedAtLeastOnce) {
             acc.accADCf[X] = 0;

@@ -37,6 +37,7 @@
 #include "pi-messages.h"            // for keeping track of message times
 #include "sensors/barometer.h"
 #include "flight/indi.h"
+#include "flight/throw.h"
 #include "drivers/dshot.h"
 #include <stdbool.h>
 
@@ -47,13 +48,15 @@
 PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_quat_measurement = 1,
+    .use_for_manual_flight = 0,
     .proc_noise_acc       = { 500000, 500000, 500000 },
     .proc_noise_gyro      = { 100000, 100000, 100000 },
     .proc_noise_acc_bias  = { 100, 100, 100 },
     .proc_noise_gyro_bias = { 10, 10, 10 },
     .meas_noise_position  = { 1000, 1000, 1000 },
     .meas_noise_quat      = { 50000, 50000, 50000, 50000 },
-    .meas_delay = 0
+    .meas_delay = 0,
+    .meas_source = LOCAL_POS_SOURCE_PI,
 ); 
 
 fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
@@ -61,7 +64,10 @@ fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 
 bool ekf_initialized = false;
-timeUs_t lastTimeUs = 0;
+bool ekf_converged = false;
+bool ekf_should_use = false;
+timeUs_t lastInitializedTimeUs = 0;
+timeUs_t lastPredictTimeUs = 0;
 
 float ekf_Z[N_MEASUREMENTS] = {0.};
 float ekf_U[N_INPUTS] = {0.};
@@ -123,14 +129,26 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 	}
 }
 
-bool isInitializedEkf(void) {
-    return ekf_initialized;
+bool isConvergedEkf(void) {
+    return ekf_converged;
 }
 
+bool shouldBeUsedEkf(void) {
+    return ekf_should_use;
+}
+
+void forceDeinitEkf(void) {
+    ekf_initialized = false;
+    ekf_converged = false;
+}
+
+
 void initEkf(timeUs_t currentTimeUs) {
-    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
+    if ( !(posMeasNed.new)
+            || (cmpTimeUs(currentTimeUs, posMeasNed.time_us) > EKF_MAX_MEAS_AGE_US) ) {
         return;
     }
+    posMeasNed.new = false;
 
 	// set ekf parameters
 	bool use_quat = ekfConfig()->use_quat_measurement;
@@ -218,11 +236,52 @@ void initEkf(timeUs_t currentTimeUs) {
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
-	lastTimeUs = currentTimeUs;
+    lastInitializedTimeUs = currentTimeUs;
+	lastPredictTimeUs = currentTimeUs;
 }
 
-void runEkf(timeUs_t currentTimeUs) {
-    static timeUs_t lastUpdateTimestamp = 0;
+void updateEkf(timeUs_t currentTimeUs) {
+    // --- check init and convergence
+    // if not init, try init and exit
+    if (!ekf_initialized) {
+        ekf_converged = false;
+        initEkf(currentTimeUs);
+        return;
+    }
+
+    // set ekf converged if healthy for long enough
+    if (!ekf_converged && cmpTimeUs(currentTimeUs, lastInitializedTimeUs) > EKF_CONVERGE_TIME_US) {
+        ekf_converged = true;
+    }
+
+    // --- check if ekf will be used by control/ahrs
+    ekf_should_use = ( FLIGHT_MODE(POSITION_MODE) 
+                            || FLIGHT_MODE(VELOCITY_MODE)
+                            || FLIGHT_MODE(NN_MODE)
+                            || FLIGHT_MODE(CATAPULT_MODE) );
+    ekf_should_use |= ekfConfig()->use_for_manual_flight;
+
+    // --- deinit because of lost position, if we are not flying/expecting to fly soon
+    bool ekf_inhibit_deinit = ekf_should_use && ARMING_FLAG(ARMED);
+    timeDelta_t deinit_timeout = EKF_DEINIT_TIMEOUT;
+
+#ifdef USE_THROW_TO_ARM
+    // if expected to be thrown at any moment, increase deinit timeout
+    if (throwState >= THROW_STATE_WAITING_FOR_THROW) {
+        deinit_timeout = MAX(deinit_timeout, THROW_TO_ARM_EKF_DEINIT_TIME_US);
+    }
+#endif
+
+    // deinit if lost position signal
+    if ( !ekf_inhibit_deinit && cmpTimeUs(currentTimeUs, posMeasNed.time_us) > deinit_timeout ) {
+        ekf_initialized = false;
+        ekf_converged = false;
+        return;
+    }
+
+
+    // --- actually run ekf ---
+
 	// PREDICTION STEP
     // FRD frame's, which we have now everywhere in INDIFlight
 	ekf_U[0] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[0];
@@ -236,12 +295,16 @@ void runEkf(timeUs_t currentTimeUs) {
 	// ekf_add_to_history(currentTimeUs * 1e-6);
 
 	// PREDICTION STEP
-	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+	float dt = cmpTimeUs(currentTimeUs, lastPredictTimeUs) * 1e-6f;
 	ekf_predict(ekf_U, dt);
+	lastPredictTimeUs = currentTimeUs;
 
 	// UPDATE STEP 			(only when new measurement is available)
-	if (cmpTimeUs(posLatestMsgTime, lastUpdateTimestamp) > 0) {
-        lastUpdateTimestamp = posLatestMsgTime;
+	if ( posMeasNed.new 
+            && cmpTimeUs(posMeasNed.time_us, currentTimeUs) <= EKF_MAX_MEAS_AGE_US) {
+
+        posMeasNed.new = false;
+
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
 #if defined(USE_BARO) && false // figure this out properly
@@ -277,56 +340,16 @@ void runEkf(timeUs_t currentTimeUs) {
 		// ekf_update_delayed(ekf_Z, posLatestMsgTime * 1e-6);
 		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
 		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
-	} 
-	// else {
-	// 	// no new measurement available, only predict
-	// 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-	// 	ekf_predict(ekf_U, dt);
-	// }
-	lastTimeUs = currentTimeUs;
-}
+	}
 
-void updateEkf(timeUs_t currentTimeUs) {
-#ifdef USE_TELEMETRY_PI
-    // send ekf inputs, if configured
-    static unsigned counter = 0;
-    if (++counter % 40 == 0) {
-        piSendEkfInputs();
-        counter = 0;
-    }
-#endif
+    float *ekf_X = ekf_get_X();
 
-	// reset ekf LOCAL_POS_NO_SIGNAL
-    if (posMeasState == LOCAL_POS_NO_SIGNAL) {
-        ekf_initialized = false;
-    } else if (!ekf_initialized) {
-        // when ekf is not initialized, we need to wait for the first external position message
-        if (posMeasState != LOCAL_POS_NO_SIGNAL) {
-            // INIT EKF
-            initEkf(currentTimeUs); // todo: this safe on GPS? esp with SET_HOME?
-        }
-    } else {
-        // ekf is initialized and POSITION_MODE, we can run the ekf
-		runEkf(currentTimeUs);
-    }
+    // update position
+    posEstNed = (fp_vector_t) { .V = {ekf_X[0], ekf_X[1], ekf_X[2]} };
+    velEstNed = (fp_vector_t) { .V = {ekf_X[3], ekf_X[4], ekf_X[5]} };
 
-    // run fallback in advance so it doesnt lose sync --> todo, move somewhere else, so this file doesnt need to include ahrs.h
-    ahrsUpdate(currentTimeUs);
-
-    // update system state with EKF data, if possible and configured
-    if (ekf_initialized && (posMeasState != LOCAL_POS_NO_SIGNAL)) {
-        // additional safety check: use EKF only, if recent update from optitrack
-        float *ekf_X = ekf_get_X();
-
-        // set ekf quaternion
-        qEkf = (fp_quaternion_t) {ekf_X[6], ekf_X[7], ekf_X[8], ekf_X[9]};
-
-        ahrsDecider();
-
-        // update position
-        posEstNed = (fp_vector_t) { .V = {ekf_X[0], ekf_X[1], ekf_X[2]} };
-        velEstNed = (fp_vector_t) { .V = {ekf_X[3], ekf_X[4], ekf_X[5]} };
-    }
+    // set ekf quaternion
+    qEkf = (fp_quaternion_t) { .w = ekf_X[6], .x = ekf_X[7], .y = ekf_X[8], .z = ekf_X[9] };
 }
 
 #endif // USE_EKF

@@ -102,7 +102,7 @@ typedef enum {
     TASK_IMU,
     TASK_FILTER,
     TASK_INNER_LOOP,
-    TASK_ATTITUDE,
+    TASK_AHRS,
     TASK_RX,
     TASK_SERIAL,
     TASK_DISPATCH,

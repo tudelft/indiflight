@@ -88,44 +88,43 @@ void setServoAngle(const int16_t *angles, const int n) {
 }
 
 void setMocap(const float *pos, const float *vel, const float *q) {
-    posMeasState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    posLatestMsgTime = micros();
-    //posLatestMsgTimeReceived = micros();
-    for (int axis = 0; axis < 3; axis++) {
-        posMeasNed.pos.A[axis] = pos[axis];
-        posMeasNed.vel.A[axis] = vel[axis];
-    }
-    posMeasNed.quat.w = q[0];
-    posMeasNed.quat.x = q[1];
-    posMeasNed.quat.y = q[2];
-    posMeasNed.quat.z = q[3];
+    setMocapT(pos, vel, q, micros());
 }
 
 void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us) {
-    posMeasState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    posLatestMsgTime = micros();
-    //posLatestMsgTimeReceived = micros();
+    local_pos_ned_t new_pos;
+
+    new_pos.source = LOCAL_POS_SOURCE_MOCKUP;
+    new_pos.new = true; // just always set this.. don't know how to handle it better
+    new_pos.time_us = time_us;
     for (int axis = 0; axis < 3; axis++) {
-        posMeasNed.pos.A[axis] = pos[axis];
-        posMeasNed.vel.A[axis] = vel[axis];
+        new_pos.pos.A[axis] = pos[axis];
+        new_pos.vel.A[axis] = vel[axis];
     }
-    posMeasNed.quat.w = q[0];
-    posMeasNed.quat.x = q[1];
-    posMeasNed.quat.y = q[2];
-    posMeasNed.quat.z = q[3];
-    posMeasNed.time_us = time_us;
+    new_pos.quat.w = q[0];
+    new_pos.quat.x = q[1];
+    new_pos.quat.y = q[2];
+    new_pos.quat.z = q[3];
+
+    setLocalPosMeas(&new_pos);
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {
-    posSpState = LOCAL_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    posLatestMsgTime = micros();
+    local_pos_sp_ned_t sp;
+
+    sp.source = LOCAL_POS_SOURCE_MOCKUP;
+    sp.new = true; // just always set this.. don't know how to handle it better
+    sp.time_us = micros();
     //posLatestMsgTimeReceived = micros();
     // meters, NED. rad
-    for (int axis = 0; axis < 3; axis++)
-        posSpNed.pos.A[axis] = pos[axis];
+    for (int axis = 0; axis < 3; axis++) {
+        sp.pos.A[axis] = pos[axis];
+    }
 
-    posSpNed.psi = yaw;
-    posSpNed.trackPsi = true;
+    sp.psi = yaw;
+    sp.trackPsi = true;
+
+    setLocalPosSp(&sp);
 }
 
 void getMotorOutputCommands(float *cmd, int n) {
@@ -169,30 +168,23 @@ void tick(void)
 #ifdef USE_UROS
         static int i = 0;
         if (++i % 16 == 0) {
-            urosUpdate(0);
+            urosUpdate(currentTimeUs);
         }
 #endif
     }
 
     if (stateEstimationReady()) {
 #ifdef USE_EKF
-        // if no position measurement available at all, then EKF runs 
-        // the fallback TASK_ATTITUDE itself
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
-#else
-        getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
 #endif
+        // run fallback attitude estimator (which also runs the decider)
+        getTask(TASK_AHRS)->attribute->taskFunc( currentTimeUs );
+
         // addition in mockup, just run POS_CTL right after EKF
         getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
     }
 
     if (filterInnerLoopShouldRun) {
         getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
-    }
-
-    if ((posMeasState == LOCAL_POS_NO_SIGNAL) || (cmpTimeUs(currentTimeUs, posLatestMsgTime) > LOCAL_POS_TIMEOUT_US)) { // or received?
-        posMeasState = LOCAL_POS_NO_SIGNAL;
-    } else {
-        posMeasState = LOCAL_POS_STILL_VALID;
     }
 }

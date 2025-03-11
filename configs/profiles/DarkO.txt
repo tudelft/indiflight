@@ -44,9 +44,6 @@
 ## #define USE_LOCAL_POSITION_GPS
 #define USE_TRAJECTORY_TRACKER
 
-#define USE_AHRS_FALLBACK_LOGIC 
-// todo:fixfixfix
-
 ## ----- DANGERZONE
 #define USE_THROW_TO_ARM
 #define USE_CATAPULT

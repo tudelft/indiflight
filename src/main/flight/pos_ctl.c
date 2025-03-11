@@ -122,10 +122,11 @@ void resetIterms(void) {
 }
 
 void updatePosCtl(timeUs_t current) {
-    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posLatestMsgTime);
+    timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
+    bool setpoint_valid = posSpNed.new;
+    static bool latch_descend = false;
 
-    if ((posSpState == LOCAL_POS_NO_SIGNAL) 
-        || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
+    if (latch_descend || !setpoint_valid || !isConvergedEkf() || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
         // panic and level craft in slight downwards motion
         accSpNedFromPos.V.X = 0.f;
         accSpNedFromPos.V.Y = 0.f;
@@ -135,10 +136,10 @@ void updatePosCtl(timeUs_t current) {
         rateSpBodyFromPos.V.Z = 0.f;
         posSpNed.trackPsi = false;
 
-        // latch reactivation until new actual setpoint arrives
-        posSpState = LOCAL_POS_NO_SIGNAL;
+        // latch reactivation until new arming cycle
+        latch_descend = ARMING_FLAG(ARMED);
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
-        // more than 0.5 sec but less than 2 seconds --> arrest motion
+        // more than 2 sec but less than 3.5 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
         updateTrajectoryTracker(current);
         if (isActiveTrajectoryTracker() && !isActiveTrajectoryTrackerRecovery()) {
@@ -148,7 +149,8 @@ void updatePosCtl(timeUs_t current) {
 #endif
         {
             posSpNed.pos = posEstNed; // hold position
-            posSpState = LOCAL_POS_NEW_MESSAGE;
+            posSpNed.new = true; // simulate new message
+            posSpNed.time_us = current;
 
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?

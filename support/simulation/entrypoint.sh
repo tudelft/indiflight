@@ -22,9 +22,6 @@ if [[ ${GDBSERVER} == "y" ]]; then
     GDBSERVER_CMD="gdbserver localhost:3333"
 fi
 
-echo ${GDBSERVER}
-echo ${GDBSERVER_CMD}
-
 #${GDBSERVER_CMD} /usr/bin/python3 -m cProfile -o profile.prof ./support/simulation/${SIM}.py   \
 ${GDBSERVER_CMD} /python-venv/bin/python3 ./support/simulation/${SIM}.py   \
     --sil ./obj/main/indiflight_MOCKUP.so                          \

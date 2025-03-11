@@ -116,6 +116,7 @@ if __name__=="__main__":
     if sil is not None:
         sil.mockup.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
         sil.mockup.setLogging( not args.no_sil_log )
+        sil.mockup.initUros()
 
         sil.sendMocap()
         sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
@@ -150,7 +151,6 @@ if __name__=="__main__":
                  vHorz=[1., -2.], # final speed in x-y-plane in m/s
                  at_time=1.)
 
-
     #%% run loop
     dt = 0.000125 # 8kHz
     T = 1000. # seconds
@@ -158,7 +158,7 @@ if __name__=="__main__":
     start_trajectory = False
     heading = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
-        if not args.throw and sim.t > 1.:
+        if not args.throw and sim.t > 2.5:
             sil.mockup.arm() if sil else None
 
         if not start_trajectory and sim.t > 10. and sil is not None:

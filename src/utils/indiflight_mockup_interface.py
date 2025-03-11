@@ -178,6 +178,9 @@ class IndiflightSITLMockup():
 
         self._loadLibAndInit()
 
+    def initUros(self):
+        self.lib.urosInit()
+
 #%% sending and receiving sensor data / flight control outputs
     def sendImu(self, gyro, acc):
         self.gyro[:] = gyro

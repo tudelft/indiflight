@@ -49,7 +49,7 @@ CFLAGS += -fPIC \
 
 LD_FLAGS    := \
 			  -L/opt/ros/humble/lib \
-			  -L/uros_ws/install/rclc/lib \
+			  -Llib/main/micro_ros_build/lib \
 			  -lrclc -lrcl -lrcutils \
               -lm \
               -lpthread \
@@ -72,7 +72,7 @@ MESSAGE_TYPES = action_msgs actionlib_msgs diagnostic_msgs geometry_msgs \
 # control_msgs service_msgs
 
 define add_flags
-  LD_FLAGS += -L/uros_ws/install/$(1)/lib -l$(1)__rosidl_typesupport_c
+  LD_FLAGS += -l$(1)__rosidl_typesupport_c
 endef
 
 # Iterate over MESSAGE_TYPES to add flags for each message type

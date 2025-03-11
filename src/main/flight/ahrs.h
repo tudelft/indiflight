@@ -51,8 +51,8 @@ void getHoverAttitudeQuaternion(fp_quaternion_t *q);
 #ifdef USE_LEARNER
 void overrideAttitudeQuaternion(fp_quaternion_t *quat);
 #endif
-void ahrsDecider(void);
 void ahrsUpdate(timeUs_t currentTimeUs);
+void ahrsDecider(void);
 
 void ahrsInit(void);
 

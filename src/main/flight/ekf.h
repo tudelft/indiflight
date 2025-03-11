@@ -37,6 +37,7 @@
 
 typedef struct ekfConfig_s {
     uint8_t use_quat_measurement;      // bool
+    uint8_t use_for_manual_flight;
     uint32_t proc_noise_acc[3];        // noise covariance * 1e6
     uint32_t proc_noise_gyro[3];       // noise covariance * 1e6
     uint32_t proc_noise_acc_bias[3];   // noise covariance * 1e6
@@ -44,12 +45,19 @@ typedef struct ekfConfig_s {
     uint32_t meas_noise_position[3];   // noise covariance * 1e6
     uint32_t meas_noise_quat[4];       // noise covariance * 1e6
     uint8_t meas_delay;                // ms
+    uint8_t meas_source;
 } ekfConfig_t;
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
 
-bool isInitializedEkf(void);
+#define EKF_MAX_MEAS_AGE_US 100000   // 0.1 seconds
+#define EKF_DEINIT_TIMEOUT 500000    // 0.5 seconds
+#define EKF_CONVERGE_TIME_US 2000000 // 2 seconds
+
+bool shouldBeUsedEkf(void);
+bool isConvergedEkf(void);
 void initEkf(timeUs_t currentTimeUs);
+void forceDeinitEkf(void);
 void updateEkf(timeUs_t currentTimeUs);
 
 extern fp_vector_t posEstNed;

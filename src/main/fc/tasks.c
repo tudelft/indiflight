@@ -338,12 +338,12 @@ static void taskHil(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_LOCAL_POSITION
-static void taskLocalPosition(timeUs_t currentTimeUs)
-{
-    getLocalPos(currentTimeUs);
-    getFakeGps(currentTimeUs);
-    getPosSetpoint(currentTimeUs);
-}
+//static void taskLocalPosition(timeUs_t currentTimeUs)
+//{
+//    getLocalPos(currentTimeUs);
+//    getFakeGps(currentTimeUs);
+//    getPosSetpoint(currentTimeUs);
+//}
 static void taskPosCtl(timeUs_t currentTimeUs)
 {
     updatePosCtl(currentTimeUs);
@@ -388,8 +388,8 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_MAIN] = DEFINE_TASK("SYSTEM", "UPDATE", NULL, taskMain, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM_HIGH),
     [TASK_SERIAL] = DEFINE_TASK("SERIAL", NULL, NULL, taskHandleSerial, TASK_PERIOD_HZ(100), TASK_PRIORITY_LOW), // 100 Hz should be enough to flush up to 115 bytes @ 115200 baud
     [TASK_BATTERY_ALERTS] = DEFINE_TASK("BATTERY_ALERTS", NULL, NULL, taskBatteryAlerts, TASK_PERIOD_HZ(5), TASK_PRIORITY_MEDIUM),
-    [TASK_BATTERY_VOLTAGE] = DEFINE_TASK("BATTERY_VOLTAGE", NULL, NULL, batteryUpdateVoltage, TASK_PERIOD_HZ(SLOW_VOLTAGE_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM), // Freq may be updated in tasksInit
-    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_BATTERY_VOLTAGE] = DEFINE_TASK("BATTERY_VOLTAGE", NULL, NULL, batteryUpdateVoltage, TASK_PERIOD_HZ(VOLTAGE_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM), // Freq may be updated in tasksInit
+    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(200), TASK_PRIORITY_MEDIUM),
 
 #ifdef USE_TRANSPONDER
     [TASK_TRANSPONDER] = DEFINE_TASK("TRANSPONDER", NULL, NULL, transponderUpdate, TASK_PERIOD_HZ(250), TASK_PRIORITY_LOW),
@@ -408,7 +408,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_ACC
-    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, ahrsUpdate, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_AHRS] = DEFINE_TASK("AHRS", NULL, NULL, taskAhrs, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 #endif
 
     [TASK_RX] = DEFINE_TASK("RX", NULL, rxUpdateCheck, taskUpdateRxMain, TASK_PERIOD_HZ(33), TASK_PRIORITY_HIGH), // If event-based scheduling doesn't work, fallback to periodic scheduling
@@ -459,7 +459,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_LOCAL_POSITION
-    [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+//    [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
@@ -537,13 +537,6 @@ void tasksInit(void)
     const bool useBatteryVoltage = batteryConfig()->voltageMeterSource != VOLTAGE_METER_NONE;
     setTaskEnabled(TASK_BATTERY_VOLTAGE, useBatteryVoltage);
 
-#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
-    // If vbat motor output compensation is used, use fast vbat samplingTime
-    if (isSagCompensationConfigured()) {
-        rescheduleTask(TASK_BATTERY_VOLTAGE, TASK_PERIOD_HZ(FAST_VOLTAGE_TASK_FREQ_HZ));
-    }
-#endif
-
     const bool useBatteryCurrent = batteryConfig()->currentMeterSource != CURRENT_METER_NONE;
     setTaskEnabled(TASK_BATTERY_CURRENT, useBatteryCurrent);
     const bool useBatteryAlerts = batteryConfig()->useVBatAlerts || batteryConfig()->useConsumptionAlerts || featureIsEnabled(FEATURE_OSD);
@@ -565,10 +558,7 @@ void tasksInit(void)
 
 #if defined(USE_ACC)
     if (sensors(SENSOR_ACC) && acc.sampleRateHz) {
-#if !defined(USE_EKF)
-        // attitude task is still run in ekf.c, as fallback
-        setTaskEnabled(TASK_ATTITUDE, true);
-#endif
+        setTaskEnabled(TASK_AHRS, true);
     }
 #endif
 

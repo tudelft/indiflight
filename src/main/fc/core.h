@@ -87,6 +87,7 @@ void resetInnerLoopCounter(void);
 void taskImuSample(timeUs_t currentTimeUs);
 
 void taskEkf(timeUs_t currentTimeUs);
+void taskAhrs(timeUs_t currentTimeUs);
 bool filterReady(void);
 bool stateEstimationReady(void);
 bool innerLoopReady(void);

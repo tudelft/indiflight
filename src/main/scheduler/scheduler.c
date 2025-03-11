@@ -504,12 +504,10 @@ FAST_CODE void scheduler(void)
 
             if (stateEstimationReady()) {
 #ifdef USE_EKF
-                // if no position measurement available at all, then EKF runs 
-                // the fallback TASK_ATTITUDE itself
                 taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_EKF), currentTimeUs);
-#else
-                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_ATTITUDE), currentTimeUs);
 #endif
+                // run fallback attitude estimator (which also runs the decider)
+                taskExecutionTimeUs += schedulerExecuteTask(getTask(TASK_AHRS), currentTimeUs);
             }
 
             if (filterInnerLoopShouldRun) {

@@ -28,43 +28,37 @@
 #include "common/maths.h"
 
 typedef enum {
-    LOCAL_POS_NO_SIGNAL,
-    LOCAL_POS_STILL_VALID,
-    LOCAL_POS_NEW_MESSAGE,
-} local_pos_state_t;
+    LOCAL_POS_SOURCE_PI,
+    LOCAL_POS_SOURCE_UROS,
+    LOCAL_POS_SOURCE_GPS,
+    LOCAL_POS_SOURCE_MOCKUP,
+} local_pos_source_e;
 
 // todo: reformulate using fp_vector_t
 typedef struct __local_pos_ned_t {
     uint32_t time_us;
+    local_pos_source_e source;
+    bool new;
     fp_vector_t pos;
     fp_vector_t vel;
     fp_quaternion_t quat;
 } local_pos_ned_t;
 
 typedef struct __local_pos_sp_ned_t {
+    uint32_t time_us;
+    local_pos_source_e source;
+    bool new;
     fp_vector_t pos;
     fp_vector_t vel;
     float psi;
     bool trackPsi;
 } local_pos_sp_ned_t;
 
-// structs used for EXTERNAL_POSE message
 extern local_pos_ned_t posMeasNed;
-extern local_pos_state_t posMeasState;
-extern timeUs_t posLatestMsgTime;
-
-// structs used for POS_SETPOINT message
 extern local_pos_sp_ned_t posSpNed;
-extern local_pos_state_t posSpState;
 
-#define LOCAL_POS_FREQ 50
-#define LOCAL_POS_TIMEOUT_US 300000
+void setLocalPosMeas(local_pos_ned_t* pos);
+void setLocalPosSp(local_pos_sp_ned_t* sp);
 
-#define POS_SETPOINT_OUTDATED_US 1000000
-
-void checkNewPos(void);
-void getLocalPos(timeUs_t current);
-void getFakeGps(timeUs_t current);
-void getPosSetpoint(timeUs_t current);
 
 #endif // LOCAL_POS_H

@@ -407,6 +407,18 @@ void updateArmingStatus(void)
             setArmingDisabled(ARMING_DISABLED_MOTOR_PROTOCOL);
         }
 
+#ifdef USE_EKF
+        if ( ( shouldBeUsedEkf() && !isConvergedEkf() )
+#ifdef USE_LOCAL_POSITION
+                || ( FLIGHT_MODE(POSITION_MODE) && !posSpNed.new )
+#endif
+                ) {
+            setArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        }
+#endif
+
 #ifdef USE_NN_CONTROL
         if (FLIGHT_MODE(NN_MODE)) {
             setArmingDisabled(ARMING_DISABLED_NN_MODE);
@@ -477,12 +489,6 @@ void updateArmingStatus(void)
         }
 #endif
 
-        //if (blackboxGetState() != BLACKBOX_STATE_RUNNING) {
-        //    setArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
-        //} else {
-        unsetArmingDisabled(ARMING_DISABLED_NO_BLACKBOX);
-        //}
-
         if (isArmingDisabled()) {
             warningLedFlash();
         } else {
@@ -529,6 +535,10 @@ void disarm(flightLogDisarmReason_e reason)
         if (!flipOverAfterCrashActive) {
             statsOnDisarm();
         }
+#endif
+#ifdef USE_LOCAL_POSITION
+        // invalidate previous setpoint
+        posSpNed.new = false;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         if (isActiveTrajectoryTracker()) {
@@ -1075,8 +1085,8 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (isInitializedEkf())
-            {
+            // when armed, only switch if converged ekf and good setpoint
+            if ( !ARMING_FLAG(ARMED) || (isConvergedEkf() && posSpNed.new) ) {
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1089,7 +1099,7 @@ void processRxModes(timeUs_t currentTimeUs)
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 
-    if (!isInitializedEkf() && !ARMING_FLAG(ARMED)) {
+    if (!isConvergedEkf() && !ARMING_FLAG(ARMED)) {
         DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
     }
 #endif
@@ -1104,9 +1114,9 @@ void processRxModes(timeUs_t currentTimeUs)
             baroSetGroundLevel();
             baro.altitude = 0; // set this now, or else EKF won't reset properly
 #endif
-//#ifdef USE_EKF
-//            initEkf(currentTimeUs);
-//#endif
+#ifdef USE_EKF
+            forceDeinitEkf(); // will re-init on received position messages
+#endif
         }
     }
 
@@ -1201,8 +1211,6 @@ void processRxModes(timeUs_t currentTimeUs)
         }
     }
 #endif
-
-    rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)ahrsConfig()->ahrs_process_denom));
 
     if (!IS_RC_MODE_ACTIVE(BOXPREARM) && ARMING_FLAG(WAS_ARMED_WITH_PREARM)) {
         DISABLE_ARMING_FLAG(WAS_ARMED_WITH_PREARM);
@@ -1461,10 +1469,20 @@ FAST_CODE bool innerLoopReady(void)
     return filterReady();
 }
 
+#ifdef USE_EKF
 FAST_CODE void taskEkf(timeUs_t currentTimeUs)
 {
     updateEkf(currentTimeUs);
 }
+#endif
+
+#ifdef USE_ACC
+FAST_CODE void taskAhrs(timeUs_t currentTimeUs)
+{
+    ahrsUpdate(currentTimeUs);
+    ahrsDecider();
+}
+#endif
 
 FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
