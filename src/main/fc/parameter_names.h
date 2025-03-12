@@ -196,6 +196,7 @@
 #ifdef USE_EKF
 #define PARAM_NAME_EKF_USE_QUAT_MEASUREMENT "ekf_use_quat"
 #define PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT "ekf_use_for_manual_flight"
+#define PARAM_NAME_EKF_MEAS_SOURCE          "ekf_meas_source"
 #define PARAM_NAME_EKF_PROC_NOISE_ACC       "ekf_proc_noise_acc"
 #define PARAM_NAME_EKF_PROC_NOISE_GYRO      "ekf_proc_noise_gyro"
 #define PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS  "ekf_proc_noise_acc_bias"
@@ -203,7 +204,6 @@
 #define PARAM_NAME_EKF_MEAS_NOISE_POSITION  "ekf_meas_noise_position"
 #define PARAM_NAME_EKF_MEAS_NOISE_QUAT      "ekf_meas_noise_quat"
 #define PARAM_NAME_EKF_MEAS_DELAY           "ekf_meas_delay"
-#define PARAM_NAME_EKF_MEAS_SOURCE          "ekf_meas_source"
 #endif
 
 #ifdef USE_CATAPULT

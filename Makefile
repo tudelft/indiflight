@@ -572,7 +572,7 @@ st-flash: st-flash_$(TARGET)
 
 ## flash with Segger hardware (e.g. jlink edu mini. need to install extra software)
 jlink_flash:
-	$(V0) $(MAKE) $(TARGET_HEX)
+	$(V0) $(MAKE) $(TARGET_HEX) || exit 1
 	echo "loadfile $(TARGET_HEX)\n exit" > .jlink-commandfile
 ifeq ($(TARGET),STM32H743)
 	$(V0) /usr/bin/JLinkExe -AutoConnect 1 -ExitOnError 1 -NoGui 1 -Device $(TARGET)VI -If SWD -Speed 4000 -CommandFile .jlink-commandfile

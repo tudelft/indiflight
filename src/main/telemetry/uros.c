@@ -3,6 +3,7 @@
 #include "rclc/rclc.h"
 #include "rclc/executor.h"
 #include "rmw_microros/custom_transport.h"
+#include "rmw_microros/rmw_microros.h"
 
 #include "std_msgs/msg/string.h"
 #include "nav_msgs/msg/odometry.h"
@@ -17,11 +18,12 @@
 #include "flight/ahrs.h"
 #include "flight/ekf.h"
 #include "cli/cli.h"
+#include "io/local_pos.h"
 
 #include "stdbool.h"
 
 
-#if defined(USE_UROS)
+#if defined(USE_TELEMETRY_UROS)
 
 #define RCLCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){ goto fail; }}
 
@@ -117,22 +119,76 @@ static rcl_allocator_t allocator;
 
 // topics / messages
 static rcl_publisher_t pub_odom;
+static rcl_subscription_t sub_pose_sp;
 static rcl_subscription_t sub_pose;
 static rcl_subscription_t sub_twist;
+
+// preallocate messages
+static geometry_msgs__msg__PoseStamped pub_msg_pose;
+static geometry_msgs__msg__PoseStamped sub_msg_pose_sp;
 static geometry_msgs__msg__PoseStamped sub_msg_pose;
 static geometry_msgs__msg__TwistStamped sub_msg_twist;
-static geometry_msgs__msg__PoseStamped pub_msg_pose;
 
 // Callback function for subscriber
-static void sub_cb_pose(const void *msgin) {
+static void sub_cb_pose_sp(const void *msgin) {
+#ifdef USE_LOCAL_POSITION
     const geometry_msgs__msg__PoseStamped *msg = (const geometry_msgs__msg__PoseStamped *)msgin;
-    UNUSED(msg);
-    // cliPrintLinef("Received Pose: %s\n", msg->header.stamp);
+    int64_t time_ns = rmw_uros_epoch_nanos() - ((int64_t)1e9) * msg->header.stamp.sec - msg->header.stamp.nanosec;
+    local_pos_sp_ned_t sp = {0};
+    sp.source = LOCAL_POS_SOURCE_UROS;
+    sp.time_us = micros() - time_ns / 1000;
+    sp.pos.V.X = msg->pose.position.x;
+    sp.pos.V.Y = msg->pose.position.y;
+    sp.pos.V.Z = msg->pose.position.z;
+
+    fp_quaternion_t q;
+    fp_quaternionProducts_t qp;
+    fp_euler_t eul;
+
+    q.w = msg->pose.orientation.w;
+    q.x = msg->pose.orientation.x;
+    q.y = msg->pose.orientation.y;
+    q.z = msg->pose.orientation.z;
+
+    float ql = QUAT_LENGTH(q);
+    if (ql >= 0.99f && ql <= 1.01f) {
+        quaternionProducts_of_quaternion(&qp, &q);
+        fp_euler_of_quaternionProducts(&eul, &qp);
+        sp.psi = eul.angles.yaw;
+        sp.trackPsi = true;
+    } else {
+        // invalid quatenion
+        sp.trackPsi = false;
+    }
+
+    setLocalPosSp(&sp);
+#else
+    UNUSED(msgin);
+#endif
+}
+static void sub_cb_pose(const void *msgin) {
+#ifdef USE_LOCAL_POSITION
+    const geometry_msgs__msg__PoseStamped *msg = (const geometry_msgs__msg__PoseStamped *)msgin;
+    int64_t time_ns = rmw_uros_epoch_nanos() - ((int64_t)1e9) * msg->header.stamp.sec - msg->header.stamp.nanosec;
+    local_pos_ned_t new_pos = {0};
+    new_pos.source = LOCAL_POS_SOURCE_UROS;
+    new_pos.time_us = micros() - time_ns / 1000;
+    new_pos.pos.V.X = msg->pose.position.x;
+    new_pos.pos.V.Y = msg->pose.position.y;
+    new_pos.pos.V.Z = msg->pose.position.z;
+    new_pos.quat.w = msg->pose.orientation.w;
+    new_pos.quat.x = msg->pose.orientation.x;
+    new_pos.quat.y = msg->pose.orientation.y;
+    new_pos.quat.z = msg->pose.orientation.z;
+
+    setLocalPosMeas(&new_pos);
+#else
+    UNUSED(msgin);
+#endif
 }
 static void sub_cb_twist(const void *msgin) {
     const geometry_msgs__msg__TwistStamped *msg = (const geometry_msgs__msg__TwistStamped *)msgin;
     UNUSED(msg);
-    // cliPrintLinef("Received Twist: %s\n", msg->header.stamp);
 }
 
 // Custom transport implementation
@@ -162,6 +218,7 @@ void urosInit(void) {
     RCLCHECK( rclc_node_init_default(&node, "indiflight", "", &support) );
 
     // 4️⃣ Create a publisher
+    //RCLCHECK( rclc_publisher_init_best_effort(
     RCLCHECK( rclc_publisher_init_default(
         &pub_odom,
         &node,
@@ -184,11 +241,16 @@ void urosInit(void) {
     ));
 
     // 6️⃣ Set up the executor (for handling callbacks)
-    RCLCHECK( rclc_executor_init(&executor, &support.context, 2, &allocator) );
+    RCLCHECK( rclc_executor_init(&executor, &support.context, 3, &allocator) ); // integer is number of subscribers+timers+services+clients+guard conditions
+    RCLCHECK( rclc_executor_add_subscription(&executor, &sub_pose_sp, &sub_msg_pose_sp, &sub_cb_pose_sp, ON_NEW_DATA) );
     RCLCHECK( rclc_executor_add_subscription(&executor, &sub_pose, &sub_msg_pose, &sub_cb_pose, ON_NEW_DATA) );
     RCLCHECK( rclc_executor_add_subscription(&executor, &sub_twist, &sub_msg_twist, &sub_cb_twist, ON_NEW_DATA) );
 
-    urosIsInitialized = true;
+    rmw_uros_sync_session(100);
+    if (rmw_uros_epoch_synchronized()) {
+        urosIsInitialized = true;
+    }
+
 
     return;
 
@@ -202,14 +264,17 @@ fail:
 }
 
 void urosUpdate(timeUs_t currentTimeUs) {
+    UNUSED(currentTimeUs);
     if (!urosIsInitialized) {
         goto fail;
     }
 
     // 8️⃣ publish some messages
     // Set message
-    pub_msg_pose.header.stamp.sec = currentTimeUs / 1000000;
-    pub_msg_pose.header.stamp.nanosec = 1000 * (currentTimeUs % 1000000);
+#ifdef USE_LOCAL_POSITION
+    int64_t time_ns = rmw_uros_epoch_nanos();
+    pub_msg_pose.header.stamp.sec = time_ns / ((int64_t)1e9);
+    pub_msg_pose.header.stamp.nanosec = time_ns % ((int64_t)1e9);
     pub_msg_pose.header.frame_id.data = (char*) "map";
     pub_msg_pose.header.frame_id.size = strlen(pub_msg_pose.header.frame_id.data);
 
@@ -225,9 +290,12 @@ void urosUpdate(timeUs_t currentTimeUs) {
 
     // Publish message
     RCLCHECK( rcl_publish(&pub_odom, &pub_msg_pose, NULL) );
+#else
+    UNUSED(pub_msg_pose);
+#endif
 
     // Spin executor (handles subscriptions)
-    RCLCHECK( rclc_executor_spin_some(&executor, RCL_US_TO_NS(10)) );
+    RCLCHECK( rclc_executor_spin_some(&executor, RCL_US_TO_NS(20)) );
 
 fail:
     {

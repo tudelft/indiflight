@@ -136,7 +136,7 @@ typedef enum {
 #ifdef USE_TELEMETRY
     TASK_TELEMETRY,
 #endif
-#ifdef USE_UROS
+#ifdef USE_TELEMETRY_UROS
     TASK_UROS,
 #endif
 #ifdef USE_TELEMETRY_PI

@@ -13,3 +13,6 @@
 [submodule "lib/main/ekf_c_code_generation"]
 	path = lib/main/ekf_c_code_generation
 	url = https://github.com/tudelft/ekf_c_code_generation.git
+[submodule "support/indiflight-configurator"]
+	path = support/indiflight-configurator
+	url = https://github.com/tudelft/indiflight-configurator.git

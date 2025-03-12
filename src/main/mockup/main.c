@@ -165,7 +165,7 @@ void tick(void)
     bool filterInnerLoopShouldRun = filterReady(); // save running this function twice
     if (filterInnerLoopShouldRun) {
         getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
-#ifdef USE_UROS
+#ifdef USE_TELEMETRY_UROS
         static int i = 0;
         if (++i % 16 == 0) {
             urosUpdate(currentTimeUs);

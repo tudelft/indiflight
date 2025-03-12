@@ -50,7 +50,7 @@ CFLAGS += -fPIC \
 LD_FLAGS    := \
 			  -L/opt/ros/humble/lib \
 			  -Llib/main/micro_ros_build/lib \
-			  -lrclc -lrcl -lrcutils \
+			  -lrclc -lrcl -lrcutils -lrmw_microxrcedds \
               -lm \
               -lpthread \
               -lc \

@@ -1067,7 +1067,7 @@ void init(void)
 
     systemState |= SYSTEM_STATE_READY;
 
-#if defined(USE_UROS) && !defined(MOCKUP)
+#if defined(USE_TELEMETRY_UROS) && !defined(MOCKUP)
     // likely a bug in uros causes this to fail if called multiple times if 
     // loaded as a .so. urosInit will be run manually for MOCKUP
     urosInit();

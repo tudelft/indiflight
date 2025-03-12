@@ -450,7 +450,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(50), TASK_PRIORITY_LOW),
 #endif
 
-#ifdef USE_UROS
+#ifdef USE_TELEMETRY_UROS
     [TASK_UROS] = DEFINE_TASK("UROS", NULL, NULL, urosUpdate, TASK_PERIOD_HZ(20), TASK_PRIORITY_LOW),
 #endif
 
@@ -615,7 +615,7 @@ void tasksInit(void)
     }
 #endif
 
-#ifdef USE_UROS
+#ifdef USE_TELEMETRY_UROS
     setTaskEnabled(TASK_UROS, true);
 #endif
 

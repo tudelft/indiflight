@@ -65,7 +65,6 @@ void nn_init(void) {
 	posSpNed.pos.V.Z = start_pos[2];
 	posSpNed.psi = start_yaw;
     posSpNed.trackPsi = true;
-    posSpState = LOCAL_POS_NEW_MESSAGE;
     posSpNed.new = true;
     posSpNed.time_us= micros();
 }
@@ -137,7 +136,7 @@ void nn_compute_motor_cmds(void) {
 	// call the neural network controller (output is in range [0,1])
 	nn_control(world_state, nn_motor_cmds);
 
-    if (cmpTimeUs(micros(), posLatestMsgTime) > NN_DEADRECKONING_TIMEOUT_US) {
+    if (cmpTimeUs(micros(), posMeasNed.time_us) > NN_DEADRECKONING_TIMEOUT_US) {
         // deadreckoning for too long --> abort
         nn_deactivate(); // fallback on position
     }

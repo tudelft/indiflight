@@ -38,6 +38,7 @@
 typedef struct ekfConfig_s {
     uint8_t use_quat_measurement;      // bool
     uint8_t use_for_manual_flight;
+    uint8_t meas_source;
     uint32_t proc_noise_acc[3];        // noise covariance * 1e6
     uint32_t proc_noise_gyro[3];       // noise covariance * 1e6
     uint32_t proc_noise_acc_bias[3];   // noise covariance * 1e6
@@ -45,7 +46,6 @@ typedef struct ekfConfig_s {
     uint32_t meas_noise_position[3];   // noise covariance * 1e6
     uint32_t meas_noise_quat[4];       // noise covariance * 1e6
     uint8_t meas_delay;                // ms
-    uint8_t meas_source;
 } ekfConfig_t;
 
 PG_DECLARE(ekfConfig_t, ekfConfig);

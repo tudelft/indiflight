@@ -1596,7 +1596,7 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 
     uint8_t numServos = MAX_SUPPORTED_SERVOS; // todo: something better here?
     for (int servo = 0; servo < MAX_SUPPORTED_SERVOS; servo++) {
-        motor_normalized[servo] = 0.;
+        servo_normalized[servo] = 0.;
     }
 
 #ifdef USE_NN_CONTROL

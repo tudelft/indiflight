@@ -12,7 +12,7 @@
 #include "common/time.h"
 #include "uros.h"
 
-#if defined(USE_UROS) && defined(MOCKUP)
+#if defined(USE_TELEMETRY_UROS) && defined(MOCKUP)
 
 #define STRING_BUFFER_LEN 250
 

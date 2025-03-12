@@ -2612,6 +2612,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_QUAT_MEASUREMENT, "%d",       ekfConfig()->use_quat_measurement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT, "%d",      ekfConfig()->use_for_manual_flight);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_SOURCE, "%d",                ekfConfig()->meas_source);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",       ekfConfig()->proc_noise_acc[0],
                                                                                     ekfConfig()->proc_noise_acc[1],
                                                                                     ekfConfig()->proc_noise_acc[2]);

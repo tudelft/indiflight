@@ -49,6 +49,7 @@ PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_quat_measurement = 1,
     .use_for_manual_flight = 0,
+    .meas_source = LOCAL_POS_SOURCE_PI,
     .proc_noise_acc       = { 500000, 500000, 500000 },
     .proc_noise_gyro      = { 100000, 100000, 100000 },
     .proc_noise_acc_bias  = { 100, 100, 100 },
@@ -56,7 +57,6 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
     .meas_noise_position  = { 1000, 1000, 1000 },
     .meas_noise_quat      = { 50000, 50000, 50000, 50000 },
     .meas_delay = 0,
-    .meas_source = LOCAL_POS_SOURCE_PI,
 ); 
 
 fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
