@@ -23,7 +23,7 @@ import threading
 import os
 import sys
 
-from PyNDIflight.crafts import MultiRotor, Rotor, IMU
+from PyNDIflight.crafts import Tailsitter, IMU
 from PyNDIflight.interfaces import Mocap, IndiflightHIL, IndiflightSITLWrapper, visApp, visData
 from PyNDIflight.sim import Sim
 
@@ -87,30 +87,19 @@ if __name__=="__main__":
 
 
     #%% Generate craft
-    mc = MultiRotor()
+    tail = Tailsitter()
     # approx model of CineRat 3inch race drone
-    mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
-    mc.setRotor(0, X=[-0.05, +0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
-    mc.setRotor(1, X=[+0.05, +0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
-    mc.setRotor(2, X=[-0.05, -0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
-    mc.setRotor(3, X=[+0.05, -0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
-    # some additional rotors
-    #mc.addRotor(Rotor(r=[+0.0, -0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[0, -1., -1.]))
-    #mc.addRotor(Rotor(r=[+0.0, +0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[0, 1., -1.]))
-    #mc.addRotor(Rotor(r=[-0.1, +0.0, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[-1, 0., -1.]))
-    #mc.addRotor(Rotor(r=[+0.1, +0.0, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[1, 0., -1.]))
+    tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
+    tail.setRotor(0, X=[-0., -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
+    tail.setRotor(1, X=[+0., +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
 
 
     #%% craft interfaces
-    #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
-    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
-    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
-    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
-    #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
+    imu = IMU(tail, r=[0., 0., 0.], qBody=[0.707, 0., 0.707, 0.], accStd=0.8, gyroStd=0.08)
 
-    mocap = Mocap(mc, args.mocap_host, args.mocap_port) if args.mocap else None
-    hil = IndiflightHIL(mc, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
-    sil = IndiflightSITLWrapper(mc, imu, args.sil, Nr=mc.Nr, Ns=0) if args.sil else None
+    mocap = Mocap(tail, args.mocap_host, args.mocap_port) if args.mocap else None
+    hil = IndiflightHIL(tail, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
+    sil = IndiflightSITLWrapper(tail, imu, args.sil, Nr=tail.Nr, Ns=tail.Ns) if args.sil else None
 
 
     #%% indiflight configuration, if software in the loop
@@ -120,7 +109,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -134,11 +123,11 @@ if __name__=="__main__":
 
 
     #%% initial conditions
-    mc.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
-    #mc.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0., 0.707])
-    mc.setTwist(v=[0., 0., 0.], w=[0., 0., 0.])
+    #tail.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
+    tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
+    tail.setTwist(v=[0., 0., 0.], w=[0., 0., 0.])
 
-    sim = Sim(mc, imu, mocap, hil, sil)
+    sim = Sim(tail, imu, mocap, hil, sil)
 
     if not args.no_vis:
         print("\n\n##########################################\n")
@@ -147,9 +136,11 @@ if __name__=="__main__":
         visThread.start( )
 
     if args.throw:
-        mc.throw(height=4.,
-                 wB=[2., -4., 3.], # approx body rotation in rad/s
-                 vHorz=[1., -2.], # final speed in x-y-plane in m/s
+        tail.throw(height=4.,
+                 #wB=[2., -4., 3.], # approx body rotation in rad/s
+                 #vHorz=[1., -2.], # final speed in x-y-plane in m/s
+                 wB=[0., -12., 0.], # approx body rotation in rad/s
+                 vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=2.5)
 
     #%% run loop
@@ -158,21 +149,28 @@ if __name__=="__main__":
     dt_rt = None if args.no_real_time else 1*dt
     start_trajectory = False
     heading = False
+    speedup = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if not args.throw and sim.t > 2.5:
             sil.mockup.arm() if sil else None
 
-        if not start_trajectory and sim.t > 5. and sil is not None:
+        if not start_trajectory and sim.t > 6. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
             sil.mockup.sendKeyboard('1')
+            #sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
             if sim.t > 8.:
-                for _ in range(8):
+                for _ in range(6):
                     sil.mockup.sendKeyboard('3')
                 start_trajectory = True
 
         if not heading and sim.t > 10. and sil is not None:
             sil.mockup.sendKeyboard('h')
             heading = True
+
+        if not speedup and sim.t > 13 and sil is not None:
+            speedup = True
+            for _ in range(6):
+                sil.mockup.sendKeyboard('3')
             # test recovery mode
             # sil.sendMocap = lambda *args: None
 

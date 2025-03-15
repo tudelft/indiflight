@@ -32,18 +32,21 @@ class VisData():
         self.q[0] = 1.
         self.inputs = np.zeros(4, dtype=np.float64)
         self.newCraft = False
-        self.rotors = []
+        self.uav = None
         self.n = 0
 
     def spawn(self, uav):
-        self.n = len(uav.rotors)
-        self.rotors = deepcopy(uav.rotors)
+        self.n = uav.Nr + uav.Ns
+        self.inputs = np.zeros(self.n, dtype=np.float64)
+        self.uav = uav
         self.newCraft = True
 
-    def update(self, uav):
-        self.x[:] = uav.xI.round(4)
-        self.q[:] = uav.q.round(4)
-        self.inputs = uav.inputs.astype(np.float64).round(4)
+    def update(self):
+        self.x[:] = self.uav.xI.round(4)
+        self.q[:] = self.uav.q.round(4)
+        self.inputs[:self.uav.Nr] = self.uav.r_u.astype(np.float64)
+        self.inputs[(self.uav.Nr):(self.uav.Nr+self.uav.Ns)] \
+            = self.uav.s_u.astype(np.float64) * 100 / 180 * np.pi
 
 visData = VisData()
 visApp = fl.Flask(__name__, static_url_path='/static')
@@ -60,17 +63,23 @@ def pose():
     pos = list(visData.x.round(4))
     quat = list(visData.q.round(4))
     ctl = list(visData.inputs)
-    arr.append({'id': 0, 'type': 3, 'newCraft': visData.newCraft, 'pos': pos, 'quat': quat, 'ctl': ctl})
+    arr.append({'id': 0, 'type': 2, 'newCraft': visData.newCraft, 'pos': pos, 'quat': quat, 'ctl': ctl})
     return json.dumps(arr)
 
 @visApp.route("/craftdata")
 def craftdata():
     visData.newCraft = False
     arr = []
-    for i, rotor in enumerate(visData.rotors):
-        r = list(rotor.r.astype(np.float64).round(4))
-        axis = list(rotor.axis.astype(np.float64).round(4))
-        arr.append({'id': i, 'd': np.round(3.5e-2*np.sqrt(rotor.Tmax), 4), 'r': r, 'axis': axis, 'dir': rotor.dir})
+    for i in range(visData.uav.Nr):
+        r = visData.uav.r_X[:, i].round(4).tolist()
+        axis = visData.uav.r_ax[:, i].round(4).tolist()
+        d = 3.5e-2*visData.uav.r_wmax[i]*np.sqrt(visData.uav.r_k[i])
+        d = float(d)
+        arr.append({'id': i,
+                    'd': d,
+                    'r': r,
+                    'axis': axis,
+                    'dir': 1 if visData.uav.r_cm[i] >= 0. else -1})
     return json.dumps(arr)
 
 @visApp.route("/shutdown")
@@ -114,24 +123,30 @@ class Mocap:
 #%% software in the loop interface
 
 class IndiflightSITLWrapper():
-    def __init__(self, uav, imu, libfile, N=4):
+    def __init__(self, uav, imu, libfile, Nr=4, Ns=0):
         from indiflight_mockup_interface import IndiflightSITLMockup
         self.uav = uav
         self.imu = imu
-        self.mockup = IndiflightSITLMockup(libfile, N=N)
+        self.mockup = IndiflightSITLMockup(libfile, Nr=Nr, Ns=Ns)
 
     def sendImuAndMotor(self):
         self.mockup.sendImu( self.imu.gyro, self.imu.acc )
-        self.mockup.sendMotorSpeeds( self.uav.rotorVelocity )
+        self.mockup.sendMotorSpeeds( self.uav.r_w ) # rad/s
+        self.mockup.sendServoAngles( self.uav.s_d ) # radians
 
     def sendMocap(self):
         self.mockup.sendMocap( self.uav.xI, self.uav.vI, self.uav.q )
 
     def receive(self):
-        inputs = self.mockup.getMotorCommands()
-        n = min(len(inputs), len(self.uav.inputs))
-        self.uav.inputs[:n] = self.mockup.getMotorCommands()
-        self.uav.inputs = np.clip(self.uav.inputs, 0., 1.)
+        motor_normalized = self.mockup.getMotorCommands()
+        nr = min(len(motor_normalized), self.uav.Nr)
+        self.uav.r_u[:nr] = motor_normalized
+        self.uav.r_u = np.clip(self.uav.r_u, 0., 1.)
+
+        servo_normalized = self.mockup.getServoCommands()
+        ns = min(len(servo_normalized), self.uav.Ns)
+        self.uav.s_u[:ns] = servo_normalized
+        self.uav.s_u = np.clip(self.uav.s_u, -1., 1.)
 
     def tick(self):
         self.mockup.tick()

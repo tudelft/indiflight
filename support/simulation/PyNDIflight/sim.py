@@ -35,7 +35,8 @@ class Sim():
             self.hil.receive() if self.hil else None
             self.sil.receive() if self.sil else None
 
-        self.uav.tick(dt)
+        if not (self.i % 4):
+            self.uav.tick(dt*4)
 
         if self.sil:
             self.sil.sendImuAndMotor()
@@ -45,7 +46,7 @@ class Sim():
             self.imu.update() if self.imu else None
             self.hil.send() if self.hil else None
         if not (self.i % 80): # 100 Hz
-            visData.update(self.uav)
+            visData.update()
         if not (self.i % 800): # 10 Hz
             self.mocap.update() if self.mocap else None
             self.sil.sendMocap() if self.sil else None

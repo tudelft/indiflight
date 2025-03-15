@@ -76,14 +76,14 @@ void setMotorSpeed(const float *omega, const int n) {
     // in rad/s
     int lim = MIN(n, getMotorCount());
     for (int motor = 0; motor < lim; motor++) {
-        motorOmegaValues[motor] = omega[motor];
+        motorOmegaValues[motor] = omega[motor]; // rad/s
     }
 }
 
-void setServoAngle(const int16_t *angles, const int n) {
+void setServoAngle(const float *angles, const int n) {
     int lim = MIN(n, MAX_SUPPORTED_SERVOS);
     for (int servo = 0; servo < lim; servo++) {
-        servo_feedback[servo] = angles[servo];
+        servo_feedback[servo] = (int16_t) 100*RADIANS_TO_DEGREES(angles[servo]); // rad to centidegrees
     }
 }
 

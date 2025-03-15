@@ -223,7 +223,7 @@ void posGetAccSpNed(timeUs_t current) {
     lastCall = current;
 
     // acceleration setpoint = velGains * velError
-    accSpNedFromPos.V.X = velError.V.X * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
+    accSpNedFromPos.V.X = (velError.V.X + 0.0f*indiRun.rate_f.V.Y) * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
     accSpNedFromPos.V.Y = velError.V.Y * posRuntime.horz_d  +  velIError.V.Y * posRuntime.horz_i;
     accSpNedFromPos.V.Z = velError.V.Z * posRuntime.vert_d  +  velIError.V.Z * posRuntime.vert_i;
 

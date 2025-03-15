@@ -26,7 +26,10 @@ from .helpers import (
     quaternionDerivative,
     angularRateDerivative,
     rotatingMassTorques,
-    motorModel
+    motorModel,
+    rotorForcesMoments,
+    servoModel,
+    wingElevonForcesMoments
     )
 
 class Rotor:
@@ -58,23 +61,45 @@ class Rotor:
         self.M -= self.dir * self.cm * self.F
         self.M -= rotatingMassTorques(self.Izz, self.axis*self.dir, self.w, wDot, Omega)
 
-class MultiRotor:
-    def __init__(self):
-        self.rotors = []
+
+class Craft:
+    def __init__(self, Nr=4, Ns=0):
+        self.Nr = Nr
+        self.Ns = Ns
+
         self.m = 1.
         self.I = np.eye(3, dtype=np.float32)
         self.Iinv = np.eye(3, dtype=np.float32)
         self.xI = np.array([0., 0., 0.], dtype=np.float32)
         self.vI = np.array([0., 0., 0.], dtype=np.float32)
+        self.vB = np.array([0., 0., 0.], dtype=np.float32)
         self.fspB = np.array([0., 0., 0.], dtype=np.float32)
         self.q = np.array([1., 0., 0., 0.], dtype=np.float32)
-        self.wDotB = np.array([0., 0., 0.], dtype=np.float32)
-        self.wB = np.array([0., 0., 0.], dtype=np.float32)
+        self.qInv = np.array([1., 0., 0., 0.], dtype=np.float32)
+        self.ODotB = np.array([0., 0., 0.], dtype=np.float32)
+        self.OB = np.array([0., 0., 0.], dtype=np.float32)
 
         self.throw_time = +np.inf
         self.throw_duration = 0.
         self.FthrowI = np.array([0., 0., 0.], dtype=np.float32)
         self.MthrowB = np.array([0., 0., 0.], dtype=np.float32)
+
+        self.r_w = np.zeros((Nr,), dtype=np.float32)
+        self.r_wdot = np.zeros((Nr,), dtype=np.float32)
+        self.r_u = np.zeros((Nr,), dtype=np.float32)
+
+        self.r_X = np.zeros((3, Nr), dtype=np.float32)
+        self.r_ax = np.zeros((3, Nr), dtype=np.float32)
+        self.r_k = 1e-6*np.ones((Nr,), dtype=np.float32)
+        self.r_cm = 1e-2*np.ones((Nr,), dtype=np.float32)
+        self.r_cm[:2:] *= -1.
+        self.r_wmax = 1000*np.ones((Nr,), dtype=np.float32)
+        self.r_tau = 0.02*np.ones((Nr,), dtype=np.float32)
+        self.r_kESC = np.zeros((Nr,), dtype=np.float32)
+        self.r_I = 1e-7*np.ones((Nr,), dtype=np.float32)
+
+        self.FM_B = np.zeros((6,), dtype=np.float32)
+        self.F_I = np.zeros((3,), dtype=np.float32)
 
     def __repr__(self):
         qWrong = np.zeros_like(self.q)
@@ -82,7 +107,7 @@ class MultiRotor:
         qWrong[:3] = self.q[1:]
         rot = R.from_quat(qWrong)
         eulers = rot.as_euler('ZYX', degrees=True)
-        return f"MultiRotor( n={len(self.rotors)}, x={self.xI}m, v={self.vI}m/s, roll={eulers[2]}deg, pitch={eulers[1]}deg, yaw={eulers[0]}deg )"
+        return f"{self.__class__.__name__}( Nr={self.Nr}, Ns={self.Ns}, x={self.xI}m, v={self.vI}m/s, roll={eulers[2]}deg, pitch={eulers[1]}deg, yaw={eulers[0]}deg )"
 
     def throw(self, height=3.5, acc=45., wB=[0., 0., 0.], vHorz=[0., 0.], at_time=0.):
         force = self.m * ( acc + GRAVITY )
@@ -107,11 +132,15 @@ class MultiRotor:
         self.I = I.astype(np.float32)
         self.Iinv = np.linalg.inv(I).astype(np.float32)
 
-    def addRotor(self, rotor):
-        self.rotors.append(rotor)
-        self.n = len(self.rotors)
-        self.rotorVelocity = np.zeros(self.n, np.float32)
-        self.inputs = np.zeros(self.n, np.float32)
+    def setRotor(self, i, X, ax=[0., 0., -1.], k=2e-7, cm=0.02, wmax=4000., tau=0.02, kESC=0.4, I=1e-7):
+        self.r_X[:, i] = np.asarray(X, dtype=np.float32)
+        self.r_ax[:, i] = np.asarray(ax, dtype=np.float32)
+        self.r_k[i] = k
+        self.r_cm[i] = cm
+        self.r_wmax[i] = wmax
+        self.r_tau[i] = tau
+        self.r_kESC[i] = kESC
+        self.r_I[i] = I
 
     def setPose(self, x=[0., 0., 0.], q=[1., 0., 0., 0.]):
         self.xI[:] = np.asarray(x, dtype=np.float32)
@@ -119,13 +148,78 @@ class MultiRotor:
 
     def setTwist(self, v=[0., 0., 0.], w=[0., 0., 0.]):
         self.vI[:] = np.asarray(v, dtype=np.float32)
-        self.wB[:] = np.asarray(w, dtype=np.float32)
+        self.OB[:] = np.asarray(w, dtype=np.float32)
 
     def setExternalForceInInertialFrame(self, F):
         self.FthrowI[:] = F
 
     def setExternalMomentInBodyFrame(self, M):
         self.MthrowB[:] = M
+
+    def groundContact(self):
+        z = self.xI[2]
+        if z > 0.:
+            # handle ground contact
+            down = self.vI[2] > 0.
+            self.F_I[2]  -= (1000 if down else 1000) * self.m * z
+            self.F_I[:3] -= (100  if down else    1) * self.m * self.vI
+            self.FM_B[3:] -= 1000 * self.I @ (np.sign(self.q[0]) * self.q[1:])
+            self.FM_B[5] = 0.; # no yaw
+            self.FM_B[3:] -= 100 * self.I @ self.OB
+
+    def customPhysics(self, dt):
+        # modify FM_B and/or F_I
+        pass
+
+    def tick(self, dt):
+        self.FM_B[:] = 0.
+        self.F_I[:] = 0.
+
+        # step motors
+        self.r_wdot[:] = motorModel(self.r_u, self.r_kESC, self.r_wmax, self.r_w, self.r_tau)
+        self.r_w += dt * self.r_wdot
+
+        # get rotor forces
+        self.FM_B += rotorForcesMoments(self.r_X, self.r_ax, self.r_w, self.r_k, self.r_cm)
+        #self.FM_B[3:] += rotatingMassTorques(self.r_I,
+        #                                     self.r_ax,
+        #                                     np.sign(self.r_cm)*self.r_w,
+        #                                     np.sign(self.r_cm)*self.r_wdot,
+        #                                     self.OB)
+
+        # ground contact
+        self.groundContact()
+
+        # throw forces
+        self.throw_time += dt
+        if self.throw_time > 0. and self.throw_time <= self.throw_duration:
+            self.F_I += self.FthrowI
+            self.FM_B[3:] += self.MthrowB
+
+        # extra forces
+        self.customPhysics(dt)
+
+        # accumulate forces
+        self.F_I += quatRotate(self.q, self.FM_B[:3])
+        self.fspB[:] = quatRotate(self.qInv, self.F_I) / self.m
+
+        # get ODotB and step rotational dynamics
+        self.ODotB[:] = angularRateDerivative(self.OB, self.FM_B[3:], self.I, self.Iinv)
+        self.OB += dt * self.ODotB
+        self.q  += dt * quaternionDerivative(self.q, self.OB)
+        self.q[:] /= np.linalg.norm(self.q)
+        self.qInv = self.q.copy()
+        self.qInv[0] *= -1.
+        self.vB = quatRotate(self.qInv, self.vI)
+
+        # step position / velocity
+        self.xI += dt * self.vI
+        self.vI += dt * (self.F_I / self.m  +  np.array([0., 0., GRAVITY]))
+
+
+class MultiRotor(Craft):
+    def __init__(self, Nr=4):
+        super().__init__(Nr=Nr)
 
     def calculateG1G2(self):
         # 2024-02-25 slightly nicer formulation for online learning (G2 not scaled with Tmax)
@@ -174,7 +268,7 @@ class MultiRotor:
 
             # moment contribution from thrust
             # and moment contribution from rotor drag
-            B1[3:, i] = np.cross(rotor.r, rotor.axis) \
+            B1[3:, i] = cross(rotor.r, rotor.axis) \
                         -rotor.dir * rotor.cm * rotor.axis
 
             B1[:, i] *= rotor.Tmax
@@ -210,44 +304,73 @@ class MultiRotor:
 
         return True
 
-    def tick(self, dt):
-        F = np.zeros(3, dtype=np.float32)
-        M = np.zeros(3, dtype=np.float32)
-        for i, (u, rotor) in enumerate(zip(self.inputs, self.rotors)):
-            rotor.step(u, self.wB, dt)
-            self.rotorVelocity[i] = rotor.w
-            F += rotor.F
-            M += rotor.M
+    def customPhysics(self, dt):
+        return super().customPhysics(dt)
 
-        qInv = self.q.copy()
-        qInv[0] *= -1.
-        if self.xI[2] > 0.:
-            # handle ground contact
-            down = self.vI[2] > 0.
-            F += (1000 if down else 1000)  * self.m * quatRotate( qInv, np.array([0., 0., -1.], dtype=np.float32) * self.xI )
-            F += (100  if down else 1) * self.m * quatRotate( qInv, -self.vI )
-            Mground = 1000 * self.I @ ( np.sign(qInv[0]) * qInv[1:] )
-            Mground[2] = 0.; # no yaw
-            Mground += 100 * self.I @ -self.wB
-            M += Mground
+import collections
 
-        # throw timekeeping and add external force and moment
-        self.throw_time += dt
-        if self.throw_time > 0. and self.throw_time <= self.throw_duration:
-            F += quatRotate( qInv, self.FthrowI )
-            M += self.MthrowB
+class Tailsitter(Craft):
+    def __init__(self):
+        super().__init__(Nr=2, Ns=2)
 
-        self.wDotB[:] = angularRateDerivative( self.wB, M, self.I, self.Iinv )
-        qDot = quaternionDerivative( self.q, self.wB )
-        self.fspB[:] = F / self.m
-        vDot = quatRotate( self.q, self.fspB )  +  np.array([0., 0., GRAVITY])
-        xDot = self.vI
+#        if (self.Nr != 2) or (self.Ns != 2):
+#            raise NotImplementedError("Must be 2 rotors and 2 servos")
 
-        self.wB += dt * self.wDotB
-        self.q += dt * qDot
-        self.q /= np.linalg.norm(self.q)
-        self.vI += dt * vDot
-        self.xI += dt * xDot
+        self.d0 = np.array([-0.3170, -0.1578], dtype=np.float32)
+
+        # drag and rate damping
+        self.cv = np.array([-0.7454, -0.1554, 0.], dtype=np.float32)
+        self.cvx = np.array([0., 0.01388, 0.], dtype=np.float32)
+        self.cO = np.array([0., 0., 0., 0.00865, -0.0100, -0.0211], dtype=np.float32)
+
+        # elevon contribution
+        self.cd = np.array([-2.14e-7, 0., 0., 0., -4.470e-8, -1.08e-7], dtype=np.float32)
+        self.cdd = np.array([0., 0., 0., 0., 0., 0.], dtype=np.float32)
+        self.cddd = np.array([0., 0., 0., 0., -3.702e-5, 0.], dtype=np.float32)
+
+        # servo data/states
+        self.s_u = np.zeros((self.Ns), dtype=np.float32)
+        self.s_d = np.zeros((self.Ns), dtype=np.float32)
+        self.s_dd = np.zeros((self.Ns), dtype=np.float32)
+        self.s_dmin   = -1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_dmax   = +1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmin  = -10.*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmax  = +10.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmin = -175.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmax = +175.*np.ones((self.Ns), dtype=np.float32)
+        self.s_P  = +30.*np.ones((self.Ns), dtype=np.float32)
+        self.s_D  = +80.*np.ones((self.Ns), dtype=np.float32)
+        self.s_delay = 0.025
+        self.s_u_buffer = collections.deque(maxlen=1000)
+
+    def customPhysics(self, dt):
+        self.s_u_buffer.append((dt, self.s_u.copy()))
+
+        tac = 0.
+        s_u = self.s_u_buffer[0][1]  # oldest element
+        for i in range(len(self.s_u_buffer)-1, -1, -1):
+            tac += self.s_u_buffer[i][0] # time
+            if tac > self.s_delay:
+                s_u = self.s_u_buffer[i][1]
+                break
+
+        s_ddd = servoModel(s_u * 100. * np.pi / 180.,
+                           self.s_d, self.s_dd,
+                           self.s_dmin, self.s_dmax,
+                           self.s_ddmin, self.s_ddmax,
+                           self.s_dddmin, self.s_dddmax,
+                           self.s_P, self.s_D)
+
+        self.s_dd += dt * s_ddd
+        self.s_d += dt * self.s_dd
+
+        self.FM_B += wingElevonForcesMoments(
+            self.vB, self.OB,
+            self.r_w, self.s_d, self.s_dd, s_ddd,
+            self.d0,
+            self.cv, 0.*self.cvx, self.cO,
+            self.cd, self.cdd, self.cddd)
+
 
 class IMU:
     def __init__(self, uav, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accBias=[0., 0., 0.], accStd=0.0, gyroBias=[0., 0., 0.], gyroStd=0.0):
@@ -266,6 +389,6 @@ class IMU:
         self.gyroStd = gyroStd
 
     def update(self):
-        accAtImu = self.uav.fspB + cross(self.uav.wDotB, self.r) + cross(self.uav.wB, cross(self.uav.wB, self.r))
+        accAtImu = self.uav.fspB + cross(self.uav.ODotB, self.r) + cross(self.uav.OB, cross(self.uav.OB, self.r))
         self.acc[:] = quatRotate(self.qInv, accAtImu) + np.random.normal(self.accBias, self.accStd)
-        self.gyro[:] = quatRotate(self.qInv, self.uav.wB) + np.random.normal(self.gyroBias, self.gyroStd)
+        self.gyro[:] = quatRotate(self.qInv, self.uav.OB) + np.random.normal(self.gyroBias, self.gyroStd)

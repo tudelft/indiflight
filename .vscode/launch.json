@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Tailsitter Sim",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/support/simulation/exampleTailsitterSim.py",
+            "console": "integratedTerminal",
+            "args": ["--sil", "obj/main/indiflight_MOCKUP.so", "--sil-profile-txt", "./configs/profiles/DarkO.txt"],
+        },
+        {
             // https://stackoverflow.com/questions/53519668/how-to-attach-to-remote-gdb-with-vscode
             "name": "MOCKUP docker",
             "type": "gdb",

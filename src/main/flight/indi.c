@@ -463,7 +463,7 @@ void getMotorCommands(timeUs_t current) {
     }
 
     // compute pseudocontrol
-    indiRun.dv[0] = 0.f;
+    indiRun.dv[0] = 0.f * (indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.X);
     indiRun.dv[1] = 0.f;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * spfz;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;

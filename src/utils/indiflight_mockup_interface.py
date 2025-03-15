@@ -70,17 +70,20 @@ float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
 timeUs_t = ct.c_uint32
 
 class IndiflightSITLMockup():
-    def __init__(self, libfile, N=4):
+    def __init__(self, libfile, Nr=4, Ns=0):
         self.libfile = libfile
-        self.N = N
+        self.Nr = Nr
+        self.Ns = Ns
         self.lib = None
         self.lib_handle = None
 
         # arrays
         self.gyro = np.zeros(3, dtype=ct.c_float)
         self.acc = np.zeros(3, dtype=ct.c_float)
-        self.motorOmega = np.zeros(self.N, dtype=ct.c_float)
-        self.motorCommands = np.zeros(self.N, dtype=ct.c_float)
+        self.motor_normalized_cmds = np.zeros(self.Nr, dtype=ct.c_float)
+        self.motorOmega            = np.zeros(self.Nr, dtype=ct.c_float)
+        self.servo_normalized_cmds = np.zeros(self.Ns, dtype=ct.c_float)
+        self.servoFeedback         = np.zeros(self.Ns, dtype=ct.c_float)
 
         self.pos = np.zeros(3, dtype=ct.c_float)
         self.vel = np.zeros(3, dtype=ct.c_float)
@@ -124,9 +127,11 @@ class IndiflightSITLMockup():
         # argtypes
         self.lib.setImu.argtypes = [float_ptr, float_ptr]
         self.lib.setMotorSpeed.argtypes = [float_ptr, ct.c_int]
+        self.lib.setServoAngle.argtypes = [float_ptr, ct.c_int]
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
+        self.lib.getServoOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.tick.argtypes = []
         self.lib.processCharacterInteractive.argtypes = [ct.c_char]
         self.lib.processKey.argtypes = [ct.c_uint8]
@@ -179,7 +184,8 @@ class IndiflightSITLMockup():
         self._loadLibAndInit()
 
     def initUros(self):
-        self.lib.urosInit()
+        # self.lib.urosInit()
+        pass
 
 #%% sending and receiving sensor data / flight control outputs
     def sendImu(self, gyro, acc):
@@ -187,13 +193,21 @@ class IndiflightSITLMockup():
         self.acc[:] = acc
         self.lib.setImu(self.gyro, self.acc)
 
-    def sendMotorSpeeds(self, omega):
+    def sendMotorSpeeds(self, omega): # rad/s
         n = len(omega)
-        if n > self.N:
-            raise TypeError("too many elements in omega. Must be at most self.N")
+        if n > self.Nr:
+            raise TypeError(f"too many elements in omega. Must be at most self.Nr: {self.Nr}")
 
         self.motorOmega[:n] = omega
         self.lib.setMotorSpeed(self.motorOmega, n)
+
+    def sendServoAngles(self, angles): # rad
+        n = len(angles)
+        if n > self.Ns:
+            raise TypeError(f"too many elements in omega. Must be at most self.Ns: {self.Ns}")
+
+        self.servoFeedback[:n] = angles
+        self.lib.setServoAngle(self.servoFeedback, n)
 
     def sendMocap(self, pos, vel, quat):
         self.pos[:] = pos
@@ -207,8 +221,12 @@ class IndiflightSITLMockup():
         self.lib.setPosSetpoint(self.posSp, self.yawSp)
 
     def getMotorCommands(self):
-        self.lib.getMotorOutputCommands(self.motorCommands, self.N)
-        return np.array(self.motorCommands, dtype=float)
+        self.lib.getMotorOutputCommands(self.motor_normalized_cmds, self.Nr)
+        return np.array(self.motor_normalized_cmds, dtype=float)
+
+    def getServoCommands(self):
+        self.lib.getServoOutputCommands(self.servo_normalized_cmds, self.Ns)
+        return np.array(self.servo_normalized_cmds, dtype=float)
 
     def sendKeyboard(self, key):
         if key in hid_codes.keys():

@@ -114,7 +114,7 @@ set align_board_roll = 0
 set align_board_pitch = 90
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
-set acc_offset = -10, -12, 8
+set acc_offset = 0, 0, 0
 
 # motor setup
 set dshot_bidir = ON
@@ -203,8 +203,8 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 700, 500, 300
-set indi_rate_gains     =  70,  70,  50
+set indi_attitude_gains = 1000, 800, 200
+set indi_rate_gains     =  130,  130,  60
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
@@ -235,7 +235,7 @@ set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
 set indi_act_nonlinearity = 40, 40, 0, 0             # %
 set indi_act_min =  0,  0, -40, -40              # %, degree
-set indi_act_max = 60, 60,  40,  40              # %, degree
+set indi_act_max = 80, 80,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 5,5,1,1
 
@@ -259,40 +259,45 @@ set indi_act_g2_yaw   =    0,    0,    0,    0
 set indi_tails_use_scheduled = 1
 set indi_tails_use_sine = 1
 
-#set indi_tails_d0 = 871, 1642  # centi-degrees. elevon angle at which motor thrust doesnt give rise to x force
-#
-#set indi_tails_cxw = 0       # * 1e9
-#set indi_tails_cyw = 0
-#set indi_tails_czw = -2645
-#set indi_tails_clw = 3343    # * 1e8
-#set indi_tails_cmw = -1132
-#set indi_tails_cnw = -277
-#
-#set indi_tails_cnwd = 115    # * 1e5
-#
-#set indi_tails_cxd =   -95   # * 1e8
-#set indi_tails_cmd = -2563
-#set indi_tails_cnd = -2225
+## # no-lift elevon angles in centi-degrees
+## set indi_tails_d0 = 1818, 2729
+## 
+## # motor thrust influenced parameters
+## # force * 1e9
+## set indi_tails_cxw = 0
+## set indi_tails_cyw = 0
+## set indi_tails_czw = -2482
+## # moment * 1e8
+## set indi_tails_clw = 2618
+## set indi_tails_cmw = -1722
+## set indi_tails_cnw = -1755
+## # motor rate derivative to yaw moment * 1e5
+## set indi_tails_cnwd = 29
+## 
+## # elevon deflection influenced parameters * 1e8
+## set indi_tails_cxd = -69
+## set indi_tails_cmd = -2937
+## set indi_tails_cnd = -2041
 
 # no-lift elevon angles in centi-degrees
-set indi_tails_d0 = 1818, 2729
+set indi_tails_d0 = -1816, -904
 
 # motor thrust influenced parameters
 # force * 1e9
-set indi_tails_cxw = 0
+set indi_tails_cxw = 405
 set indi_tails_cyw = 0
-set indi_tails_czw = -2482
+set indi_tails_czw = -2481
 # moment * 1e8
-set indi_tails_clw = 2618
-set indi_tails_cmw = -1722
-set indi_tails_cnw = -1755
+set indi_tails_clw = 2597
+set indi_tails_cmw = 0
+set indi_tails_cnw = -702
 # motor rate derivative to yaw moment * 1e5
-set indi_tails_cnwd = 29
+set indi_tails_cnwd = 260
 
 # elevon deflection influenced parameters * 1e8
-set indi_tails_cxd = -69
-set indi_tails_cmd = -2937
-set indi_tails_cnd = -2041
+set indi_tails_cxd = -42
+set indi_tails_cmd = -2234
+set indi_tails_cnd = -1662
 
 
 indiprofile 2
@@ -317,7 +322,7 @@ set indi_act_is_servo = 0,0,1,1,0,0,0,0
 # set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
 # set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000
 set indi_act_min = 0, 0, -40, 40
-set indi_act_max = 60, 60, 40, 40
+set indi_act_max = 80, 80, 40, 40
 
 # -- roll -56, pitch 81, yaw 170
 #set indi_act_g1_fx = -1037, -1037, -1037, -1037
@@ -340,18 +345,18 @@ set indi_wls_act_penalties = 1,1,1,1
 positionprofile 0
 
 # gains * 10
-set position_horizontal_p = 22
-set position_horizontal_i = 2
-set position_horizontal_d = 30
+set position_horizontal_p = 30
+set position_horizontal_i = 4
+set position_horizontal_d = 20
 set position_vertical_p = 50
 set position_vertical_i = 5
 set position_vertical_d = 40
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 100
-set position_max_horizontal_accel = 700
-set position_max_upwards_speed = 100
-set position_max_downwards_speed = 50
+set position_max_horizontal_speed = 300
+set position_max_horizontal_accel = 1000
+set position_max_upwards_speed = 200
+set position_max_downwards_speed = 200
 set position_max_upwards_accel = 1500
 set position_max_downwards_accel = 200
 

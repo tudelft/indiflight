@@ -191,7 +191,7 @@ static void mahonyUpdate(float dt, fp_vector_t* rate, bool useAcc, fp_vector_t* 
     // Use measured acceleration vector
     if (useAcc && acc_norm > 0.01f) {
         // Normalise accelerometer measurement; useAcc is true when all smoothed acc axes are within 20% of 1G
-        VEC3_NORMALIZE((*acc));
+        VEC3_SCALAR_MULT((*acc), 1.f / acc_norm);
 
         // Error is sum of cross product between estimated direction and measured direction of gravity
         fp_vector_t xprod;
@@ -374,6 +374,7 @@ void ahrsUpdate(timeUs_t currentTimeUs)
         }
 
         fp_vector_t accAverage = { .V.X = acc.accADCf[X], .V.Y = acc.accADCf[Y], .V.Z = acc.accADCf[Z] };
+        VEC3_SCALAR_MULT(accAverage, (float)acc.dev.acc_1G_rec);
         bool useAcc = ahrsIsAccelerometerHealthy(&accAverage);
 
 #ifdef USE_MAG
