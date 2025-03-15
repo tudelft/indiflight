@@ -162,7 +162,7 @@ static void mahonyUpdate(float dt, fp_vector_t* rate, bool useAcc, fp_vector_t* 
     // global z in body frame
     fp_vector_t zB = { 0 };
     zB.V.X = rMatMahony.m[2][X];
-    zB.V.X = rMatMahony.m[2][Y];
+    zB.V.Y = rMatMahony.m[2][Y];
     zB.V.Z = rMatMahony.m[2][Z];
 
 #ifdef USE_MAG
