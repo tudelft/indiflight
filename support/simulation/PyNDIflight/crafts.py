@@ -98,6 +98,9 @@ class Craft:
         self.r_kESC = np.zeros((Nr,), dtype=np.float32)
         self.r_I = 1e-7*np.ones((Nr,), dtype=np.float32)
 
+        self.s_d = np.zeros((Ns,), dtype=np.float32)
+        self.s_u = np.zeros((Ns,), dtype=np.float32)
+
         self.FM_B = np.zeros((6,), dtype=np.float32)
         self.F_I = np.zeros((3,), dtype=np.float32)
 

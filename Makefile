@@ -132,6 +132,7 @@ REVISION = $(GITHASH)$(DIRTYFLAG)
 endif
 
 check_dirty :
+	@echo "checking dirty"
 ifeq (y,$(YES))
 	@echo "Skipping dirty-checks"
 else

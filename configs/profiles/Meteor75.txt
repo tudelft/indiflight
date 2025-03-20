@@ -92,7 +92,7 @@ set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 180
 set acc_calibration = 0,0,0,1
-set acc_offset = 12, 0, -8
+set acc_offset = 13, 0, -9
 
 # motor setup
 set dshot_bidir = ON
@@ -363,8 +363,8 @@ set learner_gyro_max = 1800
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
-set learner_zeta_rate = 80
-set learner_zeta_attitude = 70
+set learner_zeta_rate = 70
+set learner_zeta_attitude = 90
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 

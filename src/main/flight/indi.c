@@ -46,6 +46,7 @@
 #include "flight/catapult.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "flight/throw.h"
 #include "drivers/motor.h"
 #include "drivers/dshot.h"
 #include <math.h>
@@ -165,7 +166,15 @@ void getSetpoints(timeUs_t current) {
             indiRun.d[i] = outputFromLearningQuery[i];
         }
         for (int i=learnerConfig()->numAct; i < MAXU; i++) {
-            indiRun.d[i] = 0;
+            indiRun.d[i] = 0.f;
+        }
+    } else
+#endif
+#ifdef USE_THROW_TO_ARM
+    if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+        indiRun.bypassControl = true;
+        for (int i=0; i < indiRun.actNum; i++) {
+            indiRun.d[i] = 0.f;
         }
     } else
 #endif
@@ -463,7 +472,7 @@ void getMotorCommands(timeUs_t current) {
     }
 
     // compute pseudocontrol
-    indiRun.dv[0] = 0.f * (indiRun.spfSpBody.V.Z - doIndi * indiRun.spf_fs.V.X);
+    indiRun.dv[0] = 0.f;
     indiRun.dv[1] = 0.f;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * spfz;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;

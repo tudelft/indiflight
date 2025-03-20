@@ -62,8 +62,8 @@ const char *armingDisableFlagNames[]= {
     "THROW_READY",
     "NO_THROW",
     "NO_CATAPULT",
-    "NO_EKF",
-    "NO_POS_SETPOINT",
+    "NN_MODE",
+    "EKF_OR_SETPOINT",
     "ARMSWITCH",
 };
 

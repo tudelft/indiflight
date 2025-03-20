@@ -212,20 +212,10 @@ static void updateLearningFilters(void) {
     float dwx, dwy, dwz;
     float ax, ay, az;
 
-    //rx = -0.010f; ry = -0.010f; rz = 0.015f; // hardcoded for now
-    fp_vector_t r;
-    r.V.X = accelerometerConfig()->acc_offset[0] * 1e-3f;
-    r.V.Y = accelerometerConfig()->acc_offset[1] * 1e-3f;
-    r.V.Z = accelerometerConfig()->acc_offset[2] * 1e-3f;
+    rx = accelerometerConfig()->acc_offset[0] * 1e-3f;
+    ry = accelerometerConfig()->acc_offset[1] * 1e-3f;
+    rz = accelerometerConfig()->acc_offset[2] * 1e-3f;
 
-    fp_quaternion_t iBoard_q;
-    quaternion_of_rotationMatrix( &iBoard_q, &boardRotation );
-    //iBoard_q.w *= -1.f;
-    rotate_vector_with_quaternion( &r, &iBoard_q );
-
-    rx = r.V.X;
-    ry = r.V.Y;
-    rz = r.V.Z;
 
     dwx = indiRun.rateDotIMU.A[0];
     dwy = indiRun.rateDotIMU.A[1];
@@ -930,10 +920,10 @@ doMoreMotors:
             }
 
             // tailsitter stuff
-            if ((motorStates[0].queryState == MOTOR_QUERY_DONE) && (motorStates[1].queryState == MOTOR_QUERY_DONE)) {
-                outputFromLearningQuery[0] = 0.3f;
-                outputFromLearningQuery[1] = 0.3f;
-            }
+            //if ((motorStates[0].queryState == MOTOR_QUERY_DONE) && (motorStates[1].queryState == MOTOR_QUERY_DONE)) {
+            //    outputFromLearningQuery[0] = 0.3f;
+            //    outputFromLearningQuery[1] = 0.3f;
+            //}
 
             bool allMotorsDone = true;
             for (int motor = 0; motor < c->numAct; motor++)

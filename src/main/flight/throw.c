@@ -27,6 +27,7 @@
 #include "platform.h"
 
 #include "fc/runtime_config.h"
+#include "fc/core.h"
 #include "fc/rc_modes.h"
 #include "io/beeper.h"
 #include "io/local_pos.h"
@@ -105,12 +106,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     lastCall = currentTimeUs;
 
     // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED)
+    bool disableConditions = false
         || FLIGHT_MODE(CATAPULT_MODE | NN_MODE) // downright dangerous to accidentally throw with catapult?
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
-#ifdef USE_INDI
-        || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
-#endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
@@ -129,6 +127,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             enableConditions = 
                 !disableConditions
                 && acc.isAccelUpdatedAtLeastOnce
+                && isTouchingGround()
 #ifdef USE_LOCAL_POSITION
                 && ( (!autoMode && throwConfig()->allowManualModes)
                         || (autoMode && isConvergedEkf()) )
