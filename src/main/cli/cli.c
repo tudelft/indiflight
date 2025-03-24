@@ -2120,6 +2120,55 @@ static void cliModeColor(const char *cmdName, char *cmdline)
 }
 #endif
 
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+static void cliGeofencePrint(void) {
+    cliPrintLinef("geofence clear");
+    int n = MIN(GEOFENCE_MAX_VERTICES, geofenceConfig()->numActive);
+    for (int i = 0; i < n; i++) {
+        cliPrintLinef("geofence %d %d",
+            geofenceConfig()->vertices[i].lat,
+            geofenceConfig()->vertices[i].lon
+        );
+
+    }
+}
+
+static void cliGeofence(const char *cmdName, char *cmdline)
+{
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+        cliGeofencePrint();
+        return;
+    }
+
+    ptr = cmdline;
+    if (!strncmp(ptr, "clear", 5)) {
+        memset(geofenceConfigMutable()->vertices, 0, GEOFENCE_MAX_VERTICES * sizeof(gpsLocation_t));
+        cliGeofencePrint();
+        return;
+    }
+
+    gpsLocation_t vertex;
+
+    vertex.lat = atoi(ptr);
+    if (!vertex.lat) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    ptr = nextArg(cmdline);
+    vertex.lon = atoi(ptr);
+    if (!vertex.lon) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    geofenceAddPoint(&vertex);
+}
+#endif
+
 #ifdef USE_SERVOS
 static void printServo(dumpFlags_t dumpMask, const servoParam_t *servoParams, const servoParam_t *defaultServoParams, const char *headingStr)
 {
@@ -6759,6 +6808,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("help", "display command help", "[search string]", cliHelp),
 #ifdef USE_LED_STRIP_STATUS_MODE
         CLI_COMMAND_DEF("led", "configure leds", NULL, cliLed),
+#endif
+#ifdef USE_GEOFENCE
+    CLI_COMMAND_DEF("geofence", "configure geofence vertexes in units of 1e7 deg", "[clear] | <latitude> <longitude>", cliGeofence),
 #endif
 #if defined(USE_BOARD_INFO)
     CLI_COMMAND_DEF("manufacturer_id", "get / set the id of the board manufacturer", "[manufacturer id]", cliManufacturerId),

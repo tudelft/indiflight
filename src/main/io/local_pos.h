@@ -26,6 +26,7 @@
 
 #include "drivers/time.h"
 #include "common/maths.h"
+#include "io/gps.h"
 
 typedef enum {
     LOCAL_POS_SOURCE_PI,
@@ -40,7 +41,9 @@ typedef struct __local_pos_ned_t {
     local_pos_source_e source;
     bool new;
     fp_vector_t pos;
+    bool vel_valid;
     fp_vector_t vel;
+    bool quat_valid;
     fp_quaternion_t quat;
 } local_pos_ned_t;
 
@@ -60,5 +63,7 @@ extern local_pos_sp_ned_t posSpNed;
 void setLocalPosMeas(local_pos_ned_t* pos);
 void setLocalPosSp(local_pos_sp_ned_t* sp);
 
+void llh_to_local(const gpsLocation_t* llh, const gpsLocation_t* home, fp_vector_t* ned);
+void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation_t* llh);
 
 #endif // LOCAL_POS_H

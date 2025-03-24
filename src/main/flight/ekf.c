@@ -45,11 +45,13 @@
 
 #ifdef USE_EKF
 
-PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 2);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_quat_measurement = 1,
     .use_for_manual_flight = 0,
     .meas_source = LOCAL_POS_SOURCE_PI,
+    .global_home_lat = 519906500,
+    .global_home_lon =  43766250,
     .proc_noise_acc       = { 500000, 500000, 500000 },
     .proc_noise_gyro      = { 100000, 100000, 100000 },
     .proc_noise_acc_bias  = { 100, 100, 100 },

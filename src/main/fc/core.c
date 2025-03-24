@@ -81,6 +81,7 @@
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "flight/nn_control.h"
+#include "flight/geofence.h"
 
 #include "io/beeper.h"
 #include "io/local_pos.h"
@@ -411,6 +412,10 @@ void updateArmingStatus(void)
         if ( ( shouldBeUsedEkf() && !isConvergedEkf() )
 #ifdef USE_LOCAL_POSITION
                 || ( FLIGHT_MODE(POSITION_MODE) && !posSpNed.new )
+#endif
+#ifdef USE_GEOFENCE
+                || ( geofenceState == GEOFENCE_STATE_ERROR )
+                || ( geofenceAction != GEOFENCE_ACTION_NONE )
 #endif
                 ) {
             setArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
@@ -1116,6 +1121,9 @@ void processRxModes(timeUs_t currentTimeUs)
 #endif
 #ifdef USE_EKF
             forceDeinitEkf(); // will re-init on received position messages
+#endif
+#ifdef USE_GEOFENCE
+            geofenceInit(); // reset geofence state
 #endif
         }
     }

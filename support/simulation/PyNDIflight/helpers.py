@@ -120,9 +120,9 @@ def wingElevonForcesMoments(vB, OB, w, d, dd, ddd, d0, cv, cvx, cO, cd, cdd, cdd
     # ACTUATION MODEL (elevons only)
     #              deflection              rate                      accel
     FM_B[0] += cd[0] * elev_sum    +   delev_sum * cdd[0]
-    #FM_B[1] += 0.
+    FM_B[1] += 0.
     FM_B[2] += cd[2] * elev_abs
-    #FM_B[3] += 0.
+    FM_B[3] += 0.
     FM_B[4] += cd[4] * elev_sum    +   delev_sum * cdd[4]    +   ddelev_sum * cddd[4]
     FM_B[5] += cd[5] * elev_diff   +   delev_diff * cdd[5]
 

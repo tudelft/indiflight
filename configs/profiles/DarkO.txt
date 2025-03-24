@@ -16,6 +16,7 @@
 
 ## ----- Other features
 #define USE_GPS
+#define USE_GEOFENCE
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -149,6 +150,13 @@ set ekf_meas_noise_position = 1000, 1000, 1000
 #set ekf_meas_noise_position = 5000, 5000, 40000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
+
+# geofence
+geofence clear
+geofence 519907000 43766000
+geofence 519906000 43766000
+geofence 519906000 43766500
+geofence 519907000 43766500
 
 # filter setups
 set gyro_lpf1_static_hz = 100

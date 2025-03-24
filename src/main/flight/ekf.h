@@ -39,6 +39,8 @@ typedef struct ekfConfig_s {
     uint8_t use_quat_measurement;      // bool
     uint8_t use_for_manual_flight;
     uint8_t meas_source;
+    int32_t global_home_lat;
+    int32_t global_home_lon;
     uint32_t proc_noise_acc[3];        // noise covariance * 1e6
     uint32_t proc_noise_gyro[3];       // noise covariance * 1e6
     uint32_t proc_noise_acc_bias[3];   // noise covariance * 1e6

@@ -46,6 +46,7 @@
 #include "io/dashboard.h"
 #endif
 #include "io/gps.h"
+#include "io/local_pos.h"
 #include "io/serial.h"
 
 #include "config/config.h"
@@ -56,6 +57,7 @@
 #include "flight/ahrs.h"
 #include "flight/pid.h"
 #include "flight/gps_rescue.h"
+#include "flight/geofence.h"
 
 #include "scheduler/scheduler.h"
 
@@ -2602,12 +2604,40 @@ void GPS_calculateDistanceAndDirectionToHome(void)
     }
 }
 
+#ifdef USE_LOCAL_POSITION
+static bool localPosFromGpsSol(local_pos_ned_t* local) {
+    if (!STATE(GPS_FIX_HOME)) {
+        return false;
+    }
+    local->source = LOCAL_POS_SOURCE_GPS;
+    local->time_us = micros(); // better sync with GPS here?
+    gpsLocation_t home = {GPS_home[GPS_LATITUDE], GPS_home[GPS_LONGITUDE], 0.f};
+
+    llh_to_local(&(gpsSol.llh), &home, &(local->pos));
+
+    local->vel_valid = false;
+    local->quat_valid = false;
+
+    return true;
+}
+#endif
+
 void onGpsNewData(void)
 {
     if (!STATE(GPS_FIX)) {
         // if we don't have a 3D fix don't give data to GPS rescue
         return;
     }
+
+#ifdef USE_LOCAL_POSITION
+    local_pos_ned_t newPos;
+    if (localPosFromGpsSol(&newPos)) {
+        setLocalPosMeas(&newPos);
+    }
+#endif
+#ifdef USE_GEOFENCE
+    geofenceUpdate(&gpsSol.llh);
+#endif
 
     gpsDataIntervalSeconds = gpsSol.navIntervalMs / 1000.0f;
 

@@ -70,6 +70,7 @@
 #include "flight/throw.h"
 #include "flight/ekf.h"
 #include "flight/nn_control.h"
+#include "flight/geofence.h"
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -1091,6 +1092,9 @@ const clivalue_t valueTable[] = {
 #endif // USE_MAG
 #endif // USE_GPS_RESCUE
 #endif // USE_GPS
+#ifdef USE_GEOFENCE
+    { "geofence_max_altitude",       VAR_INT16 | MASTER_VALUE, .config.minmax = { -30000, 30000 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, maxAltMeters) },
+#endif
 
     { PARAM_NAME_DEADBAND,          VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 32 }, PG_RC_CONTROLS_CONFIG, offsetof(rcControlsConfig_t, deadband) },
     { PARAM_NAME_YAW_DEADBAND,      VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_RC_CONTROLS_CONFIG, offsetof(rcControlsConfig_t, yaw_deadband) },

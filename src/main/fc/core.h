@@ -56,9 +56,8 @@ typedef enum {
     DISARM_REASON_GPS_RESCUE        = 7,
     DISARM_REASON_SERIAL_COMMAND    = 8,
     DISARM_REASON_ALLOC_FAILURE     = 9,
-#ifdef USE_TELEMETRY_PI
     DISARM_REASON_KEYBOARD          = 10,
-#endif
+    DISARM_REASON_GEOFENCE          = 11,
 #if defined(UNIT_TEST) || defined(SITL) || defined(MOCKUP)
     DISARM_REASON_SYSTEM            = 255,
 #endif

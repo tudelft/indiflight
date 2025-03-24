@@ -31,6 +31,7 @@
 #include "sensors/sensors.h"
 #include "flight/ahrs.h"
 #include "flight/ekf.h"
+#include "flight/geofence.h"
 
 #include "telemetry/pi.h"
 #include "telemetry/uros.h"
@@ -61,6 +62,18 @@ void setLocalPosMeas(local_pos_ned_t* pos) {
             ) {
         posMeasNed = *pos;
         posMeasNed.new = true;
+#ifdef USE_GPS
+        if (pos->source != LOCAL_POS_SOURCE_GPS) {
+            // transform local to global, set and check for geofence
+            gpsLocation_t home = {ekfConfig()->global_home_lat, ekfConfig()->global_home_lon, 0};
+            gpsLocation_t llh;
+            local_to_llh(&posMeasNed.pos, &home, &llh);
+            gpsSol.llh = llh;
+#ifdef USE_GEOFENCE
+            geofenceUpdate(&gpsSol.llh);
+#endif
+        }
+#endif
     }
 }
 
@@ -71,5 +84,20 @@ void setLocalPosSp(local_pos_sp_ned_t* sp) {
     posSpNed = *sp;
     posSpNed.new = true;
 }
+
+#ifdef USE_GPS
+void llh_to_local(const gpsLocation_t* llh, const gpsLocation_t* home, fp_vector_t* ned) {
+    ned->V.X = 1e-7f * DEGREES_TO_RADIANS(llh->lat - home->lat) * REARTHf;
+    ned->V.Y = 1e-7f * DEGREES_TO_RADIANS(llh->lon - home->lon) * REARTHf
+        * cosf(1e-7f * DEGREES_TO_RADIANS(home->lon));
+    ned->V.Z = -1e-2f * llh->altCm;
+}
+void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation_t* llh) {
+    // Reverse the conversion of NED to LLH
+    llh->lat = home->lat + 1e7f * RADIANS_TO_DEGREES(ned->V.X / REARTHf);
+    llh->lon = home->lon + 1e7f * RADIANS_TO_DEGREES(ned->V.Y / (REARTHf * cosf(1e-7f * DEGREES_TO_RADIANS(home->lon))) );
+    llh->altCm = -100 * ned->V.Z;  // Convert back from meters to centimeters
+}
+#endif
 
 #endif

@@ -109,7 +109,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 15., -1.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -139,7 +139,8 @@ if __name__=="__main__":
         tail.throw(height=4.,
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
                  #vHorz=[1., -2.], # final speed in x-y-plane in m/s
-                 wB=[0., -12., 0.], # approx body rotation in rad/s
+                 wB=[12., 0., 0.], # approx body rotation in rad/s
+                 #wB=[0., 0., 0.], # approx body rotation in rad/s
                  vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=2.5)
 
@@ -147,31 +148,33 @@ if __name__=="__main__":
     dt = 0.000125 # 8kHz
     T = 1000. # seconds
     dt_rt = None if args.no_real_time else 1*dt
+    armed = False
     start_trajectory = False
     heading = False
     speedup = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
-        if not args.throw and sim.t > 2.5:
+        if not args.throw and sim.t > 2.5 and not armed:
             sil.mockup.arm() if sil else None
+            armed = True
 
-        if not start_trajectory and sim.t > 6. and sil is not None:
-            # start trajectory tracking at 8*0.5 = 4m/s target speed
-            sil.mockup.sendKeyboard('1')
-            #sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
-            if sim.t > 8.:
-                for _ in range(6):
-                    sil.mockup.sendKeyboard('3')
-                start_trajectory = True
+        #if not start_trajectory and sim.t > 6. and sil is not None:
+        #    # start trajectory tracking at 8*0.5 = 4m/s target speed
+        #    sil.mockup.sendKeyboard('1')
+        #    #sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
+        #    if sim.t > 8.:
+        #        for _ in range(6):
+        #            sil.mockup.sendKeyboard('3')
+        #        start_trajectory = True
 
-        if not heading and sim.t > 10. and sil is not None:
-            sil.mockup.sendKeyboard('h')
-            heading = True
+        #if not heading and sim.t > 10. and sil is not None:
+        #    sil.mockup.sendKeyboard('h')
+        #    heading = True
 
-        if not speedup and sim.t > 13 and sil is not None:
-            speedup = True
-            for _ in range(6):
-                sil.mockup.sendKeyboard('3')
-            # test recovery mode
-            # sil.sendMocap = lambda *args: None
+        #if not speedup and sim.t > 13 and sil is not None:
+        #    speedup = True
+        #    for _ in range(6):
+        #        sil.mockup.sendKeyboard('3')
+        #    # test recovery mode
+        #    # sil.sendMocap = lambda *args: None
 
         sim.tick(dt)

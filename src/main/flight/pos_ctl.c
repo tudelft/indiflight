@@ -35,11 +35,16 @@
 #include "config/config.h"
 #include "flight/indi.h"
 #include "flight/trajectory_tracker.h"
+#include "flight/geofence.h"
 
 #ifdef USE_LOCAL_POSITION
 
 #ifndef USE_INDI
 #error "USE_LOCAL_POSITION requires the use of USE_INDI"
+#endif
+
+#ifndef USE_EKF
+#error "USE_LOCAL_POSITION require the use of USE_EKF"
 #endif
 
 PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
@@ -126,7 +131,10 @@ void updatePosCtl(timeUs_t current) {
     bool setpoint_valid = posSpNed.new;
     static bool latch_descend = false;
 
-    if (latch_descend || !setpoint_valid || !isConvergedEkf() || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)) {
+    if ( latch_descend
+            || !setpoint_valid || !isConvergedEkf()
+            || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)
+            || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
         // panic and level craft in slight downwards motion
         accSpNedFromPos.V.X = 0.f;
         accSpNedFromPos.V.Y = 0.f;
@@ -138,7 +146,8 @@ void updatePosCtl(timeUs_t current) {
 
         // latch reactivation until new arming cycle
         latch_descend = ARMING_FLAG(ARMED);
-    } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US) {
+    } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
+                || (geofenceAction == GEOFENCE_ACTION_HOLD) ) {
         // more than 2 sec but less than 3.5 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
         updateTrajectoryTracker(current);

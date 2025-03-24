@@ -88,6 +88,7 @@
 #define PG_LEARNER_CONFIG 62
 #define PG_EKF_CONFIG 63
 #define PG_NN_CONFIG 64
+#define PG_GEOFENCE_CONFIG 65
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

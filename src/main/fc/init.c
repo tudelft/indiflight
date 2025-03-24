@@ -107,6 +107,7 @@
 #include "flight/position.h"
 #include "flight/servos.h"
 #include "flight/learner.h"
+#include "flight/geofence.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -1057,6 +1058,10 @@ void init(void)
     // Attempt to enable DMA on all SPI busses
     spiInitBusDMA();
 #endif
+#endif
+
+#ifdef USE_GEOFENCE
+    geofenceInit();
 #endif
 
     swdPinsInit();

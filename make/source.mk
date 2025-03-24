@@ -96,6 +96,7 @@ COMMON_SRC = \
             fc/rc_modes.c \
             flight/position.c \
             flight/failsafe.c \
+            flight/geofence.c \
             flight/gps_rescue.c \
             flight/dyn_notch_filter.c \
             flight/ahrs.c \
@@ -284,6 +285,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             fc/rc_controls.c \
             fc/runtime_config.c \
             flight/dyn_notch_filter.c \
+            flight/geofence.c \
             flight/ahrs.c \
             flight/mixer.c \
             flight/pid.c \

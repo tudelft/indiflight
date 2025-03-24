@@ -95,7 +95,6 @@ void setMocapT(const float *pos, const float *vel, const float *q, const uint32_
     local_pos_ned_t new_pos;
 
     new_pos.source = LOCAL_POS_SOURCE_MOCKUP;
-    new_pos.new = true; // just always set this.. don't know how to handle it better
     new_pos.time_us = time_us;
     for (int axis = 0; axis < 3; axis++) {
         new_pos.pos.A[axis] = pos[axis];
@@ -113,7 +112,6 @@ void setPosSetpoint(const float *pos, const float yaw) {
     local_pos_sp_ned_t sp;
 
     sp.source = LOCAL_POS_SOURCE_MOCKUP;
-    sp.new = true; // just always set this.. don't know how to handle it better
     sp.time_us = micros();
     //posLatestMsgTimeReceived = micros();
     // meters, NED. rad

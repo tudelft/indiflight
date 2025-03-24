@@ -40,6 +40,7 @@
 #define M_LN2f      0.69314718055994530942f
 
 #define GRAVITYf 9.80665f
+#define REARTHf 6371000.f
 
 #define RAD    (M_PIf / 180.0f)
 #define DEGREES_TO_DECIDEGREES(angle) ((angle) * 10)
