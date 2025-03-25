@@ -1583,18 +1583,85 @@ void resetInnerLoopCounter(void) {
 #ifdef USE_ACTUATOR_TEST_DANGEROUS
 #define ACTUATOR_TEST_GRACE_PERIOD 2000000
 
+// static float testSignal(timeDelta_t timeSinceStartUs) {
+//   // parameters
+//   timeDelta_t periodUs = 200000; // 5Hz
+//   float amplitude = 0.2f; // 20% amplitude
+// 
+//   // make sure values are small for most accurate float calculations
+//   timeDelta_t deltaUs = (timeSinceStartUs % periodUs);
+// 
+//   // calculate sine output
+//   float phase = 2.0f * M_PIf * ((float) deltaUs) / ((float) (periodUs));
+//   return 0.5f + amplitude * sinf(phase); // must be between 0 and 1!
+// }
+
+//// Sine input settings
+#define ACTUATOR_TEST_N_AMPLITUDES 3
+#define ACTUATOR_TEST_N_FREQUENCIES 3
+#define ACTUATOR_TEST_SIN_US 3000000 // 3 sec
+static const float amplitudes[ACTUATOR_TEST_N_AMPLITUDES] = {0.1, 0.2, 0.3}; // [-]
+static const float frequencies[ACTUATOR_TEST_N_FREQUENCIES] = {0.5, 1, 2}; // [Hz]
+
+//// Step input settings
+#define ACTUATOR_TEST_N_STEPS 3
+#define ACTUATOR_TEST_STEP_US 2000000 // 2 sec
+static const float stepInputAmplitudes[ACTUATOR_TEST_N_STEPS] = {0.25, 0.5, 0.75};    
+
+//// Other settings
+#define ACTUATOR_TEST_BREAK_US 5000000 // 5 sec
+#define ACTUATOR_TEST_IDLE_OUTPUT 0.1f // 10% throttle
+
 static float testSignal(timeDelta_t timeSinceStartUs) {
-  // parameters
-  timeDelta_t periodUs = 200000; // 5Hz
-  float amplitude = 0.2f; // 20% amplitude
+    timeDelta_t totalUs = 0, deltaUs = 0;
 
-  // make sure values are small for most accurate float calculations
-  timeDelta_t deltaUs = (timeSinceStartUs % periodUs);
+    float phase = 0;
+    int i, j;
 
-  // calculate sine output
-  float phase = 2.0f * M_PIf * ((float) deltaUs) / ((float) (periodUs));
-  return 0.5f + amplitude * sinf(phase); // must be between 0 and 1!
-}
+    for (i = 0; i < ACTUATOR_TEST_N_AMPLITUDES; i++) {
+        for (j = 0; j < ACTUATOR_TEST_N_FREQUENCIES; j++) {
+            // If in first timeBreakUs microseconds of this iteration of the amplitude, frequency for loop return 0
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+                return ACTUATOR_TEST_IDLE_OUTPUT;
+            }
+            // If not currently in break add break time to total time
+            totalUs += ACTUATOR_TEST_BREAK_US;
+
+            // If in the last timeTestSinUs microsends of this iteration of the amplitude, frequency for loop return the sin value
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_SIN_US) {
+                float periodUsFloat = 1000000.f / frequencies[j];
+                deltaUs = timeSinceStartUs - totalUs;
+
+                // Compute sin output
+                phase = 2.0f * M_PIf * ((float) deltaUs) / periodUsFloat;
+                // return phase;
+                return 0.5f + amplitudes[i] * sinf(phase);
+            }
+
+            // If not currently doing this sine, add sine test time to total time
+            totalUs += ACTUATOR_TEST_SIN_US;
+        }
+    }
+
+    for (i = 0; i < ACTUATOR_TEST_N_STEPS; i++) {
+        // If in first timeBreakUs microseconds of this iteration of the step input amplitude for loop return 0
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+            return ACTUATOR_TEST_IDLE_OUTPUT;
+        }
+
+        // If not currently in break add break time to total time
+        totalUs += ACTUATOR_TEST_BREAK_US;
+
+        // If in the last timeTestStepUs microsends of this iteration of the step input amplitude for loop return the step amplitude
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_STEP_US) {
+            return stepInputAmplitudes[i];
+        }
+
+        // If not currently doing this step input, add step test time to total time
+        totalUs += ACTUATOR_TEST_STEP_US;
+    }
+    return ACTUATOR_TEST_IDLE_OUTPUT;
+  }
 #endif
 
 // generates motor[i] commands according to the selected controller
