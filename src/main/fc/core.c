@@ -1580,6 +1580,23 @@ void resetInnerLoopCounter(void) {
     innerLoopCounter = 0;
 }
 
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+#define ACTUATOR_TEST_GRACE_PERIOD 2000000
+
+static float testSignal(timeDelta_t timeSinceStartUs) {
+  // parameters
+  timeDelta_t periodUs = 200000; // 5Hz
+  float amplitude = 0.2f; // 20% amplitude
+
+  // make sure values are small for most accurate float calculations
+  timeDelta_t deltaUs = (timeSinceStartUs % periodUs);
+
+  // calculate sine output
+  float phase = 2.0f * M_PIf * ((float) deltaUs) / ((float) (periodUs));
+  return 0.5f + amplitude * sinf(phase); // must be between 0 and 1!
+}
+#endif
+
 // generates motor[i] commands according to the selected controller
 // does not handle arm/disarm logic, that's only done at the last step
 FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
@@ -1652,6 +1669,32 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
             motor_normalized[i] = scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
         }
     }
+
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+#pragma message "WARNING: compiling with dangerous code."
+    // overwrite outputs with test commands
+
+    // initially, just set idle for all
+    for (int i = 0; i < numMotors; i++) {
+        motor_normalized[i] = 0.f;
+    }
+
+    // find time since armed
+    static timeUs_t lastArmedUs = 0;
+    static bool lastArmed = false;
+    if (!lastArmed && ARMING_FLAG(ARMED)) {
+        lastArmedUs = currentTimeUs;
+        beeperWarningBeeps(15); // warn user
+    }
+    lastArmed = ARMING_FLAG(ARMED);
+    timeDelta_t timeSinceArmUs = cmpTimeUs(currentTimeUs, lastArmedUs);
+
+    // wait for grace period
+    if (timeSinceArmUs >= ACTUATOR_TEST_GRACE_PERIOD) {
+        float y = testSignal(timeSinceArmUs - ACTUATOR_TEST_GRACE_PERIOD);
+        motor_normalized[0] = constrainf(y, 0.f, 1.f);
+    }
+#endif
 
 #ifdef USE_INDI
     indiUpdateActuatorState( motor_normalized, servo_normalized );

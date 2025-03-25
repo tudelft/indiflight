@@ -114,6 +114,7 @@ bool cliMode = false;
 #include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"
+#include "flight/geofence.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -2121,8 +2122,9 @@ static void cliModeColor(const char *cmdName, char *cmdline)
 #endif
 
 #ifdef USE_GEOFENCE
-#include "flight/geofence.h"
 static void cliGeofencePrint(void) {
+    cliPrintLinefeed();
+    cliPrintLinef("# geofence");
     cliPrintLinef("geofence clear");
     int n = MIN(GEOFENCE_MAX_VERTICES, geofenceConfig()->numActive);
     for (int i = 0; i < n; i++) {
@@ -6511,6 +6513,10 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
         printFeature(dumpMask, featureConfig_Copy.enabledFeatures, featureConfig()->enabledFeatures, "feature");
 
         printSerial(dumpMask, &serialConfig_Copy, serialConfig(), "serial");
+
+#ifdef USE_GEOFENCE
+        cliGeofencePrint();
+#endif
 
         if (!(dumpMask & HARDWARE_ONLY)) {
 #ifndef USE_QUAD_MIXER_ONLY

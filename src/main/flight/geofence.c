@@ -21,6 +21,10 @@ geofence_action_e geofenceAction = GEOFENCE_ACTION_NONE;
 
 #ifdef USE_GEOFENCE
 
+#ifndef USE_LOCAL_POSITION
+#error "USE_GEOFENCE requires USE_LOCAL_POSITION"
+#endif
+
 static unsigned softCounter, hardCounter;
 
 

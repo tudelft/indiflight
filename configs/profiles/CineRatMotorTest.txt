@@ -41,13 +41,14 @@
 #define USE_INDI
 #define USE_EKF
 #define USE_LOCAL_POSITION
-#define USE_TRAJECTORY_TRACKER
+## #define USE_TRAJECTORY_TRACKER
 
 ## ----- DANGERZONE
-#define USE_THROW_TO_ARM
-#define USE_CATAPULT
-#define USE_LEARNER
-#define USE_NN_CONTROL
+## #define USE_THROW_TO_ARM
+## #define USE_CATAPULT
+## #define USE_LEARNER
+## #define USE_NN_CONTROL
+#define USE_ACTUATOR_TEST_DANGEROUS
 
 
 ################################################
@@ -97,17 +98,23 @@ aux 7 56 6 1700 2100 0 0
 
 # blackbox config
 set blackbox_disable_pids = ON
+set blackbox_disable_rc = ON
 set blackbox_disable_setpoint = ON
-set blackbox_disable_alt = OFF
 set blackbox_disable_bat = OFF
-set blackbox_disable_rssi = OFF
-set blackbox_disable_debug = OFF
+set blackbox_disable_mag = ON
+set blackbox_disable_alt = ON
+set blackbox_disable_rssi = ON
+set blackbox_disable_gyro = ON
+set blackbox_disable_acc = ON
+set blackbox_disable_debug = ON
+set blackbox_disable_motors = OFF
+set blackbox_disable_gps = ON
 set blackbox_disable_indi = OFF
-set blackbox_disable_pos = OFF
-set blackbox_disable_ekf = OFF
-set blackbox_disable_learner = OFF
+set blackbox_disable_pos = ON
+set blackbox_disable_ekf = ON
+set blackbox_disable_learner = ON
 set blackbox_high_resolution = ON
-set debug_mode = BARO
+set debug_mode = NONE
 
 # sensor calibration / alignment
 set align_board_roll = 0
@@ -134,7 +141,7 @@ set small_angle = 20   # angle at which to deny arming
 set pid_process_denom = 4       # relative to imu
 set ahrs_process_denom = 4      # relative to imu
 set nn_rate_denom = 2           # relative to pid
-set blackbox_sample_rate = 1/4  # relative to pid
+set blackbox_sample_rate = 1/1  # relative to pid
 
 # ekf (these are the defaults)
 set ekf_use_quat = 1
