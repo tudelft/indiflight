@@ -2436,7 +2436,7 @@ static bool blackboxWriteSysinfo(void)
 
 #ifdef USE_GPS
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_PROVIDER, "%d",               gpsConfig()->provider)
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_SET_HOME_POINT_ONCE, "%d",    gpsConfig()->gps_set_home_point_once)
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_SET_HOME_POINT_ONCE, "%d",    gpsConfig()->gps_set_home_point_once)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_USE_3D_SPEED, "%d",           gpsConfig()->gps_use_3d_speed)
 
 #ifdef USE_GPS_RESCUE

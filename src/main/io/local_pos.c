@@ -57,7 +57,7 @@ local_pos_sp_ned_t posSpNed;
 
 void setLocalPosMeas(local_pos_ned_t* pos) {
     if ( (cmpTimeUs(pos->time_us, posMeasNed.time_us) > 0)
-            && ( pos->source != ekfConfig()->meas_source
+            && ( pos->source == ekfConfig()->meas_source
                 || pos->source == LOCAL_POS_SOURCE_MOCKUP ) // always accept MOCKUP
             ) {
         posMeasNed = *pos;

@@ -2813,6 +2813,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         if (sbufBytesRemaining(src) >= 2) {
             // Added in API version 1.43
             gpsConfigMutable()->gps_set_home_point_once = sbufReadU8(src);
+            gpsConfigMutable()->gps_set_home_point_once = false; // always disable this now
             gpsConfigMutable()->gps_ublox_use_galileo = sbufReadU8(src);
         }
         break;

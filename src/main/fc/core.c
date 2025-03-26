@@ -545,6 +545,9 @@ void disarm(flightLogDisarmReason_e reason)
         // invalidate previous setpoint
         posSpNed.new = false;
 #endif
+#ifdef USE_GPS
+        DISABLE_STATE(GPS_FIX_HOME);
+#endif
 #ifdef USE_TRAJECTORY_TRACKER
         if (isActiveTrajectoryTracker()) {
             stopTrajectoryTracker();
@@ -654,7 +657,7 @@ void tryArm(void)
         lastArmingDisabledReason = 0;
 
 #ifdef USE_GPS
-        GPS_reset_home_position();
+        //GPS_reset_home_position();
         //beep to indicate arming
         if (featureIsEnabled(FEATURE_GPS)) {
             if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueConfig()->minSats) {
@@ -1661,7 +1664,7 @@ static float testSignal(timeDelta_t timeSinceStartUs) {
         totalUs += ACTUATOR_TEST_STEP_US;
     }
     return ACTUATOR_TEST_IDLE_OUTPUT;
-  }
+}
 #endif
 
 // generates motor[i] commands according to the selected controller

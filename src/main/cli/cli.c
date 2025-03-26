@@ -2148,6 +2148,7 @@ static void cliGeofence(const char *cmdName, char *cmdline)
     ptr = cmdline;
     if (!strncmp(ptr, "clear", 5)) {
         memset(geofenceConfigMutable()->vertices, 0, GEOFENCE_MAX_VERTICES * sizeof(gpsLocation_t));
+        geofenceConfigMutable()->numActive = 0;
         cliGeofencePrint();
         return;
     }

@@ -154,6 +154,7 @@ void initEkf(timeUs_t currentTimeUs) {
 
 	// set ekf parameters
 	bool use_quat = ekfConfig()->use_quat_measurement;
+    use_quat &= posMeasNed.quat_valid;
 
 	// process noise covariance
 	float Q[N_STATES] = {
@@ -330,10 +331,13 @@ void updateEkf(timeUs_t currentTimeUs) {
 		    ekf_Z[2] = posMeasNed.pos.V.Z;
         }
 
-        ekf_Z[3] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.w;
-		ekf_Z[4] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.x;
-		ekf_Z[5] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.y;
-		ekf_Z[6] = (ekfConfig()->use_quat_measurement) * posMeasNed.quat.z;
+        bool use_quat = ekfConfig()->use_quat_measurement;
+        use_quat &= posMeasNed.quat_valid;
+
+        ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
+        ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
+        ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
+        ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
 
 		// old update:
 		ekf_update(ekf_Z);
