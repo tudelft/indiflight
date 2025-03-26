@@ -1,5 +1,5 @@
 
-include remote.env
+-include remote.env
 
 SSHPASS = /usr/bin/sshpass
 REMOTE_PORT ?= 3333

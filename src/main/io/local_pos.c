@@ -62,10 +62,11 @@ void setLocalPosMeas(local_pos_ned_t* pos) {
             ) {
         posMeasNed = *pos;
         posMeasNed.new = true;
-#ifdef USE_GPS
+#if defined(USE_GPS) && false
+        // this is just for debugging geofence
         if (pos->source != LOCAL_POS_SOURCE_GPS) {
             // transform local to global, set and check for geofence
-            gpsLocation_t home = {ekfConfig()->global_home_lat, ekfConfig()->global_home_lon, 0};
+            gpsLocation_t home = { 519906500, 43766250, 0 };
             gpsLocation_t llh;
             local_to_llh(&posMeasNed.pos, &home, &llh);
             gpsSol.llh = llh;

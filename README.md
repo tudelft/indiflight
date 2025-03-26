@@ -103,37 +103,29 @@ All arguments after the image tag `indiflight`, are directly passed to `make`. E
 ```sh
 clean             # delete all relevant object files
 dfu_flash         # dito, but then flash via dfu after
-remote_flash_swd  # dito, but then flash via swd on a companion computer
+remote_flash_swd  # dito, but then flash via swd on a companion computer (see next section for configuation)
 ```
 
+### Remote flashing/debugging
 
-## Flashing and Debugging over raspberry pi companion computer
+(For context, see REAMDME's of https://github.com/tudelft/racebian)
 
-For context, see REAMDME's of https://github.com/tudelft/racebian.
+To flash and debug over a remote companion computer, you need a `remote.env` in 
+the root of this repo that looks like this:
+```sh
+REMOTE_IP=10.0.0.1
+REMOTE_USER=pi
+REMOTE_PASSWORD=pi
+REMOTE_NAME=pi
+```
 
-Furthermore, install:
+Also, you need to install
 
     apt install gdb-multiarch binutils-multiarch sshpass
 
-Create a `remote.env` in the root of this repo:
-```sh
-REMOTE_IP=10.0.0.1  # ip
-REMOTE_USER=pi
-REMOTE_PASSWORD=pi
-REMOTE_NAME=pi      # arbitrary name
-```
+To flash, use either `remote_flash_dfu` or `remote_flash_swd`.
 
-### Remote flash
-
-If connected to the racebian raspberry via wifi (such that it has ip 10.0.0.1, user pi and password pi), the following can be used to flash (UPLOAD_PARAMETERS not supported):
-
-    docker run --privileged -it                \
-        -v ./:/indiflight                      \
-        -e BOARD=MTKS-H743 -e PROFILE=CineRat  \
-        indiflight-builder remote_flash_dfu  # or remote_flash_swd
-
-
-### Remote debug
+#### Debugging
 
 (unfortunately the credentials in `remote.env` are hardcoded in `.vscode/tasks.json` and `launch.json`)
 
