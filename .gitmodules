@@ -9,7 +9,7 @@
 	url = https://www.github.com/tudelft/clapack.git
 [submodule "support/groundstation/ext/UnifiedMocapRouter"]
 	path = support/groundstation/ext/UnifiedMocapRouter
-	url = https://github.com/tudelft/UnifiedOptitrackRouter.git
+	url = https://github.com/tudelft/UnifiedMocapRouter.git
 [submodule "lib/main/ekf_c_code_generation"]
 	path = lib/main/ekf_c_code_generation
 	url = https://github.com/tudelft/ekf_c_code_generation.git
