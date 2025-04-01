@@ -113,10 +113,10 @@ set small_angle = 45   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 3       # relative to imu
+set pid_process_denom = 2       # relative to imu
 set ahrs_process_denom = 9      # relative to imu
 set nn_rate_denom = 2           # relative to pid
-set blackbox_sample_rate = 1/2  # relative to pid
+set blackbox_sample_rate = 1/1  # relative to pid
 
 # ekf (these are the defaults)
 set ekf_use_quat = 1
