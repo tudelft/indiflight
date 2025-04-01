@@ -1612,7 +1612,7 @@ void resetInnerLoopCounter(void) {
 
 //// Sine input settings
 #define ACTUATOR_TEST_N_AMPLITUDES 1
-#define ACTUATOR_TEST_N_FREQUENCIES 16
+#define ACTUATOR_TEST_N_FREQUENCIES 15
 #define ACTUATOR_TEST_SIN_US 1500000 // 1.5 sec
 static const float amplitudes[ACTUATOR_TEST_N_AMPLITUDES] = {0.2}; // [-]
 static const float frequencies[ACTUATOR_TEST_N_FREQUENCIES] = {18.1, 20.72, 23.72, 27.15, 
