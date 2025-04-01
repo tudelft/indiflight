@@ -1626,7 +1626,7 @@ static const float frequencies[ACTUATOR_TEST_N_FREQUENCIES] = {18.1, 20.72, 23.7
 //     9.21, 10.54, 12.07, 13.82, 15.81, 
 // }
 //// Step input settings
-#define ACTUATOR_TEST_N_STEPS 9
+#define ACTUATOR_TEST_N_STEPS 1
 #define ACTUATOR_TEST_STEP_US 1000000 // 1 sec
 static const float stepInputAmplitudes[ACTUATOR_TEST_N_STEPS] = {0.2};    
 
