@@ -192,7 +192,7 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
         SGEVV(rls->n, AT, KT, ATK);
         float lamFortescue = fortescueApply( &(rls->fortescue), e[0], ATK );
         rls->lambda = constrainf(lamFortescue, rls->lambdaBase, 1.);
-        rls->lambda = rls->lambdaBase;
+        //rls->lambda = rls->lambdaBase;
     }
 
     float traceP = 0.f;

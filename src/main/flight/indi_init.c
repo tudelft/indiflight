@@ -133,8 +133,9 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsNanLimit = 20;
 }
 
-void initIndiRuntime(void) {
+void initIndiRuntimeParameters(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
+
     // ---- Att/Rate config
     indiRun.attGains.A[0] = p->attGains[0] * 0.1f;
     indiRun.attGains.A[1] = p->attGains[1] * 0.1f;
@@ -234,24 +235,49 @@ void initIndiRuntime(void) {
     indiRun.wlsTheta = p->wlsTheta * 1e-4;
     indiRun.wlsNanLimit = p->wlsNanLimit;
 
-    // ---- runtime values -- actauators
+    // actuators
+    indiRun.erpmToRads = ERPM_PER_LSB / SECONDS_PER_MINUTE / (motorConfig()->motorPoleCount / 2.f) * (2.f * M_PIf);
     for (int i = 0; i < indiRun.actNum; i++) {
-        indiRun.d[i] = 0.f; // command issued to the actuators on [-1, 1] scale
-        indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
-        indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
-        indiRun.uState_fs[i] = 0.f; // sync-filtered estiamted force state
         if (indiRun.actIsMotor[i]) {
             updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
         } else if (indiRun.actIsServo[i]) {
             indiRun.lin[i].k = 0.f;
             indiRun.lin[i].A = 0.f;
         }
+    }
+
+    // gains
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        indiRun.attGainsCasc.A[axis] = indiRun.attGains.A[axis] / indiRun.rateGains.A[axis]; // attitude gains simulating parallel PD
+    }
+
+    // ---- housekeeping
+    indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
+    indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
+
+    // ---- control law selection
+    indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
+    indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
+    indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNed
+}
+
+void initIndiRuntime(void) {
+    // set parameters from profile
+    initIndiRuntimeParameters();
+
+    // reset runtime values
+
+    // ---- runtime values -- actauators
+    for (int i = 0; i < indiRun.actNum; i++) {
+        indiRun.d[i] = 0.f; // command issued to the actuators on [-1, 1] scale
+        indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
+        indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
+        indiRun.uState_fs[i] = 0.f; // sync-filtered estiamted force state
         indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
         indiRun.omegaDot_fs[i] = 0.f; // sync-filtered motor rate rad/s/s
     }
-    indiRun.erpmToRads = ERPM_PER_LSB / SECONDS_PER_MINUTE / (motorConfig()->motorPoleCount / 2.f) * (2.f * M_PIf);
     // ---- runtime values -- axes
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         indiRun.attGainsCasc.A[axis] = indiRun.attGains.A[axis] / indiRun.rateGains.A[axis]; // attitude gains simulating parallel PD
@@ -268,19 +294,13 @@ void initIndiRuntime(void) {
     }
     indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
     indiRun.attErrBody = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
-    for (int j = 0; j < MAXV; j++)
-        indiRun.dv[MAXV] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    for (int j = 0; j < MAXV; j++) {
+        indiRun.dv[j] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    }
 
     // ---- housekeeping
-    indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
-    indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
     indiRun.attExecCounter = 0; // count executions (wrapping)
     indiRun.nanCounter = 0; // count times consequtive nans appear in allocation
-
-    // ---- control law selection
-    indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
-    indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
-    indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNed
 
     // ---- filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {

@@ -572,6 +572,10 @@ void updateLearner(timeUs_t current) {
 
     appliedAfterQuery = appliedAfterQuery && !(learningQueryState == LEARNING_QUERY_IDLE);
 
+    if ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE)) {
+        initIndiRuntimeParameters();
+    }
+
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
     if (!(++printCounter % 1000))
