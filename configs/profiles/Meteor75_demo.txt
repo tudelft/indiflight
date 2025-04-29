@@ -1,0 +1,403 @@
+# This file contains build flags and configuration for the Tinywhoop Meteor75.txt
+
+###############
+# BUILD FLAGS #
+###############
+
+## ----- RC components
+#define USE_SERIALRX
+#define USE_SERIALRX_CRSF
+
+#define USE_TELEMETRY
+#define USE_TELEMETRY_CRSF
+#define USE_TELEMETRY_PI
+
+## ----- Other features
+#define USE_GPS
+
+## ----- FPV features: LED and onscreen display
+#define USE_LED_STRIP
+## define USE_OSD # no OSD on this board
+
+## ----- Outputs and logging
+#define USE_DSHOT
+#define USE_BLACKBOX
+
+## ----- Developer features
+## #define USE_BENCHMARK
+## #define USE_STACK_CHECK
+## #define USE_CLI_DEBUG_PRINT
+#define PI_STATS             ## needs USE_TELEMETRY_PI
+#define PI_USE_PRINT_MSGS
+
+## ----- INDIFLIGHT features
+#define USE_INDI
+## #define USE_EKF
+## #define USE_LOCAL_POSITION
+## #define USE_TRAJECTORY_TRACKER
+
+## ----- DANGERZONE
+#define USE_THROW_TO_ARM
+## #define USE_CATAPULT
+#define USE_LEARNER
+## #define USE_NN_CONTROL
+
+
+################################################
+# CRAFT SETTINGS (formerly known as "profile") #
+################################################
+
+## ----- PERIPHERALS
+
+# feature
+feature TELEMETRY
+feature LED_STRIP
+
+# gps
+
+# serial ports
+serial 0 262144 115200 57600 0 115200  # pi protocol
+serial 1 64 115200 57600 0 115200      # RX
+
+# rx
+set serialrx_provider = CRSF
+
+# map
+map AETR1234
+
+# switch configs (Radiomaster Pocket demo remote)
+aux 0 0 1 1800 2100 0 0
+aux 1 1 3 900 1800 0 0
+
+# blackbox config
+set blackbox_disable_pids = ON
+set blackbox_disable_setpoint = ON
+set blackbox_disable_alt = ON
+set blackbox_disable_bat = OFF
+set blackbox_disable_rssi = OFF
+set blackbox_disable_debug = ON
+set blackbox_disable_indi = OFF
+set blackbox_disable_pos = ON
+set blackbox_disable_ekf = ON
+set blackbox_disable_learner = OFF
+set blackbox_high_resolution = ON
+set debug_mode = NONE
+
+# sensor calibration / alignment
+set align_board_roll = 0
+set align_board_pitch = 0
+set align_board_yaw = 180
+set acc_calibration = 0,0,0,1
+set acc_offset = 13, 0, -9
+
+# motor setup
+set dshot_bidir = ON
+set dshot_idle_value = 1000
+set motor_pwm_protocol = DSHOT300
+set motor_poles = 12
+set motor_output_reordering = 3,2,1,0,4,5,6,7
+
+# failsafes
+set failsafe_delay = 5
+set small_angle = 45   # angle at which to deny arming
+
+
+## ----- FLIGHT PERFORMANCE
+
+# scheduling
+set pid_process_denom = 3       # relative to imu
+set ahrs_process_denom = 9      # relative to imu
+set nn_rate_denom = 2           # relative to pid
+set blackbox_sample_rate = 1/4  # relative to pid
+
+# ekf (these are the defaults)
+set ekf_use_quat = 1
+set ekf_use_for_manual_flight = 0
+set ekf_meas_source = 0
+set ekf_proc_noise_acc = 500000, 500000, 500000
+set ekf_proc_noise_gyro = 100000, 100000, 100000
+set ekf_proc_noise_acc_bias = 100, 100, 100
+set ekf_proc_noise_gyro_bias = 10, 10, 10
+set ekf_meas_noise_position = 1000, 1000, 1000
+#set ekf_meas_noise_position = 5000, 5000, 40000
+set ekf_meas_noise_quat = 500000, 500000, 500000, 500000
+set ekf_meas_delay = 0
+
+# filter setups
+set gyro_lpf1_static_hz = 100
+set gyro_lpf2_static_hz = 0
+set dyn_notch_count = 0
+set dyn_notch_q = 500
+set gyro_lpf1_dyn_min_hz = 0
+set gyro_lpf1_dyn_max_hz = 250
+set acc_lpf_hz = 50
+set simplified_gyro_filter_multiplier = 40
+set rpm_filter_min_hz = 60
+
+profile 0
+
+set dterm_lpf1_dyn_min_hz = 0
+set dterm_lpf1_dyn_max_hz = 75
+set dterm_lpf1_static_hz = 0
+set dterm_lpf2_static_hz = 0
+set yaw_lowpass_hz = 0
+set thrust_linear = 55
+set simplified_dterm_filter = OFF
+
+
+## ----- RATE PROFILES
+
+rateprofile 0
+
+set rateprofile_name = velocidrone
+set thr_mid = 50
+set thr_expo = 0
+set rates_type = ACTUAL
+set roll_rc_rate = 100
+set pitch_rc_rate = 100
+set yaw_rc_rate = 100
+set roll_expo = 1
+set pitch_expo = 1
+set yaw_expo = 1
+set roll_srate = 70
+set pitch_srate = 70
+set yaw_srate = 70
+set throttle_limit_type = OFF
+set throttle_limit_percent = 100
+set roll_rate_limit = 1998
+set pitch_rate_limit = 1998
+set yaw_rate_limit = 1998
+
+
+## ----- INDI ATTITUDE CONTROLLER
+
+indiprofile 0
+
+# --- attitude control config and limits ---
+# Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
+set indi_attitude_gains = 1500, 1500, 1000
+set indi_rate_gains     =  150,  150,  150
+
+# attitude controller limits: (deg/s)
+set indi_attitude_max_tilt_rate = 800
+set indi_attitude_max_yaw_rate = 500
+
+# --- manual flight config and limits ---
+set indi_manual_max_upwards_accel = 40  # N/kg (or 255 to set to max possible)
+set indi_manual_max_tilt = 55           # deg
+set indi_manual_use_coordinated_yaw = 1
+
+# --- indi config ---
+set indi_use_increment = 1
+set indi_use_accel_for_thrust = 1
+set indi_use_rpm_dot_feedback = 1
+set indi_act_num = 4
+set indi_sync_lowpass_hz = 15
+
+# fx, fy, fz, roll, pitch, yaw
+set indi_wls_axes_weights = 1,1,50,50,50,5
+
+# --- actuators: fields can have up to 8 elements ---
+set indi_act_is_motor = 1,1,1,1,0,0,0,0
+set indi_act_is_servo = 0,0,0,0,0,0,0,0
+set indi_act_time_constant_ms = 35, 35, 35, 35       # ms
+set indi_act_max_rpm = 80000, 80000, 80000, 80000    # rpm
+set indi_act_hover_rpm = 40000, 40000, 40000, 40000  # rpm
+set indi_act_nonlinearity = 50, 50, 50, 50           # %
+set indi_act_min = 0, 0, 0, 0                        # % will be forced 0 for motors anyway
+set indi_act_max = 100, 100, 100, 100                # %
+set indi_wls_act_preferred_state = 0,0,0,0
+set indi_wls_act_penalties = 1,1,1,1
+
+# fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
+set indi_act_g1_fx = 0,0,0,0
+set indi_act_g1_fy = 0,0,0,0
+set indi_act_g1_fz = -1000, -1000, -1000, -1000
+set indi_act_g1_roll = -6000, -6000, 6000, 6000
+set indi_act_g1_pitch = -5000, 5000, -5000, 5000
+set indi_act_g1_yaw = 1510, -1510, -1510, 1510
+
+# Nm / (kgm^2) / (rad/s/s) * 1e5
+set indi_act_g2_roll = 0,0,0,0
+set indi_act_g2_pitch = 0,0,0,0
+set indi_act_g2_yaw = 110, -110, -110, 110
+
+
+indiprofile 2
+
+# indiprofile 2 --> these are the settings for the learned profile
+# commented will be overwritten by the learner, so they dont need to be set
+# as the initial condition is currently always zero. This may be changed in the future.
+# the default values (values not set here) are the same as for all other profiles
+
+# these values are slightly more conservative than indiprofile 0
+
+set indi_act_num = 4
+# set indi_attitude_gains = 1552,1552,1552
+# set indi_rate_gains = 174,174,174
+set indi_attitude_max_tilt_rate = 500
+set indi_attitude_max_yaw_rate = 300
+set indi_manual_use_coordinated_yaw = 1
+set indi_manual_max_upwards_accel = 20
+set indi_act_is_motor = 1,1,1,1,0,0,0,0
+set indi_act_is_servo = 0,0,0,0,0,0,0,0
+# set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
+# set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
+# set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000
+set indi_act_min = 0,0,0,0,0,0,0,0
+set indi_act_max = 100,100,100,100,100,100,100,100
+
+# -- roll -56, pitch 81, yaw 170
+#set indi_act_g1_fx = -1037, -1037, -1037, -1037
+#set indi_act_g1_fy = -136, -136, -136, -136
+#set indi_act_g1_fz = -91, -91, -91, -91
+#set indi_act_g1_roll = 183, 1049, -41, -1190
+#set indi_act_g1_pitch = -2617, -4609, 4742, 2485
+#set indi_act_g1_yaw = -4016, 816, -727, 3927
+#set indi_act_g2_roll = -98, 98, 98, -98
+#set indi_act_g2_pitch = -12, 12, 12, -12
+#set indi_act_g2_yaw = -8, 8, 8, -8
+
+set indi_sync_lowpass_hz = 15
+set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
+set indi_wls_act_penalties = 1,1,1,1
+
+
+## ----- POSITION CONTROL
+
+positionprofile 0
+# gains * 10
+set position_horizontal_p = 30
+set position_horizontal_i = 2
+set position_horizontal_d = 30
+set position_vertical_p = 50
+set position_vertical_i = 5
+set position_vertical_d = 40
+
+# max velocities in cm/s and cm/s^2
+set position_max_horizontal_speed = 2000
+set position_max_horizontal_accel = 10000
+set position_max_upwards_speed = 500
+set position_max_downwards_speed = 500
+set position_max_upwards_accel = 2000
+set position_max_downwards_accel = 800
+
+# max tilt, yaw gain * 10, thrust config
+set position_max_tilt = 180
+set position_yaw_p = 50
+set position_use_thrust_attenuation = 1
+
+
+positionprofile 2
+
+# positionprofile 2 --> these are the settings for the learned profile
+# commented will be overwritten by the learner, so they dont need to be set
+# as the initial condition is currently always zero. This may be changed in the future.
+# the default values (values not set here) are the same as for all other profiles
+
+# these values are more conservative than positionprofile 0
+
+# set position_horizontal_p = 63
+# set position_horizontal_i = 4
+# set position_horizontal_d = 45
+set position_max_horizontal_speed = 500
+set position_max_horizontal_accel = 1000
+set position_max_tilt = 40
+# set position_vertical_p = 63
+# set position_vertical_i = 4
+# set position_vertical_d = 45
+set position_max_upwards_speed = 100
+set position_max_downwards_speed = 100
+set position_max_upwards_accel = 2500
+set position_max_downwards_accel = 500
+# set position_yaw_p = 44
+set position_weathervane_p = 0
+set position_use_thrust_attenuation = 1
+
+
+## ----- SET DEFAULT PROFILES
+
+profile 0
+rateprofile 0
+indiprofile 0
+positionprofile 0
+
+
+## ----- DANGERZONE
+
+# catapult
+set catapult_target_altitude = 350
+set catapult_target_x_ned = 0
+set catapult_target_y_ned = 0
+set catapult_rotation_roll = 300
+set catapult_rotation_pitch = 300
+set catapult_rotation_yaw = 100
+set catapult_rotation_randomize = 0
+set catapult_rotation_time = 150
+set catapult_upwards_accel = 20
+
+# throw to arm
+set throw_to_arm_acc_high = 20
+set throw_to_arm_acc_clip = 50
+set throw_to_arm_acc_low = 20
+set throw_to_arm_gyro_high = 600
+set throw_to_arm_momentum_thresh = 300
+set throw_to_arm_release_delay_ms = 150
+set throw_to_arm_idle_before_throw = 1
+set throw_to_arm_allow_manual_modes = 1
+
+# learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
+set learner_mode = 6
+set learner_num_actuators = 4
+set learner_delay_time_ms = 10
+set learner_step_time_ms = 30
+set learner_ramp_time_ms = 60
+set learner_overlap_time_ms = 30
+set learner_step_amplitude = 20
+set learner_ramp_amplitude = 40
+set learner_gyro_max = 1800
+set learner_imu_lowpass_hz = 10
+set learner_fx_lowpass_hz = 20
+set learner_motor_lowpass_hz = 40
+set learner_zeta_rate = 70
+set learner_zeta_attitude = 90
+set learner_zeta_velocity = 70
+set learner_zeta_position = 90
+
+set learner_roll_misalignment = 0
+set learner_pitch_misalignment = 0
+set learner_yaw_misalignment = 0
+set learner_randomize_misalignment = 0
+
+set learner_apply_indi_profile = 1
+set learner_apply_position_profile = 1
+set learner_apply_hover_rotation = 0
+
+
+## ----- ONSCREEN DISPLAY
+
+
+## ----- LED STRIP, BEEPER, BEACON
+
+# led
+led 0 5,7::C:2
+led 1 6,7::L:0
+led 2 7,7::L:0
+led 3 8,7::L:0
+led 4 9,7::C:2
+
+# ledstrip
+set ledstrip_visual_beeper = ON  # todo: check if this works
+set ledstrip_visual_beeper_color = WHITE
+set ledstrip_grb_rgb = GRB
+set ledstrip_profile = STATUS
+set ledstrip_race_color = ORANGE
+set ledstrip_beacon_color = WHITE
+set ledstrip_beacon_period_ms = 500
+set ledstrip_beacon_percent = 50
+set ledstrip_beacon_armed_only = OFF
+set ledstrip_brightness = 70
+
+# beacon
+beacon -RX_LOST
+beacon -RX_SET

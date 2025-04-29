@@ -242,6 +242,14 @@ void initEkf(timeUs_t currentTimeUs) {
 }
 
 void updateEkf(timeUs_t currentTimeUs) {
+#ifdef USE_TELEMETRY_PI
+    // stream inputs over serial
+    static unsigned counter = 0;
+    if ((++counter % 16)) {
+        piSendEkfInputs();
+    }
+#endif
+
     // --- check init and convergence
     // if not init, try init and exit
     if (!ekf_initialized) {
