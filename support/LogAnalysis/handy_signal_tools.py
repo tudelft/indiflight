@@ -17,10 +17,11 @@
 
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfilt_zi, lfilter, lfilter_zi, filtfilt, sosfiltfilt
+from scipy.interpolate import CubicSpline
 import logging
 
 class Signal(object):
-    def __init__(self, time, signal):
+    def __init__(self, time, signal, rebase=None):
         # multivariate time series with
         # 1. signal
         # 2. signal diff order n
@@ -32,7 +33,7 @@ class Signal(object):
         # this implies an n sample delay for n-order diff/derivative
 
         # get inputs and validate
-        self.t = np.array(time, dtype=float).squeeze()
+        self.t = np.asarray(time, dtype=float).squeeze()
         if self.t.ndim > 1:
             raise ValueError("Time input must be 1 dimensional")
         self.dt = np.zeros_like(self.t, dtype=float)
@@ -40,7 +41,7 @@ class Signal(object):
         self.dt[-1] = self.dt[-2]
         self.fs = 1. / np.mean(self.dt)
 
-        self.y = np.array(signal, dtype=float).squeeze()
+        self.y = np.asarray(signal, dtype=float).squeeze()
         if (self.y.ndim == 1) and (self.y.size != self.t.size):
             raise ValueError("Signal and time must be same length")
 
@@ -53,6 +54,16 @@ class Signal(object):
         # make row vector from one dimensional signal
         if self.y.ndim == 1:
             self.y = self.y[:, np.newaxis]
+
+        # interpolate if requested
+        if rebase is not None:
+            rebase = np.asarray(rebase, dtype=float).squeeze()
+            if rebase.shape != self.t.shape:
+                raise ValueError("rebase must have the same length as time")
+
+            cs = CubicSpline(self.t, self.y)
+            self.y = cs(rebase)
+            self.t = rebase
 
         self.sig = {}
 
@@ -110,7 +121,7 @@ class Signal(object):
         if key not in self.sig.keys():
             logging.debug(f'Cache miss for key {key}')
             # design filter and initial condition
-            if order == 1:
+            if order == 1 and type == "lowpass":
                 # pure lowpass with single zero
                 #b, a = butter(order, cutoff_hz, btype=type, fs=self.fs, output='ba')
                 #b[0] += b[1]

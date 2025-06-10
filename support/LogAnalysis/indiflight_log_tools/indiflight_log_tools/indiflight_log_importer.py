@@ -71,7 +71,7 @@ class IndiflightLog(object):
     DSHOT_MIN = 158.
     DSHOT_MAX = 2048.
     CACHE_NAME = "indiflight_logs"
-    LIBRARY_SO = os.path.join(os.path.dirname(__file__), "blackbox_decode.cpython-310-x86_64-linux-gnu.so")
+    LIBRARY_SO = os.path.join(os.path.dirname(__file__), "blackbox_decode.cpython-312-x86_64-linux-gnu.so")
 
     @staticmethod
     def modeToText(bits):
