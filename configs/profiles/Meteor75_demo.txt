@@ -200,10 +200,10 @@ set indi_wls_axes_weights = 1,1,50,50,50,5
 # --- actuators: fields can have up to 8 elements ---
 set indi_act_is_motor = 1,1,1,1,0,0,0,0
 set indi_act_is_servo = 0,0,0,0,0,0,0,0
-set indi_act_time_constant_ms = 35, 35, 35, 35       # ms
-set indi_act_max_rpm = 80000, 80000, 80000, 80000    # rpm
-set indi_act_hover_rpm = 40000, 40000, 40000, 40000  # rpm
-set indi_act_nonlinearity = 50, 50, 50, 50           # %
+set indi_act_time_constant_ms = 30,30,30,30
+set indi_act_max_rpm = 68415,68040,68482,70002
+set indi_act_hover_rpm = 34208,34020,34241,35001
+set indi_act_nonlinearity = 15,13,12,12
 set indi_act_min = 0, 0, 0, 0                        # % will be forced 0 for motors anyway
 set indi_act_max = 100, 100, 100, 100                # %
 set indi_wls_act_preferred_state = 0,0,0,0
@@ -212,15 +212,14 @@ set indi_wls_act_penalties = 1,1,1,1
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -1000, -1000, -1000, -1000
-set indi_act_g1_roll = -6000, -6000, 6000, 6000
-set indi_act_g1_pitch = -5000, 5000, -5000, 5000
-set indi_act_g1_yaw = 1510, -1510, -1510, 1510
+set indi_act_g1_fz = -1770,-1770,-1770,-1770
+set indi_act_g1_roll = -11138,-11483,11753,10998
+set indi_act_g1_pitch = -8762,9620,-9232,10108
+set indi_act_g1_yaw = 1400,-1400,-1400,1400
 
-# Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0
 set indi_act_g2_pitch = 0,0,0,0
-set indi_act_g2_yaw = 110, -110, -110, 110
+set indi_act_g2_yaw = 118,-124,-115,122
 
 
 indiprofile 2

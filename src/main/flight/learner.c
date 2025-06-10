@@ -163,12 +163,14 @@ void initLearner(void) {
     //rlsParallelInit(&fxRateDotRls, 2*learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // rotations need twice the parameters
 
     // Spf
-    for (int i = 0; i < 3; i++)
-        rlsInit( &fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    for (int i = 0; i < 3; i++) {
+        rlsInit(&fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    }
 
     // RateDot
-    for (int i = 3; i < 6; i++)
-        rlsInit( &fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    for (int i = 3; i < 6; i++) {
+        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    }
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
@@ -180,13 +182,63 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsInit( &motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorSqrtDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
     }
+}
+
+#define LEARNER_INIT_COV_QUERY 1e2f
+#define LEARNER_INIT_COV_RESET 1e1f
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+static void setFxRlsToProfile(void) {
+    float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+
+    const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
+
+    for (int axis = 0; axis < 3; axis++) {
+        rlsInit(&fxRls[axis], learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+    }
+    for (int i = 3; i < 6; i++) {
+        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+    }
+    for (int act = 0; act < learnerConfig()->numAct; act++) {
+        rlsInit(&motorRls[act], 4, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+    }
+
+    // inverse of updateLearnedParameters
+    for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
+        float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
+        float isq = 1.f / sq(maxOmega);
+
+        float k = 0.01f * p->actNonlinearity[motor];
+        motorRls[motor].x[0] = 1e-3f * k * maxOmega;
+        motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
+        motorRls[motor].x[2] = 0.;
+        motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
+
+        // todo: rotate with hover rotation
+        fxRls[0].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[motor];
+        fxRls[1].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[motor];
+        fxRls[2].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[motor];
+
+        fxRls[3].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[motor];
+        fxRls[4].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[motor];
+        fxRls[5].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[motor];
+
+        fxRls[3].x[learnerConfig()->numAct + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[motor];
+        fxRls[4].x[learnerConfig()->numAct + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[motor];
+        fxRls[5].x[learnerConfig()->numAct + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[motor];
+    }
+
+    learnRun.gains[LEARNER_LOOP_RATE] = 0.1f * p->rateGains[0];
+    learnRun.gains[LEARNER_LOOP_ATTITUDE] = ((float) p->attGains[0]) / ((float) p->rateGains[0]);
 }
 
 #ifdef STM32H7
@@ -481,11 +533,26 @@ void updateLearner(timeUs_t current) {
 
     bool fxLearningConditions = FLIGHT_MODE(LEARNER_MODE) && ARMING_FLAG(ARMED) && !isTouchingGround()
         && (
-            ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
+            (learnerConfig()->mode & LEARN_DURING_FLIGHT)
+            || ((learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE))
             || ((learningQueryState > LEARNING_QUERY_DELAY) && (learningQueryState != LEARNING_QUERY_DONE))
            );
 
+    static bool was_reset_fx_rls = false;
+
+    bool inflight_learning_without_query =
+        FLIGHT_MODE(LEARNER_MODE)
+        && !(learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT)
+        && (learnerConfig()->mode & LEARN_DURING_FLIGHT)
+        && ARMING_FLAG(ARMED)
+        && !isTouchingGround();
+
     if (fxLearningConditions) {
+        if (!was_reset_fx_rls && inflight_learning_without_query && fxLearningConditions) {
+            setFxRlsToProfile();
+            was_reset_fx_rls = true;
+        }
+
         //setup regressors
         float A[RLS_MAX_N];
         for (int act = 0; act < learnerConfig()->numAct; act++) {
@@ -508,12 +575,14 @@ void updateLearner(timeUs_t current) {
             rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
             rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
         }
+    } else {
+        was_reset_fx_rls = false;
     }
     learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
 
     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
-    if (motorLearningConditions) {
+    if (motorLearningConditions && false) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
@@ -570,11 +639,18 @@ void updateLearner(timeUs_t current) {
         appliedAfterQuery = true;
     }
 
-    appliedAfterQuery = appliedAfterQuery && !(learningQueryState == LEARNING_QUERY_IDLE);
+    appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
 
-    if ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE)) {
+    if (fxLearningConditions) {
+        if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
+            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+        }
         initIndiRuntimeParameters();
     }
+
+    // if ((learnerConfig()->mode & LEARN_DURING_FLIGHT) && (learningQueryState == LEARNING_QUERY_DONE)) {
+    //     initIndiRuntimeParameters();
+    // }
 
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
@@ -644,13 +720,14 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         //                                            inv y-scale   a-scale     config-scale
         indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].x[3], 10.f, 200.f);
 
-        if ((motorRls[act].x[0] > 0.f) && (motorRls[act].x[1] > 0.f))
+        if ((motorRls[act].x[0] > 0.f) && (motorRls[act].x[1] > 0.f)) {
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
                 motorRls[act].x[0] / (motorRls[act].x[0] + motorRls[act].x[1]),
                 0.f, 1.f);
             // todo: transform to match kappa better
-        else
+        } else {
             indi->actNonlinearity[act] = 50;
+        }
 
         actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[act];
         actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[act];
@@ -760,8 +837,9 @@ void runLearningQueryStateMachine(timeUs_t current) {
     static timeUs_t safetyTimeoutUs = 0;
     static motor_state_t motorStates[MAX_SUPPORTED_MOTORS];
 
-    for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) 
+    for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
         outputFromLearningQuery[i] = 0.f;
+    }
 
     const learnerConfig_t* c = learnerConfig();
 
@@ -770,18 +848,40 @@ void runLearningQueryStateMachine(timeUs_t current) {
         return;
     }
 
-    bool disableConditions = !FLIGHT_MODE(LEARNER_MODE);
-            //|| !(learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW));
+    bool idle_before_throw_query_requested = 
+        FLIGHT_MODE(LEARNER_MODE)
+        && (learnerConfig()->mode & LEARN_AFTER_THROW) 
+        && throwConfig()->idleBeforeThrow
+        && ARMING_FLAG(ARMED)
+        && throwState == THROW_STATE_WAITING_FOR_THROW;
+
+    // must not accidentally drop into inflight query when idle_before_throw is requested
+    bool inflight_query_requested =
+        !idle_before_throw_query_requested
+        && FLIGHT_MODE(LEARNER_MODE)
+        && learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT
+        && ARMING_FLAG(ARMED)
+        && !isTouchingGround();
+
+    bool normal_query_requested = 
+        !idle_before_throw_query_requested
+        && !inflight_query_requested
+        && FLIGHT_MODE(LEARNER_MODE)
+        && (learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW))
+        && !ARMING_FLAG(ARMED);
+
+    // disable when not in learner mode, or when not "inflight" anymore
+    bool disableConditions = !FLIGHT_MODE(LEARNER_MODE)
+            || ( inflight_query_requested && (!ARMING_FLAG(ARMED) || isTouchingGround()) );
 
     if (disableConditions) {
         learningQueryState = LEARNING_QUERY_IDLE;
     }
 
     bool enableConditions = !disableConditions
-        && (
-                ((learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT) && ARMING_FLAG(ARMED) && !isTouchingGround())
-                || ((learnerConfig()->mode & (LEARN_AFTER_CATAPULT | LEARN_AFTER_THROW)) && !ARMING_FLAG(ARMED))
-                || ((learnerConfig()->mode & LEARN_AFTER_THROW) && throwConfig()->idleBeforeThrow && ARMING_FLAG(ARMED) && throwState == THROW_STATE_WAITING_FOR_THROW)
+        && ( idle_before_throw_query_requested
+                || inflight_query_requested
+                || normal_query_requested
             );
 
 doMore:
@@ -807,10 +907,6 @@ doMore:
             }
             break;
         case LEARNING_QUERY_WAITING_FOR_LAUNCH: // catapult or throw
-            if ( (learnerConfig()->mode & LEARN_ALLOW_QUERY_DURING_FLIGHT) ) {
-                learningQueryState = LEARNING_QUERY_DELAY; goto doMore;
-            }
-
             if ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) {
                 // randomize board rotation after catapulting with 0 0 0 board rotation
                 fp_euler_t boardEulers_fp = { 0 };
@@ -849,9 +945,12 @@ doMore:
 #endif
             }
 
-            if ( ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-                    || ((learnerConfig()->mode & LEARN_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW)) ) {
+            // considered launched if succesfully activated inflight_query, or catapult/throw states correct
+            bool launched = inflight_query_requested
+                || ((learnerConfig()->mode & LEARN_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+                || ((learnerConfig()->mode & LEARN_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
 
+            if (launched) {
                 learningQueryEnabledAt = current;
                 startAt = current + MAX(c->delayMs, 1)*1e3;
                 // 10ms grace period, then cutoff, even if learning is not done, because that means error in the state machine

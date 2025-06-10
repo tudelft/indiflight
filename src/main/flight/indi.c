@@ -88,6 +88,7 @@ FAST_CODE
 #endif
 void indiController(timeUs_t current) {
     if (flightModeFlags & ~(CATAPULT_MODE | LEARNER_MODE)) {
+#pragma message "LEARNER_MODE probably shouldnt be here"
         // any flight mode active other than catapult, learner or acro (acro is all off)?
         if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 ) {
             // rate limit attitude control

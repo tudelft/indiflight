@@ -267,11 +267,14 @@ set indi_manual_use_coordinated_yaw = 1
 set indi_manual_max_upwards_accel = 20
 set indi_act_is_motor = 1,1,1,1,0,0,0,0
 set indi_act_is_servo = 0,0,0,0,0,0,0,0
-# set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
-# set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
-# set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000
-set indi_act_max = 100,100,100,100,100,100,100,100
-set indi_act_min = 0,0,0,0,0,0,0,0
+set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
+set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
+set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
+set indi_act_nonlinearity = 50, 50, 50, 50           # %
+set indi_act_min = 0, 0, 0, 0                        # % will be forced 0 for motors anyway
+set indi_act_max = 100, 100, 100, 100                # %
+set indi_wls_act_preferred_state = 0,0,0,0
+set indi_wls_act_penalties = 1,1,1,1
 
 # -- roll -56, pitch 81, yaw 170
 #set indi_act_g1_fx = -1037, -1037, -1037, -1037
