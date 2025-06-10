@@ -1,19 +1,20 @@
 from indiflight_log_tools import IndiflightLog
 from handy_signal_tools import Signal
-from estimators import LMS, RLS, EMWV, RLS_fortescue, FlightPlotter, AttitudePlotter
+from estimators import LMS, RLS, EMWV, RLS_fortescue
+from plotting import FlightPlotter, Viewport
 
 import numpy as np
 from tqdm import tqdm
 
-# log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-05-02/btfl_004_adaptationInflightCrashAfterDisturbance.bbl",
-#                     logId=3,
-#                     resetTime=True)
-# log.data, _ = log.crop(4.643, +np.inf)
+log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-05-02/btfl_004_adaptationInflightCrashAfterDisturbance.bbl",
+                    logId=3,
+                    resetTime=True)
+log.data, _ = log.crop(4.643, +np.inf)
 # log.data, _ = log.crop(62., 200.)
 
-log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2024-10-09_TII_Wednesday/LOG00109_LongOval_140perc.BFL",
-                    logId=1,
-                    resetTime=True)
+# log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2024-10-09_TII_Wednesday/LOG00109_LongOval_140perc.BFL",
+#                     logId=1,
+#                     resetTime=True)
 # log.data, _ = log.crop(18., 26.)
 
 
@@ -21,8 +22,8 @@ import matplotlib.pyplot as plt
 plt.close('all')
 
 fplt = FlightPlotter(log.data, name="Disturbance Flight")
-pplt = AttitudePlotter(log.data, follow=False, name="Disturbance Flight")
-aplt = AttitudePlotter(log.data, follow=True, name="Disturbance Flight")
+pplt = Viewport(log.data, follow=False, name="Disturbance Flight")
+aplt = Viewport(log.data, follow=True, name="Disturbance Flight")
 fplt.add_callback('motion_notify_event', pplt.update)
 fplt.add_callback('motion_notify_event', aplt.update)
 

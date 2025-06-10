@@ -1,75 +1,9 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
-from matplotlib.lines import Line2D
-from scipy.spatial.transform import Rotation as R
-from scipy.interpolate import interp1d
-import time
 
-local_rc = plt.rcParams.copy()
-local_rc.update({
-#    "text.usetex": True,
-#    "font.family": "Helvetica",
-    "font.family": "sans-serif",
-    "font.size": 10,
-    "axes.grid": True,
-    "axes.grid.which": 'both',
-    "grid.linestyle": '--',
-    "grid.alpha": 0.7,
-    "axes.labelsize": 10,
-    "axes.titlesize": 14,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
-    "legend.loc": 'best',
-    'figure.subplot.bottom': 0.025,
-    'figure.subplot.left': 0.025,
-    'figure.subplot.right': 0.95,
-    'figure.subplot.top': 0.925,
-    'figure.subplot.hspace': 0.2,
-    'figure.subplot.wspace': 0.25,
-})
+from plotting import local_rc, BlittedCursor
 plt.rcParams.update(local_rc)
-
-COLORS = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-
-class BlittedCursor(object):
-    def __init__(self, axes, canvas, sharex=True):
-        self.axes = axes
-        self.canvas = canvas
-        self.backgrounds = []
-        self.cursors = []
-
-        ax0 = self.axes[0]
-
-        for i, ax in enumerate(self.axes):
-            if i > 0 and sharex:
-                ax.sharex(ax0)
-
-            lb, ub = ax.get_xlim()
-            self.cursors.append(ax.axvline(x=lb,
-                                           color='black',
-                                           linestyle='--',
-                                           lw=0.8,
-                                           visible=False))
-
-        self.canvas.mpl_connect('draw_event', self._on_draw)
-        self.canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
-
-    def _on_draw(self, event):
-        self.backgrounds = [self.canvas.copy_from_bbox(ax.bbox) for ax in self.axes]
-
-    def _on_mouse_move(self, event):
-        if event.xdata is None or not self.backgrounds:
-            return
-
-        for ax, line, bg in zip(self.axes, self.cursors, self.backgrounds):
-            self.canvas.restore_region(bg)
-            line.set_xdata([event.xdata])
-            line.set_visible(True)
-            ax.draw_artist(line)
-            self.canvas.blit(ax.bbox)
-
 
 class Estimator(object):
     def __init__(self, n, d=1):
@@ -345,7 +279,6 @@ class Estimator(object):
         # k and e
         raise NotImplementedError("todo")
 
-
 class RLS(Estimator):
     def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
         super().__init__(n, d)
@@ -402,7 +335,6 @@ class RLS(Estimator):
         self.N += 1
         self.log()
 
-
 class LMS(Estimator):
     def __init__(self, n, d=1, mu=1e-8):
         super().__init__(n, d)
@@ -447,7 +379,6 @@ class LMS(Estimator):
         self.N += 1
         self.log()
 
-
 class EMWV(Estimator):
     def __init__(self, forgetting=0.995):
         super().__init__(2, 1)
@@ -473,7 +404,6 @@ class EMWV(Estimator):
 
         self.N += 1
         self.log()
-
 
 class RLS_fortescue(Estimator):
     def __init__(self, n, d=1, gamma=1e8, forgetting_base=0.995, N0=1):
@@ -539,277 +469,3 @@ class RLS_fortescue(Estimator):
         # Call the parent method to initialize the plot
         super().plotParameters(extra_rows=1, **kwargs)
         self.extraAxes[0][0].plot(self.timeMs, self.lam_h, label="Forgetting factor")
-
-
-class AttitudePlotter(object):
-    def __init__(self, data, name="AttitudePlotter", follow=False):
-        self.data = data
-        self.name = name
-        self.follow = follow
-        self.fig = plt.figure(figsize=(4, 4))
-        self.ax = self.fig.add_subplot(111, projection='3d')
-
-        # Quadrotor geometry (in local frame)
-        l = 0.2
-        self.arms = np.array([
-            [ -l, +l, 0.],
-            [ +l, +l, 0.],
-            [ -l, -l, 0.],
-            [ +l, -l, 0.],
-        ])
-        self.front = np.array([
-            [    l,     0., -0.3*l],
-            [    l, -0.4*l,     0.],
-            [1.7*l,     0.,     0.],
-            [    l, +0.4*l,     0.],
-            [    l,     0., -0.3*l],
-            [1.7*l,     0.,     0.],
-        ])
-
-        # preprocess data
-        self.t = self.data['timeS'].to_numpy()
-
-        if "pos[0]" not in self.data.columns and not self.follow:
-            raise ValueError("Data must contain 'pos' column for non-follow mode.")
-
-        # interpolators
-        self.series = {
-            "quat": {"raw": self.data[[f"quat[{i}]" for i in [1,2,3,0]]].to_numpy()    , "style": "solid",  "color": COLORS[0], "marker": None, "width": 1.5, "label": "Estimate"},
-            "quatSp": {"raw": self.data[[f"quatSp[{i}]" for i in [1,2,3,0]]].to_numpy(), "style": "dashed", "color": COLORS[0], "marker": None, "width": 1.0,  "label": "Setpoint"},
-        }
-
-        if not self.follow:
-            self.series.update({
-                "pos": {"raw": self.data[[f"pos[{i}]" for i in range(3)]].to_numpy()       , "style": "solid",  "color": COLORS[1], "marker": "o", "width": 1.5, "label": "Estimate"},
-                "posSp": {"raw": self.data[[f"posSp[{i}]" for i in range(3)]].to_numpy()   , "style": "solid", "color": COLORS[1], "marker": ".", "width": 2.0,  "label": "Setpoint"},
-                "vel": {"raw": self.data[[f"vel[{i}]" for i in range(3)]].to_numpy()       , "style": "solid",  "color": COLORS[2], "marker": None, "width": 1.5, "label": "Estimate"},
-                "velSp": {"raw": self.data[[f"velSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[2], "marker": None, "width": 1.0,  "label": "Setpoint"},
-                "accSp": {"raw": self.data[[f"accSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[3], "marker": None, "width": 1.0,  "label": "Setpoint"},
-            })
-
-        for key, value in self.series.items():
-            self.series[key]['interpolator'] = interp1d(
-                self.t,
-                value["raw"].T,
-                kind="nearest",
-                bounds_error=False,
-                fill_value=(value["raw"][0], value["raw"][-1]))
-
-            self.series[key]['line'] = self.ax.plot(
-                [np.nan], [np.nan], [np.nan],
-                linestyle=value['style'],
-                color=value['color'],
-                lw=value['width'],
-                label=value["label"])[0]
-
-        self.ax.set_xlabel("X")
-        self.ax.set_ylabel("Y")
-        self.ax.set_zlabel("Z")
-
-        # set view angle
-        self.ax.view_init(elev=-25, azim=150, roll=180)
-
-        # set limits
-        if self.follow:
-            minx, miny, minz = 0, 0, 0
-            maxx, maxy, maxz = 0, 0, 0
-        else:
-            minx, miny, minz = np.min(self.series["pos"]["raw"], axis=0)
-            maxx, maxy, maxz = np.max(self.series["pos"]["raw"], axis=0)
-
-        self.ax.set_xlim(minx-0.5, maxx+0.5)
-        self.ax.set_ylim(miny-0.5, maxy+0.5)
-        self.ax.set_zlim(minz-0.5, maxz+0.5)
-
-        self.ax.legend(loc='best')
-
-        self.ax.set_title(self.name)
-
-        self.fig.show()
-
-    def update(self, event):
-        if event.xdata is None:
-            return
-
-        for ser in self.series.keys():
-            try:
-                self.series[ser]['line'].remove()
-            except ValueError:
-                pass
-
-        # get interpolates
-        interpolates = {}
-        for ser in self.series.keys():
-            interpolates[ser] = self.series[ser]['interpolator'](event.xdata)
-
-        for ser in ["quat", "quatSp"]:
-            rotation = R.from_quat(interpolates[ser])
-            rotated_front = rotation.apply(self.front)
-
-            # Plot circles (representing rotors)
-            xs = np.array([])
-            ys = np.array([])
-            zs = np.array([])
-            for arm in self.arms:
-                u = np.linspace(0, 2*np.pi, 20)
-                x = arm[0] + 0.1 * np.cos(u)
-                y = arm[1] + 0.1 * np.sin(u)
-                z = np.ones_like(x) * arm[2]
-                x, y, z = rotation.apply(np.array([x,y,z]).T).T
-                xs = np.concatenate((xs, x, np.array([np.nan])))
-                ys = np.concatenate((ys, y, np.array([np.nan])))
-                zs = np.concatenate((zs, z, np.array([np.nan])))
-
-            # plot front triangle
-            xs = np.concatenate((xs, rotated_front[:, 0]))
-            ys = np.concatenate((ys, rotated_front[:, 1]))
-            zs = np.concatenate((zs, rotated_front[:, 2]))
-
-            if not self.follow:
-                xs += interpolates["pos"][0]
-                ys += interpolates["pos"][1]
-                zs += interpolates["pos"][2]
-
-            self.series[ser]['line'] = self.ax.plot(xs, ys, zs,
-                linestyle=self.series[ser]['style'],
-                color=self.series[ser]['color'],
-                lw=self.series[ser]['width'])[0]
-
-        if not self.follow:
-            for ser in ["pos", "posSp"]:
-                self.series[ser]['line'] = self.ax.scatter(
-                    interpolates[ser][0],
-                    interpolates[ser][1],
-                    interpolates[ser][2],
-                    linestyle=self.series[ser]['style'],
-                    color=self.series[ser]['color'],
-                    lw=self.series[ser]['width'],
-                    marker=self.series[ser]['marker'],
-                    facecolor='none',
-                    s=50)
-
-            for ser in ["vel", "velSp"]:
-                self.series[ser]['line'] = self.ax.plot(
-                    [interpolates['pos'][0], 0.2*interpolates[ser][0] + interpolates['pos'][0]],
-                    [interpolates['pos'][1], 0.2*interpolates[ser][1] + interpolates['pos'][1]],
-                    [interpolates['pos'][2], 0.2*interpolates[ser][2] + interpolates['pos'][2]],
-                    linestyle=self.series[ser]['style'],
-                    color=self.series[ser]['color'],
-                    lw=self.series[ser]['width'])[0]
-
-            self.series["accSp"]['line'] = self.ax.plot(
-                [interpolates['pos'][0], 0.1*interpolates['accSp'][0] + interpolates['pos'][0]],
-                [interpolates['pos'][1], 0.1*interpolates['accSp'][1] + interpolates['pos'][1]],
-                [interpolates['pos'][2], 0.1*interpolates['accSp'][2] + interpolates['pos'][2]],
-                linestyle=self.series["accSp"]['style'],
-                color=self.series["accSp"]['color'],
-                lw=self.series["accSp"]['width'])[0]
-
-        # make sure all the axes are equal
-        self.ax.set_aspect('equal', adjustable='box')
-
-        self.fig.canvas.draw()
-
-
-class FlightPlotter(object):
-    def __init__(self, data, name="FlightPlotter"):
-        self.data = data
-        self.name = name
-        self.all_axes = []
-
-        self.fig = plt.figure(figsize=(12, 8))
-        self.gs = GridSpec(nrows=3, ncols=3,
-                      width_ratios=[1, 2, 2],
-                      height_ratios=[1, 1, 1])
-
-        # preprocess data
-        self.t = self.data['timeS'].to_numpy()
-
-        # go
-        self._populate()
-        self._dress()
-
-        self.curser = BlittedCursor(self.all_axes, self.fig.canvas, sharex=True)
-
-        self.fig.show()
-
-    def add_callback(self, event_type, callback):
-        # e,g, motion_notify_event
-        self.fig.canvas.mpl_connect(event_type, callback)
-
-    def _populate(self):
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
-                         solid=[self.data[f'gyroADCafterRpm[{i}]'].to_numpy() for i in range(3)],
-                         light=[self.data[f'gyroSp[{i}]'].to_numpy() for i in range(3)],
-                         series_labels=["roll", "pitch", "yaw"],
-                         style_labels=["Raw", "Setpoint", None],
-                         title="Body Angular Rates",
-                         ylabel="Angular Rate [rad/s]")
-
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 2]),
-                         solid=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
-                         light=[self.data[f'spfSp[{i}]'].to_numpy() for i in range(3)],
-                         series_labels=["X", "Y", "Z"],
-                         style_labels=["Raw", "Setpoint", None],
-                         title="Body Accelerations",
-                         ylabel="Acceleration [m/s²]")
-
-    def _plot_timeseries(self, ax, solid=[], light=[], dashed=[], series_labels=[], style_labels=[None, None, None], title="", ylabel=""):
-        if len(solid) == 0:
-            raise ValueError("At least one solid series must be provided.")
-        if len(series_labels) != len(solid):
-            raise ValueError("series_labels must have the same length as solid series.")
-        if len(style_labels) != 3:
-            raise ValueError("style_labels must have exactly 3 entries. Set to None if not needed.")
-        if len(light) == 0:
-            light = [None] * len(solid)
-        if len(dashed) == 0:
-            dashed = [None] * len(solid)
-        lengths = np.array([len(solid), len(light), len(dashed), len(series_labels)])
-        if not (lengths == lengths[0]).all():
-            raise ValueError("solid, light, dashed and labels must all have the same length if given.")
-
-        for i, series in enumerate(solid):
-            ax.plot(self.t, series, label=series_labels[i], color=COLORS[i], lw=1.5, linestyle='-')
-
-        for i, series in enumerate(light):
-            if series is not None:
-                ax.plot(self.t, series, color=COLORS[i], alpha=0.5, lw=1.0, linestyle='-')
-
-        for i, series in enumerate(dashed):
-            if series is not None:
-                ax.plot(self.t, series, color=COLORS[i], lw=1.0, linestyle='--')
-
-        self.all_axes.append(ax)
-        ax.set_title(title)
-        ax.set_ylabel(ylabel)
-
-        ax.add_artist(ax.legend(loc='upper left'))
-        ax.add_artist(self._generate_style_legend(ax, style_labels))
-
-    def _generate_style_legend(self, ax, labels):
-        linestyles = []
-        if labels[0] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=1.0, lw=1.5, linestyle='-', label=labels[0]))
-        if labels[1] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=0.5, lw=1.0, linestyle='-', label=labels[1]))
-        if labels[2] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=1.0, lw=1.0, linestyle='--', label=labels[2]))
-
-        leg_styles = ax.legend(handles=linestyles, title='Line Styles', loc='lower left')
-
-        return leg_styles
-
-    def _dress(self):
-        for ax in self.all_axes:
-            ax.grid(True)
-            ax.set_xlabel("Time [s]")
-            # if ax.get_subplotspec().is_last_row():
-            #     ax.set_xlabel("Time [s]")
-            # else:
-            #     ax.xaxis.set_ticklabels([])
-
-        # self.fig.tight_layout()
-        # self.fig.subplots_adjust(hspace=0.3, wspace=0.3)
-
-        self.fig.suptitle(self.name)
