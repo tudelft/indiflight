@@ -15,7 +15,7 @@ class Estimator(object):
         self.theta[:] = np.nan
         self.P = np.zeros((n, n))
         self.P[:] = np.nan
-        self.A = np.zeros((1, n))
+        self.A = np.zeros((d, n))
         self.y = np.zeros((d, 1))
         self.e = np.zeros((d, 1))
 

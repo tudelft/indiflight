@@ -210,19 +210,23 @@ class Viewport(object):
 
         # Quadrotor geometry (in local frame)
         l = 0.2
+        # self.arms = np.array([
+        #     [ -l, +l, 0.],
+        #     [ +l, +l, 0.],
+        #     [ -l, -l, 0.],
+        #     [ +l, -l, 0.],
+        # ])
         self.arms = np.array([
-            [ -l, +l, 0.],
-            [ +l, +l, 0.],
-            [ -l, -l, 0.],
-            [ +l, -l, 0.],
+            [ 0., +l, -2*l],
+            [ 0., -l, -2*l],
         ])
         self.front = np.array([
-            [    l,     0., -0.3*l],
-            [    l, -0.4*l,     0.],
-            [1.7*l,     0.,     0.],
-            [    l, +0.4*l,     0.],
-            [    l,     0., -0.3*l],
-            [1.7*l,     0.,     0.],
+            [    0,   2*l,     0.],
+            [    0,   2*l,   -  l],
+            [    0,    0.,   -2*l],
+            [    0,  -2*l,   -  l],
+            [    0,  -2*l,   0.],
+            [    0,   2*l,   0.],
         ])
 
         # preprocess data

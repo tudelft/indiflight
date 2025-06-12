@@ -118,7 +118,7 @@ if __name__=="__main__":
         if args.catapult:
             sil.mockup.enableFlightMode(flightModeFlags.CATAPULT_MODE)
         elif args.throw:
-            sil.mockup.enableRxBox(boxId.BOXTHROWTOARM)
+            # sil.mockup.enableRxBox(boxId.BOXTHROWTOARM)
             sil.mockup.enableRxBox(boxId.BOXARM)
 
 
@@ -136,10 +136,10 @@ if __name__=="__main__":
         visThread.start( )
 
     if args.throw:
-        tail.throw(height=4.,
+        tail.throw(height=6.,
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
                  #vHorz=[1., -2.], # final speed in x-y-plane in m/s
-                 wB=[12., 0., 0.], # approx body rotation in rad/s
+                 wB=[2., 6., 0.], # approx body rotation in rad/s
                  #wB=[0., 0., 0.], # approx body rotation in rad/s
                  vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=2.5)
@@ -153,9 +153,9 @@ if __name__=="__main__":
     heading = False
     speedup = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
-        if not args.throw and sim.t > 2.5 and not armed:
-            sil.mockup.arm() if sil else None
-            armed = True
+        # if not args.throw and sim.t > 2.5 and not armed:
+        #     sil.mockup.arm() if sil else None
+        #     armed = True
 
         #if not start_trajectory and sim.t > 6. and sil is not None:
         #    # start trajectory tracking at 8*0.5 = 4m/s target speed

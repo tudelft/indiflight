@@ -170,6 +170,9 @@ if __name__=="__main__":
                     sil.mockup.sendKeyboard('3')
                 start_trajectory = True
 
+        if sim.t > 11.:
+            sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE)
+
         if not heading and sim.t > 10. and sil is not None:
             sil.mockup.sendKeyboard('h')
             heading = True
