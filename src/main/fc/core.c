@@ -1158,7 +1158,9 @@ void processRxModes(timeUs_t currentTimeUs)
 
 #ifdef USE_LEARNER
     if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
-        ENABLE_FLIGHT_MODE(LEARNER_MODE);
+        if (!FLIGHT_MODE(LEARNER_MODE)) {
+            ENABLE_FLIGHT_MODE(LEARNER_MODE);
+        }
     } else {
         if (FLIGHT_MODE(LEARNER_MODE)) {
             // reset to manually tuned parameters on transition
@@ -1329,6 +1331,8 @@ bool isTouchingGround(void) {
         float throttleLowThresh = (float) (rxConfig()->mincheck + 50);
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
     }
+
+    throttleLow |= !ARMING_FLAG(ARMED);
 
     return (accHigh && throttleLow && gyroLow && !isLaunchControlActive());
 }

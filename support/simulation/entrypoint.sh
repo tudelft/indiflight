@@ -15,7 +15,7 @@ source /opt/ros/humble/setup.bash
 source /uros_ws/install/local_setup.bash
 export RMW_IMPLEMENTATION=rmw_microxrcedds
 
-make -j TARGET=MOCKUP
+make -j -e DEBUG=${DEBUG} -e PROFILE=${PROFILE} TARGET=MOCKUP
 
 GDBSERVER_CMD=
 if [[ ${GDBSERVER} == "y" ]]; then

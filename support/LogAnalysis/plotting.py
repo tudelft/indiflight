@@ -47,8 +47,9 @@ class BlittedCursor(object):
             if i > 0 and sharex:
                 ax.sharex(ax0)
 
-            lb, ub = ax.get_xlim()
-            self.cursors.append(ax.axvline(x=lb,
+            lines = ax.get_lines()
+            min_x = min(min(line.get_xdata()) for line in lines)
+            self.cursors.append(ax.axvline(x=min_x,
                                            color='black',
                                            linestyle='--',
                                            lw=0.8,
@@ -93,7 +94,13 @@ class FlightPlotter(object):
 
         self.fig.show()
 
-    def add_callback(self, event_type, callback):
+    def connect_viewport(self, viewport):
+        """
+        Connect a viewport to the plotter, allowing it to update on mouse movement.
+        """
+        self._add_callback('motion_notify_event', viewport.update)
+
+    def _add_callback(self, event_type, callback):
         # e,g, motion_notify_event
         self.fig.canvas.mpl_connect(event_type, callback)
 
@@ -135,15 +142,26 @@ class FlightPlotter(object):
                          ylabel="Motor Speed [rad/s]",
                          ylimits=(-100, None))
 
+        N = 2
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
-                         light=None,
-                         solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(4)],
-                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(4)],
-                         series_labels=[f"Motor {i}" for i in [1,2,3,4]],
-                         style_labels=[None, "Est. state", "Command"],
+                         light=[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
+                         solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(N)],
+                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(N)],
+                         series_labels=[f"Motor {i}" for i in range(N)],
+                         style_labels=["Final command", "Est. state", "Command"],
                          title="Motor Speeds",
                          ylabel="Motor Speed [rad/s]",
                          ylimits=(-0.05, 1.05))
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                         light=None,
+                         solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
+                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
+                         series_labels=[f"Servo {i}" for i in [1,2]],
+                         style_labels=[None, "Est. state", "Command"],
+                         title="Servo State",
+                         ylabel="Servo State [rad]",
+        )
 
     def _plot_timeseries(self, ax, light=None, solid=None, dashed=None, series_labels=[], style_labels=[None, None, None], title="", ylabel="", ylimits=(None, None)):
         if solid is None or len(solid) == 0:
@@ -176,7 +194,7 @@ class FlightPlotter(object):
         ax.set_ylabel(ylabel)
         ax.set_ylim(ylimits)
 
-        ax.add_artist(ax.legend(loc='upper left'))
+        ax.add_artist(ax.legend(loc='upper right'))
         ax.add_artist(self._generate_style_legend(ax, style_labels))
 
     def _generate_style_legend(self, ax, labels):
@@ -188,7 +206,7 @@ class FlightPlotter(object):
         if labels[2] is not None:
             linestyles.append(Line2D([0], [0], color='gray', alpha=1.0, lw=1.5, linestyle='--', label=labels[2]))
 
-        leg_styles = ax.legend(handles=linestyles, title='Line Styles', loc='lower left')
+        leg_styles = ax.legend(handles=linestyles, title='Line Styles', loc='lower right')
 
         return leg_styles
 

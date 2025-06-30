@@ -155,7 +155,7 @@ if __name__=="__main__":
     #%% run loop
     dt = 0.000125 # 8kHz
     T = 1000. # seconds
-    dt_rt = None if args.no_real_time else 1*dt
+    dt_rt = None if args.no_real_time else dt
     start_trajectory = False
     heading = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):

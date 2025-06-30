@@ -745,7 +745,7 @@ void init(void)
     initIndiRuntime();
 #endif
 #ifdef USE_LEARNER
-    initLearner();
+    initLearnerFilters();
     //testLearner();
 #endif
 #ifdef USE_LOCAL_POSITION

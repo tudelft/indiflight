@@ -1374,15 +1374,8 @@ const clivalue_t valueTable[] = {
 #endif
 
 #ifdef USE_LEARNER
-    { PARAM_NAME_LEARNER_MODE,              VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 15 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
-    { PARAM_NAME_LEARNER_NUM_ACT,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
-    { PARAM_NAME_LEARNER_DELAY_TIME_MS,     VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, delayMs) },
-    { PARAM_NAME_LEARNER_STEP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepMs) },
-    { PARAM_NAME_LEARNER_RAMP_TIME_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampMs) },
-    { PARAM_NAME_LEARNER_OVERLAP_TIME_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 200 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, overlapMs) },
-    { PARAM_NAME_LEARNER_STEP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, stepAmp) },
-    { PARAM_NAME_LEARNER_RAMP_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rampAmp) },
-    { PARAM_NAME_LEARNER_GYRO_MAX,          VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 720, 1600 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, gyroMax) },
+    // { PARAM_NAME_LEARNER_MODE,              VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 15 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
+    // { PARAM_NAME_LEARNER_NUM_ACT,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
     { PARAM_NAME_LEARNER_IMU_LOWPASS_HZ,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, imuFiltHz) },
     { PARAM_NAME_LEARNER_FX_LOWPASS_HZ,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxFiltHz) },
     { PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, motorFiltHz) },
@@ -1394,9 +1387,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_PITCH_MISALIGNMENT,VAR_INT16 | MASTER_VALUE, .config.minmaxUnsigned = { -180, 180 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, pitchMisalignment) },
     { PARAM_NAME_LEARNER_YAW_MISALIGNMENT,  VAR_INT16 | MASTER_VALUE, .config.minmaxUnsigned = { -180, 180 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, yawMisalignment) },
     { PARAM_NAME_LEARNER_RANDOMIZE_MISALIGNMENT,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, randomizeMisalignment) },
-    { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
-    { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
-    { PARAM_NAME_LEARNER_APPLY_HOVER,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyHoverRotationAfterQuery) },
+    { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndi) },
+    { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPosition) },
+    { PARAM_NAME_LEARNER_APPLY_HOVER,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyHoverRotation) },
 #endif
 
 #ifdef USE_NN_CONTROL

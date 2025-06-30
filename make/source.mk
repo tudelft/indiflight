@@ -111,6 +111,7 @@ COMMON_SRC = \
             flight/indi_init.c \
             flight/catapult.c \
             flight/learner.c \
+            flight/learning_prober.c \
             flight/throw.c \
             flight/rpm_filter.c \
             flight/servos.c \
@@ -293,6 +294,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/indi.c \
             flight/catapult.c \
             flight/learner.c \
+            flight/learning_prober.c \
             flight/throw.c \
             flight/rpm_filter.c \
             flight/ekf.c \

@@ -2657,15 +2657,15 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ALLOW_MANUAL_MODES, "%d",  throwConfig()->allowManualModes);
 #endif
 #ifdef USE_LEARNER
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_NUM_ACT, "%d",  learnerConfig()->numAct);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_DELAY_TIME_MS, "%d",  learnerConfig()->delayMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_TIME_MS, "%d",  learnerConfig()->stepMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_TIME_MS, "%d",  learnerConfig()->rampMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_OVERLAP_TIME_MS, "%d",  learnerConfig()->overlapMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_AMPLITUDE, "%d",  learnerConfig()->stepAmp);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_AMPLITUDE, "%d",  learnerConfig()->rampAmp);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_GYRO_MAX, "%d",  learnerConfig()->gyroMax);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_NUM_ACT, "%d",  learnerConfig()->numAct);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_DELAY_TIME_MS, "%d",  learnerConfig()->delayMs);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_TIME_MS, "%d",  learnerConfig()->stepMs);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_TIME_MS, "%d",  learnerConfig()->rampMs);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_OVERLAP_TIME_MS, "%d",  learnerConfig()->overlapMs);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_AMPLITUDE, "%d",  learnerConfig()->stepAmp);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_AMPLITUDE, "%d",  learnerConfig()->rampAmp);
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_GYRO_MAX, "%d",  learnerConfig()->gyroMax);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_IMU_LOWPASS_HZ, "%d",  learnerConfig()->imuFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_LOWPASS_HZ, "%d",  learnerConfig()->fxFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ, "%d",  learnerConfig()->motorFiltHz);
@@ -2677,9 +2677,9 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_PITCH_MISALIGNMENT    , "%d", learnerConfig()->pitchMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_YAW_MISALIGNMENT      , "%d", learnerConfig()->yawMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RANDOMIZE_MISALIGNMENT, "%d", learnerConfig()->randomizeMisalignment);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndiProfileAfterQuery);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPositionProfileAfterQuery);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotationAfterQuery);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndi);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPosition);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotation);
 #endif
 #ifdef USE_NN_CONTROL
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);

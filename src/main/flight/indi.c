@@ -87,7 +87,7 @@ FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 FAST_CODE
 #endif
 void indiController(timeUs_t current) {
-    if (flightModeFlags & ~(CATAPULT_MODE | LEARNER_MODE)) {
+    if (flightModeFlags && !(flightModeFlags & (CATAPULT_MODE | LEARNER_MODE))) {
 #pragma message "LEARNER_MODE probably shouldnt be here"
         // any flight mode active other than catapult, learner or acro (acro is all off)?
         if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 ) {
@@ -163,10 +163,10 @@ void getSetpoints(timeUs_t current) {
             && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
             && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
-        for (int i=0; i < learnerConfig()->numAct; i++) {
+        for (int i=0; i < learnerConfig()->numMotors; i++) {
             indiRun.d[i] = outputFromLearningQuery[i];
         }
-        for (int i=learnerConfig()->numAct; i < MAXU; i++) {
+        for (int i=learnerConfig()->numMotors; i < MAXU; i++) {
             indiRun.d[i] = 0.f;
         }
     } else
@@ -454,6 +454,7 @@ void getMotorCommands(timeUs_t current) {
 
     // horrible code! Fixme todo
     if (indiRun.bypassControl) {
+        // this is the problem. bypassControl gets set back to false in indiReset triggered from continuous adaptation
         return;
     }
 

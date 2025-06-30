@@ -456,8 +456,8 @@ set learner_pitch_misalignment = 0
 set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
-set learner_apply_indi_profile = 1
-set learner_apply_position_profile = 1
+set learner_apply_indi_profile = 0
+set learner_apply_position_profile = 0
 set learner_apply_hover_rotation = 0
 
 

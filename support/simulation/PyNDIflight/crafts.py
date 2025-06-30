@@ -312,6 +312,65 @@ class MultiRotor(Craft):
 
 import collections
 
+class TailsitterPhi(Craft):
+    def __init__(self):
+        super().__init__(Nr=2, Ns=2)
+
+        self.d0 = np.array([-0.3170, -0.1578], dtype=np.float32)
+
+        # drag and rate damping
+        self.cv = np.array([-0.7454, -0.1554, 0.], dtype=np.float32)
+        self.cvx = np.array([0., 0.01388, 0.], dtype=np.float32)
+        self.cO = np.array([0., 0., 0., -0.00865, -0.0100, -0.0211], dtype=np.float32)
+
+        # elevon contribution
+        self.cd = np.array([-2.14e-7, 0., 0., 0., -4.470e-8, -1.08e-7], dtype=np.float32)
+        self.cdd = np.array([0., 0., 0., 0., 0., 0.], dtype=np.float32)
+        self.cddd = np.array([0., 0., 0., 0., -3.702e-5, 0.], dtype=np.float32)
+
+        # servo data/states
+        self.s_u = np.zeros((self.Ns), dtype=np.float32)
+        self.s_d = np.zeros((self.Ns), dtype=np.float32)
+        self.s_dd = np.zeros((self.Ns), dtype=np.float32)
+        self.s_dmin   = -1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_dmax   = +1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmin  = -10.*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmax  = +10.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmin = -175.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmax = +175.*np.ones((self.Ns), dtype=np.float32)
+        self.s_P  = +30.*np.ones((self.Ns), dtype=np.float32)
+        self.s_D  = +80.*np.ones((self.Ns), dtype=np.float32)
+        self.s_delay = 0
+        self.s_u_buffer = collections.deque(maxlen=1000)
+
+    def customPhysics(self, dt):
+        self.s_u_buffer.append((dt, self.s_u.copy()))
+
+        tac = 0.
+        s_u = self.s_u_buffer[0][1]  # oldest element
+        for i in range(len(self.s_u_buffer)-1, -1, -1):
+            tac += self.s_u_buffer[i][0] # time
+            if tac > self.s_delay:
+                s_u = self.s_u_buffer[i][1]
+                break
+
+        s_ddd = servoModel(s_u * 100. * np.pi / 180.,
+                           self.s_d, self.s_dd,
+                           self.s_dmin, self.s_dmax,
+                           self.s_ddmin, self.s_ddmax,
+                           self.s_dddmin, self.s_dddmax,
+                           self.s_P, self.s_D)
+
+        self.s_dd += dt * s_ddd
+        self.s_d += dt * self.s_dd
+
+        self.FM_B += wingElevonForcesMomentsPhi(
+            self.vB, self.OB,
+            self.r_w, self.s_d, self.s_dd, s_ddd,
+            self.d0,
+            self.cv, 0.*self.cvx, self.cO,
+            self.cd, self.cdd, self.cddd)
+
 class Tailsitter(Craft):
     def __init__(self):
         super().__init__(Nr=2, Ns=2)
@@ -324,7 +383,7 @@ class Tailsitter(Craft):
         # drag and rate damping
         self.cv = np.array([-0.7454, -0.1554, 0.], dtype=np.float32)
         self.cvx = np.array([0., 0.01388, 0.], dtype=np.float32)
-        self.cO = np.array([0., 0., 0., 0.00865, -0.0100, -0.0211], dtype=np.float32)
+        self.cO = np.array([0., 0., 0., -0.00865, -0.0100, -0.0211], dtype=np.float32)
 
         # elevon contribution
         self.cd = np.array([-2.14e-7, 0., 0., 0., -4.470e-8, -1.08e-7], dtype=np.float32)

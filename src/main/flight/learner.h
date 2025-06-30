@@ -33,30 +33,29 @@
 
 // --- config
 typedef struct learnerConfig_s {
-    uint8_t mode;
-    uint8_t numAct;
-    uint16_t delayMs;
-    uint16_t stepMs;
-    uint16_t rampMs;
-    uint16_t overlapMs;
-    uint8_t stepAmp;
-    uint8_t rampAmp;
-    uint16_t gyroMax;
+    uint8_t modeProbing;
+    uint8_t modeFx;
+    uint8_t modeAct;
+    uint8_t modeHover;
+    uint8_t initFromProfileFx;
+    uint8_t initFromProfileAct;
+    uint8_t numMotors;
+    uint8_t numServos;
     uint8_t imuFiltHz;
     uint8_t fxFiltHz;
     uint8_t motorFiltHz;
+    uint8_t servoFiltHz;
     uint8_t zetaRate;
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
-    uint8_t actLimit;
     int16_t rollMisalignment;
     int16_t pitchMisalignment;
     int16_t yawMisalignment;
     uint8_t randomizeMisalignment;
-    uint8_t applyIndiProfileAfterQuery;
-    uint8_t applyPositionProfileAfterQuery;
-    uint8_t applyHoverRotationAfterQuery;
+    uint8_t applyIndi;
+    uint8_t applyPosition;
+    uint8_t applyHoverRotation;
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -72,12 +71,19 @@ typedef enum learner_loops_e {
 typedef enum learning_mode_e {
     LEARNING_OFF                    = 0,
     LEARN_DURING_FLIGHT             = 1 << 0,
-    LEARN_AFTER_CATAPULT            = 1 << 1,
-    LEARN_AFTER_THROW               = 1 << 2,
-    LEARN_ALLOW_QUERY_DURING_FLIGHT = 1 << 3,
+    LEARN_DURING_PROBING            = 1 << 1,
 } learner_mode_t;
 
+typedef enum learning_probing_mode_e {
+    LEARN_PROBING_OFF               = 0,
+    LEARN_PROBING_DURING_FLIGHT     = 1 << 0, // allow query during flight
+    LEARN_PROBING_AFTER_THROW       = 1 << 1, // after throw
+    LEARN_PROBING_AFTER_CATAPULT    = 1 << 2, // after catapult
+} laerner_probing_mode_t;
+
 typedef struct learningRuntime_s {
+    bool initialized;
+    bool filtersInitialized;
     fp_vector_t imuRate;
     fp_vector_t imuRateDot;
     fp_vector_t imuSpf;
@@ -103,8 +109,6 @@ extern rls_t imuRls;
 extern rls_t fxRls[6];
 extern fp_quaternion_t hoverAttitude;
 
-void initLearnerRuntime(void);
-
 
 // --- states and functions
 
@@ -123,7 +127,7 @@ typedef struct learnerTimings_s {
 
 extern learnerTimings_t learnerTimings;
 
-void initLearner(void);
+void initLearnerFilters(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
