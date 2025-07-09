@@ -184,11 +184,11 @@ class Craft:
 
         # get rotor forces
         self.FM_B += rotorForcesMoments(self.r_X, self.r_ax, self.r_w, self.r_k, self.r_cm)
-        #self.FM_B[3:] += rotatingMassTorques(self.r_I,
-        #                                     self.r_ax,
-        #                                     np.sign(self.r_cm)*self.r_w,
-        #                                     np.sign(self.r_cm)*self.r_wdot,
-        #                                     self.OB)
+        self.FM_B[3:] += rotatingMassTorques(self.r_I,
+                                             self.r_ax,
+                                             np.sign(self.r_cm)*self.r_w,
+                                             np.sign(self.r_cm)*self.r_wdot,
+                                             self.OB)
 
         # ground contact
         self.groundContact()

@@ -210,6 +210,8 @@ typedef struct indiRuntime_s {
     fp_vector_t rateDotSpBody; // rate derivative setpoint in body coordinates
     fp_vector_t spfSpBody; // specific force setpoint in body coordinates
     float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    float du[MAXU]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    float du_fs[MAXU]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
     //fp_vector_t rate_fs; // sync-filtered gyro in rad/s
     fp_vector_t rateIMU; // unfiltered gyro in rad/s
     fp_vector_t rate_f; // unfiltered gyro in rad/s
@@ -221,6 +223,7 @@ typedef struct indiRuntime_s {
     pt1Filter_t uLagFilter[MAXU]; // to simulate spinup
     biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t duFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
     // ---- housekeeping

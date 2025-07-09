@@ -396,7 +396,6 @@ FAST_CODE
 void getMotorCommands(timeUs_t current) {
     UNUSED(current);
 
-    static float du[MAXU] = {0.f};
     static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
     static float omega_prev[MAXU] = {0.f};
@@ -448,7 +447,7 @@ void getMotorCommands(timeUs_t current) {
         } else
 #endif
         {
-            indiRun.omegaDot_fs[i] = du[i] * indiRun.G2_scaler[i] * omega_inv[i];
+            indiRun.omegaDot_fs[i] = indiRun.du_fs[i] * indiRun.G2_scaler[i] * omega_inv[i];
         }
     }
 
@@ -618,7 +617,8 @@ void getMotorCommands(timeUs_t current) {
         }
 
         // apply lag filter to simulate spinup dynamics
-        du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
+        indiRun.du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
+        indiRun.du_fs[i] = biquadFilterApply(&indiRun.duFilter[i], indiRun.du[i]);
 
         indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
     }

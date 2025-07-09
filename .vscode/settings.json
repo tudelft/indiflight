@@ -13,6 +13,7 @@
         "pi-messages.h": "c",
         "random": "c",
         "cli_debug_print.h": "c",
-        "config.h": "c"
+        "config.h": "c",
+        "stdlib.h": "c"
     },
 }

@@ -58,14 +58,14 @@
 
 #ifdef USE_LEARNER
 
-PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 0);
 PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     // .type = (uint8_t) PROBER_STEPS,
     .type = (uint8_t) PROBER_MULTISINE,
     .numMotors = 4,
     .numServos = 0,
-    .preDelayMs = 250,
-    .postDelayMs = 250,
+    .preDelayMs = 200,
+    .postDelayMs = 150,
     .steps_stepMs = 50,
     .steps_overlapMs = 0,
     .steps_amp = 35,
@@ -74,11 +74,11 @@ PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     .stepramps_overlapMs = 50,
     .stepramps_stepAmp = 35,
     .stepramps_rampAmp = 70,
-    .multisine_fundamental = 10,
-    .multisine_sinesPerActuator = 3,
+    .multisine_fundamental = 15,
+    .multisine_sinesPerActuator = 2,
     .multisine_optimizePhase = false,
-    .multisine_timeMs = 500,
-    .multisine_amp = 20,
+    .multisine_timeMs = 467,
+    .multisine_amp = 10,
     .noise_sampleTimeUs = 10000,
     .noise_amp = 20,
 );
@@ -107,7 +107,7 @@ static void initMultisine(void) {
 
     for (int i=0; i < config->numMotors; i++) {
         // proberRuntime.sub.multisine.motorPhases[i] = (float)rand() / RAND_MAX * 2.0f * M_PIf; // random phase between 0 and 2π
-        proberRuntime.sub.multisine.motorPhases[i] = i * 0.5f * M_PIf; // random phase between 0 and 2π
+        proberRuntime.sub.multisine.motorPhases[i] = i * 0.5f * M_PIf;
     }
     for (int i=0; i < config->numServos; i++) {
         proberRuntime.sub.multisine.servoPhases[i] = 0.0f;
@@ -144,13 +144,16 @@ static void updateMultisine(timeUs_t currentTimeUs) {
         // Generate multisine output
         for (int i = 0; i < config->numMotors; i++) {
             // Calculate the sine wave output for each motor
+            proberRuntime.motorOutput[i] = 0.015f*config->multisine_amp;
             float dt_s = 0.000001f * (currentTimeUs - proberRuntime.genStartTimeUs);
-            float phase = 2.f*M_PIf * dt_s * config->multisine_fundamental + proberRuntime.sub.multisine.motorPhases[i];
-            // Wrap the phase to keep it within [0, 2π]
-            while (phase >= 2 * M_PIf) {
-                phase -= 2 * M_PIf;
+            for (int j = 1; j <= config->multisine_sinesPerActuator; j++) {
+                float phase = 2.f*M_PIf * dt_s * j * config->multisine_fundamental + proberRuntime.sub.multisine.motorPhases[i];
+                // Wrap the phase to keep it within [0, 2π]
+                while (phase >= 2 * M_PIf) {
+                    phase -= 2 * M_PIf;
+                }
+                proberRuntime.motorOutput[i] += 0.01f * config->multisine_amp * sinf(phase);
             }
-            proberRuntime.motorOutput[i] = (0.01f*config->multisine_amp) + 0.01f * config->multisine_amp * sinf(phase);
         }
     } else {
         // All steps done, set finished flag

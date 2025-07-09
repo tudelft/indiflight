@@ -297,6 +297,9 @@ void initIndiRuntime(void) {
     for (int j = 0; j < MAXV; j++) {
         indiRun.dv[j] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
     }
+    for (int j = 0; j < MAXU; j++) {
+        indiRun.du[j] = 0.f; // delta-pseudo controls in N/kg
+    }
 
     // ---- housekeeping
     indiRun.attExecCounter = 0; // count executions (wrapping)
@@ -311,6 +314,7 @@ void initIndiRuntime(void) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
         biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        biquadFilterInitLPF(&indiRun.duFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
     }
 }
 

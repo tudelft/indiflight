@@ -81,7 +81,7 @@ set blackbox_disable_debug = ON
 set blackbox_disable_indi = OFF
 set blackbox_disable_pos = ON
 set blackbox_disable_ekf = ON
-set blackbox_disable_learner = OFF
+set blackbox_disable_learner = ON
 set blackbox_high_resolution = ON
 set debug_mode = NONE
 
@@ -89,7 +89,7 @@ set debug_mode = NONE
 set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 180
-set acc_calibration = 0,0,0,1
+set acc_calibration = 14,-13,-8,1
 set acc_offset = 13, 0, -9
 
 # motor setup
@@ -107,10 +107,10 @@ set small_angle = 45   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 5       # relative to imu (this is 640Hz)
+set pid_process_denom = 2       # relative to imu (this is 1600Hz)
 set ahrs_process_denom = 10     # relative to imu (320Hz)
-set nn_rate_denom = 2           # relative to pid (320Hz)
-set blackbox_sample_rate = 1/1  # relative to pid (640Hz)
+set nn_rate_denom = 5           # relative to pid (320Hz)
+set blackbox_sample_rate = 1/1  # relative to pid (1600Hz)
 
 # ekf (these are the defaults)
 set ekf_use_quat = 1
@@ -187,7 +187,7 @@ set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 40  # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 55           # deg
+set indi_manual_max_tilt = 30           # deg
 set indi_manual_use_coordinated_yaw = 1
 
 # --- indi config ---

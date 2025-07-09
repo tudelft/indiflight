@@ -65,11 +65,14 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
-    .modeFx = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
-    .modeAct = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
-    .modeHover = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
+    .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
+    .modeFx = (uint8_t) (LEARN_DURING_PROBING),
+    .modeAct = (uint8_t) (LEARN_DURING_PROBING),
+    .modeHover = (uint8_t) (LEARN_DURING_PROBING),
+    .initFromProfileFx = false,
+    .initFromProfileAct = false,
     .numMotors = 4,
     .numServos = 0,
     .imuFiltHz = 10,
@@ -638,12 +641,14 @@ void updateLearner(timeUs_t current) {
 
     static bool appliedAfterQuery = false;
     if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
-        if (learnerConfig()->applyIndi)
+        if (learnerConfig()->applyIndi) {
             changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+        }
 
 #ifdef USE_LOCAL_POSITION
-        if (learnerConfig()->applyPosition)
+        if (learnerConfig()->applyPosition) {
             changePositionProfile(POSITION_PROFILE_COUNT-1); 
+        }
 #endif
         appliedAfterQuery = true;
     }
@@ -935,8 +940,8 @@ doMore:
 
             // considered launched if succesfully activated inflight_query, or catapult/throw states correct
             bool launched = inflight_query_requested
-                || ((c->modeFx & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-                || ((c->modeFx & LEARN_PROBING_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
+                || ((c->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+                || ((c->modeProbing & LEARN_PROBING_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
 
             if (launched) {
                 initProber(current);
