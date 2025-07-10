@@ -185,7 +185,7 @@ void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float ta
     float a0 = 2 * tauDes / Ts + 1;
     float a1 = 1 - 2 * tauDes / Ts;
     float b0 = 2 * tauEst / Ts + 1;
-    float b1 = 1 - 2 * tauDes / Ts;
+    float b1 = 1 - 2 * tauEst / Ts;
 
     float a1_normalized = a1 / a0;
     float b0_normalized = b0 / a0;
