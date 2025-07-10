@@ -121,7 +121,7 @@ typedef struct indiProfile_s {
 
     // -------- Parameters for motor lead-lag filter
     #ifdef USE_MOTOR_LEAD_LAG
-    uint32_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
+    uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
     #endif
 } indiProfile_t;
 
