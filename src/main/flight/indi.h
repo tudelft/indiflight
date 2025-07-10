@@ -123,6 +123,10 @@ typedef struct indiProfile_s {
     #ifdef USE_MOTOR_LEAD_LAG
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
     #endif
+    // -------- Parameters for feedforward control
+    #ifdef USE_INDI_FEEDFORWARD
+    uint16_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-3
+    #endif
 } indiProfile_t;
 
 // linearization
@@ -244,6 +248,11 @@ typedef struct indiRuntime_s {
     biquadFilter_t motorLeadLagFilter[MAXU]; 
     float actTimeConstDesMs[MAXU]; 
     float actTimeConstDesS[MAXU]; 
+    #endif
+    #ifdef USE_INDI_FEEDFORWARD
+    biquadFilter_t feedforwardFilter[3]; 
+    float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
+    fp_vector_t ffRateSpBody;   
     #endif
 } indiRuntime_t;
 

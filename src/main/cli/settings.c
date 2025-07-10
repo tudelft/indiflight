@@ -1318,6 +1318,9 @@ const clivalue_t valueTable[] = {
     #ifdef USE_MOTOR_LEADLAG
     { PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS,         VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstDesMs) }, 
     #endif
+    #ifdef USE_INDI_FEEDFORWARD
+    { PARAM_NAME_INDI_FF_COEFS           ,              VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, feedforwardCoefs) },
+    #endif
 #endif
 
 #ifdef USE_LOCAL_POSITION

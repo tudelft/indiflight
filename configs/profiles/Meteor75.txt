@@ -182,6 +182,14 @@ indiprofile 0
 set indi_attitude_gains = 1500, 1500, 1000
 set indi_rate_gains     =  150,  150,  150
 
+# --- feedforward control config
+# H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
+# Coefficient: unitless * 1000
+# Coefficient order:  b0, b1, b2, a1, a2  
+set indi_ff_coefs = 0, 0, 0, 0, 0
+
+
+
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
 set indi_attitude_max_yaw_rate = 500
