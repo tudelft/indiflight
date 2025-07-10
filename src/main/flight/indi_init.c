@@ -189,6 +189,9 @@ void initIndiRuntimeParameters(void) {
         // ---- WLS config
         indiRun.wlsWu[i] = (float) p->wlsWu[i];
         indiRun.u_pref[i] = p->u_pref[i] * 0.01f;
+        # ifdef USE_MOTOR_LEAD_LAG
+        indiRun.actTimeConstDesMs[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
+        #endif
     }
     //indiRun.actG1[0][0] = NAN; // FIXME: crashtesting
     for (int i = 0; i < MAXV; i++)
@@ -311,6 +314,9 @@ void initIndiRuntime(void) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
         biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        #ifdef USE_MOTOR_LEAD_LAG
+        biquadFilterInitMotorLeadLag(&indiRun.motorLeadLagFilter[i], indiRun.actTimeConstS[i], indiRun.actTimeConstDesS[i], gyro.targetLooptime);
+        #endif
     }
 }
 
