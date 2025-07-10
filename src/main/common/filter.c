@@ -168,6 +168,46 @@ void biquadFilterInitLPF(biquadFilter_t *filter, float filterFreq, uint32_t refr
     biquadFilterInit(filter, filterFreq, refreshRate, BIQUAD_Q, FILTER_LPF, 1.0f);
 }
 
+// Initialize lead or lag filter A_comp(z) to modify time constant of motor from tauEst [s] to tauDes [s]
+// Here the desired actuator dynamics should be A_des(s) = A_est(s) * A_comp(s) where A_est(s) is the estimated
+// actuator dynamics modeled as a first order lowpass filter.
+void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float tauDes, float Ts)
+{
+    /* Compute coefficients based on motor being a first order lowpass filter A(s) with time constant tauEst:
+    A(s) = 1 / (tauEst * s + 1)
+    A_des(s) = A(s) * A_comp(s) = A(s) * (tauDes * s + 1) / (tauEst * s + 1)
+    Discretization of A_comp(s) using bilinear transform yields:
+    A_comp(z) =  ( (2 * tau_est / Ts) + 1 ) * z + (1 - (2 * tau_est / Ts)) 
+                -----------------------------------------------------------------
+                 ( (2 * tau_des / Ts) + 1 ) * z + (1 - (2 * tau_des / Ts))]
+    */
+    
+    float a0 = 2 * tauDes / Ts + 1;
+    float a1 = 1 - 2 * tauDes / Ts;
+    float b0 = 2 * tauEst / Ts + 1;
+    float b1 = 1 - 2 * tauDes / Ts;
+
+    float a1_normalized = a1 / a0;
+    float b0_normalized = b0 / a0;
+    float b1_normalized = b1 / a0;
+    biquadFilterInitLeadLag(filter, b0_normalized, b1_normalized, 0.0f, a1_normalized, 0.0f);
+}
+
+/* Setups up a biquad filter as a lead-lag filter in the form H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)*/
+void biquadFilterInitLeadLag(biquadFilter_t *filter, float b0, float b1, float b2, float a1, float a2)
+{
+    filter->x1 = 0.0f;
+    filter->y1 = 0.0f;
+    filter->x2 = 0.0f;
+    filter->y2 = 0.0f;
+    filter->b0 = b0;
+    filter->b1 = b1;
+    filter->b2 = b2;
+    filter->a1 = a1;
+    filter->a2 = a2;
+    filter->weight = 1.0f; 
+}
+
 void biquadFilterInit(biquadFilter_t *filter, float filterFreq, uint32_t refreshRate, float Q, biquadFilterType_e filterType, float weight)
 {
     biquadFilterUpdate(filter, filterFreq, refreshRate, Q, filterType, weight);
