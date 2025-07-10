@@ -177,9 +177,9 @@ void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float ta
     A(s) = 1 / (tauEst * s + 1)
     A_des(s) = A(s) * A_comp(s) = A(s) * (tauDes * s + 1) / (tauEst * s + 1)
     Discretization of A_comp(s) using bilinear transform yields:
-    A_comp(z) =  ( (2 * tau_est / Ts) + 1 ) * z + (1 - (2 * tau_est / Ts)) 
-                -----------------------------------------------------------------
-                 ( (2 * tau_des / Ts) + 1 ) * z + (1 - (2 * tau_des / Ts))]
+    A_comp(z) =  ((2 * tau_est / Ts) + 1) * z + (1 - (2 * tau_est / Ts)) 
+                ---------------------------------------------------------
+                 ((2 * tau_des / Ts) + 1) * z + (1 - (2 * tau_des / Ts))
     */
     
     float a0 = 2 * tauDes / Ts + 1;
