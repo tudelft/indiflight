@@ -620,7 +620,7 @@ void getMotorCommands(timeUs_t current) {
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
         #ifdef USE_MOTOR_LEAD_LAG
         float uFiltered = biquadFilterApply(&indiRun.motorLeadLagFilter[i], indiRun.u[i]);
-        indiRun.u[i] = constrainf(ufiltered, indiRun.actMin[i], indiRun.actMax[i]);
+        indiRun.u[i] = constrainf(uFiltered, indiRun.actMin[i], indiRun.actMax[i]);
         #endif
         indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
     }
