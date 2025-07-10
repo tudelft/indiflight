@@ -10,6 +10,7 @@ typedef enum {
 } ortho_base_e;
 
 typedef enum {
+    ORTHO_TRANS_NONE,
     ORTHO_TRANS_POWER,
     ORTHO_TRANS_SCALE,
     ORTHO_TRANS_TIMESHIFT,
@@ -29,4 +30,4 @@ typedef struct ortho_signal_s {
 
 extern ortho_signal_t orthoSignal;
 
-void orthoSignalGenerate(float t, float* out);
+void orthoSignalGenerate(float t, float* out, int n);

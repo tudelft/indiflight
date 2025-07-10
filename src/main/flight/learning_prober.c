@@ -55,13 +55,14 @@
 #include <stdbool.h>
 
 #include "learning_prober.h"
+#include "common/ortho_signals.h"
 
 #ifdef USE_LEARNER
 
 PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 0);
 PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     // .type = (uint8_t) PROBER_STEPS,
-    .type = (uint8_t) PROBER_MULTISINE,
+    .type = (uint8_t) PROBER_ORTHO,
     .numMotors = 4,
     .numServos = 0,
     .preDelayMs = 200,
@@ -162,6 +163,23 @@ static void updateMultisine(timeUs_t currentTimeUs) {
     }
 }
 
+static void updateOrtho(timeUs_t currentTimeUs) {
+    const proberConfig_t* config = proberConfig();
+
+    timeDelta_t timeSinceStartUs = cmpTimeUs(currentTimeUs, proberRuntime.genStartTimeUs);
+    float t = 0.000001f * timeSinceStartUs; // convert to seconds
+    t *= 4.f; // shrink time 
+
+    if (t < 1.f) {
+        setZeroOutputs();
+        orthoSignalGenerate(t, proberRuntime.motorOutput, config->numMotors);
+    } else {
+        // All steps done, set finished flag
+        proberRuntime.isGenFinished = true;
+        proberRuntime.genFinishTimeUs = currentTimeUs;
+    }
+}
+
 #define PROBER_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
 
 void initProber(timeUs_t currentTimeUs) {
@@ -186,6 +204,9 @@ void initProber(timeUs_t currentTimeUs) {
             break;
         case PROBER_NOISE:
             // Initialize noise prober runtime
+            break;
+        case PROBER_ORTHO:
+            // Initialize orthogonal signal prober runtime not needed
             break;
         default:
             // Handle unknown prober type
@@ -235,6 +256,9 @@ void updateProber(timeUs_t currentTimeUs) {
         case PROBER_NOISE:
             // Handle noise prober logic
             break;
+        case PROBER_ORTHO:
+            // Handle orthogonal signal prober logic
+            updateOrtho(currentTimeUs);
         default:
             // Handle unknown prober type
             break;

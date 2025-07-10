@@ -63,6 +63,7 @@ typedef enum {
     PROBER_STEPRAMPS,
     PROBER_MULTISINE,
     PROBER_NOISE,
+    PROBER_ORTHO,
 } prober_type_t;
 
 // for each of the types, make one runtime struct. then a union of those structs

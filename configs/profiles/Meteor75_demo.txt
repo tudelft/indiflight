@@ -372,7 +372,7 @@ set throw_to_arm_idle_before_throw = 1
 set throw_to_arm_allow_manual_modes = 1
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 6
+set learner_mode = 7
 set learner_num_actuators = 4
 set learner_delay_time_ms = 10
 set learner_step_time_ms = 30

@@ -68,9 +68,9 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
-    .modeFx = (uint8_t) (LEARN_DURING_PROBING),
-    .modeAct = (uint8_t) (LEARN_DURING_PROBING),
-    .modeHover = (uint8_t) (LEARN_DURING_PROBING),
+    .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     .initFromProfileFx = false,
     .initFromProfileAct = false,
     .numMotors = 4,
@@ -188,7 +188,7 @@ static void initLearnerRls(void) {
         learnRun.initialized = false;
     }
 
-    float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 0.4f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // init filters and other rls
@@ -528,13 +528,13 @@ void updateLearner(timeUs_t current) {
 
     bool probing = proberRuntime.isGenRunning;
 
-    bool learnFx = (config->modeFx & LEARN_DURING_FLIGHT)
+    bool learnFx = (config->modeFx & LEARN_DURING_FLIGHT && !proberRuntime.isInitialized)
         || ((config->modeFx & LEARN_DURING_PROBING) && probing);
 
-    bool learnAct = (config->modeAct & LEARN_DURING_FLIGHT)
+    bool learnAct = (config->modeAct & LEARN_DURING_FLIGHT && !proberRuntime.isInitialized)
         || ((config->modeAct & LEARN_DURING_PROBING) && probing);
 
-    bool learnHover = (config->modeHover & LEARN_DURING_FLIGHT)
+    bool learnHover = (config->modeHover & LEARN_DURING_FLIGHT && !proberRuntime.isInitialized)
         || ((config->modeHover & LEARN_DURING_PROBING) && probing);
 
     // wait for motors to spool down before learning imu position

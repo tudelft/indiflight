@@ -7,26 +7,27 @@
 #include <stdlib.h>
 
 ortho_signal_t orthoSignal = {
-    .K = 6,
+    .K = 4,
     .base_param = 20.0f,
-    .base_type = ORTHO_BASE_SINE,
+    .base_type = ORTHO_BASE_CHIRP,
     .transform_type = {
+        ORTHO_TRANS_NONE,
         ORTHO_TRANS_SCALE,
         ORTHO_TRANS_SCALE,
         ORTHO_TRANS_SCALE,
-        ORTHO_TRANS_SCALE,
-        ORTHO_TRANS_SCALE,
-        ORTHO_TRANS_SCALE
+//         ORTHO_TRANS_SCALE,
+//         ORTHO_TRANS_SCALE,
     },
     .trans_param = {
+        1.f,
         0.9f,
-        0.9f,
-        0.9f,
-        0.9f,
-        0.9f,
-        0.9f,
+        0.9f*0.9f,
+        0.9f*0.9f*0.9f,
+//         0.9f*0.9f*0.9f*0.9f,
+//         0.9f*0.9f*0.9f*0.9f*0.9f,
     },
-    .mixing_matrix = {1.401225, -0.735259, 1.799495, 1.178102, -1.937457, 2.577425, -1.491344, 3.059466, -4.132516, 3.753533, 1.573364, -4.493330, 8.461420, -10.251562, 6.940148, -3.152923, 11.829003, -27.703880, 42.777754, -40.674826, 18.913716} // row major order
+    // .mixing_matrix = {0.236303, -0.013044, 0.237292, 0.029661, -0.044778, 0.243902, -0.050836, 0.072173, -0.095275, 0.262043}
+    .mixing_matrix = {0.542061, -0.563899, 0.818948, 1.583174, -2.335288, 1.775406, -1.846006, 4.809987, -4.979564, 2.563008}
 };
 
 
@@ -39,7 +40,7 @@ static float orthoSignalMonomial(ortho_base_e type, float param, float t) {
         case ORTHO_BASE_NOISE:
             return (2.0f * ((float)rand() / RAND_MAX) - 1.0f); // Random noise
         case ORTHO_BASE_CHIRP:
-            return cosf(param * t * t); // Chirp signal
+            return cosf(param * (1.f-t) * (1.f-t)); // Chirp signal
         default:
             return 0.f; // Default case
     }
@@ -53,7 +54,7 @@ static float orthoTransform(ortho_base_e type, float base_param, ortho_trans_e t
             mono = orthoSignalMonomial(type, base_param, t);
             return powf(mono, param);
         case ORTHO_TRANS_SCALE:
-            mono = param * orthoSignalMonomial(type, base_param, t*param);
+            mono = orthoSignalMonomial(type, base_param, t * param);
             return mono;
         case ORTHO_TRANS_TIMESHIFT:
             mono = orthoSignalMonomial(type, base_param, t + param);
@@ -66,11 +67,15 @@ static float orthoTransform(ortho_base_e type, float base_param, ortho_trans_e t
     }
 }
 
-void orthoSignalGenerate(float t, float* out) {
+void orthoSignalGenerate(float t, float* out, int n) {
     float v[ORTHO_SIGNAL_MAX];
 
+    if (n > orthoSignal.K) {
+        n = orthoSignal.K;
+    }
+
     // Generate the orthogonal signal basis functions
-    for (int i = 0; i < orthoSignal.K; i++) {
+    for (int i = 0; i < n; i++) {
         v[i] = orthoTransform(
             orthoSignal.base_type,
             orthoSignal.base_param,
@@ -80,10 +85,10 @@ void orthoSignalGenerate(float t, float* out) {
 
         // diagonal
         int diagIdx = ((i+1)*(i+2) >> 1) - 1;
-        out[i] = orthoSignal.mixing_matrix[diagIdx] * v[i];
+        out[i] = .5f*orthoSignal.mixing_matrix[diagIdx] * v[i];
 
         for (int j = 0; j < i; j++) {
-            out[i] += orthoSignal.mixing_matrix[diagIdx - (i-j)] * v[j];
+            out[i] += 0.5f*orthoSignal.mixing_matrix[diagIdx - (i-j)] * v[j];
         }
     }
 }

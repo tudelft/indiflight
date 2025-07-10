@@ -32,9 +32,9 @@
 
 ## ----- INDIFLIGHT features
 #define USE_INDI
-## #define USE_EKF
-## #define USE_LOCAL_POSITION
-## #define USE_TRAJECTORY_TRACKER
+#define USE_EKF
+#define USE_LOCAL_POSITION
+#define USE_TRAJECTORY_TRACKER
 
 ## ----- DANGERZONE
 #define USE_THROW_TO_ARM

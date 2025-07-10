@@ -14,7 +14,7 @@ def normalized(v):
 
 # transformations
 def T_scale(v, beta):
-    return lambda t: beta*v(t*beta)
+    return lambda t: v(t*beta)
 
 def T_timeshift(v, tau):
     return lambda t: v(t+tau)
@@ -28,13 +28,18 @@ def T_nextpower(v):
 
 #%% monomial
 
+np.random.seed(42)  # for reproducibility
+S = 101
+prng = np.random.random(S*10)*2 - 1
+
 # v = [lambda t: (1-t)**3]
 # v = [lambda t: np.sinc(10*(t-0.2)) * np.log(10*(t-0.2)**2+1.5)]  # v1]
 # v = [lambda t: np.sin(20*t)+np.cos(60*t) + 8]  # monomial function
-# v = [lambda t: np.cos(20*(1-t)*(1-t))]
-v = [lambda t: np.cos(20*t)]
+v = [lambda t: np.cos(20*(1-t)*(1-t))]
+# v = [lambda t: np.cos(30*t)]
+# v = [lambda t: prng[(S*t).astype(int)]]  # random piecewise constant function
 # v = [lambda t: (t <= 0.33) * 0 + (t > 0.33) * np.cos(40*(1.-t)*(1.-t))]  # piecewise linear function
-K = 6
+K = 4
 
 from time import time
 
@@ -46,8 +51,8 @@ start = time()
 v.append(T_scale(v[0], 0.9))  # v2
 v.append(T_scale(v[0], 0.9**2))  # v2
 v.append(T_scale(v[0], 0.9**3))  # v2
-v.append(T_scale(v[0], 0.9**4))  # v2
-v.append(T_scale(v[0], 0.9**5))  # v2
+# v.append(T_scale(v[0], 0.9**4))  # v2
+# v.append(T_scale(v[0], 0.9**5))  # v2
 # v.append(T_scale(v[1], 0.9))  # v3
 # v.append(T_scale(v[2], 0.9))  # v3
 # v.append(T_scale(v[3], 0.9))  # v3
@@ -102,6 +107,7 @@ for k in range(K):
 
 # normalize gamma, and evaluate the orthonormalized functions
 g /= np.sqrt(auto_inner)[:, np.newaxis]
+g /= np.max(np.abs(x @ g.T))
 yn = x @ g.T
 
 # end timer
