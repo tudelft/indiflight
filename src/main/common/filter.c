@@ -171,7 +171,7 @@ void biquadFilterInitLPF(biquadFilter_t *filter, float filterFreq, uint32_t refr
 // Initialize lead or lag filter A_comp(z) to modify time constant of motor from tauEst [s] to tauDes [s]
 // Here the desired actuator dynamics should be A_des(s) = A_est(s) * A_comp(s) where A_est(s) is the estimated
 // actuator dynamics modeled as a first order lowpass filter.
-void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float tauDes, float Ts)
+void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float tauDes, uint32_t refreshRate)
 {
     /* Compute coefficients based on motor being a first order lowpass filter A(s) with time constant tauEst:
     A(s) = 1 / (tauEst * s + 1)
@@ -181,7 +181,7 @@ void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float ta
                 ---------------------------------------------------------
                  ((2 * tau_des / Ts) + 1) * z + (1 - (2 * tau_des / Ts))
     */
-    
+    float Ts = refreshRate * 0.000001f;
     float a0 = 2 * tauDes / Ts + 1;
     float a1 = 1 - 2 * tauDes / Ts;
     float b0 = 2 * tauEst / Ts + 1;

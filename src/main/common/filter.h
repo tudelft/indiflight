@@ -81,7 +81,7 @@ typedef float (*filterApplyFnPtr)(filter_t *filter, float input);
 float nullFilterApply(filter_t *filter, float input);
 
 void biquadFilterInitLPF(biquadFilter_t *filter, float filterFreq, uint32_t refreshRate);
-void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float tauDes, float Ts);
+void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float tauDes, uint32_t refreshRate);
 void biquadFilterInitLeadLag(biquadFilter_t *filter, float b0, float b1, float b2, float a1, float a2);
 void biquadFilterInit(biquadFilter_t *filter, float filterFreq, uint32_t refreshRate, float Q, biquadFilterType_e filterType, float weight);
 void biquadFilterUpdate(biquadFilter_t *filter, float filterFreq, uint32_t refreshRate, float Q, biquadFilterType_e filterType, float weight);
