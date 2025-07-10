@@ -253,7 +253,12 @@ void initIndiRuntimeParameters(void) {
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         indiRun.attGainsCasc.A[axis] = indiRun.attGains.A[axis] / indiRun.rateGains.A[axis]; // attitude gains simulating parallel PD
     }
-
+    
+    #ifdef USE_INDI_FEEDFORWARD
+    for (int i = 0; i < 5; i++) {
+        indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i];
+    }
+    #endif 
     // ---- housekeeping
     indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
     indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
@@ -309,6 +314,9 @@ void initIndiRuntime(void) {
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        #ifdef USE_INDI_FEEDFORWARD
+        biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
+        #endif
     }
     for (int i = 0; i < indiRun.actNum; i++) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup

@@ -198,6 +198,10 @@ void getSetpoints(timeUs_t current) {
         // which results in a sort of radial deadzone past the x*y=1 circle
         float roll = getRcDeflection(ROLL);
         float pitch = getRcDeflection(PITCH);
+        #ifdef USE_INDI_FEEDFORWARD
+            indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], roll);
+            indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], pitch);
+        #endif
         float maxTilt = indiRun.manualMaxTilt;
 
         fp_vector_t axis = {
@@ -365,6 +369,12 @@ void getAlphaSpBody(timeUs_t current) {
         // multiply with gains and mix existing rate setpoint
         indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
         indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+
+        #ifdef USE_INDI_FEEDFORWARD
+        indiRun.rateSpBody.V.X += indiRun.ffRateSpBody.V.X;
+        indiRun.rateSpBody.V.Y += indiRun.ffRateSpBody.V.Y;
+        #endif
+
         if (indiRun.trackAttitudeYaw)
             indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * yawErrorAngle;
         // else: just keep rateSpBody.V.Z that has been set
