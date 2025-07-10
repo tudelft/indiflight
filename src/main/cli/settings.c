@@ -1315,6 +1315,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_TAILS_CXD          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cxd) },
     { PARAM_NAME_INDI_TAILS_CMD          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cmd) },
     { PARAM_NAME_INDI_TAILS_CND          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cnd) },
+    { PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS,         VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstMs) },    
 #endif
 
 #ifdef USE_LOCAL_POSITION
