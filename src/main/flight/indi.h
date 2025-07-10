@@ -118,6 +118,11 @@ typedef struct indiProfile_s {
     uint16_t wlsCondBound;       // condition number bound / 1e4
     uint16_t wlsTheta;           // objective segragation / 1e-4
     uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
+
+    // -------- Parameters for motor lead-lag filter
+    #ifdef USE_MOTOR_LEAD_LAG
+    uint32_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
+    #endif
 } indiProfile_t;
 
 // linearization
@@ -223,6 +228,7 @@ typedef struct indiRuntime_s {
     biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
+
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz
@@ -232,6 +238,13 @@ typedef struct indiRuntime_s {
     bool bypassControl; // no control at all. u and d are unmodified by loop
     bool controlAttitude; // attempt to reach tilt given by attSpNed
     bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
+
+    // ---- actuator time constant modification lead-lag filter
+    #ifdef USE_MOTOR_LEAD_LAG
+    biquadFilter_t motorLeadLagFilter[MAXU]; 
+    float actTimeConstDesMs[MAXU]; 
+    float actTimeConstDesS[MAXU]; 
+    #endif
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3
