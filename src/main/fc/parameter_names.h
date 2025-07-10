@@ -171,6 +171,7 @@
 #define PARAM_NAME_INDI_TAILS_CXD           "indi_tails_cxd"
 #define PARAM_NAME_INDI_TAILS_CMD           "indi_tails_cmd"
 #define PARAM_NAME_INDI_TAILS_CND           "indi_tails_cnd"
+#define PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS "indi_act_time_constant_des_ms"
 #endif
 
 #ifdef USE_LOCAL_POSITION
