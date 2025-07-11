@@ -256,7 +256,7 @@ void initIndiRuntimeParameters(void) {
     
     #ifdef USE_INDI_FEEDFORWARD
     for (int i = 0; i < 5; i++) {
-        indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i];
+        indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i] * 1e-3f;
     }
     #endif 
     // ---- housekeeping
