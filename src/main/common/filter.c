@@ -175,7 +175,7 @@ void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float ta
 {
     /* Compute coefficients based on motor being a first order lowpass filter A(s) with time constant tauEst:
     A(s) = 1 / (tauEst * s + 1)
-    A_des(s) = A(s) * A_comp(s) = A(s) * (tauDes * s + 1) / (tauEst * s + 1)
+    A_des(s) = A(s) * A_comp(s) = A(s) * (tauEst * s + 1) / (tauDes * s + 1)
     Discretization of A_comp(s) using bilinear transform yields:
     A_comp(z) =  ((2 * tau_est / Ts) + 1) * z + (1 - (2 * tau_est / Ts)) 
                 ---------------------------------------------------------
