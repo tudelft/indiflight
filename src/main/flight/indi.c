@@ -633,6 +633,7 @@ void getMotorCommands(timeUs_t current) {
 
         // apply lag filter to simulate spinup dynamics
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
+        
         indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
     }
 }

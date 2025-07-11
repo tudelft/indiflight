@@ -130,5 +130,3 @@ typedef struct meanAccumulator_s {
 void meanAccumulatorAdd(meanAccumulator_t *filter, const int8_t newVal);
 int8_t meanAccumulatorCalc(meanAccumulator_t *filter, const int8_t defaultValue);
 void meanAccumulatorInit(meanAccumulator_t *filter);
-
-
