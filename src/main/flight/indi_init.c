@@ -190,7 +190,7 @@ void initIndiRuntimeParameters(void) {
         indiRun.wlsWu[i] = (float) p->wlsWu[i];
         indiRun.u_pref[i] = p->u_pref[i] * 0.01f;
         # ifdef USE_MOTOR_LEAD_LAG
-        indiRun.actTimeConstDesMs[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
+        indiRun.actTimeConstDesS[i] = MAX(1UL, p->actTimeConstDesMs[i]) * 1e-3f;
         #endif
     }
     //indiRun.actG1[0][0] = NAN; // FIXME: crashtesting
