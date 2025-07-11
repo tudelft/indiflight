@@ -42,6 +42,7 @@
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
 ## #define USE_MOTOR_LEAD_LAG
+## #define USE_INDI_FEEDFORWARD
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -187,8 +188,6 @@ set indi_rate_gains     =  150,  150,  150
 # Coefficient: unitless * 1000
 # Coefficient order:  b0, b1, b2, a1, a2  
 set indi_ff_coefs = 0, 0, 0, 0, 0
-
-
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
