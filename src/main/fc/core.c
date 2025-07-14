@@ -1717,12 +1717,7 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         int m = 0;
         for (int i = 0; i < indiRun.actNum; i++) {
             if ((indiRun.actIsMotor[i]) && (m < numMotors)) {
-#ifdef USE_MOTOR_LEAD_LAG
-                float indiOutput = biquadFilterApply(&indiRun.motorLeadLagFilter[i], indiRun.d[i]);
-#else
-                float indiOutput = indiRun.d[i];
-#endif
-                motor_normalized[m++] = constrainf(indiOutput, 0., 1.);
+                motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
             }
         }
 
@@ -1773,6 +1768,19 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 
 #ifdef USE_INDI
     indiUpdateActuatorState( motor_normalized, servo_normalized );
+#endif
+
+    // apply motor lead-lag filter only after the commands are fed into the actuator state filter
+#ifdef USE_INDI
+    if (indiRun.useMotorLeadLag) {
+        int m = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actIsMotor[i]) && (m < numMotors)) {
+                float output = biquadFilterApply(&indiRun.motorLeadLagFilter[m], motor_normalized[m]);
+                motor_normalized[m++] = constrainf(output, 0.f, 1.f);
+            }
+        }
+    }
 #endif
 
     // get real motor outputs for the hardware implementation used

@@ -2607,12 +2607,15 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->feedforwardCoefs[2],
                                                                                               indiProfile->feedforwardCoefs[3],
                                                                                               indiProfile->feedforwardCoefs[4]);
-#ifdef USE_MOTOR_LEAD_LAG
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_MOTOR_LEAD_LAG, "%d",                  indiProfile->useMotorLeadLag);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS, "%d,%d,%d,%d",  indiProfile->actTimeConstTrueMs[0],
+                                                                                              indiProfile->actTimeConstTrueMs[1],
+                                                                                              indiProfile->actTimeConstTrueMs[2],
+                                                                                              indiProfile->actTimeConstTrueMs[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS, "%d,%d,%d,%d",   indiProfile->actTimeConstDesMs[0],
                                                                                               indiProfile->actTimeConstDesMs[1],
                                                                                               indiProfile->actTimeConstDesMs[2],
                                                                                               indiProfile->actTimeConstDesMs[3]);
-#endif
 #endif // USE_INDI
 #ifdef USE_LOCAL_POSITION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);

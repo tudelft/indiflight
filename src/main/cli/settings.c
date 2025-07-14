@@ -1315,9 +1315,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_TAILS_CXD          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cxd) },
     { PARAM_NAME_INDI_TAILS_CMD          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cmd) },
     { PARAM_NAME_INDI_TAILS_CND          ,              VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, tails_cnd) },   
-#ifdef USE_MOTOR_LEAD_LAG
+    { PARAM_NAME_INDI_USE_MOTOR_LEAD_LAG,               VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useMotorLeadLag) },
+    { PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS,         VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstTrueMs) }, 
     { PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS,         VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, actTimeConstDesMs) }, 
-#endif
     { PARAM_NAME_INDI_FF_COEFS           ,              VAR_INT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, feedforwardCoefs) },
 #endif
 

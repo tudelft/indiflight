@@ -41,7 +41,6 @@
 ## #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
-#define USE_MOTOR_LEAD_LAG
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -223,7 +222,11 @@ set indi_act_min = 0,0,0,0,0,0,0,0
 set indi_act_max = 100,100,100,100,100,100,100,100
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 1,1,1,1
-set indi_act_time_constant_des_ms = 33, 33, 33, 33       # ms
+
+# lead lag filtering for motor Outputs
+set indi_use_motor_lead_lag = 0
+set indi_act_time_constant_true_ms = 33,33,33,33
+set indi_act_time_constant_des_ms = 50,50,50,50
 
 set indi_act_g1_fx = 0,0,0,0,0,0,0,0
 set indi_act_g1_fy = 0,0,0,0,0,0,0,0

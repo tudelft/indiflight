@@ -171,6 +171,8 @@
 #define PARAM_NAME_INDI_TAILS_CXD           "indi_tails_cxd"
 #define PARAM_NAME_INDI_TAILS_CMD           "indi_tails_cmd"
 #define PARAM_NAME_INDI_TAILS_CND           "indi_tails_cnd"
+#define PARAM_NAME_INDI_USE_MOTOR_LEAD_LAG "indi_use_motor_lead_lag"
+#define PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS "indi_act_time_constant_true_ms"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS "indi_act_time_constant_des_ms"
 #define PARAM_NAME_INDI_FF_COEFS "indi_ff_coefs"
 #endif

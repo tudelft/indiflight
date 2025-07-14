@@ -68,6 +68,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->useIncrement = true;
     indiProfile->useAccelForSpfz = true;
     indiProfile->useRpmDotFeedback = true;
+    indiProfile->useMotorLeadLag = false;
     // ---- INDI actuator config
     indiProfile->actNum = 4;
     for (int i = 0; i < MAXU; i++) {
@@ -88,9 +89,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->actG2_roll[i] = 0;
         indiProfile->actG2_pitch[i] = 0;
         indiProfile->actG2_yaw[i] = 0;     // actuator rate effectiveness
-#ifdef USE_MOTOR_LEAD_LAG
+        indiProfile->actTimeConstTrueMs[i] = 25; // true time constant in seconds
         indiProfile->actTimeConstDesMs[i] = 25; // desired time constant in seconds
-#endif
         // ---- WLS config
         indiProfile->wlsWu[i] = 1;
         indiProfile->u_pref[i] = 0;
@@ -122,7 +122,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
-    indiProfile->attRateDenom = 4;
+    indiProfile->attRateDenom = 1;
     // ---- WLS config
     indiProfile->useConstantG2 = false;
     indiProfile->useRpmFeedback = false;
@@ -195,9 +195,9 @@ void initIndiRuntimeParameters(void) {
         // ---- WLS config
         indiRun.wlsWu[i] = (float) p->wlsWu[i];
         indiRun.u_pref[i] = p->u_pref[i] * 0.01f;
-#ifdef USE_MOTOR_LEAD_LAG
+        indiRun.useMotorLeadLag = (bool) p->useMotorLeadLag;
+        indiRun.actTimeConstTrueS[i] = MAX(1UL, p->actTimeConstTrueMs[i]) * 1e-3f;
         indiRun.actTimeConstDesS[i] = MAX(1UL, p->actTimeConstDesMs[i]) * 1e-3f;
-#endif
     }
     //indiRun.actG1[0][0] = NAN; // FIXME: crashtesting
     for (int i = 0; i < MAXV; i++)
@@ -324,9 +324,11 @@ void initIndiRuntime(void) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
         biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
-#ifdef USE_MOTOR_LEAD_LAG
-        biquadFilterInitMotorLeadLag(&indiRun.motorLeadLagFilter[i], indiRun.actTimeConstS[i], indiRun.actTimeConstDesS[i], gyro.targetLooptime);
-#endif
+        if (indiRun.useMotorLeadLag) {
+            // initialize motor lead-lag filter
+            // b0 = 1, b1 = 0, b2 = 0, a1 = -exp(-dT/tauEst), a2 = exp(-dT/tauDes)
+            biquadFilterInitMotorLeadLag(&indiRun.motorLeadLagFilter[i], indiRun.actTimeConstTrueS[i], indiRun.actTimeConstDesS[i], gyro.targetLooptime);
+        }
     }
 }
 
