@@ -120,13 +120,11 @@ typedef struct indiProfile_s {
     uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
 
     // -------- Parameters for motor lead-lag filter
-    #ifdef USE_MOTOR_LEAD_LAG
+#ifdef USE_MOTOR_LEAD_LAG
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
-    #endif
+#endif
     // -------- Parameters for feedforward control
-    #ifdef USE_INDI_FEEDFORWARD
-    uint16_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-3
-    #endif
+    int16_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-3
 } indiProfile_t;
 
 // linearization
@@ -244,16 +242,14 @@ typedef struct indiRuntime_s {
     bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
 
     // ---- actuator time constant modification lead-lag filter
-    #ifdef USE_MOTOR_LEAD_LAG
+#ifdef USE_MOTOR_LEAD_LAG
     biquadFilter_t motorLeadLagFilter[MAXU]; 
     float actTimeConstDesMs[MAXU]; 
     float actTimeConstDesS[MAXU]; 
-    #endif
-    #ifdef USE_INDI_FEEDFORWARD
+#endif
     biquadFilter_t feedforwardFilter[3]; 
     float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
     fp_vector_t ffRateSpBody;   
-    #endif
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3

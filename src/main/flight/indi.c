@@ -131,6 +131,10 @@ void getSetpoints(timeUs_t current) {
     indiRun.spfSpBody.V.Y = 0.f;
     indiRun.spfSpBody.V.Z = 0.f;
 
+    indiRun.ffRateSpBody.V.X = 0.f;
+    indiRun.ffRateSpBody.V.Y = 0.f;
+    indiRun.ffRateSpBody.V.Z = 0.f;
+
     indiRun.rateSpBodyCommanded.V.X = 0.f;
     indiRun.rateSpBodyCommanded.V.Y = 0.f;
     indiRun.rateSpBodyCommanded.V.Z = 0.f;
@@ -198,10 +202,6 @@ void getSetpoints(timeUs_t current) {
         // which results in a sort of radial deadzone past the x*y=1 circle
         float roll = getRcDeflection(ROLL);
         float pitch = getRcDeflection(PITCH);
-        #ifdef USE_INDI_FEEDFORWARD
-            indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], roll);
-            indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], pitch);
-        #endif
         float maxTilt = indiRun.manualMaxTilt;
 
         fp_vector_t axis = {
@@ -210,6 +210,10 @@ void getSetpoints(timeUs_t current) {
             .V.Z = 0.f,
         };
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
+
+        indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+        indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+
         float angle = VEC3_XY_LENGTH(axis);
         VEC3_NORMALIZE(axis);
         fp_quaternion_t attSpYaw;
@@ -370,10 +374,8 @@ void getAlphaSpBody(timeUs_t current) {
         indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
         indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
 
-        #ifdef USE_INDI_FEEDFORWARD
         indiRun.rateSpBody.V.X += indiRun.ffRateSpBody.V.X;
         indiRun.rateSpBody.V.Y += indiRun.ffRateSpBody.V.Y;
-        #endif
 
         if (indiRun.trackAttitudeYaw)
             indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * yawErrorAngle;
@@ -626,14 +628,14 @@ void getMotorCommands(timeUs_t current) {
             indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], indiRun.actMin[i], indiRun.actMax[i]);
         }
 
-        #ifdef USE_MOTOR_LEAD_LAG
+#ifdef USE_MOTOR_LEAD_LAG
         float uFiltered = biquadFilterApply(&indiRun.motorLeadLagFilter[i], indiRun.u[i]);
         indiRun.u[i] = constrainf(uFiltered, indiRun.actMin[i], indiRun.actMax[i]);
-        #endif
+#endif
 
         // apply lag filter to simulate spinup dynamics
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
-        
+
         indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
     }
 }

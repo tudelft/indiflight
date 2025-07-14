@@ -304,6 +304,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"gyroSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
+    {"gyroFF",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFF",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFF",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+
     {"alphaSp",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alphaSp",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alphaSp",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -703,6 +707,7 @@ typedef struct blackboxMainState_s {
     int16_t alpha[XYZ_AXIS_COUNT];
     int16_t quatSp[4];
     int16_t gyroSp[XYZ_AXIS_COUNT];
+    int16_t gyroFf[XYZ_AXIS_COUNT];
     int16_t alphaSp[XYZ_AXIS_COUNT];
     int16_t spfSp[XYZ_AXIS_COUNT];
     int16_t dv[MAXV];
@@ -1128,6 +1133,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->alpha, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->quatSp, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->gyroSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->gyroFf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->alphaSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->spfSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->dv, MAXV);
@@ -1363,6 +1369,10 @@ static void writeInterframe(void)
 
         // rotational rate setpoint
         arraySubInt16(deltas16, blackboxCurrent->gyroSp, blackboxLast->gyroSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        // feedforward rotational rate setpoint
+        arraySubInt16(deltas16, blackboxCurrent->gyroFf, blackboxLast->gyroFf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         // rotational accel setpoint
@@ -1891,6 +1901,9 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.X) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Y) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Z) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[0] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.X) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[1] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.Y) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[2] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.Z) * blackboxHighResolutionScale);
     blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.X) * 0.1f);
     blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Y) * 0.1f);
     blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Z) * 0.1f);
@@ -2589,7 +2602,18 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->u_pref[1],
                                                                                               indiProfile->u_pref[2],
                                                                                               indiProfile->u_pref[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_FF_COEFS, "%d,%d,%d,%d,%d",                indiProfile->feedforwardCoefs[0],
+                                                                                              indiProfile->feedforwardCoefs[1],
+                                                                                              indiProfile->feedforwardCoefs[2],
+                                                                                              indiProfile->feedforwardCoefs[3],
+                                                                                              indiProfile->feedforwardCoefs[4]);
+#ifdef USE_MOTOR_LEAD_LAG
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS, "%d,%d,%d,%d",   indiProfile->actTimeConstDesMs[0],
+                                                                                              indiProfile->actTimeConstDesMs[1],
+                                                                                              indiProfile->actTimeConstDesMs[2],
+                                                                                              indiProfile->actTimeConstDesMs[3]);
 #endif
+#endif // USE_INDI
 #ifdef USE_LOCAL_POSITION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
