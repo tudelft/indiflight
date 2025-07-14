@@ -244,7 +244,6 @@ typedef struct indiRuntime_s {
     // ---- actuator time constant modification lead-lag filter
 #ifdef USE_MOTOR_LEAD_LAG
     biquadFilter_t motorLeadLagFilter[MAXU]; 
-    float actTimeConstDesMs[MAXU]; 
     float actTimeConstDesS[MAXU]; 
 #endif
     biquadFilter_t feedforwardFilter[3]; 

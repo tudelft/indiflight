@@ -17,7 +17,7 @@
             "name": "MOCKUP docker",
             "type": "gdb",
             "request": "attach",
-            "executable": "${workspaceFolder}/obj/main/indiflight_MOCKUP.so",
+            //"executable": "${workspaceFolder}/obj/main/indiflight_MOCKUP.so",
             "target": "localhost:3333",
             "remote": true,
             "cwd": "${workspaceRoot}",

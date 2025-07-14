@@ -41,7 +41,7 @@
 ## #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
-## #define USE_MOTOR_LEAD_LAG
+#define USE_MOTOR_LEAD_LAG
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
