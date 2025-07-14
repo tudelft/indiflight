@@ -628,11 +628,6 @@ void getMotorCommands(timeUs_t current) {
             indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], indiRun.actMin[i], indiRun.actMax[i]);
         }
 
-#ifdef USE_MOTOR_LEAD_LAG
-        float uFiltered = biquadFilterApply(&indiRun.motorLeadLagFilter[i], indiRun.u[i]);
-        indiRun.u[i] = constrainf(uFiltered, indiRun.actMin[i], indiRun.actMax[i]);
-#endif
-
         // apply lag filter to simulate spinup dynamics
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
 
