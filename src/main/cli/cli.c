@@ -568,6 +568,11 @@ static void printValuePointer(const char *cmdName, const clivalue_t *var, const 
                 // uin32_t array
                 cliPrintf("%u", ((uint32_t *)valuePointer)[i]);
                 break;
+
+            case VAR_INT32:
+                // int32_t array
+                cliPrintf("%d", ((int32_t *)valuePointer)[i]);
+                break;
             }
 
             if (i < var->config.array.length - 1) {
@@ -596,6 +601,10 @@ static void printValuePointer(const char *cmdName, const clivalue_t *var, const 
             break;
         case VAR_UINT32:
             value = *(uint32_t *)valuePointer;
+
+            break;
+        case VAR_INT32:
+            value = *(int32_t *)valuePointer;
 
             break;
         }
@@ -680,6 +689,9 @@ static bool valuePtrEqualsDefault(const clivalue_t *var, const void *ptr, const 
             break;
         case VAR_UINT32:
             result = result && (((uint32_t *)ptr)[i] & mask) == (((uint32_t *)ptrDefault)[i] & mask);
+            break;
+        case VAR_INT32:
+            result = result && ((int32_t *)ptr)[i] == ((int32_t *)ptrDefault)[i];
             break;
         }
     }
@@ -981,6 +993,10 @@ static void cliSetVar(const clivalue_t *var, const uint32_t value)
 
         case VAR_UINT32:
             *(uint32_t *)ptr = value;
+            break;
+
+        case VAR_INT32:
+            *(int32_t *)ptr = value;
             break;
         }
     }
@@ -4856,6 +4872,16 @@ STATIC_UNIT_TESTED void cliSet(const char *cmdName, char *cmdline)
                             // store value
                             *data = (uint32_t)strtoul((const char*) valPtr, NULL, 10);
                        }
+
+                        break;
+                    
+                    case VAR_INT32:
+                        {
+                            // fetch data pointer
+                            int32_t *data = (int32_t *)cliGetValuePointer(val) + i;
+                            // store value
+                            *data = (int32_t)strtol((const char*) valPtr, NULL, 10);
+                        }
 
                         break;
                     }

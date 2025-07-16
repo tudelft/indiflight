@@ -124,7 +124,7 @@ typedef struct indiProfile_s {
     uint8_t actTimeConstTrueMs[MAXU]; // natural (true) motor time constant for actuator lead-lag in ms
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
     // -------- Parameters for feedforward control
-    int16_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-3
+    int32_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-6
 } indiProfile_t;
 
 // linearization

@@ -261,7 +261,7 @@ void initIndiRuntimeParameters(void) {
     }
 
     for (int i = 0; i < 5; i++) {
-        indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i] * 1e-3f;
+        indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i] * 1e-6f;
     }
     // ---- housekeeping
     indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
