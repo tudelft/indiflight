@@ -82,7 +82,7 @@ set blackbox_disable_debug = ON
 set blackbox_disable_indi = OFF
 set blackbox_disable_pos = ON
 set blackbox_disable_ekf = ON
-set blackbox_disable_learner = ON
+set blackbox_disable_learner = OFF
 set blackbox_high_resolution = ON
 set debug_mode = NONE
 
@@ -116,7 +116,7 @@ set small_angle = 45   # angle at which to deny arming
 set pid_process_denom = 2       # relative to imu (this is 1600Hz)
 set ahrs_process_denom = 10     # relative to imu (320Hz)
 set nn_rate_denom = 5           # relative to pid (320Hz)
-set blackbox_sample_rate = 1/1  # relative to pid (1600Hz)
+set blackbox_sample_rate = 1/2  # relative to pid (800Hz)
 
 # ekf (these are the defaults)
 set ekf_use_quat = 1
@@ -375,11 +375,11 @@ set learner_mode = 6
 set learner_num_actuators = 4
 set learner_delay_time_ms = 10
 set learner_step_time_ms = 30
-set learner_ramp_time_ms = 60
-set learner_overlap_time_ms = 30
+set learner_ramp_time_ms = 50
+set learner_overlap_time_ms = 0
 set learner_step_amplitude = 20
 set learner_ramp_amplitude = 40
-set learner_gyro_max = 1800
+set learner_gyro_max = 2000
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40

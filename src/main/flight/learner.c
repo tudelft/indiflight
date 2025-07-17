@@ -575,6 +575,18 @@ void updateLearner(timeUs_t current) {
             rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
             rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
         }
+
+        // test beun for tiny whoop
+        const indiProfile_t *p = indiProfiles(0);
+
+        for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
+            float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
+            float isq = 1.f / sq(maxOmega);
+
+            fxRls[0].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[motor];
+            fxRls[1].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[motor];
+            fxRls[2].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[motor];
+        }
     } else {
         was_reset_fx_rls = false;
     }
