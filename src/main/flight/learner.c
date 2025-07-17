@@ -582,7 +582,7 @@ void updateLearner(timeUs_t current) {
 
     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
-    if (motorLearningConditions && false) {
+    if (motorLearningConditions) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
