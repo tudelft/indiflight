@@ -378,7 +378,7 @@ class SysIdPlotter(FlightPlotterBase):
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
                                 light=None,
-                                solid=p[N:] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
+                                solid=p[N:] if axis == 'p' else q[N:] if axis == 'q' else r[N:],
                                 dashed=None,
                                 series_labels=[f"Motor {j}" for j in range(N)],
                                 style_labels=[None, "Onboard", None],
