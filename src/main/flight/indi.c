@@ -255,7 +255,9 @@ void getSetpoints(timeUs_t current) {
 
     } else {
         // acro
+        #ifdef INJECT_ATTITUDE_SETPOINTS
         indiRun.attSpInjectionStarted = false; // Reset attitude injection flag
+        #endif
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
         indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(getSetpointRate(YAW));
