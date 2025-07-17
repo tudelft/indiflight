@@ -14,6 +14,8 @@
         "random": "c",
         "cli_debug_print.h": "c",
         "config.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "gyro.h": "c",
+        "maths.h": "c"
     },
 }

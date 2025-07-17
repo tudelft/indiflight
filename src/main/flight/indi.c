@@ -54,6 +54,7 @@
 #include "setupWLS.h"
 #include "solveActiveSet.h"
 #include "flight/learner.h"
+#include "flight/learning_prober.h"
 
 #include "io/local_pos.h"
 #include "io/beeper.h"
@@ -163,10 +164,10 @@ void getSetpoints(timeUs_t current) {
             && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
             && (learningQueryState < LEARNING_QUERY_DONE)) {
         indiRun.bypassControl = true;
-        for (int i=0; i < learnerConfig()->numMotors; i++) {
+        for (int i=0; i < proberRuntime.numActuators; i++) {
             indiRun.d[i] = outputFromLearningQuery[i];
         }
-        for (int i=learnerConfig()->numMotors; i < MAXU; i++) {
+        for (int i=proberRuntime.numActuators; i < MAXU; i++) {
             indiRun.d[i] = 0.f;
         }
     } else
@@ -431,7 +432,7 @@ void getMotorCommands(timeUs_t current) {
     // get rotation speeds and accelerations from dshot, or fallback
     float omega_inv[MAXU] = {0}; // keep zero for servos
     for (int i = 0; i < indiRun.actNum; i++) {
-        if (indiRun.actIsMotor[i]) {
+        if (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
             float invThresh = 0.1f * indiRun.actMaxOmega[i];
             omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
         }
@@ -440,7 +441,7 @@ void getMotorCommands(timeUs_t current) {
     // get motor acceleration
     for (int i = 0; i < indiRun.actNum; i++) {
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
-        if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback && indiRun.actIsMotor[i]) {
+        if (isDshotTelemetryActive() && indiRun.useRpmDotFeedback && indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
             indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
             omega_prev[i] = indiRun.omega_fs[i];
             // probably do some limiting here
@@ -526,7 +527,7 @@ void getMotorCommands(timeUs_t current) {
     // add in G2 contributions G2 * omega_dot
     for (int j=0; j < 3; j++) {
         for (int i=0; i < indiRun.actNum; i++) {
-            if (indiRun.actIsMotor[i]) {
+            if (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
                 indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
             }
         }
@@ -606,10 +607,17 @@ void getMotorCommands(timeUs_t current) {
         // apply dgyro filters to sync with input
         // also apply gyro filters here?
         indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
-        if (indiRun.actIsMotor[i]) {
-            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
-        } else if (indiRun.actIsServo[i]) {
-            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], -1.f, 1.f);
+        switch (indiRun.actType[i]) {
+            case INDI_ACT_TYPE_MOTOR:
+                indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+                break;
+            case INDI_ACT_TYPE_SERVO:
+                indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], -1.f, 1.f);
+                break;
+            default:
+            case INDI_ACT_TYPE_OFF:
+                indiRun.uState_fs[i] = 0.f; // do nothing
+                break;
         }
 
         if (as_exit_code < AS_NAN_FOUND_Q) {
@@ -630,42 +638,43 @@ void getMotorCommands(timeUs_t current) {
 void indiUpdateActuatorState( float* motors, float* servos ) {
     int motor = 0;
     int servo = 0;
-    for (int i=0; i < indiRun.actNum; i++) {
+    for (int i = 0; i < indiRun.actNum; i++) {
         float d;
-        if (indiRun.actIsMotor[i]) {
-            if (motor >= getMotorCount()) { continue; }
-            d = motors[motor];
-        } else if (indiRun.actIsServo[i]) {
-            if (servo >= MAX_SUPPORTED_SERVOS) { continue; } // todo: fix the macro
-            d = servos[servo];
-        } else {
-            continue;
+        switch (indiRun.actType[i]) {
+            case INDI_ACT_TYPE_MOTOR:
+                if (motor >= getMotorCount()) { continue; }
+                d = motors[motor];
+
+                // is motor, also get motor speed for control
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
+                if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotTelemetry(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
+                    // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
+                    indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(motor);
+                    indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
+                } else
+#endif
+                {
+                    // fallback option 1: fixed omega_hover
+                    indiRun.omega[i] = indiRun.actHoverOmega[i];
+                    indiRun.omega_fs[i] = indiRun.actHoverOmega[i];
+
+                    // fallback option 2: use actLag filter. TODO
+                }
+
+                motor++;
+                break;
+            case INDI_ACT_TYPE_SERVO:
+                if (servo >= MAX_SUPPORTED_SERVOS) { continue; } // todo: fix the macro
+                d = servos[servo++];
+                break;
+            default:
+            case INDI_ACT_TYPE_OFF:
+                d = 0.f; // do nothing
+                break;
         }
 
         float u = indiOutputCurve( &indiRun.lin[i], d );
         indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
-
-        if (indiRun.actIsServo[i]) {
-            servo++;
-            continue;
-        }
-
-        // is motor, also get motor speed for control
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
-        if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotTelemetry(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
-            // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
-            indiRun.omega[i] = indiRun.erpmToRads * getDshotTelemetry(motor);
-            indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
-        } else
-#endif
-        {
-            // fallback option 1: fixed omega_hover
-            indiRun.omega[i] = indiRun.actHoverOmega[i];
-            indiRun.omega_fs[i] = indiRun.actHoverOmega[i];
-
-            // fallback option 2: use actLag filter. TODO
-        }
-        motor++;
     }
 }
 

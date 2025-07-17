@@ -1968,7 +1968,7 @@ static void loadMainState(timeUs_t currentTimeUs)
 #ifdef USE_LEARNER
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
         for (int i = 0; i < BLACKBOX_LEARNER_MOTOR_RLS_N; i++) {
-            blackboxCurrent->motor_rls_x[motor][i] = lrintf(1e3f*motorRls[motor].x[i]);
+            blackboxCurrent->motor_rls_x[motor][i] = lrintf(1e3f*actRls[motor].x[i]);
         }
     }
     for (int i = 0; i < 3; i++) {
@@ -1994,8 +1994,8 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
-        blackboxCurrent->eVarsMotor[motor] = 0.1f * ((1 << 16) - 1) * motorRls[motor].fortescue.errorMV.variance;
-        blackboxCurrent->lambdasMotor[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * motorRls[motor].lambda;
+        blackboxCurrent->eVarsMotor[motor] = 0.1f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
+        blackboxCurrent->lambdasMotor[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * actRls[motor].lambda;
     }
 
     for (int axis = 0; axis < 6; axis++) {
@@ -2517,14 +2517,10 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actMax[1],
                                                                                               indiProfile->actMax[2],
                                                                                               indiProfile->actMax[3]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_IS_MOTOR, "%d,%d,%d,%d",               indiProfile->actIsMotor[0],
-                                                                                              indiProfile->actIsMotor[1],
-                                                                                              indiProfile->actIsMotor[2],
-                                                                                              indiProfile->actIsMotor[3]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_IS_SERVO, "%d,%d,%d,%d",               indiProfile->actIsServo[0],
-                                                                                              indiProfile->actIsServo[1],
-                                                                                              indiProfile->actIsServo[2],
-                                                                                              indiProfile->actIsServo[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TYPE, "%d,%d,%d,%d",                   indiProfile->actType[0],
+                                                                                              indiProfile->actType[1],
+                                                                                              indiProfile->actType[2],
+                                                                                              indiProfile->actType[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FX, "%d,%d,%d,%d",                  indiProfile->actG1_fx[0],
                                                                                               indiProfile->actG1_fx[1],
                                                                                               indiProfile->actG1_fx[2],

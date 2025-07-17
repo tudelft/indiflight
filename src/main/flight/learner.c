@@ -73,8 +73,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     .initFromProfileFx = false,
     .initFromProfileAct = false,
-    .numMotors = 4,
-    .numServos = 0,
+    .actMask = 0xFFFF, // all motors and servos
     .imuFiltHz = 10,
     .fxFiltHz = 20,
     .motorFiltHz = 40,
@@ -95,9 +94,9 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
 // extern
 learnerRuntime_t learnRun = {0};
 
-float outputFromLearningQuery[MAX_SUPPORTED_MOTORS];
+float outputFromLearningQuery[MAXU];
 static timeUs_t learningQueryEnabledAt = 0;
-rls_t motorRls[MAXU];
+rls_t actRls[MAXU];
 rls_t imuRls;
 //rls_parallel_t fxSpfRls;
 //rls_parallel_t fxRateDotRls;
@@ -108,13 +107,14 @@ learnerTimings_t learnerTimings = {0};
 static biquadFilter_t imuRateFilter[3];
 static biquadFilter_t imuSpfFilter[3];
 
-static biquadFilter_t motorOmegaFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t motorDFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t motorSqrtDFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t fxOmegaFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t fxUFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t fxRateFilter[MAX_SUPPORTED_MOTORS];
-static biquadFilter_t fxSpfFilter[MAX_SUPPORTED_MOTORS];
+static biquadFilter_t actOmegaFilter[MAXU];
+static biquadFilter_t actAngleFilter[MAXU];
+static biquadFilter_t actDFilter[MAXU];
+static biquadFilter_t actSqrtDFilter[MAXU];
+static biquadFilter_t fxOmegaFilter[MAXU];
+static biquadFilter_t fxAngleFilter[MAXU];
+static biquadFilter_t fxRateFilter[3];
+static biquadFilter_t fxSpfFilter[3];
 
 static fp_vector_t hoverThrust;
 
@@ -139,10 +139,22 @@ static positionProfile_t* positionProfileLearned = &dummy;
 
 // learning
 void initLearnerFilters(void) {
-    int numAct = learnerConfig()->numMotors + learnerConfig()->numServos;
-    if (numAct > LEARNING_MAX_ACT) {
-        learnRun.initialized = false;
+    learnRun.filtersInitialized = false;
+
+    // get number of actuators
+    int numActuators = 0;
+    for (int i = 0; i < indiRun.actNum; i++) {
+        if (learnerConfig()->actMask & (1 << i)
+                && (indiRun.actType[i] != INDI_ACT_TYPE_OFF)) {
+            numActuators++;
+        }
     }
+
+    if (numActuators > LEARNING_MAX_ACT) {
+        return;
+    }
+
+    learnRun.numActuators = numActuators;
 
     indiProfileLearned = indiProfilesMutable(INDI_PROFILE_COUNT-1);
 #ifdef USE_LOCAL_POSITION
@@ -163,17 +175,38 @@ void initLearnerFilters(void) {
         biquadFilterInitLPF(&fxSpfFilter[axis], learnerConfig()->fxFiltHz, gyro.targetLooptime);
     }
 
-    for (int motor = 0; motor < learnerConfig()->numMotors; motor++) {
-        biquadFilterInitLPF(&fxOmegaFilter[motor], learnerConfig()->fxFiltHz, gyro.targetLooptime);
-        biquadFilterInitLPF(&fxUFilter[motor], learnerConfig()->fxFiltHz, gyro.targetLooptime);
-        biquadFilterInitLPF(&motorOmegaFilter[motor], learnerConfig()->motorFiltHz, gyro.targetLooptime);
-        biquadFilterInitLPF(&motorDFilter[motor], learnerConfig()->motorFiltHz, gyro.targetLooptime);
-        biquadFilterInitLPF(&motorSqrtDFilter[motor], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+    int m = 0, s = 0;
+    for (int act = 0; act < indiRun.actNum; act++) {
+        if (!(learnerConfig()->actMask & (1 << act))) {
+            continue;
+        }
+
+        switch(indiRun.actType[act]) {
+            case INDI_ACT_TYPE_MOTOR:
+                if (m >= MAX_SUPPORTED_MOTORS) { return; } // abort if too many motors
+                biquadFilterInitLPF(&actDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actSqrtDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+
+                biquadFilterInitLPF(&fxOmegaFilter[m], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actOmegaFilter[m], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+                m++;
+                break;
+            case INDI_ACT_TYPE_SERVO:
+                if (s >= MAX_SUPPORTED_SERVOS) { return; } // abort if too many servos
+                // not implemented yet
+                s++;
+                break;
+            case INDI_ACT_TYPE_OFF:
+            default:
+                continue; // skip unsupported actuator types
+        }
     }
 
     // todo: implement servo filters
 
     learnRun.filtersInitialized = true;
+    learnRun.numMotors = m;
+    learnRun.numServos = s;
 }
 
 #define LEARNER_INIT_COV_QUERY 1e2f
@@ -183,10 +216,13 @@ void initLearnerFilters(void) {
 FAST_CODE
 #endif
 static void initLearnerRls(void) {
-    int numAct = learnerConfig()->numMotors + learnerConfig()->numServos;
-    if (numAct > LEARNING_MAX_ACT) {
+    if (!learnRun.filtersInitialized) {
         learnRun.initialized = false;
+        return; 
     }
+
+    const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
+    const learnerConfig_t *config = learnerConfig();
 
     float actionBandwidthHz = 0.4f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
@@ -197,52 +233,57 @@ static void initLearnerRls(void) {
 
     // Spf
     for (int i = 0; i < 3; i++) {
-        rlsInit(&fxRls[i], numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], learnRun.numActuators, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
     }
 
     // RateDot
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 2*numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], 2*learnRun.numActuators, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
     }
 
-    for (int motor = 0; motor < learnerConfig()->numMotors; motor++) {
-        rlsInit(&motorRls[motor], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
-    }
-
-
-    int numMotors = learnerConfig()->numMotors;
-
-    const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
-    const learnerConfig_t *config = learnerConfig();
-
-    // inverse of updateLearnedParameters
-    for (int motor = 0; motor < numMotors; motor++) {
-        float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
-        float isq = 1.f / sq(maxOmega);
-
-        if (config->initFromProfileAct) {
-            float k = 0.01f * p->actNonlinearity[motor];
-            motorRls[motor].x[0] = 1e-3f * k * maxOmega;
-            motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
-            motorRls[motor].x[2] = 0.;
-            motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
+    for (int act = 0; act < indiRun.actNum; act++) {
+        if (!(config->actMask & (1 << act))) {
+            continue;
         }
 
-        // todo: rotate with hover rotation
-        if (config->initFromProfileFx) {
-            fxRls[0].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[motor];
-            fxRls[1].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[motor];
-            fxRls[2].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[motor];
+        switch(indiRun.actType[act]) {
+            case INDI_ACT_TYPE_MOTOR:
+                rlsInit(&actRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
-            fxRls[3].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[motor];
-            fxRls[4].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[motor];
-            fxRls[5].x[motor] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[motor];
+                // inverse of updateLearnedParameters
+                float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[act];
+                float isq = 1.f / sq(maxOmega);
 
-            fxRls[3].x[numMotors + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[motor];
-            fxRls[4].x[numMotors + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[motor];
-            fxRls[5].x[numMotors + motor] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[motor];
+                if (config->initFromProfileAct) {
+                    float k = 0.01f * p->actNonlinearity[act];
+                    actRls[act].x[0] = 1e-3f * k * maxOmega;
+                    actRls[act].x[1] = 1e-3f * (1.f - k) * maxOmega;
+                    actRls[act].x[2] = 0.;
+                    actRls[act].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[act]);
+                }
+
+                // todo: rotate with hover rotation
+                if (config->initFromProfileFx) {
+                    fxRls[0].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[act];
+                    fxRls[1].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[act];
+                    fxRls[2].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[act];
+
+                    fxRls[3].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[act];
+                    fxRls[4].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[act];
+                    fxRls[5].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[act];
+
+                    fxRls[3].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[act];
+                    fxRls[4].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[act];
+                    fxRls[5].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[act];
+                }
+                break;
+            case INDI_ACT_TYPE_SERVO:
+            case INDI_ACT_TYPE_OFF:
+            default:
+                break; // skip unsupported actuator types
         }
     }
+
 
     if (config->initFromProfileAct) {
         learnRun.gains[LEARNER_LOOP_RATE] = 0.1f * p->rateGains[0];
@@ -259,6 +300,8 @@ static void updateLearningFilters(void) {
     if (!learnRun.initialized) {
         return; // no can do
     }
+
+    const learnerConfig_t *config = learnerConfig();
 
     static fp_vector_t imuPrevRate = {0};
     static fp_vector_t fxPrevRateDot = {0};
@@ -282,7 +325,6 @@ static void updateLearningFilters(void) {
     rx = accelerometerConfig()->acc_offset[0] * 1e-3f;
     ry = accelerometerConfig()->acc_offset[1] * 1e-3f;
     rz = accelerometerConfig()->acc_offset[2] * 1e-3f;
-
 
     dwx = indiRun.rateDotIMU.A[0];
     dwy = indiRun.rateDotIMU.A[1];
@@ -312,26 +354,45 @@ static void updateLearningFilters(void) {
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
-    static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
     static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
-    for (int motor = 0; motor < learnerConfig()->numMotors; motor++) {
-        learnRun.fxOmega[motor] = biquadFilterApply(&fxOmegaFilter[motor], indiRun.omega[motor]);
-        learnRun.fxOmegaDiff[motor] = learnRun.fxOmega[motor] - fxPrevOmega[motor];
-        fxPrevOmega[motor] = learnRun.fxOmega[motor];
+    static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
+    static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
 
-        float fxOmegaDot = indiRun.indiFrequency * learnRun.fxOmegaDiff[motor];
-        learnRun.fxOmegaDotDiff[motor] = fxOmegaDot - fxPrevOmegaDot[motor];
-        fxPrevOmegaDot[motor] = fxOmegaDot;
+    UNUSED(fxAngleFilter);
+    UNUSED(actAngleFilter);
+    UNUSED(fxPrevAngle);
 
-        learnRun.motorOmega[motor] = biquadFilterApply(&motorOmegaFilter[motor], indiRun.omega[motor]);
-        learnRun.motorOmegaDot[motor] = indiRun.indiFrequency * (learnRun.motorOmega[motor] - motorPrevOmega[motor]);
-        motorPrevOmega[motor] = learnRun.motorOmega[motor];
+    for (int act = 0; act < indiRun.actNum; act++) {
+        if (!(config->actMask & (1 << act))) {
+            continue; // skip unselected actuators
+        }
 
-        learnRun.motorD[motor] = biquadFilterApply(&motorDFilter[motor], indiRun.d[motor]);
-        // second order filters could the signal to exceed bounds of the input
-        // but we need to ensure [0, 1] for the square root
-        float dConstr = constrainf(indiRun.d[motor], 0.f, 1.f);
-        learnRun.motorSqrtD[motor] = biquadFilterApply(&motorSqrtDFilter[motor], sqrtf(dConstr));
+        switch(indiRun.actType[act]) {
+            case INDI_ACT_TYPE_MOTOR:
+                learnRun.fxOmega[act] = biquadFilterApply(&fxOmegaFilter[act], indiRun.omega[act]);
+                learnRun.fxOmegaDiff[act] = learnRun.fxOmega[act] - fxPrevOmega[act];
+                fxPrevOmega[act] = learnRun.fxOmega[act];
+
+                float fxOmegaDot = indiRun.indiFrequency * learnRun.fxOmegaDiff[act];
+                learnRun.fxOmegaDotDiff[act] = fxOmegaDot - fxPrevOmegaDot[act];
+                fxPrevOmegaDot[act] = fxOmegaDot;
+
+                learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], indiRun.omega[act]);
+                learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (learnRun.motorOmega[act] - motorPrevOmega[act]);
+                motorPrevOmega[act] = learnRun.motorOmega[act];
+
+                learnRun.motorD[act] = biquadFilterApply(&actDFilter[act], indiRun.d[act]);
+                // second order filters could the signal to exceed bounds of the input
+                // but we need to ensure [0, 1] for the square root
+                float dConstr = constrainf(indiRun.d[act], 0.f, 1.f);
+                learnRun.motorSqrtD[act] = biquadFilterApply(&actSqrtDFilter[act], sqrtf(dConstr));
+
+                break;
+            case INDI_ACT_TYPE_SERVO:
+            case INDI_ACT_TYPE_OFF:
+            default:
+                break; // skip unsupported actuator types
+        }
     }
 }
 
@@ -366,7 +427,7 @@ static bool calculateHoverAttitude(void) {
     // 8. verify that  Br uHover == 0
 
     // column major
-    const uint8_t numAct = learnerConfig()->numMotors;
+    const uint8_t numAct = learnRun.numActuators;
     float BfT[LEARNING_MAX_ACT * 3];
     float BrT[LEARNING_MAX_ACT * LEARNING_MAX_ACT] = {0}; // waste of stack, reduce because M < N?
     for (int motor = 0; motor < numAct; motor++) {
@@ -520,7 +581,11 @@ void updateLearner(timeUs_t current) {
     updateLearningFilters();
     learnerTimings.filters = cmpTimeUs(micros(), learnerTimings.start);
 
-    if (!ARMING_FLAG(ARMED) || !FLIGHT_MODE(LEARNER_MODE) || isTouchingGround()) {
+    // if we are not armed, we do not learn
+    if (!ARMING_FLAG(ARMED)
+            || !FLIGHT_MODE(LEARNER_MODE)
+            || isTouchingGround()
+            || learningQueryState == LEARNING_QUERY_WAITING_FOR_LAUNCH) {
         return;
     }
 
@@ -568,42 +633,69 @@ void updateLearner(timeUs_t current) {
     learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
 
     if (learnFx) {
-        //setup regressors
+        // setup regressors
         float A[RLS_MAX_N];
-        for (int act = 0; act < config->numMotors; act++) {
-            A[act] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
-            A[act + config->numMotors] = 1e-3f * learnRun.fxOmegaDotDiff[act];
-        }
         float ySpf[3];
         float yRateDot[3];
-        for (int i = 0; i < 3; i++) {
-            ySpf[i] = learnRun.fxSpfDiff.A[i] * 10.f; // scaling likely depends on sample time..
-            yRateDot[i] = learnRun.fxRateDotDiff.A[i]; // scaling seems okay at this sample time/filtering
+
+        int m = 0, s = 0; 
+        for (int act = 0; act < indiRun.actNum; act++) {
+            if (!(config->actMask & (1 << act))) {
+                continue; // skip unselected actuators
+            }
+
+            switch (indiRun.actType[act]) {
+                case INDI_ACT_TYPE_MOTOR:
+                    A[m] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+                    A[m + learnRun.numMotors] = 1e-3f * learnRun.fxOmegaDotDiff[act];
+                    m++;
+                    break;
+                case INDI_ACT_TYPE_SERVO:
+                case INDI_ACT_TYPE_OFF:
+                default:
+                    UNUSED(s);
+                    break;
+            }
         }
 
-        // perform rls step
+        for (int ax = 0; ax < 3; ax++) {
+            ySpf[ax] = learnRun.fxSpfDiff.A[ax] * 10.f; // scaling likely depends on sample time..
+            yRateDot[ax] = learnRun.fxRateDotDiff.A[ax]; // scaling seems okay at this sample time/filtering
+            rlsNewSample(&fxRls[ax], A, &ySpf[ax]); // spf
+            rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax]); // RateDot
+        }
+
+        // parallel alternative: perform rls step
         //rlsParallelNewSample(&fxSpfRls, A, ySpf);
         //rlsParallelNewSample(&fxRateDotRls, A, yRateDot);
-
-        // perform rls step in new single filters
-        for (int i = 0; i < 3; i++) {
-            rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
-            rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
-        }
     }
 
     learnerTimings.fx = cmpTimeUs(micros(), learnerTimings.start);
 
     if (learnAct) {
-        for (int act = 0; act < config->numMotors; act++) {
-            float A[4] = {
-                learnRun.motorD[act],
-                learnRun.motorSqrtD[act],
-                1.f,
-                -1e-4f * learnRun.motorOmegaDot[act]
-            };
-            float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
-            rlsNewSample( &motorRls[act], A, &y );
+        float A[4]; // 4 regressors per actuator
+        float y;
+
+        for (int act = 0; act < indiRun.actNum; act++) {
+            if (!(config->actMask & (1 << act))) {
+                continue; // skip unselected actuators
+            }
+
+            switch (indiRun.actType[act]) {
+                case INDI_ACT_TYPE_MOTOR:
+                    A[0] = learnRun.motorD[act];
+                    A[1] = learnRun.motorSqrtD[act];
+                    A[2] = 1.f;
+                    A[3] = -1e-4f * learnRun.motorOmegaDot[act];
+                    y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
+                    break;
+                case INDI_ACT_TYPE_SERVO:
+                case INDI_ACT_TYPE_OFF:
+                default:
+                    break;
+            }
+
+            rlsNewSample( &actRls[act], A, &y );
         }
     }
 
@@ -614,8 +706,14 @@ void updateLearner(timeUs_t current) {
     if (gainTuningConditions) {
         // get slowest actuator
         float maxTau = 0.f;
-        for (int act = 0; act < learnerConfig()->numMotors; act++)
-            maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
+        for (int act = 0; act < indiRun.actNum; act++) {
+            if (!(config->actMask & (1 << act))) {
+                continue; // skip unselected actuators
+            }
+
+            maxTau = MAX(maxTau, actRls[act].x[3] * 0.1f);
+        }
+
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
 
         // calculate gains
@@ -677,6 +775,8 @@ void updateLearner(timeUs_t current) {
 }
 
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+    const learnerConfig_t* config = learnerConfig(); // fix this line
+
     for (int axis = 0; axis < 3; axis++) {
         indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
         // attGains are expected for parallel PD, but we have cascaded, so
@@ -721,35 +821,39 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     quaternionProducts_of_quaternion(&imu_to_hoverP, &imu_to_hover);
     rotationMatrix_of_quaternionProducts(&imu_to_hoverR, &imu_to_hoverP);
 
-    int numMotors = learnerConfig()->numMotors;
+    indi->actNum = indiRun.actNum;
 
-    indi->actNum = MIN(numMotors, MAXU);
-    for (int act = 0; act < indi->actNum ; act++) {
+    int m = 0;
+    for (int act = 0; act < indi->actNum; act++) {
+        if (!(config->actMask & (1 << act))) {
+            continue; // skip unselected actuators
+        }
+
         //              inv y-scale 
-        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
+        float maxOmega =   1e3f  *  (actRls[act].x[0] + actRls[act].x[1]);
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale
-        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].x[3], 10.f, 200.f);
+        indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * actRls[act].x[3], 10.f, 200.f);
 
-        if ((motorRls[act].x[0] > 0.f) && (motorRls[act].x[1] > 0.f)) {
+        if ((actRls[act].x[0] > 0.f) && (actRls[act].x[1] > 0.f)) {
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
-                motorRls[act].x[0] / (motorRls[act].x[0] + motorRls[act].x[1]),
+                actRls[act].x[0] / (actRls[act].x[0] + actRls[act].x[1]),
                 0.f, 1.f);
             // todo: transform to match kappa better
         } else {
             indi->actNonlinearity[act] = 50;
         }
 
-        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[act];
-        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[act];
-        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[act];
-        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[act];
-        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[act];
-        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[act];
-        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[numMotors + act];
-        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[numMotors + act];
-        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[numMotors + act];
+        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[m];
+        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[m];
+        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[m];
+        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[m];
+        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[m];
+        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[m];
+        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[learnRun.numMotors + m];
+        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[learnRun.numMotors + m];
+        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[learnRun.numMotors + m];
 
         fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
 
@@ -774,6 +878,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         indi->wlsWu[act] = 1.;
         indi->u_pref[act] = 0;
+
+        m++;
     }
 
     // indi->imuSyncLp2Hz = 15; // lord knows
@@ -801,7 +907,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
 void testLearner(void) {
     rlsTest();
-    learnerConfigMutable()->numMotors = 6;
+    learnerConfigMutable()->actMask = 0x003F; // all 6 motors
 
     float G1Tmp[6][6] = {
         {-0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608, -0.83072608},
@@ -831,17 +937,17 @@ void runLearningQueryStateMachine(timeUs_t current) {
         outputFromLearningQuery[i] = 0.f;
     }
 
-    const learnerConfig_t* c = learnerConfig();
-    int numMotors = c->numMotors;
-
-    if ((numMotors > MAX_SUPPORTED_MOTORS) || (numMotors == 0)) {
-        learningQueryState = LEARNING_QUERY_IDLE;
-        return;
-    }
+    const learnerConfig_t* config = learnerConfig();
+//    int numMotors = config->numMotors;
+//
+//    if ((numMotors > MAX_SUPPORTED_MOTORS) || (numMotors == 0)) {
+//        learningQueryState = LEARNING_QUERY_IDLE;
+//        return;
+//    }
 
     bool idle_before_throw_query_requested = 
         FLIGHT_MODE(LEARNER_MODE)
-        && (c->modeProbing & LEARN_PROBING_AFTER_THROW)
+        && (config->modeProbing & LEARN_PROBING_AFTER_THROW)
         && throwConfig()->idleBeforeThrow
         && ARMING_FLAG(ARMED)
         && throwState == THROW_STATE_WAITING_FOR_THROW;
@@ -850,7 +956,7 @@ void runLearningQueryStateMachine(timeUs_t current) {
     bool inflight_query_requested =
         !idle_before_throw_query_requested
         && FLIGHT_MODE(LEARNER_MODE)
-        && (c->modeProbing & LEARN_PROBING_DURING_FLIGHT)
+        && (config->modeProbing & LEARN_PROBING_DURING_FLIGHT)
         && ARMING_FLAG(ARMED)
         && !isTouchingGround();
 
@@ -858,7 +964,7 @@ void runLearningQueryStateMachine(timeUs_t current) {
         !idle_before_throw_query_requested
         && !inflight_query_requested
         && FLIGHT_MODE(LEARNER_MODE)
-        && (c->modeProbing & (LEARN_PROBING_AFTER_THROW | LEARN_PROBING_AFTER_CATAPULT))
+        && (config->modeProbing & (LEARN_PROBING_AFTER_THROW | LEARN_PROBING_AFTER_CATAPULT))
         && !ARMING_FLAG(ARMED);
 
     bool disableConditions = !FLIGHT_MODE(LEARNER_MODE);
@@ -896,8 +1002,8 @@ doMore:
             }
             break;
         case LEARNING_QUERY_WAITING_FOR_LAUNCH: // catapult or throw
-            if ((c->modeHover & LEARN_DURING_PROBING)
-                    && (c->modeProbing & LEARN_PROBING_AFTER_CATAPULT)
+            if ((config->modeHover & LEARN_DURING_PROBING)
+                    && (config->modeProbing & LEARN_PROBING_AFTER_CATAPULT)
                     && (catapultState == CATAPULT_DONE)) {
 
                 // randomize board rotation after catapulting with 0 0 0 board rotation
@@ -940,8 +1046,8 @@ doMore:
 
             // considered launched if succesfully activated inflight_query, or catapult/throw states correct
             bool launched = inflight_query_requested
-                || ((c->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-                || ((c->modeProbing & LEARN_PROBING_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
+                || ((config->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
+                || ((config->modeProbing & LEARN_PROBING_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
 
             if (launched) {
                 initProber(current);
@@ -958,16 +1064,33 @@ doMore:
                 learningQueryState = LEARNING_QUERY_DONE;
             } else {
                 // update output from prober
-                for (int motor = 0; motor < c->numMotors; motor++) {
-                    outputFromLearningQuery[motor] = proberRuntime.motorOutput[motor];
+                for (int act = 0; act < indiRun.actNum; act++) {
+                    if (!(config->actMask & (1 << act))) {
+                        continue; // skip unselected actuators
+                    }
+
+                    float output = proberRuntime.output[act];
+
+                    switch(indiRun.actType[act]) {
+                        case INDI_ACT_TYPE_MOTOR:
+                            outputFromLearningQuery[act] = constrainf(output, 0.f, 1.f);
+                            break;
+                        case INDI_ACT_TYPE_SERVO:
+                            outputFromLearningQuery[act] = constrainf(output, -1.f, 1.f);
+                            break;
+                        case INDI_ACT_TYPE_OFF:
+                        default:
+                            outputFromLearningQuery[act] = 0.f;
+                            break;
+                    }
                 }
             }
 
             break;
         case LEARNING_QUERY_DONE:
-            if ((c->modeHover & LEARN_DURING_PROBING)
-                    && ( ((c->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) 
-                        || ((c->modeProbing & LEARN_PROBING_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )
+            if ((config->modeHover & LEARN_DURING_PROBING)
+                    && ( ((config->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) 
+                        || ((config->modeProbing & LEARN_PROBING_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )
                 ) {
 
                 // use current board orientation to fix attitude
@@ -1003,10 +1126,6 @@ doMore:
                 learningQueryState = LEARNING_QUERY_IDLE;
             }
             break;
-    }
-
-    for (int motor = 0; motor < c->numMotors; motor++) {
-        outputFromLearningQuery[motor] = constrainf(outputFromLearningQuery[motor], 0.f, 1.f);
     }
 }
 

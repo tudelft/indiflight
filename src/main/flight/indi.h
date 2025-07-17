@@ -46,6 +46,12 @@
 #error "Blackbox will crash. Fix it to accept more that MAXV > 8"
 #endif
 
+enum actuator_type_e {
+    INDI_ACT_TYPE_OFF = 0,
+    INDI_ACT_TYPE_MOTOR = 1,
+    INDI_ACT_TYPE_SERVO = 2
+};
+
 typedef struct indiProfile_s {
     // ---- Att/Rate config
     uint16_t attGains[3]; // attitude error to rotational accel gain * 10
@@ -72,8 +78,7 @@ typedef struct indiProfile_s {
     uint8_t actNonlinearity[MAXU];  // motor nonlinearity percentage between (0, 100)
     int8_t actMin[MAXU];         // limit motor output in percent (+100 full power)
     int8_t actMax[MAXU];         // limit motor output in percent (+100 full power)
-    uint8_t actIsMotor[MAXU];         // which actuators are motors
-    uint8_t actIsServo[MAXU];         // which are servos
+    uint8_t actType[MAXU];         // 0: off, 1: motor, 2: servo
     int16_t actG1_fx[MAXU];      // actuator effectiveness (N/kg) / u * 100
     int16_t actG1_fy[MAXU];      // actuator effectiveness * 100
     int16_t actG1_fz[MAXU];      // actuator effectiveness * 100
@@ -158,8 +163,7 @@ typedef struct indiRuntime_s {
     float actNonlinearity[MAXU]; // - 
     float actMin[MAXU];        // 
     float actMax[MAXU];        // 
-    bool actIsMotor[MAXU];        // 
-    bool actIsServo[MAXU];        // 
+    uint8_t actType[MAXU];        // 0: off, 1: motor, 2: servo
     float actG1[MAXV][MAXU];
     float actG2[3][MAXU];
     float G2_scaler[MAXU];

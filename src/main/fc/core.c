@@ -1719,15 +1719,12 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         indiController(currentTimeUs);
 
         int m = 0;
-        for (int i = 0; i < indiRun.actNum; i++) {
-            if ((indiRun.actIsMotor[i]) && (m < numMotors)) {
-                motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
-            }
-        }
-
         int s = 0;
         for (int i = 0; i < indiRun.actNum; i++) {
-            if ((indiRun.actIsServo[i]) && (s < numServos)) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && (m < numMotors)) {
+                motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
+            }
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_SERVO) && (s < numServos)) {
                 servo_normalized[s++] = constrainf(indiRun.d[i], -1., 1.);
             }
         }

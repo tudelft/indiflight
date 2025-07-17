@@ -74,8 +74,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->actNonlinearity[i] = 50;
         indiProfile->actMin[i] = 0;
         indiProfile->actMax[i] = 100;
-        indiProfile->actIsMotor[i] = true;
-        indiProfile->actIsServo[i] = false;
+        indiProfile->actType[i] = 1; // 0: off, 1: motor, 2: servo
         indiProfile->actG1_fx[i] = 0;
         indiProfile->actG1_fy[i] = 0;
         indiProfile->actG1_fz[i] = 0;
@@ -166,15 +165,24 @@ void initIndiRuntimeParameters(void) {
         indiRun.actMaxOmega2[i] = sq( indiRun.actMaxOmega[i] );
         indiRun.actTimeConstS[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
         indiRun.actNonlinearity[i] = constrainu(p->actNonlinearity[i], 0, 100) * 0.01f;
-        indiRun.actIsMotor[i] = (bool) p->actIsMotor[i];
-        indiRun.actIsServo[i] = (bool) p->actIsServo[i];
-        if (indiRun.actIsMotor[i]) {
-            unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actMax[i]);
-            indiRun.actMin[i] = 0.f; // hardcode for safety!
-            indiRun.actMax[i] = constrainu(tmp, 0, 100) * 0.01f;
-        } else {
-            indiRun.actMin[i] = constrain(p->actMin[i], -100, 100) * 0.01f;
-            indiRun.actMax[i] = constrain(p->actMax[i], -100, 100) * 0.01f;
+        indiRun.actType[i] = (bool) p->actType[i];
+        switch (indiRun.actType[i]) {
+            default:
+                // fallthrough intended
+            case INDI_ACT_TYPE_OFF:
+                indiRun.actMin[i] = 0.f; // hardcode for safety!
+                indiRun.actMax[i] = 0.f; // hardcode for safety!
+                break;
+            case INDI_ACT_TYPE_MOTOR: {
+                unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actMax[i]);
+                indiRun.actMin[i] = 0.f; // hardcode for safety!
+                indiRun.actMax[i] = constrainu(tmp, 0, 100) * 0.01f;
+                break;
+            }
+            case INDI_ACT_TYPE_SERVO:
+                indiRun.actMin[i] = constrain(p->actMin[i], -100, 100) * 0.01f;
+                indiRun.actMax[i] = constrain(p->actMax[i], -100, 100) * 0.01f;
+                break;
         }
         indiRun.actG1[0][i] = p->actG1_fx[i] * 0.01f;
         indiRun.actG1[1][i] = p->actG1_fy[i] * 0.01f;
@@ -207,8 +215,15 @@ void initIndiRuntimeParameters(void) {
     indiRun.tailsUseScheduled = (bool) p->tails_use_scheduled;
     if (indiRun.tailsUseScheduled) {
         // enforce motor/servo assignment: first 2 motor, then 2 servos
-        for (int m=0; m<indiRun.actNum; m++) {indiRun.actIsMotor[m]=(m<2) ? true : false;}
-        for (int s=0; s<indiRun.actNum; s++) {indiRun.actIsServo[s]=(s>=2 && s<4) ? true : false;}
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if (i < 2) {
+                indiRun.actType[i] = INDI_ACT_TYPE_MOTOR;
+            } else if (i < 4) {
+                indiRun.actType[i] = INDI_ACT_TYPE_SERVO;
+            } else {
+                indiRun.actType[i] = INDI_ACT_TYPE_OFF; // no more motors or servos
+            }
+        }
     }
     indiRun.tailsUseSine = (bool) p->tails_use_sine;
     indiRun.tailsD0[0]= DEGREES_TO_RADIANS( ((float) p->tails_d0[0]) * 1e-2f );
@@ -238,11 +253,16 @@ void initIndiRuntimeParameters(void) {
     // actuators
     indiRun.erpmToRads = ERPM_PER_LSB / SECONDS_PER_MINUTE / (motorConfig()->motorPoleCount / 2.f) * (2.f * M_PIf);
     for (int i = 0; i < indiRun.actNum; i++) {
-        if (indiRun.actIsMotor[i]) {
-            updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
-        } else if (indiRun.actIsServo[i]) {
-            indiRun.lin[i].k = 0.f;
-            indiRun.lin[i].A = 0.f;
+        switch (indiRun.actType[i]) {
+            default:
+            case INDI_ACT_TYPE_OFF:
+            case INDI_ACT_TYPE_SERVO:
+                indiRun.lin[i].k = 0.f;
+                indiRun.lin[i].A = 0.f;
+                break;
+            case INDI_ACT_TYPE_MOTOR:
+                updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
+                break;
         }
     }
 

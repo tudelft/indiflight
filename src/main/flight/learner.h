@@ -39,8 +39,7 @@ typedef struct learnerConfig_s {
     uint8_t modeHover;
     uint8_t initFromProfileFx;
     uint8_t initFromProfileAct;
-    uint8_t numMotors;
-    uint8_t numServos;
+    uint16_t actMask;
     uint8_t imuFiltHz;
     uint8_t fxFiltHz;
     uint8_t motorFiltHz;
@@ -84,25 +83,28 @@ typedef enum learning_probing_mode_e {
 typedef struct learningRuntime_s {
     bool initialized;
     bool filtersInitialized;
+    int numActuators; // number of actuators (motors + servos)
+    int numMotors; // number of motors
+    int numServos; // number of servos
     fp_vector_t imuRate;
     fp_vector_t imuRateDot;
     fp_vector_t imuSpf;
-    float fxOmega[MAX_SUPPORTED_MOTORS];
-    float fxOmegaDiff[MAX_SUPPORTED_MOTORS];
-    float fxOmegaDotDiff[MAX_SUPPORTED_MOTORS];
+    float fxOmega[MAXU];
+    float fxOmegaDiff[MAXU];
+    float fxOmegaDotDiff[MAXU];
     fp_vector_t fxRateDotDiff;
     fp_vector_t fxSpfDiff;
-    float motorOmega[MAX_SUPPORTED_MOTORS];
-    float motorOmegaDot[MAX_SUPPORTED_MOTORS];
-    float motorD[MAX_SUPPORTED_MOTORS];
-    float motorSqrtD[MAX_SUPPORTED_MOTORS];
+    float motorOmega[MAXU];
+    float motorOmegaDot[MAXU];
+    float motorD[MAXU];
+    float motorSqrtD[MAXU];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;
 
-extern rls_t motorRls[MAX_SUPPORTED_MOTORS];
+extern rls_t actRls[MAXU];
 extern rls_t imuRls;
 //extern rls_parallel_t fxSpfRls;
 //extern rls_parallel_t fxRateDotRls;

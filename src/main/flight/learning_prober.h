@@ -30,8 +30,7 @@
 typedef struct proberConfig_s {
     uint8_t type;  // learning_prober_config_type_t
     // --- common parameters
-    uint8_t numMotors;
-    uint8_t numServos;
+    uint16_t actMask;
     uint16_t preDelayMs;  // delay before starting the prober
     uint16_t postDelayMs;  // delay after finishing the prober
     // --- specific parameters
@@ -61,7 +60,7 @@ PG_DECLARE(proberConfig_t, proberConfig);
 typedef enum {
     PROBER_STEPS,
     PROBER_STEPRAMPS,
-    PROBER_MULTISINE,
+//     PROBER_MULTISINE,
     PROBER_NOISE,
     PROBER_ORTHO,
 } prober_type_t;
@@ -90,6 +89,7 @@ typedef struct prober_runtime_noise_s {
 
 typedef struct prober_runtime_s {
     prober_type_t type;
+    int numActuators; // number of actuators (motors + servos)
     timeUs_t initTimeUs;      // when init was called
     timeUs_t safetyTimeoutUs; // when to stop probing even if not finished
     timeUs_t genStartTimeUs;     // first call to actual probe generator
@@ -106,8 +106,7 @@ typedef struct prober_runtime_s {
         prober_runtime_multisine_t multisine;
         prober_runtime_noise_t noise;
     } sub;
-    float motorOutput[MAX_SUPPORTED_MOTORS];  // output values for each motor during probing
-    float servoOutput[MAX_SUPPORTED_SERVOS];  // output values for each servo during probing
+    float output[MAXU];  // output values for each motor during probing
 } prober_runtime_t;
 
 extern prober_runtime_t proberRuntime;

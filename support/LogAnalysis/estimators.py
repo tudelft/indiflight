@@ -121,7 +121,7 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, timeMs=None, sharey=True, zoomy=False, cursor=True, extra_rows=0):
+    def plotParameters(self, parGroups=None, outGroups=None, timeMs=None, sharey=True, zoomy=False, extra_rows=0):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
@@ -269,9 +269,6 @@ class Estimator(object):
             yAxs[-1].set_xlabel(timeLabel)
             for regAx in regAxs[-1]:
                 regAx.set_xlabel(timeLabel)
-
-            if cursor:
-                self.curser = BlittedCursor(self.all_axes, self.f.canvas)
 
             return self.f
 

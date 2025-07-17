@@ -28,16 +28,15 @@ local_rc.update({
     'figure.subplot.left': 0.05,
     'figure.subplot.right': 0.95,
     'figure.subplot.top': 0.925,
-    'figure.subplot.wspace': 0.2,
-    'figure.subplot.hspace': 0.3,
+    'figure.subplot.wspace': 0.3,
+    'figure.subplot.hspace': 0.433,
 })
 
 plt.rcParams.update(local_rc)
 
 class BlittedCursor(object):
-    def __init__(self, axes, canvas, sharex=True):
+    def __init__(self, axes, sharex=True):
         self.axes = axes
-        self.canvas = canvas
         self.backgrounds = []
         self.cursors = []
 
@@ -54,55 +53,138 @@ class BlittedCursor(object):
                                            linestyle='--',
                                            lw=0.8,
                                            visible=False))
+            
+        # get unique canvasses by iterating over axes
+        # this is necessary to avoid multiple connections to the same canvas
+        self.canvasses = [self.axes[0].figure.canvas]
+        for ax in self.axes[1:]:
+            if ax.figure.canvas is not self.canvasses:
+                self.canvasses.append(ax.figure.canvas)
 
-        self.canvas.mpl_connect('draw_event', self._on_draw)
-        self.canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
+        for canvas in self.canvasses:
+            # connect the canvas to the draw and motion events
+            canvas.mpl_connect('draw_event', self._on_draw)
+            canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
 
     def _on_draw(self, event):
-        self.backgrounds = [self.canvas.copy_from_bbox(ax.bbox) for ax in self.axes]
+        self.backgrounds.clear()
+        for ax in self.axes:
+            canvas = ax.figure.canvas
+            self.backgrounds.append(canvas.copy_from_bbox(ax.bbox))
 
     def _on_mouse_move(self, event):
         if event.xdata is None or not self.backgrounds:
             return
 
         for ax, line, bg in zip(self.axes, self.cursors, self.backgrounds):
-            self.canvas.restore_region(bg)
+            canvas = ax.figure.canvas
+            canvas.restore_region(bg)
             line.set_xdata([event.xdata])
             line.set_visible(True)
             ax.draw_artist(line)
-            self.canvas.blit(ax.bbox)
+            canvas.blit(ax.bbox)
 
-class FlightPlotter(object):
+class FlightPlotterBase(object):
     def __init__(self, data, name="Flight Plotter"):
         self.data = data
         self.name = name
         self.all_axes = []
 
-        self.fig = plt.figure(figsize=(12, 8))
-        self.gs = GridSpec(nrows=3, ncols=3,
-                      width_ratios=[2, 2, 2],
-                      height_ratios=[1, 1, 1])
-
         # preprocess data
         self.t = self.data['timeS'].to_numpy()
 
-        # go
+    def define_layout(self, figsize=(12, 8), nrows=3, ncols=3, width_ratios=None, height_ratios=None):
+        if width_ratios is None:
+            width_ratios = [1] * ncols
+        if height_ratios is None:
+            height_ratios = [1] * nrows
+
+        self.fig = plt.figure(figsize=figsize)
+        self.gs = GridSpec(nrows=nrows, ncols=ncols,
+                           width_ratios=width_ratios,
+                           height_ratios=height_ratios)
+
+    def plot(self):
         self._populate()
         self._dress()
-
-        self.curser = BlittedCursor(self.all_axes, self.fig.canvas, sharex=True)
-
+        # self.curser = BlittedCursor(self.all_axes, self.fig.canvas, sharex=True)
         self.fig.show()
 
+    def _populate(self):
+        raise NotImplementedError("Subclasses should implement this method to populate the plot.")
+
     def connect_viewport(self, viewport):
-        """
-        Connect a viewport to the plotter, allowing it to update on mouse movement.
-        """
         self._add_callback('motion_notify_event', viewport.update)
 
     def _add_callback(self, event_type, callback):
         # e,g, motion_notify_event
         self.fig.canvas.mpl_connect(event_type, callback)
+
+    def _plot_timeseries(self, ax, light=None, solid=None, dashed=None, series_labels=[], style_labels=[None, None, None], title="", ylabel="", ylimits=(None, None)):
+        if solid is None or len(solid) == 0:
+            raise ValueError("At least one solid series must be provided.")
+        if len(series_labels) != len(solid):
+            raise ValueError("series_labels must have the same length as solid series.")
+        if len(style_labels) != 3:
+            raise ValueError("style_labels must have exactly 3 entries. Set to None if not needed.")
+        if light is None or len(light) == 0:
+            light = [None] * len(solid)
+        if dashed is None or len(dashed) == 0:
+            dashed = [None] * len(solid)
+        lengths = np.array([len(solid), len(light), len(dashed), len(series_labels)])
+        if not (lengths == lengths[0]).all():
+            raise ValueError("light, solid, dashed and labels must all have the same length if given.")
+
+        for i, series in enumerate(light):
+            if series is not None:
+                ax.plot(self.t, series, color=COLORS[i], alpha=0.3, lw=1.0, linestyle='-')
+
+        for i, series in enumerate(solid):
+            ax.plot(self.t, series, label=series_labels[i], color=COLORS[i], alpha=0.8, lw=1.0, linestyle='-')
+
+        for i, series in enumerate(dashed):
+            if series is not None:
+                ax.plot(self.t, series, color=COLORS[i], lw=1.5, linestyle='--')
+
+        self.all_axes.append(ax)
+        ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.set_ylim(ylimits)
+
+        ax.add_artist(ax.legend(loc='upper left'))
+        ax.add_artist(self._generate_style_legend(ax, style_labels))
+
+    def _generate_style_legend(self, ax, labels):
+        linestyles = []
+        if labels[0] is not None:
+            linestyles.append(Line2D([0], [0], color='gray', alpha=0.3, lw=1.0, linestyle='-', label=labels[0]))
+        if labels[1] is not None:
+            linestyles.append(Line2D([0], [0], color='gray', alpha=0.8, lw=1.0, linestyle='-', label=labels[1]))
+        if labels[2] is not None:
+            linestyles.append(Line2D([0], [0], color='gray', alpha=1.0, lw=1.5, linestyle='--', label=labels[2]))
+
+        leg_styles = ax.legend(handles=linestyles, title='Line Styles', loc='lower left')
+
+        return leg_styles
+
+    def _dress(self):
+        for ax in self.all_axes:
+            ax.grid(True)
+            # only set time label if in lowest row
+            if ax.get_subplotspec().is_last_row():
+                ax.set_xlabel("Time [s]")
+
+        self.fig.suptitle(self.name)
+
+class FlightPlotter(FlightPlotterBase):
+    def __init__(self, data, name="Flight Plotter"):
+        super().__init__(data, name)
+
+        self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
+                           width_ratios=[1, 1, 0.2],
+                           height_ratios=[1, 1, 1])
+
+        self.plot()
 
     def _populate(self):
         self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
@@ -153,72 +235,175 @@ class FlightPlotter(object):
                          ylabel="Motor Speed [rad/s]",
                          ylimits=(-0.05, 1.05))
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
-                         light=None,
-                         solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
-                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
-                         series_labels=[f"Servo {i}" for i in [1,2]],
-                         style_labels=[None, "Est. state", "Command"],
-                         title="Servo State",
-                         ylabel="Servo State [rad]",
-        )
+#         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+#                          light=None,
+#                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
+#                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
+#                          series_labels=[f"Servo {i}" for i in [1,2]],
+#                          style_labels=[None, "Est. state", "Command"],
+#                          title="Servo State",
+#                          ylabel="Servo State [rad]",
+#         )
 
-    def _plot_timeseries(self, ax, light=None, solid=None, dashed=None, series_labels=[], style_labels=[None, None, None], title="", ylabel="", ylimits=(None, None)):
-        if solid is None or len(solid) == 0:
-            raise ValueError("At least one solid series must be provided.")
-        if len(series_labels) != len(solid):
-            raise ValueError("series_labels must have the same length as solid series.")
-        if len(style_labels) != 3:
-            raise ValueError("style_labels must have exactly 3 entries. Set to None if not needed.")
-        if light is None or len(light) == 0:
-            light = [None] * len(solid)
-        if dashed is None or len(dashed) == 0:
-            dashed = [None] * len(solid)
-        lengths = np.array([len(solid), len(light), len(dashed), len(series_labels)])
-        if not (lengths == lengths[0]).all():
-            raise ValueError("light, solid, dashed and labels must all have the same length if given.")
+class SysIdPlotter(FlightPlotterBase):
+    def __init__(self, data, name="System Identification Plotter"):
+        super().__init__(data, name)
 
-        for i, series in enumerate(light):
-            if series is not None:
-                ax.plot(self.t, series, color=COLORS[i], alpha=0.3, lw=1.0, linestyle='-')
+        self.define_layout(figsize=(12, 8), nrows=6, ncols=4,
+                           width_ratios=[1, 1, 1, 1],
+                           height_ratios=[1, 1, 1, 1, 1, 1])
 
-        for i, series in enumerate(solid):
-            ax.plot(self.t, series, label=series_labels[i], color=COLORS[i], alpha=0.8, lw=1.0, linestyle='-')
+        self.plot()
 
-        for i, series in enumerate(dashed):
-            if series is not None:
-                ax.plot(self.t, series, color=COLORS[i], lw=1.5, linestyle='--')
+    def _populate(self):
+        N = 4
 
-        self.all_axes.append(ax)
-        ax.set_title(title)
-        ax.set_ylabel(ylabel)
-        ax.set_ylim(ylimits)
+        # motor learning data
+        a = np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(N)])
+        b = np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(N)])
+        widle = np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(N)])
+        tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(N)])
+        wmax = a + b
+        kappa = np.zeros_like(wmax)
+        kappa[a+b > 0] = a[a+b > 0] / (a[a+b > 0] + b[a+b > 0])
 
-        ax.add_artist(ax.legend(loc='upper right'))
-        ax.add_artist(self._generate_style_legend(ax, style_labels))
+        motor_e_var = np.array([self.data[f'motor_{i}_rls_e_var'] for i in range(N)])
+        motor_lambda = np.array([self.data[f'motor_{i}_rls_lambda'] for i in range(N)])
 
-    def _generate_style_legend(self, ax, labels):
-        linestyles = []
-        if labels[0] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=0.3, lw=1.0, linestyle='-', label=labels[0]))
-        if labels[1] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=0.8, lw=1.0, linestyle='-', label=labels[1]))
-        if labels[2] is not None:
-            linestyles.append(Line2D([0], [0], color='gray', alpha=1.0, lw=1.5, linestyle='--', label=labels[2]))
 
-        leg_styles = ax.legend(handles=linestyles, title='Line Styles', loc='lower right')
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+                            light=None,
+                            solid=wmax,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Max Motor Speed",
+                            ylabel="Angular Rate [rad/s]")
 
-        return leg_styles
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+                            light=None,
+                            solid=widle,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Idle Motor Speed",
+                            ylabel="Angular Rate [rad/s]")
 
-    def _dress(self):
-        for ax in self.all_axes:
-            ax.grid(True)
-            ax.set_xlabel("Time [s]")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+                            light=None,
+                            solid=tau,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Time Constant",
+                            ylabel="Time Constant [s]")
 
-        self.fig.suptitle(self.name)
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+                            light=None,
+                            solid=kappa,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Kappa",
+                            ylabel="Kappa [rad/s]")
+        
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 0]),
+                            light=None,
+                            solid=motor_e_var,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Error Variance",
+                            ylabel="Variance")
+        
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 0]),
+                            light=None,
+                            solid=motor_lambda,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(N)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Forgetting Factor",
+                            ylabel="Forgetting Factor")
+        
+
+        # fx learning data
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(N)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(N)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(N)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in range(2*N)])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(2*N)])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in range(2*N)])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+        fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
+        fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+
+        for i, axis in enumerate(['x', 'y', 'z']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                light=None,
+                                solid=x if axis == 'x' else y if axis == 'y' else z,
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(N)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [N/kg/(rad/s)²]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+                                light=None,
+                                solid=fx_e_var[:3],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+                                light=None,
+                                solid=fx_lambda[:3],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
+
+        for i, axis in enumerate(['p', 'q', 'r']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
+                                light=None,
+                                solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(N)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
+                                light=None,
+                                solid=p[N:] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(N)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s²)]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 2]),
+                                light=None,
+                                solid=fx_e_var[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 2]),
+                                light=None,
+                                solid=fx_lambda[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
 
 class Viewport(object):
-    def __init__(self, data, follow=False, name="Viewport"):
+    def __init__(self, data, follow=False, craft="quad", name="Viewport"):
         self.data = data
         self.name = name
         self.follow = follow
@@ -228,24 +413,34 @@ class Viewport(object):
 
         # Quadrotor geometry (in local frame)
         l = 0.2
-        # self.arms = np.array([
-        #     [ -l, +l, 0.],
-        #     [ +l, +l, 0.],
-        #     [ -l, -l, 0.],
-        #     [ +l, -l, 0.],
-        # ])
-        self.arms = np.array([
-            [ 0., +l, -2*l],
-            [ 0., -l, -2*l],
-        ])
-        self.front = np.array([
-            [    0,   2*l,     0.],
-            [    0,   2*l,   -  l],
-            [    0,    0.,   -2*l],
-            [    0,  -2*l,   -  l],
-            [    0,  -2*l,   0.],
-            [    0,   2*l,   0.],
-        ])
+        if craft == "quad":
+            self.arms = np.array([
+                [ -l, +l, 0.],
+                [ +l, +l, 0.],
+                [ -l, -l, 0.],
+                [ +l, -l, 0.],
+            ])
+            self.front = np.array([
+                [    l,   -l/4,     0.],
+                [    l,   +l/4,     0.],
+                [    l+l/4,   0,     0.],
+                [    l,   -l/4,     0.],
+            ])
+        elif craft == "tailsitter":
+            self.arms = np.array([
+                [ 0., +l, -2*l],
+                [ 0., -l, -2*l],
+            ])
+            self.front = np.array([
+                [    0,   2*l,     0.],
+                [    0,   2*l,   -  l],
+                [    0,    0.,   -2*l],
+                [    0,  -2*l,   -  l],
+                [    0,  -2*l,   0.],
+                [    0,   2*l,   0.],
+            ])
+        else:
+            raise ValueError(f"Unknown craft type: {craft}")
 
         # preprocess data
         self.t = self.data['timeS'].to_numpy()

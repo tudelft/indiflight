@@ -1,7 +1,7 @@
 from indiflight_log_tools import IndiflightLog
 from handy_signal_tools import Signal
 from estimators import LMS, RLS, EMWV, RLS_fortescue
-from plotting import FlightPlotter, Viewport
+from plotting import FlightPlotter, Viewport, BlittedCursor
 
 import numpy as np
 from tqdm import tqdm
@@ -127,8 +127,8 @@ text[0] = t[0]-(t[1]-t[0])
 frls = rls.plotParameters(timeMs=text,
                           parGroups=[[0,1,2,3], [4,5,6,7], [8,9], [10,11], [12,13,14,15], [16,17,18,19]],
                           sharey=False,
-                          zoomy=False,
-                          cursor=True)
+                          zoomy=False)
 frls.show()
 
+cursor = BlittedCursor(fplt.all_axes + rls.all_axes, sharex=True)
 
