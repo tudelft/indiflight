@@ -175,6 +175,9 @@
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS "indi_act_time_constant_true_ms"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS "indi_act_time_constant_des_ms"
 #define PARAM_NAME_INDI_FF_COEFS "indi_ff_coefs"
+#define PARAM_NAME_INDI_ATT_SP_INJECTION_TYPE "indi_att_sp_injection_type"
+#define PARAM_NAME_INDI_ATT_SP_INJECTION_AMPLITUDE "indi_att_sp_injection_amplitude"
+#define PARAM_NAME_INDI_ATT_SP_INJECTION_DURATION "indi_att_sp_injection_duration"
 #endif
 
 #ifdef USE_LOCAL_POSITION

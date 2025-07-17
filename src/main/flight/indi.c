@@ -203,12 +203,28 @@ void getSetpoints(timeUs_t current) {
         float roll = getRcDeflection(ROLL);
         float pitch = getRcDeflection(PITCH);
         float maxTilt = indiRun.manualMaxTilt;
-
         fp_vector_t axis = {
             .V.X = maxTilt*roll,
             .V.Y = maxTilt*pitch,
             .V.Z = 0.f,
         };
+
+        #ifdef INJECT_ATTITUDE_SETPOINTS
+            // Only inject setpoints in Angle Mode (so drone can be positioned in horizon mode)
+            if (FLIGHT_MODE(ANGLE_MODE)) {
+                
+
+                if (!indiRun.attSpInjectionStarted) {
+                    set_signal_mode(indiRun.attSpInjectionType, indiRun.attSpInjectionAmplitude, indiRun.attSpInjectionDuration, current);
+                    indiRun.attSpInjectionStartTime = current;
+                    indiRun.attSpInjectionStarted = true;
+                }
+                float roll_signal = generate_signal(current, indiRun.attSpInjectionStartTime);
+                // Add roll signal to RC input signal
+                axis.V.X += roll_signal;
+            }
+        #endif
+
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
 
         indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
@@ -239,6 +255,7 @@ void getSetpoints(timeUs_t current) {
 
     } else {
         // acro
+        indiRun.attSpInjectionStarted = false; // Reset attitude injection flag
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
         indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(getSetpointRate(YAW));

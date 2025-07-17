@@ -46,6 +46,9 @@
 #error "Blackbox will crash. Fix it to accept more that MAXV > 8"
 #endif
 
+#ifdef INJECT_ATTITUDE_SETPOINTS
+#include "common/signal_generator.h"
+#endif
 typedef struct indiProfile_s {
     // ---- Att/Rate config
     uint16_t attGains[3]; // attitude error to rotational accel gain * 10
@@ -125,6 +128,11 @@ typedef struct indiProfile_s {
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
     // -------- Parameters for feedforward control
     int32_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-6
+    // -------- Parameters for attitude injection
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
+    int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
+    int16_t attSpInjectionDuration;  // duration of injection in ms
 } indiProfile_t;
 
 // linearization
@@ -251,6 +259,15 @@ typedef struct indiRuntime_s {
     float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
     biquadFilter_t feedforwardFilter[3]; 
     fp_vector_t ffRateSpBody;   
+
+    // ---- attitude injection
+    #ifdef INJECT_ATTITUDE_SETPOINTS
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    signal_mode_t attSpInjectionType; // What type of injection is used. 1: None, 2: Impulse, 3: Doublet, 4: Step
+    float attSpInjectionAmplitude; // amplitude of injection in degrees
+    float attSpInjectionDuration;  // duration of injection in s
+    timeUs_t attSpInjectionStartTime; // time when the injection started
+    #endif
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3

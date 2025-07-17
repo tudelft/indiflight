@@ -137,6 +137,12 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsCondBound = 1 << 15;
     indiProfile->wlsTheta = 1;
     indiProfile->wlsNanLimit = 20;
+
+    // ---- attitude injection
+    indiProfile->attSpInjectionStarted = false;
+    indiProfile->attSpInjectionType = 0; // 0: None, 1: Impulse, 2: Doublet, 3: Step
+    indiProfile->attSpInjectionAmplitude = 0; // amplitude of injection in degrees * 10
+    indiProfile->attSpInjectionDuration = 0;  // duration of injection in ms
 }
 
 void initIndiRuntimeParameters(void) {
@@ -270,7 +276,33 @@ void initIndiRuntimeParameters(void) {
     // ---- control law selection
     indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
     indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
-    indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNed
+    indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNedj
+
+    // ---- attitude injection parameters
+    #ifdef INJECT_ATTITUDE_SETPOINTS
+    indiRun.attSpInjectionStarted = false;
+
+    switch (p->attSpInjectionType) {
+        case 0: // None
+            indiRun.attSpInjectionType = SIGNAL_MODE_OFF;
+            break;
+        case 1: // Impulse
+            indiRun.attSpInjectionType = SIGNAL_MODE_IMPULSE;
+            break;
+        case 2: // Doublet
+            indiRun.attSpInjectionType = SIGNAL_MODE_DOUBLET;
+            break;
+        case 3: // Step
+            indiRun.attSpInjectionType = SIGNAL_MODE_STEP;
+            break;
+        default:
+            indiRun.attSpInjectionType = SIGNAL_MODE_OFF;
+            break;
+    }
+
+    indiRun.attSpInjectionAmplitude = DEGREES_TO_RADIANS(p->attSpInjectionAmplitude) * 0.1f; // convert to radians and scale
+    indiRun.attSpInjectionDuration = p->attSpInjectionDuration * 1e-3f; // convert to seconds
+    #endif
 }
 
 void initIndiRuntime(void) {
@@ -330,6 +362,9 @@ void initIndiRuntime(void) {
             biquadFilterInitMotorLeadLag(&indiRun.motorLeadLagFilter[i], indiRun.actTimeConstTrueS[i], indiRun.actTimeConstDesS[i], gyro.targetLooptime);
         }
     }
+    #ifdef INJECT_ATTITUDE_SETPOINTS
+    indiRun.attSpInjectionStartTime = 0;
+    #endif 
 }
 
 #endif // ifdef USE_INDI

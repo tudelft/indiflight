@@ -332,6 +332,15 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"u",           6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u",           7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 
+    {"d",           0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d",           7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
     {"u_state",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u_state",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u_state",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
@@ -713,6 +722,7 @@ typedef struct blackboxMainState_s {
     int16_t dv[MAXV];
     int16_t u[MAXU];
     int16_t u_state[MAXU];
+    int16_t d[MAXU];
     uint16_t omega[MAXU];
     uint16_t omegaUnfiltered[MAXU];
     int16_t omega_dot[MAXU];
@@ -1139,6 +1149,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->dv, MAXV);
         blackboxWriteSigned16VBArray(blackboxCurrent->u, MAXU);
         blackboxWriteSigned16VBArray(blackboxCurrent->u_state, MAXU);
+        blackboxWriteSigned16VBArray(blackboxCurrent->d, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omega, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omegaUnfiltered, MAXU);
         blackboxWriteSigned16VBArray(blackboxCurrent->omega_dot, MAXU);
@@ -1398,7 +1409,13 @@ static void writeInterframe(void)
         for (int i=0; i < MAXU; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
-
+        
+        // d
+        arraySubInt16(deltas16, blackboxCurrent->d, blackboxLast->d, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+        
         // omega
         arraySubUint16(deltas16, blackboxCurrent->omega, blackboxLast->omega, MAXU);
         for (int i=0; i < MAXU; i++)
@@ -1915,6 +1932,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int i=0; i < MAXU; i++) {
         blackboxCurrent->u[i] = lrintf(indiRun.u[i] * UNIT_FLOAT_TO_SIGNED16VB);
         blackboxCurrent->u_state[i] = lrintf(indiRun.uState[i] * UNIT_FLOAT_TO_SIGNED16VB);
+        blackboxCurrent->d[i] = lrintf(indiRun.d[i] * UNIT_FLOAT_TO_SIGNED16VB);
         blackboxCurrent->omega[i] = lrintf(indiRun.omega_fs[i]);
         blackboxCurrent->omegaUnfiltered[i] = lrintf(indiRun.omega[i]);
         blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
