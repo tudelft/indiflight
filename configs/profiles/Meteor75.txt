@@ -41,7 +41,7 @@
 ## #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
-## #define INJECT_ATTITUDE_SETPOINTS
+#define INJECT_ATTITUDE_SETPOINTS
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -184,14 +184,31 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 1358, 1358, 1358
-set indi_rate_gains     = 183, 183, 183
+# set indi_attitude_gains = 1358, 1358, 1358
+# set indi_rate_gains     = 183, 183, 183
+
+## Test 290725 settings
+set indi_attitude_gains  = 883, 883, 883
+set indi_rate_gains      = 152, 152, 152
+#set indi_attitude_gains = 1830, 1830, 1830
+#set indi_rate_gains     = 180, 180, 100
+
+# H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
+# Coefficient: unitless * 1000000
+# Coefficient order:  b0, b1, b2, a1, a2  
+set indi_use_attitude_lead_lag = 0             # 1 yes 0 no
+# set indi_attitude_coefs  = 14320000,-14250000,0,-990600,0
+# set indi_rate_coefs      = 15000000,-14890000,0,-989800,0
+set indi_attitude_coefs  = 30860000,-30590000,0,-969400,0
+set indi_rate_coefs      = 11380000,-10680000,0,-924500,0
+#set indi_attitude_coefs  = 7300000,0,0,0,0
+#set indi_rate_coefs      = 18000000,0,0,0,0
 
 # --- feedforward control config
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
 # Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
-set indi_ff_coefs = 0, 0, 0, 0, 0
+set indi_ff_coefs = 2455000, -2455000, 0, -991800, 0
 # set indi_ff_coefs = 291700, -291700, 0, -1949000, 950000
 # set indi_ff_coefs = 10840000, -10840000, 0, -967400, 0
 
