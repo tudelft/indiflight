@@ -210,10 +210,12 @@ void getSetpoints(timeUs_t current) {
         };
 
         #ifdef INJECT_ATTITUDE_SETPOINTS
+        if (FLIGHT_MODE(HORIZON_MODE)) {
+            indiRun.attSpInjectionStarted = false;
+        }
+        if (indiRun.injectAttSp) {
             // Only inject setpoints in Angle Mode (so drone can be positioned in horizon mode)
             if (FLIGHT_MODE(ANGLE_MODE)) {
-                
-
                 if (!indiRun.attSpInjectionStarted) {
                     set_signal_mode(indiRun.attSpInjectionType, indiRun.attSpInjectionAmplitude, indiRun.attSpInjectionDuration, current);
                     indiRun.attSpInjectionStartTime = current;
@@ -223,6 +225,7 @@ void getSetpoints(timeUs_t current) {
                 // Add roll signal to RC input signal
                 axis.V.X += roll_signal;
             }
+        }
         #endif
 
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
@@ -255,9 +258,6 @@ void getSetpoints(timeUs_t current) {
 
     } else {
         // acro
-        #ifdef INJECT_ATTITUDE_SETPOINTS
-        indiRun.attSpInjectionStarted = false; // Reset attitude injection flag
-        #endif
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
         indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(getSetpointRate(YAW));
@@ -376,7 +376,7 @@ void getAlphaSpBody(timeUs_t current) {
         quaternion_of_axis_angle(&q_tilt_inv, &tiltAxis, -tiltErrorAngle);
 
         // get q_yaw via multiplication.
-        // TODO: we only need w and sign(z). Surely there is somethign faster than dense quaternion mult
+        // TODO: we only need w and sign(z). Surely there is something faster than dense quaternion mult
         fp_quaternion_t q_yaw = chain_quaternion(&indiRun.attErrBody, &q_tilt_inv);
 
         q_yaw.w = constrainf(q_yaw.w, -1.f, 1.f);
@@ -384,14 +384,22 @@ void getAlphaSpBody(timeUs_t current) {
         if (yawErrorAngle > M_PIf)
             yawErrorAngle -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
 
-        // we still have to check if the vector compoenent is negative
+        // we still have to check if the vector component is negative
         // this inverts the error angle
         if (q_yaw.z < 0.f)
             yawErrorAngle = -yawErrorAngle;
 
-        // multiply with gains and mix existing rate setpoint
-        indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
-        indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+        
+        if (!indiRun.useAttLeadLag) {
+            // multiply with gains and mix existing rate setpoint
+            indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
+            indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+        } else {
+            // indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
+            // indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+            indiRun.rateSpBody.V.X += biquadFilterApply(&indiRun.attLlFilter[0], tiltError.V.X);
+            indiRun.rateSpBody.V.Y += biquadFilterApply(&indiRun.attLlFilter[1], tiltError.V.Y);
+        }
 
         indiRun.rateSpBody.V.X += indiRun.ffRateSpBody.V.X;
         indiRun.rateSpBody.V.Y += indiRun.ffRateSpBody.V.Y;
@@ -416,8 +424,15 @@ void getAlphaSpBody(timeUs_t current) {
     VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, indiRun.rate_f);
 
     // alphaSpBody = rateGains * rateErr
-    indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
-    indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
+    if (!indiRun.useAttLeadLag) {
+        indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
+        indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
+    } else {
+        // indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
+        // indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
+        indiRun.rateDotSpBody.V.X = biquadFilterApply(&indiRun.rateLlFilter[0], rateErr.V.X);
+        indiRun.rateDotSpBody.V.Y = biquadFilterApply(&indiRun.rateLlFilter[1], rateErr.V.Y);
+    }
     indiRun.rateDotSpBody.V.Z = indiRun.rateGains.V.Z * rateErr.V.Z;
 }
 

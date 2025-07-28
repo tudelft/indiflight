@@ -69,6 +69,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->useAccelForSpfz = true;
     indiProfile->useRpmDotFeedback = true;
     indiProfile->useMotorLeadLag = false;
+    indiProfile->useAttLeadLag = false;
+
     // ---- INDI actuator config
     indiProfile->actNum = 4;
     for (int i = 0; i < MAXU; i++) {
@@ -139,6 +141,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsNanLimit = 20;
 
     // ---- attitude injection
+    indiProfile->injectAttSp = false; // whether to inject attitude setpoints
     indiProfile->attSpInjectionStarted = false;
     indiProfile->attSpInjectionType = 0; // 0: None, 1: Impulse, 2: Doublet, 3: Step
     indiProfile->attSpInjectionAmplitude = 0; // amplitude of injection in degrees * 10
@@ -268,6 +271,8 @@ void initIndiRuntimeParameters(void) {
 
     for (int i = 0; i < 5; i++) {
         indiRun.feedforwardCoefs[i] = p->feedforwardCoefs[i] * 1e-6f;
+        indiRun.attCoefs[i] = p->attCoefs[i] * 1e-6f;
+        indiRun.rateCoefs[i] = p->rateCoefs[i] * 1e-6f;
     }
     // ---- housekeeping
     indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
@@ -277,9 +282,11 @@ void initIndiRuntimeParameters(void) {
     indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
     indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
     indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNedj
+    indiRun.useAttLeadLag = p->useAttLeadLag; // use lead-lag filter for attitude control
 
     // ---- attitude injection parameters
     #ifdef INJECT_ATTITUDE_SETPOINTS
+    indiRun.injectAttSp = p->injectAttSp;
     indiRun.attSpInjectionStarted = false;
 
     switch (p->attSpInjectionType) {
@@ -311,12 +318,12 @@ void initIndiRuntime(void) {
 
     // reset runtime values
 
-    // ---- runtime values -- actauators
+    // ---- runtime values -- actuators
     for (int i = 0; i < indiRun.actNum; i++) {
         indiRun.d[i] = 0.f; // command issued to the actuators on [-1, 1] scale
         indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
         indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
-        indiRun.uState_fs[i] = 0.f; // sync-filtered estiamted force state
+        indiRun.uState_fs[i] = 0.f; // sync-filtered estimated force state
         indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
@@ -333,8 +340,8 @@ void initIndiRuntime(void) {
         //indiRun.rate_fs.A[axis] = 0.; // sync-filtered gyro in rad/s
         indiRun.rateDotIMU.A[axis] = 0.; // unfiltered gyro derivative in rad/s/s
         indiRun.rateDot_fs.A[axis] = 0.; // sync-filtered gyro derivative in rad/s/s
-        indiRun.spfIMU.A[axis] = 0.; // unfilterd accelerometer (specific force) in N/kg
-        indiRun.spf_fs.A[axis] = 0.; // sync-filterd accelerometer (specific force) in N/kg
+        indiRun.spfIMU.A[axis] = 0.; // unfiltered accelerometer (specific force) in N/kg
+        indiRun.spf_fs.A[axis] = 0.; // sync-filtered accelerometer (specific force) in N/kg
     }
     indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
     indiRun.attErrBody = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
@@ -351,6 +358,8 @@ void initIndiRuntime(void) {
         biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
+        biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);
+        biquadFilterInitLeadLag(&indiRun.attLlFilter[axis], indiRun.attCoefs[0], indiRun.attCoefs[1], indiRun.attCoefs[2], indiRun.attCoefs[3], indiRun.attCoefs[4]);
     }
     for (int i = 0; i < indiRun.actNum; i++) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup

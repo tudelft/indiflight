@@ -178,6 +178,10 @@
 #define PARAM_NAME_INDI_ATT_SP_INJECTION_TYPE "indi_att_sp_injection_type"
 #define PARAM_NAME_INDI_ATT_SP_INJECTION_AMPLITUDE "indi_att_sp_injection_amplitude"
 #define PARAM_NAME_INDI_ATT_SP_INJECTION_DURATION "indi_att_sp_injection_duration"
+#define PARAM_NAME_INDI_INJECT_ATT_SP "indi_inject_attitude_setpoints"
+#define PARAM_NAME_INDI_USE_ATT_LEAD_LAG "indi_use_attitude_lead_lag"
+#define PARAM_NAME_INDI_ATT_COEFS "indi_attitude_coefs"
+#define PARAM_NAME_INDI_RATE_COEFS "indi_rate_coefs"
 #endif
 
 #ifdef USE_LOCAL_POSITION

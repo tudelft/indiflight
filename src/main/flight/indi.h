@@ -128,8 +128,15 @@ typedef struct indiProfile_s {
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
     // -------- Parameters for feedforward control
     int32_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-6
+
+    // -------- Parameters for attitude lead lag control
+    uint8_t useAttLeadLag; // bool: use attitude lead-lag filter
+    int32_t rateCoefs[5]; // time constant for attitude lead-lag in ms
+    int32_t attCoefs[5]; // desired time constant for attitude lead-lag in ms
+
     // -------- Parameters for attitude injection
     bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    bool injectAttSp; // whether to inject attitude setpoints
     int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
     int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
     int16_t attSpInjectionDuration;  // duration of injection in ms
@@ -260,6 +267,13 @@ typedef struct indiRuntime_s {
     biquadFilter_t feedforwardFilter[3]; 
     fp_vector_t ffRateSpBody;   
 
+    // ---- leadlag attitude control
+    bool useAttLeadLag; // bool: use attitude lead-lag filter
+    float attCoefs[5];
+    float rateCoefs[5];
+    biquadFilter_t attLlFilter[3];  // attitude control filter
+    biquadFilter_t rateLlFilter[3]; // rate control filter
+
     // ---- attitude injection
     #ifdef INJECT_ATTITUDE_SETPOINTS
     bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
@@ -267,6 +281,7 @@ typedef struct indiRuntime_s {
     float attSpInjectionAmplitude; // amplitude of injection in degrees
     float attSpInjectionDuration;  // duration of injection in s
     timeUs_t attSpInjectionStartTime; // time when the injection started
+    bool injectAttSp; // whether to inject attitude setpoints
     #endif
 } indiRuntime_t;
 

@@ -1322,6 +1322,10 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_ATT_SP_INJECTION_TYPE,            VAR_INT8  | PROFILE_INDI_VALUE , .config.minmax = { 0, 5 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attSpInjectionType) },
     { PARAM_NAME_INDI_ATT_SP_INJECTION_AMPLITUDE,       VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, attSpInjectionAmplitude) },
     { PARAM_NAME_INDI_ATT_SP_INJECTION_DURATION,        VAR_INT16 | PROFILE_INDI_VALUE, .config.minmax = { INT16_MIN, INT16_MAX }, PG_INDI_PROFILE, offsetof(indiProfile_t, attSpInjectionDuration) },
+    { PARAM_NAME_INDI_INJECT_ATT_SP,                    VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, injectAttSp) },
+    { PARAM_NAME_INDI_USE_ATT_LEAD_LAG,                 VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useAttLeadLag) },
+    { PARAM_NAME_INDI_ATT_COEFS           ,             VAR_INT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, attCoefs) },
+    { PARAM_NAME_INDI_RATE_COEFS           ,            VAR_INT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, rateCoefs) },
 #endif
 
 #ifdef USE_LOCAL_POSITION

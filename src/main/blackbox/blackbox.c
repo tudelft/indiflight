@@ -304,9 +304,9 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"gyroSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
-    {"gyroFF",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
-    {"gyroFF",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
-    {"gyroFF",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFf",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFf",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFf",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
     {"alphaSp",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alphaSp",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -331,15 +331,6 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"u",           5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u",           6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u",           7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-
-    {"d",           0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
-    {"d",           7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 
     {"u_state",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"u_state",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
@@ -722,7 +713,6 @@ typedef struct blackboxMainState_s {
     int16_t dv[MAXV];
     int16_t u[MAXU];
     int16_t u_state[MAXU];
-    int16_t d[MAXU];
     uint16_t omega[MAXU];
     uint16_t omegaUnfiltered[MAXU];
     int16_t omega_dot[MAXU];
@@ -1149,7 +1139,6 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->dv, MAXV);
         blackboxWriteSigned16VBArray(blackboxCurrent->u, MAXU);
         blackboxWriteSigned16VBArray(blackboxCurrent->u_state, MAXU);
-        blackboxWriteSigned16VBArray(blackboxCurrent->d, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omega, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omegaUnfiltered, MAXU);
         blackboxWriteSigned16VBArray(blackboxCurrent->omega_dot, MAXU);
@@ -1406,12 +1395,6 @@ static void writeInterframe(void)
 
         // u_state
         arraySubInt16(deltas16, blackboxCurrent->u_state, blackboxLast->u_state, MAXU);
-        for (int i=0; i < MAXU; i++)
-            deltas[i] = deltas16[i];
-        blackboxWriteTag8_8SVB(deltas, MAXU);
-        
-        // d
-        arraySubInt16(deltas16, blackboxCurrent->d, blackboxLast->d, MAXU);
         for (int i=0; i < MAXU; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
@@ -1932,7 +1915,6 @@ static void loadMainState(timeUs_t currentTimeUs)
     for (int i=0; i < MAXU; i++) {
         blackboxCurrent->u[i] = lrintf(indiRun.u[i] * UNIT_FLOAT_TO_SIGNED16VB);
         blackboxCurrent->u_state[i] = lrintf(indiRun.uState[i] * UNIT_FLOAT_TO_SIGNED16VB);
-        blackboxCurrent->d[i] = lrintf(indiRun.d[i] * UNIT_FLOAT_TO_SIGNED16VB);
         blackboxCurrent->omega[i] = lrintf(indiRun.omega_fs[i]);
         blackboxCurrent->omegaUnfiltered[i] = lrintf(indiRun.omega[i]);
         blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
@@ -2626,6 +2608,17 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->feedforwardCoefs[3],
                                                                                               indiProfile->feedforwardCoefs[4]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_MOTOR_LEAD_LAG, "%d",                  indiProfile->useMotorLeadLag);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_ATT_LEAD_LAG, "%d",                    indiProfile->useAttLeadLag);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATT_COEFS, "%d,%d,%d,%d,%d",               indiProfile->attCoefs[0],
+                                                                                              indiProfile->attCoefs[1],
+                                                                                              indiProfile->attCoefs[2],
+                                                                                              indiProfile->attCoefs[3],
+                                                                                              indiProfile->attCoefs[4]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RATE_COEFS, "%d,%d,%d,%d,%d",              indiProfile->rateCoefs[0],
+                                                                                              indiProfile->rateCoefs[1],
+                                                                                              indiProfile->rateCoefs[2],
+                                                                                              indiProfile->rateCoefs[3],
+                                                                                              indiProfile->rateCoefs[4]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS, "%d,%d,%d,%d",  indiProfile->actTimeConstTrueMs[0],
                                                                                               indiProfile->actTimeConstTrueMs[1],
                                                                                               indiProfile->actTimeConstTrueMs[2],
