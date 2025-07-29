@@ -1326,6 +1326,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_USE_ATT_LEAD_LAG,                 VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, useAttLeadLag) },
     { PARAM_NAME_INDI_ATT_COEFS           ,             VAR_INT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, attCoefs) },
     { PARAM_NAME_INDI_RATE_COEFS           ,            VAR_INT32 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 5, PG_INDI_PROFILE, offsetof(indiProfile_t, rateCoefs) },
+    { PARAM_NAME_INDI_INJECT_INPUT_DIST,                VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, injectInputDist) },
+    { PARAM_NAME_INDI_INPUT_DIST_AMPLITUDE,             VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_INDI_PROFILE, offsetof(indiProfile_t, inputDistAmplitude) },
+    { PARAM_NAME_INDI_APPLY_DIST_TO_MOTOR,              VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, applyDistToMotor) },
 #endif
 
 #ifdef USE_LOCAL_POSITION

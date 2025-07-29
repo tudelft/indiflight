@@ -42,6 +42,7 @@
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
 #define INJECT_ATTITUDE_SETPOINTS
+#define INJECT_INPUT_DISTURBANCE
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -263,6 +264,12 @@ set indi_act_g2_yaw = 120,-120,-120,120,0,0,0,0
 set indi_att_sp_injection_type      = 2  # 0: None, 1: Impulse, 2: Doublet, 3: Step
 set indi_att_sp_injection_amplitude = 150 # amplitude * 10
 set indi_att_sp_injection_duration  = 2000 # signal duration in ms
+
+# Input disturbance
+# Inject a constant step disturbance on certain motors
+set indi_inject_input_dist          = 1    # 0: No 1: Yes
+set indi_input_dist_amplitude       = 1    # Disturbance amplitude * 100
+set indi_apply_dist_to_motor        = 0,0,0,0,0,0,0,0 # Which motors to apply an input disturbance
 
 indiprofile 2
 

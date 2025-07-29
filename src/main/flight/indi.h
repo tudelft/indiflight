@@ -140,6 +140,12 @@ typedef struct indiProfile_s {
     int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
     int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
     int16_t attSpInjectionDuration;  // duration of injection in ms
+
+    // -------- Parameters for input disturbance injection
+    bool injectInputDist; // whether to inject input disturbance
+    int16_t inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
+
 } indiProfile_t;
 
 // linearization
@@ -282,6 +288,12 @@ typedef struct indiRuntime_s {
     float attSpInjectionDuration;  // duration of injection in s
     timeUs_t attSpInjectionStartTime; // time when the injection started
     bool injectAttSp; // whether to inject attitude setpoints
+    #endif
+
+    #ifdef INJECT_INPUT_DISTURBANCE
+    bool injectInputDist; // whether to inject input disturbance
+    float inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
     #endif
 } indiRuntime_t;
 

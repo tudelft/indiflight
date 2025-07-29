@@ -182,6 +182,9 @@
 #define PARAM_NAME_INDI_USE_ATT_LEAD_LAG "indi_use_attitude_lead_lag"
 #define PARAM_NAME_INDI_ATT_COEFS "indi_attitude_coefs"
 #define PARAM_NAME_INDI_RATE_COEFS "indi_rate_coefs"
+#define PARAM_NAME_INDI_INJECT_INPUT_DIST "indi_inject_input_dist"
+#define PARAM_NAME_INDI_INPUT_DIST_AMPLITUDE "indi_input_dist_amplitude"
+#define PARAM_NAME_INDI_APPLY_DIST_TO_MOTOR "indi_apply_dist_to_motor"
 #endif
 
 #ifdef USE_LOCAL_POSITION

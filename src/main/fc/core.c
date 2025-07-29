@@ -1782,7 +1782,18 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
     }
 #endif
-
+#ifdef INJECT_INPUT_DISTURBANCE
+#pragma message "WARNING: compiling with dangerous code."
+    // Ensure this only runs when not injecting an attitude setpoint and in angle mode (disable in horizon mode)
+    if (indiRun.injectInputDist && !indiRun.injectAttSp && FLIGHT_MODE(ANGLE_MODE)) {
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if (indiRun.actIsMotor[i] && indiRun.applyDistToMotor[i]) {
+                // inject disturbance into the motor output
+                motor_normalized[i] += indiRun.inputDistAmplitude;
+            }
+        }
+    }
+#endif
     // get real motor outputs for the hardware implementation used
     for (int i = 0; i < numMotors; i++) {
         motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);

@@ -146,6 +146,15 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->attSpInjectionType = 0; // 0: None, 1: Impulse, 2: Doublet, 3: Step
     indiProfile->attSpInjectionAmplitude = 0; // amplitude of injection in degrees * 10
     indiProfile->attSpInjectionDuration = 0;  // duration of injection in ms
+
+    #ifdef INJECT_INPUT_DISTURBANCE
+    // ---- input disturbance injection
+    indiProfile->injectInputDist = false; // whether to inject input disturbance
+    indiProfile->inputDistAmplitude = 0; // amplitude of input disturbance in percent
+    for (int i = 0; i < MAXU; i++) {
+        indiProfile->applyDistToMotor[i] = false; // whether to apply disturbance to motor
+    }
+    #endif
 }
 
 void initIndiRuntimeParameters(void) {
@@ -309,6 +318,14 @@ void initIndiRuntimeParameters(void) {
 
     indiRun.attSpInjectionAmplitude = DEGREES_TO_RADIANS(p->attSpInjectionAmplitude) * 0.1f; // convert to radians and scale
     indiRun.attSpInjectionDuration = p->attSpInjectionDuration * 1e-3f; // convert to seconds
+    #endif
+
+    #ifdef INJECT_INPUT_DISTURBANCE
+    indiRun.injectInputDist = p->injectInputDist;
+    indiRun.inputDistAmplitude = constrain(p->inputDistAmplitude, 0, 100) * 0.01f; // Convert to motor setpoint
+    for (int i = 0; i < MAXU; i++) {
+        indiRun.applyDistToMotor[i] = p->applyDistToMotor[i];
+    }
     #endif
 }
 
