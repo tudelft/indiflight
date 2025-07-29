@@ -42,7 +42,7 @@
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
 #define INJECT_ATTITUDE_SETPOINTS
-#define INJECT_INPUT_DISTURBANCE
+## #define INJECT_INPUT_DISTURBANCE
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -189,8 +189,8 @@ indiprofile 0
 # set indi_rate_gains     = 183, 183, 183
 
 ## Test 290725 settings
-set indi_attitude_gains  = 883, 883, 883
-set indi_rate_gains      = 152, 152, 152
+set indi_attitude_gains  = 748, 748, 748
+set indi_rate_gains      = 142, 142, 142
 #set indi_attitude_gains = 1830, 1830, 1830
 #set indi_rate_gains     = 180, 180, 100
 
@@ -209,7 +209,7 @@ set indi_rate_coefs      = 11380000,-10680000,0,-924500,0
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
 # Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
-set indi_ff_coefs = 2455000, -2455000, 0, -991800, 0
+set indi_ff_coefs = 2669000, -2669000, 0, -992000, 0
 # set indi_ff_coefs = 291700, -291700, 0, -1949000, 950000
 # set indi_ff_coefs = 10840000, -10840000, 0, -967400, 0
 
@@ -219,7 +219,7 @@ set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 40  # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 30           # deg
+set indi_manual_max_tilt = 20           # deg
 set indi_manual_use_coordinated_yaw = 1
 
 # --- indi config ---
@@ -245,30 +245,35 @@ set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 1,1,1,1
 
 # lead lag filtering for motor Outputs
-set indi_use_motor_lead_lag = 0
+set indi_use_motor_lead_lag = 1
 set indi_act_time_constant_true_ms = 33,33,33,33
-set indi_act_time_constant_des_ms = 50,50,50,50
+set indi_act_time_constant_des_ms = 37,37,37,37
 
+# fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0,0,0,0,0
 set indi_act_g1_fy = 0,0,0,0,0,0,0,0
 set indi_act_g1_fz = -1770,-1770,-1770,-1770,0,0,0,0
+# set indi_act_g1_roll = -7500,-7500,7500,7500,0,0,0,0
 set indi_act_g1_roll = -7500,-7500,7500,7500,0,0,0,0
 set indi_act_g1_pitch = -6000,6000,-6000,6000,0,0,0,0
 set indi_act_g1_yaw = 1400,-1400,-1400,1400,0,0,0,0
 
+# Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0,0,0,0,0
 set indi_act_g2_pitch = 0,0,0,0,0,0,0,0
 set indi_act_g2_yaw = 120,-120,-120,120,0,0,0,0
+# set indi_act_g2_yaw = 0,0,0,0,0,0,0,0
 
 # Attitude setpoint injection
-set indi_att_sp_injection_type      = 2  # 0: None, 1: Impulse, 2: Doublet, 3: Step
-set indi_att_sp_injection_amplitude = 150 # amplitude * 10
+set indi_inject_attitude_setpoints  = 1    # 0: No 1: Yes
+set indi_att_sp_injection_type      = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
+set indi_att_sp_injection_amplitude = 200  # amplitude * 10
 set indi_att_sp_injection_duration  = 2000 # signal duration in ms
 
 # Input disturbance
 # Inject a constant step disturbance on certain motors
-set indi_inject_input_dist          = 1    # 0: No 1: Yes
-set indi_input_dist_amplitude       = 1    # Disturbance amplitude * 100
+set indi_inject_input_dist          = 0    # 0: No 1: Yes
+set indi_input_dist_amplitude       = 0    # Disturbance amplitude * 100
 set indi_apply_dist_to_motor        = 0,0,0,0,0,0,0,0 # Which motors to apply an input disturbance
 
 indiprofile 2
