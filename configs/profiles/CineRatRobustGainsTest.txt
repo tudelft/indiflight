@@ -48,6 +48,8 @@
 #define USE_CATAPULT
 #define USE_LEARNER
 #define USE_NN_CONTROL
+#define INJECT_ATTITUDE_SETPOINTS
+#define INJECT_INPUT_DISTURBANCE
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
