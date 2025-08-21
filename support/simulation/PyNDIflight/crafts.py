@@ -430,7 +430,7 @@ class Tailsitter(Craft):
             self.vB, self.OB,
             self.r_w, self.s_d, self.s_dd, s_ddd,
             self.d0,
-            self.cv, 0.*self.cvx, self.cO,
+            0.*self.cv, 0.*self.cvx, 0.*self.cO,
             self.cd, self.cdd, self.cddd)
 
 

@@ -205,6 +205,7 @@ class Estimator(object):
                 regAxsRow = []
                 for j in range(len(parGroups)):
                     regAx = self.f.add_subplot(regGs[i, j]); regAxsRow.append(regAx)
+                    self.all_axes.append(regAxsRow[-1])
                     if j == 0:
                         regAx.set_ylabel("Regressor(s)")
                     if (j > 0) and sharey:
@@ -248,8 +249,8 @@ class Estimator(object):
             for yIdxs, yAx in zip(outGroups, yAxs):
                 for i in yIdxs:
                     yAx.plot(self.timeMs, y[:, i], label="Target")
-                    # yAx.plot(timeMs, yLastTheta[:, i], label="A posteriori")
                     yAx.plot(self.timeMs, yRealTime[:, i], label="Real Time")
+                    yAx.plot(self.timeMs, yLastTheta[:, i], label="A posteriori")
                 yAx.set_ylabel("Output "+self.outNames[i])
                 if printLegend:
                     legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
@@ -466,3 +467,60 @@ class RLS_fortescue(Estimator):
         # Call the parent method to initialize the plot
         super().plotParameters(extra_rows=1, **kwargs)
         self.extraAxes[0][0].plot(self.timeMs, self.lam_h, label="Forgetting factor")
+
+class RLS_linear(Estimator):
+    def __init__(self, n=4, gamma=1e8, forgetting_base=0.995, N0=1):
+        self.n = 3 + n
+        self.d = 3
+        super().__init__(self.n, self.d)
+
+        self.K = np.empty((self.n, self.d))
+        self.K[:] = 0.
+        self.e = np.empty((self.d, 1))
+        self.e[:] = np.nan
+        self.lam = forgetting_base
+        self.lam_base = forgetting_base
+        self.N0 = N0
+
+        self.setParameters(np.zeros((self.n, 1)))
+        self.setCovariance(gamma * np.eye(n))
+
+        self.K_h = []
+        self.e_h = []
+        self.lam_h = []
+
+        self.setTitle("Recursive Least Squares -- with IMU")
+
+    def log(self):
+        super().log()
+        self.K_h.append(self.K)
+        self.e_h.append(self.e)
+        self.lam_h.append(self.lam)
+
+    def update(self):
+        if self.N == 1:
+            self.log()  # log initial conditions
+
+        # shorthands
+        theta = self.theta
+        P = self.P
+        A = self.A
+        y = self.y
+        lam = self.lam
+        K = self.K
+        e = self.e
+        n = self.n
+        d = self.d
+
+        # vanilla RLS equations
+        e[:] = y - A @ theta
+
+        M = lam * np.eye(d) + A @ P @ A.T
+        K[:] = ( P @ A.T ) @ np.linalg.inv(M)
+
+        theta[:] += K @ e
+        P[:] = ( P - K @ A @ P ) / lam
+
+        # log result
+        self.N += 1
+        self.log()

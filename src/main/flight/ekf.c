@@ -45,6 +45,10 @@
 
 #ifdef USE_EKF
 
+#ifndef USE_LOCAL_POSITION
+#error "USE_EKF requires USE_LOCAL_POSITION"
+#endif
+
 PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_quat_measurement = 1,

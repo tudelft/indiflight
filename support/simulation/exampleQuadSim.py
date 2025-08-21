@@ -89,11 +89,16 @@ if __name__=="__main__":
     #%% Generate craft
     mc = MultiRotor()
     # approx model of CineRat 3inch race drone
-    mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
-    mc.setRotor(0, X=[-0.05, +0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
-    mc.setRotor(1, X=[+0.05, +0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
-    mc.setRotor(2, X=[-0.05, -0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
-    mc.setRotor(3, X=[+0.05, -0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
+    #mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
+    #mc.setRotor(0, X=[-0.05, +0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
+    #mc.setRotor(1, X=[+0.05, +0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
+    #mc.setRotor(2, X=[-0.05, -0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
+    #mc.setRotor(3, X=[+0.05, -0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
+    mc.setInertia(m=0.5, I=np.diag([1e-3, 1.5e-3, 2e-3]))
+    mc.setRotor(0, X=[-0.05, +0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
+    mc.setRotor(1, X=[+0.05, +0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
+    mc.setRotor(2, X=[-0.05, -0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
+    mc.setRotor(3, X=[+0.05, -0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
     # some additional rotors
     #mc.addRotor(Rotor(r=[+0.0, -0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[0, -1., -1.]))
     #mc.addRotor(Rotor(r=[+0.0, +0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[0, 1., -1.]))
@@ -105,8 +110,13 @@ if __name__=="__main__":
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
-    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
-    #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
+
+    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
+    #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
+
+    imu = IMU(mc, r=[0.02, 0.0, 0.0], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
+    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
+    #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
 
     mocap = Mocap(mc, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(mc, imu, device=args.hil, baud=args.hil_baud) if args.hil else None

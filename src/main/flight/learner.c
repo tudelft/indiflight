@@ -68,9 +68,12 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
-    .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    // .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    // .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    .modeFx    = (uint8_t) (LEARN_DURING_PROBING),
+    .modeAct   = (uint8_t) (LEARN_DURING_PROBING),
+    .modeHover = (uint8_t) (LEARN_DURING_PROBING),
     .initFromProfileFx = false,
     .initFromProfileAct = false,
     .actMask = 0xFFFF, // all motors and servos

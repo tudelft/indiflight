@@ -15,8 +15,8 @@
 #define USE_TELEMETRY_PI
 
 ## ----- Other features
-#define USE_GPS
-#define USE_GEOFENCE
+## #define USE_GPS
+## #define USE_GEOFENCE
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -41,11 +41,11 @@
 #define USE_INDI
 #define USE_EKF
 #define USE_LOCAL_POSITION
-#define USE_TRAJECTORY_TRACKER
+## #define USE_TRAJECTORY_TRACKER
 
 ## ----- DANGERZONE
 #define USE_THROW_TO_ARM
-#define USE_CATAPULT
+## #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
 
@@ -237,8 +237,7 @@ set indi_wls_axes_weights = 1,1,50,50,50,5
 # actuators (1 to 4, could be up to 8)
 
 # --- actuators: fields can have up to 8 elements ---
-set indi_act_is_motor = 1,1,0,0,0,0,0,0
-set indi_act_is_servo = 0,0,1,1,0,0,0,0
+set indi_act_type = 1,1,2,2,0,0,0,0
 set indi_act_time_constant_ms = 33, 33, 70, 70       # ms
 set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
@@ -265,7 +264,7 @@ set indi_act_g2_pitch =    0,    0,    0,    0
 set indi_act_g2_yaw   =    0,    0,    0,    0  
 
 # --- Tailsitter scheduled linear model
-set indi_tails_use_scheduled = 1
+set indi_tails_use_scheduled = 0
 set indi_tails_use_sine = 1
 
 ## # no-lift elevon angles in centi-degrees
@@ -325,8 +324,7 @@ set indi_attitude_max_tilt_rate = 500
 set indi_attitude_max_yaw_rate = 300
 set indi_manual_use_coordinated_yaw = 1
 set indi_manual_max_upwards_accel = 20
-set indi_act_is_motor = 1,1,0,0,0,0,0,0
-set indi_act_is_servo = 0,0,1,1,0,0,0,0
+set indi_act_type = 1,1,2,2,0,0,0,0
 # set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
 # set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
 # set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000

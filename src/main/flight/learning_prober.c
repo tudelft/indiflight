@@ -63,8 +63,8 @@
 
 PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 0);
 PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
-    .type = (uint8_t) PROBER_STEPS,
-    // .type = (uint8_t) PROBER_ORTHO,
+    // .type = (uint8_t) PROBER_STEPS,
+    .type = (uint8_t) PROBER_ORTHO,
     .actMask = 0xFFFF, // all motors and servos
     // .numMotors = 2,
     // .numServos = 2,
@@ -249,11 +249,20 @@ void updateProber(timeUs_t currentTimeUs) {
             || cmpTimeUs(currentTimeUs, proberRuntime.initTimeUs) <= config->preDelayMs * 1000
             || proberRuntime.isGenFinished
             || proberRuntime.isFinished) {
+
         if (proberRuntime.isGenFinished && (cmpTimeUs(currentTimeUs, proberRuntime.genFinishTimeUs) > config->postDelayMs * 1000)) {
             proberRuntime.isFinished = true;
             proberRuntime.isInitialized = false;
+            goto zeroAndReturn;
+        } else if (proberRuntime.isGenFinished) {
+            // set zero outputs, but keep prober running
+            setZeroOutputs();
+            proberRuntime.isGenRunning = true;
+            return;  // Prober is finished, no updates needed
+        } else {
+            goto zeroAndReturn;
         }
-        goto zeroAndReturn;
+
     }
 
     if (cmpTimeUs(currentTimeUs, proberRuntime.safetyTimeoutUs) > 0) {

@@ -114,7 +114,8 @@ set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
-set acc_offset = -10, -12, 8
+set acc_offset = 0, 0, 0
+# set acc_offset = -10, -12, 8
 
 # motor setup
 set dshot_bidir = ON
@@ -377,8 +378,8 @@ set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
+set learner_mode = 6
 # set learner_mode = 7
-set learner_mode = 7
 set learner_num_actuators = 4
 set learner_delay_time_ms = 150
 set learner_step_time_ms = 50

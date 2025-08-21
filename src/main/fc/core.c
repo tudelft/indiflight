@@ -1485,7 +1485,8 @@ FAST_CODE bool innerLoopReady(void)
 }
 
 #ifdef USE_EKF
-FAST_CODE void taskEkf(timeUs_t currentTimeUs)
+// FAST_CODE // TODO: troubleshoot why this takes so much ITCM_RAM on debug mode
+void taskEkf(timeUs_t currentTimeUs)
 {
     updateEkf(currentTimeUs);
 }

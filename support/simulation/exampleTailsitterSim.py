@@ -139,15 +139,15 @@ if __name__=="__main__":
         tail.throw(height=6.,
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
                  #vHorz=[1., -2.], # final speed in x-y-plane in m/s
-                 wB=[4., 6., 0.], # approx body rotation in rad/s
-                 #wB=[0., 0., 0.], # approx body rotation in rad/s
+                 #wB=[4., 6., 0.], # approx body rotation in rad/s
+                 wB=[0., 0., 0.], # approx body rotation in rad/s
                  vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=3.5)
 
     #%% run loop
     dt = 0.000125 # 8kHz
     T = 1000. # seconds
-    dt_rt = None if args.no_real_time else 4*dt
+    dt_rt = None if args.no_real_time else 1*dt
     armed = False
     start_trajectory = False
     heading = False

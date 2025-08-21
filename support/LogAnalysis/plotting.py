@@ -47,6 +47,8 @@ class BlittedCursor(object):
                 ax.sharex(ax0)
 
             lines = ax.get_lines()
+            if not lines:
+                continue
             min_x = min(min(line.get_xdata()) for line in lines)
             self.cursors.append(ax.axvline(x=min_x,
                                            color='black',
@@ -181,7 +183,7 @@ class FlightPlotter(FlightPlotterBase):
         super().__init__(data, name)
 
         self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
-                           width_ratios=[1, 1, 0.2],
+                           width_ratios=[1, 1, 1],
                            height_ratios=[1, 1, 1])
 
         self.plot()
@@ -224,26 +226,36 @@ class FlightPlotter(FlightPlotterBase):
                          ylabel="Motor Speed [rad/s]",
                          ylimits=(-100, None))
 
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
+                         light=None,
+                         solid=[self.data[f'rcCommand[{i}]'].to_numpy() for i in range(4)],
+                         dashed=None,
+                         series_labels=["RC Roll", "RC Pitch", "RC Yaw", "RC Throttle"],
+                         style_labels=[None, "Raw", None],
+                         title="RC Commands",
+                         ylabel="RC Command",
+                         ylimits=(-1.1, +1.1))
+
         N = 2
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
                          light=[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
                          solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(N)],
                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(N)],
-                         series_labels=[f"Motor {i}" for i in range(N)],
+                         series_labels=[f"Motor {str(i)}" for i in range(1,N+1)],
                          style_labels=["Final command", "Est. state", "Command"],
-                         title="Motor Speeds",
-                         ylabel="Motor Speed [rad/s]",
+                         title="Motor Commands",
+                         ylabel="Motor Commands [-]",
                          ylimits=(-0.05, 1.05))
 
-#         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
-#                          light=None,
-#                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
-#                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
-#                          series_labels=[f"Servo {i}" for i in [1,2]],
-#                          style_labels=[None, "Est. state", "Command"],
-#                          title="Servo State",
-#                          ylabel="Servo State [rad]",
-#         )
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                         light=None,
+                         solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
+                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
+                         series_labels=[f"Servo {i}" for i in [1,2]],
+                         style_labels=[None, "Est. state", "Command"],
+                         title="Servo State",
+                         ylabel="Servo State [rad]",
+        )
 
 class SysIdPlotter(FlightPlotterBase):
     def __init__(self, data, name="System Identification Plotter"):

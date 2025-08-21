@@ -165,7 +165,7 @@ void initIndiRuntimeParameters(void) {
         indiRun.actMaxOmega2[i] = sq( indiRun.actMaxOmega[i] );
         indiRun.actTimeConstS[i] = MAX(1UL, p->actTimeConstMs[i]) * 1e-3f;
         indiRun.actNonlinearity[i] = constrainu(p->actNonlinearity[i], 0, 100) * 0.01f;
-        indiRun.actType[i] = (bool) p->actType[i];
+        indiRun.actType[i] = p->actType[i];
         switch (indiRun.actType[i]) {
             default:
                 // fallthrough intended
