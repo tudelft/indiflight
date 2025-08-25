@@ -194,6 +194,11 @@ set indi_rate_gains      = 142, 142, 142
 #set indi_attitude_gains = 1830, 1830, 1830
 #set indi_rate_gains     = 180, 180, 100
 
+## Gain-scheduling
+set indi_use_gain_scheduling  = 0 # 1 yes 0 no
+set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
+
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
 # Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
