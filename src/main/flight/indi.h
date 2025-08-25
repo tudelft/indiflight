@@ -134,6 +134,11 @@ typedef struct indiProfile_s {
     int32_t rateCoefs[5]; // time constant for attitude lead-lag in ms
     int32_t attCoefs[5]; // desired time constant for attitude lead-lag in ms
 
+    // -------- Parameters for gain-scheduling
+    uint8_t useGainScheduling; // bool: use gain scheduling
+    uint8_t gainSchedulingType; // What type of gain scheduling is used. 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+    uint8_t gainScheduleFf; // Whether to take feedforward values from gain-scheduling
+
     // -------- Parameters for attitude injection
     bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
     bool injectAttSp; // whether to inject attitude setpoints
@@ -279,6 +284,11 @@ typedef struct indiRuntime_s {
     float rateCoefs[5];
     biquadFilter_t attLlFilter[3];  // attitude control filter
     biquadFilter_t rateLlFilter[3]; // rate control filter
+
+    // ---- gain scheduling
+    bool useGainScheduling; // whether to use gain scheduling
+    uint8_t gainSchedulingType; // 0: 1D interpolation, 1: 2D interpolation, 2: 1D polynomial, 3: 2D polynomial
+    bool gainScheduleFf; // Whether to take feedforward values from gain-scheduling
 
     // ---- attitude injection
     #ifdef INJECT_ATTITUDE_SETPOINTS

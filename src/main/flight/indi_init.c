@@ -293,6 +293,11 @@ void initIndiRuntimeParameters(void) {
     indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNedj
     indiRun.useAttLeadLag = p->useAttLeadLag; // use lead-lag filter for attitude control
 
+    // ---- gain scheduling
+    indiRun.useGainScheduling = p->useGainScheduling;
+    indiRun.gainSchedulingType = p->gainSchedulingType;
+    indiRun.gainScheduleFf = p->gainScheduleFf;
+
     // ---- attitude injection parameters
     #ifdef INJECT_ATTITUDE_SETPOINTS
     indiRun.injectAttSp = p->injectAttSp;
@@ -368,13 +373,17 @@ void initIndiRuntime(void) {
 
     // ---- housekeeping
     indiRun.attExecCounter = 0; // count executions (wrapping)
-    indiRun.nanCounter = 0; // count times consequtive nans appear in allocation
+    indiRun.nanCounter = 0; // count times consecutive nans appear in allocation
 
     // ---- filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
-        biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
+        if (indiRun.gainScheduleFf) {
+            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
+        } else {
+            biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
+        }
         biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);
         biquadFilterInitLeadLag(&indiRun.attLlFilter[axis], indiRun.attCoefs[0], indiRun.attCoefs[1], indiRun.attCoefs[2], indiRun.attCoefs[3], indiRun.attCoefs[4]);
     }

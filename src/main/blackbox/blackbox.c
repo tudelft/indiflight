@@ -2619,6 +2619,9 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->rateCoefs[2],
                                                                                               indiProfile->rateCoefs[3],
                                                                                               indiProfile->rateCoefs[4]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_GAIN_SCHEDULING, "%d",                 indiProfile->useGainScheduling);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_GAIN_SCHEDULING_TYPE, "%d",                indiProfile->gainSchedulingType);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_GAIN_SCHEDULE_FF, "%d",                    indiProfile->gainScheduleFf);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS, "%d,%d,%d,%d",  indiProfile->actTimeConstTrueMs[0],
                                                                                               indiProfile->actTimeConstTrueMs[1],
                                                                                               indiProfile->actTimeConstTrueMs[2],
