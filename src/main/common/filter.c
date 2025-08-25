@@ -168,6 +168,38 @@ void biquadFilterInitLPF(biquadFilter_t *filter, float filterFreq, uint32_t refr
     biquadFilterInit(filter, filterFreq, refreshRate, BIQUAD_Q, FILTER_LPF, 1.0f);
 }
 
+// Initialize a biquad filter based on chosen gain, zero and pole location
+void biquadFilterInitZeroPole(biquadFilter_t *filter, float k, float z, float p, uint32_t refreshRate)
+{
+    /* Continuous-time filter:
+        G(s) = K * (s - z) / (s - p)
+
+    Discretization using bilinear transform (s -> (2/Ts) * (1 - z^-1) / (1 + z^-1)):
+        Numerator: (s - z) ->
+            (2/Ts * (1 - z^-1) / (1 + z^-1) - z)
+        Denominator: (s - p) ->
+            (2/Ts * (1 - z^-1) / (1 + z^-1) - p)
+        Multiply top and bottom by (1 + z^-1):
+        G(z) = K *   ((c - z) * z + (-c - z))
+                    --------------------------
+                     ((c - p) * z + (-c - p)) 
+        where c = 2 / Ts, Ts = refreshRate * 1e-6
+    */
+
+    float Ts = refreshRate * 0.000001f;
+    float c = 2.0f / Ts;
+    float b0 = k * (c - z);
+    float b1 = k * (-c - z);
+    float a0 = (c - p);
+    float a1 = (-c - p);
+
+    float b0n = b0 / a0;
+    float b1n = b1 / a0;
+    float a1n = a1 / a0;
+    biquadFilterInitLeadLag(filter, b0n, b1n, 0.0f, a1n, 0.0f);
+}
+
+
 // Initialize lead or lag filter A_comp(z) to modify time constant of motor from tauEst [s] to tauDes [s]
 // Here the desired actuator dynamics should be A_des(s) = A_est(s) * A_comp(s) where A_est(s) is the estimated
 // actuator dynamics modeled as a first order lowpass filter.
@@ -187,10 +219,10 @@ void biquadFilterInitMotorLeadLag(biquadFilter_t *filter, float tauEst, float ta
     float b0 = 2 * tauEst / Ts + 1;
     float b1 = 1 - 2 * tauEst / Ts;
 
-    float a1_normalized = a1 / a0;
-    float b0_normalized = b0 / a0;
-    float b1_normalized = b1 / a0;
-    biquadFilterInitLeadLag(filter, b0_normalized, b1_normalized, 0.0f, a1_normalized, 0.0f);
+    float a1n = a1 / a0;
+    float b0n = b0 / a0;
+    float b1n = b1 / a0;
+    biquadFilterInitLeadLag(filter, b0n, b1n, 0.0f, a1n, 0.0f);
 }
 
 /* Setups up a biquad filter as a lead-lag filter in the form H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)*/
