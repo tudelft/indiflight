@@ -8,11 +8,11 @@ const Poly1D kEtaPoly1D = {kEtaCoeffs1D, 2};
 static const float kOmegaCoeffs1D[] = {2427, -418.3, 25.47}; 
 const Poly1D kOmegaPoly1D = {kOmegaCoeffs1D, 2};
 
-static const float ffKCoeffs1D[] = {1811, -129.1, 3.952};  // 2.0 + 0.3x - 0.01x²
+static const float ffKCoeffs1D[] = {1811, -129.1, 3.952};  
 const Poly1D ffKPoly1D = {ffKCoeffs1D, 2};
 
-static const float ffPoleCoeffs1D[] = {9819, -757.2, 25.83};    // 10.0 - 0.5x
-const Poly1D ffPolePoly1D = {ffPoleCoeffs1D, 1};
+static const float ffPoleCoeffs1D[] = {9819, -757.2, 25.83};
+const Poly1D ffPolePoly1D = {ffPoleCoeffs1D, 2};
 
 // 2D Polynomials (NOT DONE YET)
 static const float kEtaCoeffs2D[] = {0.5, 0.1, 0.2, 0.05}; // 0.5 + 0.1x + 0.2y + 0.05xy
