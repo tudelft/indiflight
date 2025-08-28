@@ -140,6 +140,11 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->wlsTheta = 1;
     indiProfile->wlsNanLimit = 20;
 
+    // ---- gain scheduling
+    indiProfile->useGainScheduling = false;
+    indiProfile->gainSchedulingType = 0; // 0: None, 1: 1D interp, 2: 2D interp, 3: 1D poly, 4: 2D poly
+    indiProfile->gainScheduleFf = false; // Whether to take feedforward values from gain-scheduling
+    
     // ---- attitude injection
     indiProfile->injectAttSp = false; // whether to inject attitude setpoints
     indiProfile->attSpInjectionStarted = false;
