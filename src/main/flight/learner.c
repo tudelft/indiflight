@@ -611,7 +611,7 @@ void updateLearner(timeUs_t current) {
 
     bool gainTuningConditions = fxLearningConditions;
 
-    if (gainTuningConditions) {
+    if (gainTuningConditions && !indiRun.useGainScheduling) {
         // get slowest actuator
         float maxTau = 0.f;
         for (int act = 0; act < learnerConfig()->numAct; act++)
@@ -683,6 +683,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // TODO: Put this somewhere more logical
     float kEtaMin = 1.0f;
     float kOmegaMin = 1.0f;
+
+    // Initialize kFf and pFf
+    float kFf = 0.0f;
+    float pFf = 0.0f;
+
     // TODO: Add minimum for FF?
     if (indiRun.useGainScheduling) {
         // get slowest actuator
@@ -709,8 +714,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     indi->rateGains[axis] = (uint16_t)(10.0f * interpolate1D(kOmega1D.xAxis, kOmega1D.table, kOmega1D.xSize, maxTau));
                     indi->attGains[axis] = (uint16_t)(10.0f * interpolate1D(kEta1D.xAxis, kEta1D.table, kEta1D.xSize, maxTau) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
-                        float kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
-                        float pFf = interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
+                        kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
+                        pFf = interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
                         biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                     }                   
                     break;
@@ -720,9 +725,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     indi->attGains[axis] = (uint16_t)(10.0f * interpolate2D(kEta2D.xAxis, kEta2D.xSize, kEta2D.yAxis, kEta2D.ySize,
                                                                            (const float**)kEta2D.table, maxTau, minC) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
-                        float kFf = interpolate2D(ffK2D.xAxis, ffK2D.xSize, ffK2D.yAxis, ffK2D.ySize,
+                        kFf = interpolate2D(ffK2D.xAxis, ffK2D.xSize, ffK2D.yAxis, ffK2D.ySize,
                                                  (const float**)ffK2D.table, maxTau, minC);
-                        float pFf = interpolate2D(ffPole2D.xAxis, ffPole2D.xSize, ffPole2D.yAxis, ffPole2D.ySize,
+                        pFf = interpolate2D(ffPole2D.xAxis, ffPole2D.xSize, ffPole2D.yAxis, ffPole2D.ySize,
                                                  (const float**)ffPole2D.table, maxTau, minC);
                         biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                     }
@@ -731,8 +736,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly1D(&kOmegaPoly1D, maxTau));
                     indi->attGains[axis] = (uint16_t)(10.0f * evalPoly1D(&kEtaPoly1D, maxTau) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
-                        float kFf = evalPoly1D(&ffKPoly1D, maxTau);
-                        float pFf = evalPoly1D(&ffPolePoly1D, maxTau);
+                        kFf = evalPoly1D(&ffKPoly1D, maxTau);
+                        pFf = evalPoly1D(&ffPolePoly1D, maxTau);
                         biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                     }
 
@@ -741,8 +746,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kOmegaPoly2D, maxTau, minC));
                     indi->attGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kEtaPoly2D, maxTau, minC) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
-                        float kFf = evalPoly2D(&ffKPoly2D, maxTau, minC);
-                        float pFf = evalPoly2D(&ffPolePoly2D, maxTau, minC);
+                        kFf = evalPoly2D(&ffKPoly2D, maxTau, minC);
+                        pFf = evalPoly2D(&ffPolePoly2D, maxTau, minC);
                         biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                     }
                     break;
@@ -750,6 +755,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                 // Ensure gains are above minimum
                 indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
                 indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(10.0f * kEtaMin * indi->rateGains[axis]));
+                learnRun.gains[LEARNER_LOOP_RATE] = indi->rateGains[axis] / 10.0f;
+                learnRun.gains[LEARNER_LOOP_ATTITUDE] = (float)indi->attGains[axis] / (float)indi->rateGains[axis];
+                // Override position and velocity gains to log feedforward values
+                learnRun.gains[LEARNER_LOOP_VELOCITY] = kFf;
+                learnRun.gains[LEARNER_LOOP_POSITION] = pFf;
             }
     } else {
         for (int axis = 0; axis < 3; axis++) {
