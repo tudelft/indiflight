@@ -2,16 +2,20 @@
 #include "gain_schedule.h"
 
 // 1D Polynomials
-static const float kEtaCoeffs1D[] = {2125, -297.4, 13.31};
+// static const float kEtaCoeffs1D[] = {2125, -297.4, 13.31};
+static const float kEtaCoeffs1D[] = {13.31, -297.4, 2125};
 const Poly1D kEtaPoly1D = {kEtaCoeffs1D, 2};
 
-static const float kOmegaCoeffs1D[] = {2427, -418.3, 25.47}; 
+// static const float kOmegaCoeffs1D[] = {2427, -418.3, 25.47}; 
+static const float kOmegaCoeffs1D[] = {25.47, -418.3, 2427};
 const Poly1D kOmegaPoly1D = {kOmegaCoeffs1D, 2};
 
-static const float ffKCoeffs1D[] = {1811, -129.1, 3.952};  
+// static const float ffKCoeffs1D[] = {1811, -129.1, 3.952};  
+static const float ffKCoeffs1D[] = {3.952, -129.1, 1811};
 const Poly1D ffKPoly1D = {ffKCoeffs1D, 2};
 
-static const float ffPoleCoeffs1D[] = {9819, -757.2, 25.83};
+// static const float ffPoleCoeffs1D[] = {9819, -757.2, 25.83};
+static const float ffPoleCoeffs1D[] = {25.83, -757.2, 9819};
 const Poly1D ffPolePoly1D = {ffPoleCoeffs1D, 2};
 
 // 2D Polynomials (NOT DONE YET)
