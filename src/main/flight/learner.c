@@ -680,6 +680,10 @@ void updateLearner(timeUs_t current) {
 }
 
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+    // TODO: Put this somewhere more logical
+    float kEtaMin = 1.0f;
+    float kOmegaMin = 1.0f;
+    // TODO: Add minimum for FF?
     if (indiRun.useGainScheduling) {
         // get slowest actuator
         float maxTau = 0.f;
@@ -731,6 +735,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                         float pFf = evalPoly1D(&ffPolePoly1D, maxTau);
                         biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                     }
+
                     break;
                 case GAIN_SCHEDULE_2D_POLY:
                     indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kOmegaPoly2D, maxTau, minC));
@@ -742,6 +747,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     }
                     break;
                 }
+                // Ensure gains are above minimum
+                indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
+                indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(10.0f * kEtaMin * indi->rateGains[axis]));
             }
     } else {
         for (int axis = 0; axis < 3; axis++) {
