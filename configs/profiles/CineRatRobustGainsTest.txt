@@ -202,15 +202,21 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 3000, 3000, 1000
-set indi_rate_gains     =  230,  230,  150
+set indi_attitude_gains = 1079, 1079, 1079
+set indi_rate_gains     =  166,  166,  166
+
+## Gain-scheduling
+set indi_use_gain_scheduling  = 0 # 1 yes 0 no
+set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 # --- feedforward control config
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
-# Coefficient: unitless * 1000
+# Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
 # set indi_ff_coefs = 0, 0, 0, 0, 0
-set indi_ff_coefs = 292, -292, 0, -1949, 950
+set indi_ff_coefs = 3676000, -3676000, 0, -991300, 0
+# set indi_ff_coefs = 0, -0, 0, -0, 0
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
@@ -262,10 +268,11 @@ set indi_act_g2_pitch = 0,0,0,0
 set indi_act_g2_yaw = -100, 100, 100, -100
 
 # Attitude setpoint injection
-set indi_inject_attitude_setpoints  = 1    # 0: No 1: Yes
-set indi_att_sp_injection_type      = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
-set indi_att_sp_injection_amplitude = 5    # amplitude * 10
-set indi_att_sp_injection_duration  = 3000 # signal duration in ms
+set indi_inject_attitude_setpoints      = 1    # 0: No 1: Yes
+set indi_att_sp_injection_type          = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
+set indi_att_sp_injection_amplitude     = 150  # amplitude * 10
+set indi_att_sp_injection_duration      = 1500 # signal duration in ms
+set indi_att_sp_injection_duration_down = 1000 # signal duration in ms for down step (doublet only)
 
 # Input disturbance
 # Inject a constant step disturbance on certain motors
