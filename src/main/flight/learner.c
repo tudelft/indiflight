@@ -722,7 +722,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                 case GAIN_SCHEDULE_2D_INTERP:
                     indi->rateGains[axis] = (uint16_t)(10.0f * interpolate2D(kOmega2D.xAxis, kOmega2D.xSize, kOmega2D.yAxis, kOmega2D.ySize, 
                                                                             (const float**)kOmega2D.table, maxTau, minC));
-                    indi->attGains[axis] = (uint16_t)(10.0f * interpolate2D(kEta2D.xAxis, kEta2D.xSize, kEta2D.yAxis, kEta2D.ySize,
+                    indi->attGains[axis] = (uint16_t)(interpolate2D(kEta2D.xAxis, kEta2D.xSize, kEta2D.yAxis, kEta2D.ySize,
                                                                            (const float**)kEta2D.table, maxTau, minC) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
                         kFf = interpolate2D(ffK2D.xAxis, ffK2D.xSize, ffK2D.yAxis, ffK2D.ySize,
@@ -734,7 +734,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     break;
                 case GAIN_SCHEDULE_1D_POLY:
                     indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly1D(&kOmegaPoly1D, maxTau));
-                    indi->attGains[axis] = (uint16_t)(10.0f * evalPoly1D(&kEtaPoly1D, maxTau) * indi->rateGains[axis]);
+                    indi->attGains[axis] = (uint16_t)(evalPoly1D(&kEtaPoly1D, maxTau) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
                         kFf = evalPoly1D(&ffKPoly1D, maxTau);
                         pFf = evalPoly1D(&ffPolePoly1D, maxTau);
@@ -744,7 +744,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     break;
                 case GAIN_SCHEDULE_2D_POLY:
                     indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kOmegaPoly2D, maxTau, minC));
-                    indi->attGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kEtaPoly2D, maxTau, minC) * indi->rateGains[axis]);
+                    indi->attGains[axis] = (uint16_t)(evalPoly2D(&kEtaPoly2D, maxTau, minC) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
                         kFf = evalPoly2D(&ffKPoly2D, maxTau, minC);
                         pFf = evalPoly2D(&ffPolePoly2D, maxTau, minC);
@@ -754,7 +754,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                 }
                 // Ensure gains are above minimum
                 indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
-                indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(10.0f * kEtaMin * indi->rateGains[axis]));
+                indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(kEtaMin * indi->rateGains[axis]));
                 learnRun.gains[LEARNER_LOOP_RATE] = indi->rateGains[axis] / 10.0f;
                 learnRun.gains[LEARNER_LOOP_ATTITUDE] = (float)indi->attGains[axis] / (float)indi->rateGains[axis];
                 // Override position and velocity gains to log feedforward values
