@@ -27,7 +27,7 @@ const Poly2D ffKPoly2D = {ffKCoeffs2D, 1, 1};
 static const float ffPoleCoeffs2D[] = {10.0, -0.5, 0.2, -0.01}; // 10.0 - 0.5x + 0.2y - 0.01xy
 const Poly2D ffPolePoly2D = {ffPoleCoeffs2D, 1, 1};
 
-// 1D Gain Schedules (NOT DONE YET)
+// 1D Gain interpolation (NOT DONE YET)
 static const float kEtaAxis1D[] = {0, 5, 10};
 static const float kEtaGains1D[] = {0.4, 0.6, 0.8};
 const GainSchedule kEta1D = {kEtaAxis1D, 3, NULL, 0, kEtaGains1D};
@@ -44,7 +44,7 @@ static const float ffPoleAxis1D[] = {0, 4, 8};
 static const float ffPoleGains1D[] = {8.0, 10.0, 12.0};
 const GainSchedule ffPole1D = {ffPoleAxis1D, 3, NULL, 0, ffPoleGains1D};
 
-// 2D Gain Schedules (NOT DONE YET)
+// 2D Gain interpolation (NOT DONE YET)
 static const float kEtaXAxis2D[] = {0, 2, 4};
 static const float kEtaYAxis2D[] = {0, 1};
 static const float kEtaGains2D[] = {0.3, 0.5, 0.7,   0.4, 0.6, 0.8}; // row-major
