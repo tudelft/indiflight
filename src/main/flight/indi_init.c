@@ -146,6 +146,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->attSpInjectionType = 0; // 0: None, 1: Impulse, 2: Doublet, 3: Step
     indiProfile->attSpInjectionAmplitude = 0; // amplitude of injection in degrees * 10
     indiProfile->attSpInjectionDuration = 0;  // duration of injection in ms
+    indiProfile->attSpInjectionDurationDown = 0; // for doublet, duration of negative pulse in ms
 
     #ifdef INJECT_INPUT_DISTURBANCE
     // ---- input disturbance injection
@@ -323,6 +324,7 @@ void initIndiRuntimeParameters(void) {
 
     indiRun.attSpInjectionAmplitude = DEGREES_TO_RADIANS(p->attSpInjectionAmplitude) * 0.1f; // convert to radians and scale
     indiRun.attSpInjectionDuration = p->attSpInjectionDuration * 1e-3f; // convert to seconds
+    indiRun.attSpInjectionDurationDown = p->attSpInjectionDurationDown * 1e-3f; // convert to seconds
     #endif
 
     #ifdef INJECT_INPUT_DISTURBANCE

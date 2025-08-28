@@ -3,13 +3,15 @@
 
 int current_signal_mode = SIGNAL_MODE_OFF;
 static float signal_amplitude = 0.0f;
-static float signal_period = 0.0f;
+static float signal_period_up = 0.0f;
+static float signal_period_down = 0.0f;
 static timeUs_t signal_start_time = 0;
 
-void set_signal_mode(signal_mode_t mode, float signalAmplitude, float signalPeriod, timeUs_t currentTimeUs) {
+void set_signal_mode(signal_mode_t mode, float signalAmplitude, float signalPeriodUp, float signalPeriodDown, timeUs_t currentTimeUs) {
     current_signal_mode = mode;
     signal_amplitude = signalAmplitude;
-    signal_period = signalPeriod;
+    signal_period_up = signalPeriodUp;
+    signal_period_down = signalPeriodDown;
     signal_start_time = currentTimeUs;
 }
 
@@ -23,16 +25,16 @@ float generate_signal(timeUs_t currentTimeUs, timeUs_t signalStartTime) {
     if (current_signal_mode == SIGNAL_MODE_IMPULSE) {
         // Impulse signal: a single pulse at the start
         // return signal_amplitude;
-        return (elapsedTime < signal_period) ? signal_amplitude : 0.0f;
+        return (elapsedTime < signal_period_up) ? signal_amplitude : 0.0f;
     }
 
     if (current_signal_mode == SIGNAL_MODE_DOUBLET) {
         // Doublet signal
         // float cycleTime = fmod(elapsedTime, signal_period); // Get time within current cycle
         float cycleTime = elapsedTime;
-        if (cycleTime < signal_period / 2) {
+        if (cycleTime < signal_period_up) {
             return signal_amplitude; // Positive pulse
-        } else if (cycleTime < signal_period) {
+        } else if (cycleTime < signal_period_up + signal_period_down) {
             return -signal_amplitude; // Negative pulse
         } else {
             return 0.0f; // No pulse
@@ -41,7 +43,7 @@ float generate_signal(timeUs_t currentTimeUs, timeUs_t signalStartTime) {
 
     if (current_signal_mode == SIGNAL_MODE_STEP) {
         // Step signal: a step change at the start
-        return (elapsedTime < signal_period) ? signal_amplitude : 0.0f;
+        return (elapsedTime < signal_period_up) ? signal_amplitude : 0.0f;
     }
     return 0.0f; // Default to no signal
 }

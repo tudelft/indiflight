@@ -145,7 +145,8 @@ typedef struct indiProfile_s {
     int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
     int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
     int16_t attSpInjectionDuration;  // duration of injection in ms
-
+    int16_t attSpInjectionDurationDown; // for doublet, duration of negative pulse in ms
+    
     // -------- Parameters for input disturbance injection
     bool injectInputDist; // whether to inject input disturbance
     int16_t inputDistAmplitude; // amplitude of input disturbance in percent
@@ -296,6 +297,7 @@ typedef struct indiRuntime_s {
     signal_mode_t attSpInjectionType; // What type of injection is used. 1: None, 2: Impulse, 3: Doublet, 4: Step
     float attSpInjectionAmplitude; // amplitude of injection in degrees
     float attSpInjectionDuration;  // duration of injection in s
+    float attSpInjectionDurationDown; // for doublet, duration of negative pulse in s
     timeUs_t attSpInjectionStartTime; // time when the injection started
     bool injectAttSp; // whether to inject attitude setpoints
     #endif

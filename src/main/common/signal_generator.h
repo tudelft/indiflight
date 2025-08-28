@@ -18,7 +18,7 @@ typedef enum {
 } signal_mode_t;
 
 // Function to initialize the signal mode
-void set_signal_mode(signal_mode_t mode, float signalAmplitude, float signalPeriod, timeUs_t currentTimeUs);
+void set_signal_mode(signal_mode_t mode, float signalAmplitude, float signalPeriod, float signalPeriodDown, timeUs_t currentTimeUs);
 
 // Function to generate the signal for the current time
 float generate_signal(timeUs_t currentTimeUs, timeUs_t signalStartTime);

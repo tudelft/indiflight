@@ -217,7 +217,7 @@ void getSetpoints(timeUs_t current) {
             // Only inject setpoints in Angle Mode (so drone can be positioned in horizon mode)
             if (FLIGHT_MODE(ANGLE_MODE)) {
                 if (!indiRun.attSpInjectionStarted) {
-                    set_signal_mode(indiRun.attSpInjectionType, indiRun.attSpInjectionAmplitude, indiRun.attSpInjectionDuration, current);
+                    set_signal_mode(indiRun.attSpInjectionType, indiRun.attSpInjectionAmplitude, indiRun.attSpInjectionDuration, indiRun.attSpInjectionDurationDown, current);
                     indiRun.attSpInjectionStartTime = current;
                     indiRun.attSpInjectionStarted = true;
                 }
