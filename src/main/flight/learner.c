@@ -685,8 +685,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         float maxTau = 0.f;
         for (int act = 0; act < learnerConfig()->numAct; act++)
             maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
-            // TODO: What to do if actuator not used? (Is output default in indi_init? (=25)
-            // TODO: What to do if maxTau stays infinity
+            // TODO: What to do if maxTau stays 0
 
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
         for (int axis = 0; axis < 3; axis++) {
