@@ -397,7 +397,7 @@ void initIndiRuntime(void) {
             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
         } else if (indiRun.useFeedforwardFilter) {
             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
-        } else
+        } else {
             biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
         }
         biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);
