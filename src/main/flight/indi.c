@@ -229,10 +229,16 @@ void getSetpoints(timeUs_t current) {
         #endif
 
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
-
-        indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
-        indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
-
+        // TODO: Need to figure out how to program this properly. Depends on what feedforward is kept.
+        if (indiRun.useFeedforwardFilter) {
+            // If feedforward filter is used, apply it to the reference itself
+            axis.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            axis.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+        } else {
+            // Else use injection feedforward
+            indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+        }
         float angle = VEC3_XY_LENGTH(axis);
         VEC3_NORMALIZE(axis);
         fp_quaternion_t attSpYaw;
