@@ -305,6 +305,7 @@ void initIndiRuntimeParameters(void) {
     indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
     indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNedj
     indiRun.useAttLeadLag = p->useAttLeadLag; // use lead-lag filter for attitude control
+    indiRun.useFeedforwardFilter = p->useFeedforwardFilter; // use lead-lag filter for feedforward
 
     // ---- gain scheduling
     indiRun.useGainScheduling = p->useGainScheduling;
