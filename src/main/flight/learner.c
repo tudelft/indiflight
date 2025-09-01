@@ -578,16 +578,30 @@ void updateLearner(timeUs_t current) {
         }
 
         // test beun for tiny whoop
+        # ifdef LEARNER_PARAM_OVERRIDE
         const indiProfile_t *p = indiProfiles(0);
 
         for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
             float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
             float isq = 1.f / sq(maxOmega);
+            // float k = 0.01f * p->actNonlinearity[motor];
+            // motorRls[motor].x[0] = 1e-3f * k * maxOmega;
+            // motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
+            // motorRls[motor].x[2] = 0.;
+            // motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
 
             fxRls[0].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[motor];
             fxRls[1].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[motor];
             fxRls[2].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[motor];
+
+            // fxRls[3].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_roll[motor];
+            // fxRls[4].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_pitch[motor];
+            // fxRls[5].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_yaw[motor];
+            // fxRls[5].x[motor+4] = 1.f * 1e3f * 1e-5f * p->actG2_yaw[motor];
+
+            // motorRls[motor].x[0] = 1e-3f * 0.01f * maxOmega;
         }
+        # endif
     } else {
         was_reset_fx_rls = false;
     }
@@ -611,19 +625,31 @@ void updateLearner(timeUs_t current) {
 
     bool gainTuningConditions = fxLearningConditions;
 
-    if (gainTuningConditions && !indiRun.useGainScheduling) {
+    if (gainTuningConditions) {
         // get slowest actuator
         float maxTau = 0.f;
         for (int act = 0; act < learnerConfig()->numAct; act++)
             maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
 
-        // calculate gains
-        learnRun.gains[LEARNER_LOOP_RATE] = 
-            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+        if (indiRun.useGainScheduling) {
+            // Still set velocity and position gains 
+            float tempGain = 0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+            // float tempGain = rateGain;
+            for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++) {
+                tempGain = 0.25f * tempGain / sq(learnRun.zeta[loop]);
+                if (loop > LEARNER_LOOP_ATTITUDE) {
+                    learnRun.gains[loop] = tempGain;
+                }
+            }
+        } else {
+            // calculate gains
+            learnRun.gains[LEARNER_LOOP_RATE] = 
+                0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
 
-        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
-            learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+            for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
+                learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+        }
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -752,14 +778,14 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     }
                     break;
                 }
-                // Ensure gains are above minimum
-                indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
-                indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(kEtaMin * indi->rateGains[axis]));
-                learnRun.gains[LEARNER_LOOP_RATE] = indi->rateGains[axis] / 10.0f;
-                learnRun.gains[LEARNER_LOOP_ATTITUDE] = (float)indi->attGains[axis] / (float)indi->rateGains[axis];
-                // Override position and velocity gains to log feedforward values
-                learnRun.gains[LEARNER_LOOP_VELOCITY] = kFf;
-                learnRun.gains[LEARNER_LOOP_POSITION] = pFf;
+            // Ensure gains are above minimum
+            indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
+            indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(kEtaMin * indi->rateGains[axis]));
+            learnRun.gains[LEARNER_LOOP_RATE] = indi->rateGains[axis] / 10.0f;
+            learnRun.gains[LEARNER_LOOP_ATTITUDE] = (float)indi->attGains[axis] / (float)indi->rateGains[axis];
+            // Override position and velocity gains to log feedforward values
+            // learnRun.gains[LEARNER_LOOP_VELOCITY] = kFf;
+            // learnRun.gains[LEARNER_LOOP_POSITION] = pFf;
             }
     } else {
         for (int axis = 0; axis < 3; axis++) {
@@ -811,6 +837,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
+        #ifdef LEARNER_PARAM_OVERRIDE
+        maxOmega = 2.f * M_PIf / 60.f  *  indiProfiles(0)->actMaxRpm[act];
+        #endif
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale
