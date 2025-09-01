@@ -31,22 +31,25 @@ const Poly2D ffKPoly2D = {ffKCoeffs2D, 1, 1};
 static const float ffPoleCoeffs2D[] = {10.0, -0.5, 0.2, -0.01}; // 10.0 - 0.5x + 0.2y - 0.01xy
 const Poly2D ffPolePoly2D = {ffPoleCoeffs2D, 1, 1};
 
-// 1D Gain interpolation (NOT DONE YET)
-static const float kEtaAxis1D[] = {0, 5, 10};
-static const float kEtaGains1D[] = {0.4, 0.6, 0.8};
-const GainSchedule kEta1D = {kEtaAxis1D, 3, NULL, 0, kEtaGains1D};
+// 1D Gain interpolation
+// Tau axis (independent variable)
+static const float tauAxis1D[] = {0.0100, 0.0137, 0.0174, 0.0211, 0.0247, 0.0284, 0.0321, 0.0358, 0.0395, 0.0432, 0.0468, 0.0505, 0.0542, 0.0579, 0.0616, 0.0653, 0.0689, 0.0726, 0.0763, 0.0800};
 
-static const float kOmegaAxis1D[] = {0, 2, 4};
-static const float kOmegaGains1D[] = {0.8, 1.2, 1.6};
-const GainSchedule kOmega1D = {kOmegaAxis1D, 3, NULL, 0, kOmegaGains1D};
+// K_eta gains
+static const float kEtaGains1D[] = {11.2290, 9.8429, 8.5680, 7.5807, 6.8054, 6.1790, 5.6648, 5.2292, 4.8604, 4.5388, 4.2581, 4.0129, 3.8002, 3.6077, 3.4333, 3.2741, 3.1288, 2.9959, 2.8732, 2.7598};
+const GainSchedule kEta1D = {tauAxis1D, 20, NULL, 0, kEtaGains1D};
 
-static const float ffKAxis1D[] = {0, 3, 6};
-static const float ffKGains1D[] = {1.5, 2.0, 2.5};
-const GainSchedule ffK1D = {ffKAxis1D, 3, NULL, 0, ffKGains1D};
+// K_Omega gains
+static const float kOmegaGains1D[] = {22.0141, 20.7435, 19.5069, 18.1144, 16.7913, 15.5944, 14.5235, 13.5817, 12.7382, 11.9897, 11.3215, 10.7143, 10.1565, 9.6536, 9.1995, 8.7857, 8.4081, 8.0623, 7.7435, 7.4487};
+const GainSchedule kOmega1D = {tauAxis1D, 20, NULL, 0, kOmegaGains1D};
 
-static const float ffPoleAxis1D[] = {0, 4, 8};
-static const float ffPoleGains1D[] = {8.0, 10.0, 12.0};
-const GainSchedule ffPole1D = {ffPoleAxis1D, 3, NULL, 0, ffPoleGains1D};
+// FfK gains
+static const float ffKGains1D[] = {1.4257, 1.1786, 0.9499, 0.8178, 0.7270, 0.6547, 0.5998, 0.5513, 0.5120, 0.4784, 0.4493, 0.4222, 0.4000, 0.3800, 0.3619, 0.3445, 0.3299, 0.3157, 0.3027, 0.2909};
+const GainSchedule ffK1D = {tauAxis1D, 20, NULL, 0, ffKGains1D};
+
+// FfP gains
+static const float ffPoleGains1D[] = {21.3741, 15.7076, 10.2703, 7.8107, 6.4457, 5.5352, 4.9430, 4.3996, 4.0140, 3.7101, 3.5083, 3.2405, 3.0345, 2.8568, 2.7215, 2.5710, 2.4727, 2.3579, 2.2507, 2.1492};
+const GainSchedule ffPole1D = {tauAxis1D, 20, NULL, 0, ffPoleGains1D};
 
 // 2D Gain interpolation (NOT DONE YET)
 static const float kEtaXAxis2D[] = {0, 2, 4};
