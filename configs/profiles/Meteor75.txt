@@ -225,8 +225,8 @@ set indi_rate_gains     = 132, 132, 132
 #set indi_rate_gains     = 180, 180, 100
 
 ## Gain-scheduling (CURRENTLY DOES NOT DO ANYTHING HERE. Should be changed in INDIPROFILE 2)
-set indi_use_gain_scheduling  = 0 # 1 yes 0 no
-set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_use_gain_scheduling  = 1 # 1 yes 0 no
+set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
 set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
@@ -371,7 +371,7 @@ set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
 set indi_use_gain_scheduling  = 1 # 1 yes 0 no
-set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
 set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 ## ----- POSITION CONTROL
