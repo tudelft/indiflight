@@ -64,6 +64,13 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     for (int i = 0; i < 5; i++) {
         indiProfile->feedforwardCoefs[i] = 0;
     }
+
+    indiProfile->feedforwardFilterCoefs[1] = 1; // Theoretically this makes the filter a straight pass-through, for safety probably better to disable if no values given.
+    for (int i = 1; i < 3; i++) {
+        indiProfile->feedforwardFilterCoefs[i] = 0;
+    }
+    indiProfile->useFeedforwardFilter = false;
+
     // ---- general INDI config
     indiProfile->useIncrement = true;
     indiProfile->useAccelForSpfz = true;
@@ -388,7 +395,9 @@ void initIndiRuntime(void) {
         biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         if (indiRun.gainScheduleFf) {
             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
-        } else {
+        } else if (indiRun.useFeedforwardFilter) {
+            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
+        } else
             biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
         }
         biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);

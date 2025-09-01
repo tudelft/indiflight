@@ -126,8 +126,11 @@ typedef struct indiProfile_s {
     uint8_t useMotorLeadLag; // bool: use motor lead-lag filter
     uint8_t actTimeConstTrueMs[MAXU]; // natural (true) motor time constant for actuator lead-lag in ms
     uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
+
     // -------- Parameters for feedforward control
-    int32_t feedforwardCoefs[5]; // feedforward coefficients for the control law / 1e-6
+    int32_t feedforwardCoefs[5]; // feedforward coefficients for the feedforward INJECTION control law / 1e-6
+    uint8_t useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    int32_t feedforwardFilterCoefs[3]; // K, z, p, feedforward filter coefficients for the feedforward FILTER control law (need to clear this up or choose one) / 1e-6
 
     // -------- Parameters for attitude lead lag control
     uint8_t useAttLeadLag; // bool: use attitude lead-lag filter
@@ -276,6 +279,8 @@ typedef struct indiRuntime_s {
 
     // ---- feedforward control
     float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
+    bool useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    float feedforwardFilterCoefs[3]; // feedforward coefficients for feedforward control law k, z, p (TODO: Yes its double now)
     biquadFilter_t feedforwardFilter[3]; 
     fp_vector_t ffRateSpBody;   
 

@@ -175,6 +175,8 @@
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS "indi_act_time_constant_true_ms"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS "indi_act_time_constant_des_ms"
 #define PARAM_NAME_INDI_FF_COEFS "indi_ff_coefs"
+#define PARAM_NAME_INDI_USE_FF_FILTER "indi_use_ff_filter"
+#define PARAM_NAME_INDI_FF_FILTER_COEFS "indi_ff_filter_coefs"
 #define PARAM_NAME_INDI_USE_GAIN_SCHEDULING "indi_use_gain_scheduling"
 #define PARAM_NAME_INDI_GAIN_SCHEDULING_TYPE "indi_gain_scheduling_type"
 #define PARAM_NAME_INDI_GAIN_SCHEDULE_FF "indi_gain_schedule_ff"
