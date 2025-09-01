@@ -44,6 +44,7 @@ extern const GainSchedule kEta1D;
 extern const GainSchedule kOmega1D;
 extern const GainSchedule ffK1D;
 extern const GainSchedule ffPole1D;
+extern const float ffZeroGain1D;
 
 extern const GainSchedule kEta2D;
 extern const GainSchedule kOmega2D;
