@@ -713,6 +713,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // Initialize kFf and pFf
     float kFf = 0.0f;
     float pFf = 0.0f;
+    float zFf = 0.0f;
 
     // TODO: Add minimum for FF?
     if (indiRun.useGainScheduling) {
@@ -738,11 +739,17 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
             switch (indiRun.gainSchedulingType) {
                 case GAIN_SCHEDULE_1D_INTERP:
                     indi->rateGains[axis] = (uint16_t)(10.0f * interpolate1D(kOmega1D.xAxis, kOmega1D.table, kOmega1D.xSize, maxTau));
-                    indi->attGains[axis] = (uint16_t)(10.0f * interpolate1D(kEta1D.xAxis, kEta1D.table, kEta1D.xSize, maxTau) * indi->rateGains[axis]);
+                    indi->attGains[axis] = (uint16_t)(interpolate1D(kEta1D.xAxis, kEta1D.table, kEta1D.xSize, maxTau) * indi->rateGains[axis]);
                     if (indiRun.gainScheduleFf) {
                         kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
                         pFf = -interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
-                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                        zFf = ffZeroGain1D;
+                        if (indiRun.useFeedforwardFilter) {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
+                        } else {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                        }
+
 
                     }                   
                     break;
@@ -765,7 +772,12 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     if (indiRun.gainScheduleFf) {
                         kFf = evalPoly1D(&ffKPoly1D, maxTau);
                         pFf = -evalPoly1D(&ffPolePoly1D, maxTau); // ffPolePoly is defined as the polynomial through -p
-                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                        zFf = ffZeroGain1D;
+                        if (indiRun.useFeedforwardFilter) {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
+                        } else {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                        }
                     }
 
                     break;
