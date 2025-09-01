@@ -3,11 +3,11 @@
 
 // 1D Polynomials
 // static const float kEtaCoeffs1D[] = {2125, -297.4, 13.31};
-static const float kEtaCoeffs1D[] = {13.31, -297.4, 2125};
+static const float kEtaCoeffs1D[] = {12.8, -277.6, 1942.1};
 const Poly1D kEtaPoly1D = {kEtaCoeffs1D, 2};
 
 // static const float kOmegaCoeffs1D[] = {2427, -418.3, 25.47}; 
-static const float kOmegaCoeffs1D[] = {25.47, -418.3, 2427};
+static const float kOmegaCoeffs1D[] = {25.7, -426.8, 2505.3};
 const Poly1D kOmegaPoly1D = {kOmegaCoeffs1D, 2};
 
 // static const float ffKCoeffs1D[] = {1811, -129.1, 3.952};  
