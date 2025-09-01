@@ -254,6 +254,12 @@ set indi_ff_coefs = 0,0,0,0,0
 # set indi_ff_coefs = 2778000, -2778000, 0, -991400, 0
 # set indi_ff_coefs = 291700, -291700, 0, -1949000, 950000
 # set indi_ff_coefs = 10840000, -10840000, 0, -967400, 0
+set indi_use_ff_filter = 0 # 1 use Filter instead of injection feedforward 0 use injection instead of filter feedforward
+
+# H(s) = K * (s - z) / (s - p)
+# Coefficient: unitless * 1000000
+# Coefficient order:  K, z, p 
+set indi_ff_filter_coefs = 
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
