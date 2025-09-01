@@ -221,6 +221,13 @@ set indi_gain_schedule_ff     = 1 # 1 yes 0 no
 # set indi_ff_coefs = 3676000, -3676000, 0, -991300, 0
 set indi_ff_coefs = 0, 0, 0, 0, 0
 
+set indi_use_ff_filter = 1 # 1 use Filter instead of injection feedforward 0 use injection instead of filter feedforward
+
+# H(s) = K * (s - z) / (s - p)
+# Coefficient: unitless * 1000000
+# Coefficient order:  K, z, p 
+set indi_ff_filter_coefs = 1048600, -5011300, -10941000
+
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
 set indi_attitude_max_yaw_rate = 500
@@ -351,10 +358,9 @@ set indi_wls_axes_weights = 1,1,50,50,50,5
 set indi_wls_act_penalties = 1,1,1,1
 
 ## Gain-scheduling
-set indi_use_gain_scheduling  = 1 # 1 yes 0 no
-set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
-set indi_gain_schedule_ff     = 1 # 1 yes 0 no
-
+set indi_use_gain_scheduling  = 0 # 1 yes 0 no
+set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 ## ----- POSITION CONTROL
 
