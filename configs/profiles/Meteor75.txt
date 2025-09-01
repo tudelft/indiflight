@@ -43,6 +43,7 @@
 ## #define USE_NN_CONTROL
 #define INJECT_ATTITUDE_SETPOINTS
 ## #define INJECT_INPUT_DISTURBANCE
+#define LEARNER_PARAM_OVERRIDE
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -74,18 +75,37 @@ aux 3 58 3 1800 2100 0 0
 aux 4 56 0 1700 2100 0 0
 
 # blackbox config
+#set blackbox_disable_pids = ON
+#set blackbox_disable_setpoint = ON
+#set blackbox_disable_alt = ON
+#set blackbox_disable_bat = OFF
+#set blackbox_disable_rssi = ON
+#set blackbox_disable_debug = ON
+#set blackbox_disable_indi = OFF
+#set blackbox_disable_pos = ON
+#set blackbox_disable_ekf = ON
+#set blackbox_disable_learner = OFF
+#set blackbox_high_resolution = ON
+#set debug_mode = NONE
+
+set blackbox_sample_rate = 1/4
+set blackbox_device = SPIFLASH
 set blackbox_disable_pids = ON
+set blackbox_disable_rc = OFF
 set blackbox_disable_setpoint = ON
-set blackbox_disable_alt = ON
 set blackbox_disable_bat = OFF
-set blackbox_disable_rssi = OFF
+set blackbox_disable_alt = ON
+set blackbox_disable_rssi = ON
+set blackbox_disable_gyro = OFF
+set blackbox_disable_acc = OFF
 set blackbox_disable_debug = ON
+set blackbox_disable_motors = OFF
+set blackbox_disable_gps = ON
 set blackbox_disable_indi = OFF
-set blackbox_disable_pos = ON
-set blackbox_disable_ekf = ON
 set blackbox_disable_learner = OFF
+set blackbox_mode = NORMAL
 set blackbox_high_resolution = ON
-set debug_mode = NONE
+
 
 # sensor calibration / alignment
 set align_board_roll = 0
@@ -117,7 +137,7 @@ set small_angle = 45   # angle at which to deny arming
 set pid_process_denom = 2       # relative to imu (this is 1600Hz)
 set ahrs_process_denom = 10     # relative to imu (320Hz)
 set nn_rate_denom = 5           # relative to pid (320Hz)
-set blackbox_sample_rate = 1/2  # relative to pid (800Hz)
+# set blackbox_sample_rate = 1/2  # relative to pid (800Hz)
 
 # ekf (these are the defaults)
 set ekf_use_quat = 1
@@ -188,15 +208,25 @@ indiprofile 0
 # set indi_attitude_gains = 1358, 1358, 1358
 # set indi_rate_gains     = 183, 183, 183
 
-## Test 290725 settings
-set indi_attitude_gains  = 748, 748, 748
-set indi_rate_gains      = 142, 142, 142
+## Test 310725 settings
+# set indi_attitude_gains  = 748, 748, 748
+# set indi_rate_gains      = 142, 142, 142
+
+# set indi_attitude_gains  = 749, 749, 749
+# set indi_rate_gains      = 141, 141, 141
+
+## Test 250825 settings
+#set indi_attitude_gains  = 749, 749, 749
+#set indi_rate_gains      = 141, 141, 141
+
+set indi_attitude_gains = 660, 660, 660
+set indi_rate_gains     = 132, 132, 132
 #set indi_attitude_gains = 1830, 1830, 1830
 #set indi_rate_gains     = 180, 180, 100
 
-## Gain-scheduling
+## Gain-scheduling (CURRENTLY DOES NOT DO ANYTHING HERE. Should be changed in INDIPROFILE 2)
 set indi_use_gain_scheduling  = 0 # 1 yes 0 no
-set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
 set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
@@ -205,16 +235,23 @@ set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 set indi_use_attitude_lead_lag = 0             # 1 yes 0 no
 # set indi_attitude_coefs  = 14320000,-14250000,0,-990600,0
 # set indi_rate_coefs      = 15000000,-14890000,0,-989800,0
-set indi_attitude_coefs  = 30860000,-30590000,0,-969400,0
-set indi_rate_coefs      = 11380000,-10680000,0,-924500,0
+# set indi_attitude_coefs  = 30860000,-30590000,0,-969400,0
+# set indi_rate_coefs      = 11380000,-10680000,0,-924500,0
 #set indi_attitude_coefs  = 7300000,0,0,0,0
 #set indi_rate_coefs      = 18000000,0,0,0,0
+set indi_attitude_coefs   = 0,0,0,0,0
+set indi_rate_coefs       = 0,0,0,0,0
 
 # --- feedforward control config
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
 # Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
-set indi_ff_coefs = 2669000, -2669000, 0, -992000, 0
+## ff used 310725
+# set indi_ff_coefs = 2669000, -2669000, 0, -992000, 0
+
+# 250825 settings
+set indi_ff_coefs = 0,0,0,0,0
+# set indi_ff_coefs = 2778000, -2778000, 0, -991400, 0
 # set indi_ff_coefs = 291700, -291700, 0, -1949000, 950000
 # set indi_ff_coefs = 10840000, -10840000, 0, -967400, 0
 
@@ -224,7 +261,7 @@ set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 40  # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 20           # deg
+set indi_manual_max_tilt = 25           # deg
 set indi_manual_use_coordinated_yaw = 1
 
 # --- indi config ---
@@ -240,7 +277,7 @@ set indi_wls_axes_weights = 1,1,50,50,50,5
 # --- actuators: fields can have up to 8 elements ---
 set indi_act_is_motor = 1,1,1,1,0,0,0,0
 set indi_act_is_servo = 0,0,0,0,0,0,0,0
-set indi_act_time_constant_ms = 33,33,33,33,25,25,25,25
+set indi_act_time_constant_ms = 37,37,37,37,25,25,25,25
 set indi_act_max_rpm = 70000,70000,70000,70000,40000,40000,40000,40000
 set indi_act_hover_rpm = 35000,35000,35000,35000,20000,20000,20000,20000
 set indi_act_nonlinearity = 50,50,50,50,50,50,50,50
@@ -250,18 +287,30 @@ set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 1,1,1,1
 
 # lead lag filtering for motor Outputs
-set indi_use_motor_lead_lag = 1
+set indi_use_motor_lead_lag = 0
 set indi_act_time_constant_true_ms = 33,33,33,33
-set indi_act_time_constant_des_ms = 37,37,37,37
+set indi_act_time_constant_des_ms = 38,38,38,38
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0,0,0,0,0
 set indi_act_g1_fy = 0,0,0,0,0,0,0,0
 set indi_act_g1_fz = -1770,-1770,-1770,-1770,0,0,0,0
-# set indi_act_g1_roll = -7500,-7500,7500,7500,0,0,0,0
+#set indi_act_g1_roll = -6000,-6000,6000,6000,0,0,0,0
+#set indi_act_g1_pitch = -4800,4800,-4800,4800,0,0,0,0
+#set indi_act_g1_yaw = 1120,-1120,-1120,1120,0,0,0,0
+#set indi_act_g1_roll = -9000,-9000,9000,9000,0,0,0,0
+#set indi_act_g1_pitch = -7200,7200,-7200,7200,0,0,0,0
+#set indi_act_g1_yaw = 1680,-1680,-1680,1680,0,0,0,0
 set indi_act_g1_roll = -7500,-7500,7500,7500,0,0,0,0
 set indi_act_g1_pitch = -6000,6000,-6000,6000,0,0,0,0
 set indi_act_g1_yaw = 1400,-1400,-1400,1400,0,0,0,0
+#set indi_act_g1_roll = -19000, -12000, 35652, 16994
+#set indi_act_g1_pitch = -20873, 23169, -16236, 16842
+#set indi_act_g1_yaw = 2292, -4919, -1376, -3319
+
+
+
+
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
 set indi_act_g2_roll = 0,0,0,0,0,0,0,0
@@ -270,10 +319,11 @@ set indi_act_g2_yaw = 120,-120,-120,120,0,0,0,0
 # set indi_act_g2_yaw = 0,0,0,0,0,0,0,0
 
 # Attitude setpoint injection
-set indi_inject_attitude_setpoints  = 1    # 0: No 1: Yes
+set indi_inject_attitude_setpoints  = 0    # 0: No 1: Yes
 set indi_att_sp_injection_type      = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
-set indi_att_sp_injection_amplitude = 200  # amplitude * 10
-set indi_att_sp_injection_duration  = 2000 # signal duration in ms
+set indi_att_sp_injection_amplitude = 150  # amplitude * 10
+set indi_att_sp_injection_duration  = 1250 # signal duration in ms
+set indi_att_sp_injection_duration_down = 500 # signal duration down (only for doublet) in ms
 
 # Input disturbance
 # Inject a constant step disturbance on certain motors
@@ -320,6 +370,9 @@ set indi_sync_lowpass_hz = 15
 set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
+set indi_use_gain_scheduling  = 1 # 1 yes 0 no
+set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 ## ----- POSITION CONTROL
 

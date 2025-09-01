@@ -50,6 +50,7 @@
 ## #define USE_NN_CONTROL
 #define INJECT_ATTITUDE_SETPOINTS
 #define INJECT_INPUT_DISTURBANCE
+#define LEARNER_PARAM_OVERRIDE
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -88,10 +89,12 @@ set serialrx_provider = SBUS
 aux 0 0 1 1700 2100 0 0
 aux 1 1 3 1300 2100 0 0
 aux 2 2 3 900 1275 0 0
-aux 3 57 6 1300 1700 0 0
-aux 4 36 2 1700 2100 0 0
-aux 5 56 6 1700 2100 0 0
-aux 6 56 6 1700 2100 0 0
+aux 3 55 0 1700 2100 0 0
+aux 4 57 6 1300 1700 0 0
+aux 5 58 3 1700 2100 0 0
+aux 6 61 7 1700 2100 0 0
+aux 7 36 2 1700 2100 0 0
+aux 8 56 6 1700 2100 0 0
 
 
 # blackbox config
@@ -200,21 +203,23 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 1079, 1079, 1079
-set indi_rate_gains     =  166,  166,  166
+# set indi_attitude_gains = 1079, 1079, 1079
+# set indi_rate_gains     =  166,  166,  166
+set indi_attitude_gains = 1800, 1800, 1800
+set indi_rate_gains     = 198, 198, 198
 
 ## Gain-scheduling
 set indi_use_gain_scheduling  = 1 # 1 yes 0 no
-set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
-set indi_gain_schedule_ff     = 1 # 1 yes 0 no
+set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 # --- feedforward control config
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
 # Coefficient: unitless * 1000000
 # Coefficient order:  b0, b1, b2, a1, a2  
 # set indi_ff_coefs = 0, 0, 0, 0, 0
-set indi_ff_coefs = 3676000, -3676000, 0, -991300, 0
-# set indi_ff_coefs = 0, -0, 0, -0, 0
+# set indi_ff_coefs = 3676000, -3676000, 0, -991300, 0
+set indi_ff_coefs = 0, 0, 0, 0, 0
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
@@ -286,7 +291,7 @@ set indi_act_g2_yaw = -100, 100, 100, -100
 # Attitude setpoint injection
 set indi_inject_attitude_setpoints      = 0    # 0: No 1: Yes
 set indi_att_sp_injection_type          = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
-set indi_att_sp_injection_amplitude     = 150  # amplitude * 10
+set indi_att_sp_injection_amplitude     = 0  # amplitude * 10
 set indi_att_sp_injection_duration      = 1500 # signal duration in ms
 set indi_att_sp_injection_duration_down = 1000 # signal duration in ms for down step (doublet only)
 
@@ -304,11 +309,6 @@ indiprofile 2
 # the default values (values not set here) are the same as for all other profiles
 
 # these values are slightly more conservative than indiprofile 0
-
-## Gain-scheduling
-set indi_use_gain_scheduling  = 1 # 1 yes 0 no
-set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
-set indi_gain_schedule_ff     = 1 # 1 yes 0 no
 
 set indi_act_num = 4
 # set indi_attitude_gains = 1552,1552,1552
@@ -349,6 +349,11 @@ set indi_sync_lowpass_hz = 15
 # fx, fy, fz, roll, pitch, yaw
 set indi_wls_axes_weights = 1,1,50,50,50,5
 set indi_wls_act_penalties = 1,1,1,1
+
+## Gain-scheduling
+set indi_use_gain_scheduling  = 1 # 1 yes 0 no
+set indi_gain_scheduling_type = 2 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 
 ## ----- POSITION CONTROL
@@ -436,7 +441,7 @@ set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 7
+set learner_mode = 6
 set learner_num_actuators = 4
 set learner_delay_time_ms = 150
 set learner_step_time_ms = 50
