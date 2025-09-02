@@ -37,6 +37,7 @@ typedef struct learnerConfig_s {
     uint8_t modeFx;
     uint8_t modeAct;
     uint8_t modeHover;
+    uint16_t mixControlAfterMs;
     uint8_t initFromProfileFx;
     uint8_t initFromProfileAct;
     uint16_t actMask;
@@ -83,6 +84,7 @@ typedef enum learning_probing_mode_e {
 typedef struct learningRuntime_s {
     bool initialized;
     bool filtersInitialized;
+    bool mixControl;
     int numActuators; // number of actuators (motors + servos)
     int numMotors; // number of motors
     int numServos; // number of servos

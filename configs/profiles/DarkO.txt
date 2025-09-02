@@ -97,7 +97,7 @@ aux 6 36 2 1700 2100 0 0
 aux 7 56 6 1700 2100 0 0
 
 # blackbox config
-set blackbox_mode = ALWAYS
+set blackbox_mode = NORMAL
 set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
 set blackbox_disable_alt = OFF
@@ -212,8 +212,8 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 1000, 800, 200
-set indi_rate_gains     =  130,  130,  60
+set indi_attitude_gains = 800, 500, 200
+set indi_rate_gains     =  130,  100,  60
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
@@ -264,7 +264,7 @@ set indi_act_g2_pitch =    0,    0,    0,    0
 set indi_act_g2_yaw   =    0,    0,    0,    0  
 
 # --- Tailsitter scheduled linear model
-set indi_tails_use_scheduled = 0
+set indi_tails_use_scheduled = 1
 set indi_tails_use_sine = 1
 
 ## # no-lift elevon angles in centi-degrees
@@ -289,6 +289,7 @@ set indi_tails_use_sine = 1
 
 # no-lift elevon angles in centi-degrees
 set indi_tails_d0 = -1816, -904
+#set indi_tails_d0 = 0, 0
 
 # motor thrust influenced parameters
 # force * 1e9
@@ -365,7 +366,7 @@ set position_max_horizontal_accel = 1000
 set position_max_upwards_speed = 200
 set position_max_downwards_speed = 200
 set position_max_upwards_accel = 1500
-set position_max_downwards_accel = 200
+set position_max_downwards_accel = 1500
 
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 45

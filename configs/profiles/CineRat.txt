@@ -114,8 +114,8 @@ set align_board_roll = 0
 set align_board_pitch = 0
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
-set acc_offset = 0, 0, 0
-# set acc_offset = -10, -12, 8
+# set acc_offset = 0, 0, 0
+set acc_offset = -10, -12, 8
 
 # motor setup
 set dshot_bidir = ON

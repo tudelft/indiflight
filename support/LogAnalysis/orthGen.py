@@ -181,7 +181,7 @@ for k in range(K):
             ax[k, j].set_ylabel('Inner Product')
 
 all_axes = axs.flatten().tolist() + ax.flatten().tolist()
-cursor = BlittedCursor(axs, f.canvas, sharex=True)
-cursor2 = BlittedCursor(ax.flatten().tolist(), fig.canvas, sharex=True)
+cursor = BlittedCursor(axs, sharex=True)
+cursor2 = BlittedCursor(ax.flatten().tolist(), sharex=True)
 
 plt.show()

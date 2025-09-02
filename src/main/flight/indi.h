@@ -236,7 +236,7 @@ typedef struct indiRuntime_s {
     uint8_t attExecCounter; // count executions (wrapping)
     uint16_t nanCounter; // count times consequtive nans appear in allocation
     // ---- control law selection
-    bool bypassControl; // no control at all. u and d are unmodified by loop
+    // bool bypassControl; // no control at all. u and d are unmodified by loop
     bool controlAttitude; // attempt to reach tilt given by attSpNed
     bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
 } indiRuntime_t;

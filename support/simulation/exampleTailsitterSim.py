@@ -93,6 +93,12 @@ if __name__=="__main__":
     tail.setRotor(0, X=[-0., -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
     tail.setRotor(1, X=[+0., +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
 
+    inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
+                               (tail.I[0,0] - tail.I[2,2]) / tail.I[1,1],
+                               (tail.I[1,1] - tail.I[0,0]) / tail.I[2,2]])
+    print(f"Craft inertia ratios: {inertia_ratios}") # [-0.50000006  0.6666667  -0.24999997]
+
+
 
     #%% craft interfaces
     imu = IMU(tail, r=[0., 0., 0.], qBody=[0.707, 0., 0.707, 0.], accStd=0.8, gyroStd=0.08)
@@ -109,7 +115,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 2., -1.], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -136,12 +142,11 @@ if __name__=="__main__":
         visThread.start( )
 
     if args.throw:
-        tail.throw(height=6.,
+        tail.throw(height=4.,
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
-                 #vHorz=[1., -2.], # final speed in x-y-plane in m/s
-                 #wB=[4., 6., 0.], # approx body rotation in rad/s
-                 wB=[0., 0., 0.], # approx body rotation in rad/s
-                 vHorz=[0., 0.], # final speed in x-y-plane in m/s
+                 vHorz=[1., 0.], # final speed in x-y-plane in m/s
+                 wB=[0., -1., 0.], # approx body rotation in rad/s
+                 #vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=3.5)
 
     #%% run loop

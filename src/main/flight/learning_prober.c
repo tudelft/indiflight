@@ -181,7 +181,7 @@ static void updateSteps(timeUs_t currentTimeUs) {
 static void updateOrtho(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceStartUs = cmpTimeUs(currentTimeUs, proberRuntime.genStartTimeUs);
     float t = 0.000001f * timeSinceStartUs; // convert to seconds
-    t *= 4.f; // shrink time 
+    t *= 2.f; // shrink time 
 
     if (t < 1.f) {
         setZeroOutputs();
@@ -228,6 +228,7 @@ void initProber(timeUs_t currentTimeUs) {
             // Initialize noise prober runtime
             break;
         case PROBER_ORTHO:
+            proberRuntime.safetyTimeoutUs += 1000e3;  // add half a second // TODO THIS IS BEUN AF
             // Initialize orthogonal signal prober runtime not needed
             break;
         default:

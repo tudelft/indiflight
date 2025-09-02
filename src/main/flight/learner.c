@@ -65,15 +65,16 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 3);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
-    .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
+    .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW | LEARN_PROBING_DURING_FLIGHT),
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     .modeFx    = (uint8_t) (LEARN_DURING_PROBING),
     .modeAct   = (uint8_t) (LEARN_DURING_PROBING),
     .modeHover = (uint8_t) (LEARN_DURING_PROBING),
+    .mixControlAfterMs = 350,
     .initFromProfileFx = false,
     .initFromProfileAct = false,
     .actMask = 0xFFFF, // all motors and servos
@@ -208,6 +209,7 @@ void initLearnerFilters(void) {
     // todo: implement servo filters
 
     learnRun.filtersInitialized = true;
+    learnRun.mixControl = false;
     learnRun.numMotors = m;
     learnRun.numServos = s;
 }
@@ -756,12 +758,12 @@ void updateLearner(timeUs_t current) {
 
     appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
 
-    if (learnFx) {
-        if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
-            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-        }
-        initIndiRuntimeParameters();
-    }
+    // if (learnFx) {
+    //     if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
+    //         changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+    //     }
+    //     initIndiRuntimeParameters();
+    // }
 
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
@@ -982,6 +984,8 @@ void runLearningQueryStateMachine(timeUs_t current) {
                 || post_launch_query_requested
             );
 
+    learnRun.mixControl = false;
+
 doMore:
     switch (learningQueryState) {
         case LEARNING_QUERY_IDLE:
@@ -1062,6 +1066,11 @@ doMore:
         case LEARNING_QUERY_ACTIVE:
             // cycles through motors
             updateProber(current);
+
+            if (cmpTimeUs(current, proberRuntime.genStartTimeUs) > 1e3 * config->mixControlAfterMs) {
+                learnRun.mixControl = true;
+            }
+
             if (proberRuntime.isFinished) {
                 // all motors done, or timeout reached
                 learningQueryState = LEARNING_QUERY_DONE;

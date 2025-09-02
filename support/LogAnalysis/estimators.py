@@ -121,13 +121,19 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, timeMs=None, sharey=True, zoomy=False, extra_rows=0):
+    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, timeMs=None, sharey=True, zoomy=False, extra_rows=0):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
 
+        if parGroupNames is None:
+            parGroupNames = [f"Group {i}" for i in parGroups]
+
         if outGroups is None:
             outGroups = [[i] for i in range(self.d)]
+
+        if outGroupsNames is None:
+            outGroupsNames = [f"Group {i}" for i in outGroups]
 
         if timeMs is None:
             self.timeMs = list(range(self.N))
@@ -137,12 +143,12 @@ class Estimator(object):
             timeLabel = "Time [ms]"
 
         with plt.rc_context(rc=local_rc):
-            self.f = plt.figure()
+            self.f = plt.figure(figsize=(16, 9))
 
             left=0.04
             bottom=0.06
             right=0.975
-            top=0.925
+            top=0.91
             hspace=0.15
             wspace=0.25
             rWidth = (right - left + 0*0.3*wspace) * 1 / (1 + len(parGroups)) + left
@@ -182,6 +188,7 @@ class Estimator(object):
 
             for i in range(len(parGroups)):
                 parAx = self.f.add_subplot(parGs[0, i]); parAxs.append(parAx)
+                parAx.set_title(parGroupNames[i])
 
                 varAx = self.f.add_subplot(parGs[1, i]); varAxs.append(varAx)
                 varAx.set_yscale('log')

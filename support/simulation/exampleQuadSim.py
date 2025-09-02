@@ -105,16 +105,21 @@ if __name__=="__main__":
     #mc.addRotor(Rotor(r=[-0.1, +0.0, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[-1, 0., -1.]))
     #mc.addRotor(Rotor(r=[+0.1, +0.0, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[1, 0., -1.]))
 
+    inertia_ratios = np.array([(mc.I[2,2] - mc.I[1,1]) / mc.I[0,0],
+                               (mc.I[0,0] - mc.I[2,2]) / mc.I[1,1],
+                               (mc.I[1,1] - mc.I[0,0]) / mc.I[2,2]])
+    print(f"Craft inertia ratios: {inertia_ratios}") # [-0.50000006  0.6666667  -0.24999997]
+
 
     #%% craft interfaces
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
 
-    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
+    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
 
-    imu = IMU(mc, r=[0.02, 0.0, 0.0], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
+    #imu = IMU(mc, r=[0.02, 0.0, 0.0], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
 

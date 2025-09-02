@@ -276,7 +276,7 @@ void initIndiRuntimeParameters(void) {
     indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
 
     // ---- control law selection
-    indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
+    // indiRun.bypassControl = false; // no control at all. u and d are unmodified by loop
     indiRun.controlAttitude = true; // attempt to reach tilt given by attSpNed
     indiRun.trackAttitudeYaw = false; // also attempt to reach yaw given by attSpNed
 }

@@ -136,7 +136,7 @@ void getSetpoints(timeUs_t current) {
     indiRun.rateSpBodyCommanded.V.Y = 0.f;
     indiRun.rateSpBodyCommanded.V.Z = 0.f;
 
-    indiRun.bypassControl = false;
+    // indiRun.bypassControl = false;
     indiRun.controlAttitude = true;
     indiRun.trackAttitudeYaw = false;
 
@@ -159,22 +159,9 @@ void getSetpoints(timeUs_t current) {
         indiRun.rateSpBodyCommanded = rateSpBodyFromCat;
     } else
 #endif
-#ifdef USE_LEARNER
-    if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
-            && (learningQueryState < LEARNING_QUERY_DONE)) {
-        indiRun.bypassControl = true;
-        for (int i=0; i < proberRuntime.numActuators; i++) {
-            indiRun.d[i] = outputFromLearningQuery[i];
-        }
-        for (int i=proberRuntime.numActuators; i < MAXU; i++) {
-            indiRun.d[i] = 0.f;
-        }
-    } else
-#endif
 #ifdef USE_THROW_TO_ARM
     if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
-        indiRun.bypassControl = true;
+        // indiRun.bypassControl = true;
         for (int i=0; i < indiRun.actNum; i++) {
             indiRun.d[i] = 0.f;
         }
@@ -453,11 +440,10 @@ void getMotorCommands(timeUs_t current) {
     }
 
     // horrible code! Fixme todo
-    if (indiRun.bypassControl) {
-        // this is the problem. bypassControl gets set back to false in indiReset triggered from continuous adaptation
-        return;
-    }
-
+    // if (indiRun.bypassControl) {
+    //     // this is the problem. bypassControl gets set back to false in indiReset triggered from continuous adaptation
+    //     return;
+    // }
 
     // use INDI only when in the air, solve linearized global problem otherwise
     bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
@@ -621,8 +607,23 @@ void getMotorCommands(timeUs_t current) {
         }
 
         if (as_exit_code < AS_NAN_FOUND_Q) {
-            indiRun.u[i] = constrainf(doIndi*indiRun.uState_fs[i] + du_as[i], indiRun.actMin[i], indiRun.actMax[i]);
+            indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
         }
+
+#ifdef USE_LEARNER
+    if (FLIGHT_MODE(LEARNER_MODE)
+            && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            && (learningQueryState < LEARNING_QUERY_DONE)
+            && i < proberRuntime.numActuators) {
+        if (learnRun.mixControl) {
+            indiRun.u[i] += outputFromLearningQuery[i];
+        } else {
+            indiRun.u[i] = outputFromLearningQuery[i];
+        }
+    }
+#endif
+
+        indiRun.u[i] = constrainf(indiRun.u[i], indiRun.actMin[i], indiRun.actMax[i]);
 
         // apply lag filter to simulate spinup dynamics
         indiRun.du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
