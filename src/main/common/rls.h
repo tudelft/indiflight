@@ -32,7 +32,7 @@ typedef enum rls_exit_code_e {
     RLS_FAIL, // TODO fine grained error handliing
 } rls_exit_code_t;
 
-#define RLS_MAX_N (MAX_SUPPORTED_MOTORS * 2) // need twice, lots of memory...
+#define RLS_MAX_N (MAX_SUPPORTED_MOTORS * 2 + 1) // need twice, lots of memory...
 #define RLS_MAX_D 3
 #define RLS_MAX_P 3
 #define RLS_COV_MAX 1e+10f

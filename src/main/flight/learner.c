@@ -238,13 +238,17 @@ static void initLearnerRls(void) {
 
     // Spf
     for (int i = 0; i < 3; i++) {
-        rlsInit(&fxRls[i], learnRun.numActuators, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], learnRun.numActuators, 1, 1e-1f, gyro.targetLooptime, actionBandwidthHz);
     }
 
     // RateDot
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 2*learnRun.numActuators, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], 1 + 2*learnRun.numActuators, 1, 1e-1f, gyro.targetLooptime, actionBandwidthHz);
     }
+
+    fxRls[3].x[0] = 0.f;
+    fxRls[4].x[0] = 0.f;
+    fxRls[5].x[0] = 0.f;
 
     for (int act = 0; act < indiRun.actNum; act++) {
         if (!(config->actMask & (1 << act))) {
@@ -273,13 +277,13 @@ static void initLearnerRls(void) {
                     fxRls[1].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[act];
                     fxRls[2].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[act];
 
-                    fxRls[3].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[act];
-                    fxRls[4].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[act];
-                    fxRls[5].x[act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[act];
+                    fxRls[3].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[act];
+                    fxRls[4].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[act];
+                    fxRls[5].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[act];
 
-                    fxRls[3].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[act];
-                    fxRls[4].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[act];
-                    fxRls[5].x[learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[act];
+                    fxRls[3].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[act];
+                    fxRls[4].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[act];
+                    fxRls[5].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[act];
                 }
                 break;
             case INDI_ACT_TYPE_SERVO:
@@ -309,8 +313,8 @@ static void updateLearningFilters(void) {
     const learnerConfig_t *config = learnerConfig();
 
     static fp_vector_t imuPrevRate = {0};
-    static fp_vector_t fxPrevRateDot = {0};
-    static fp_vector_t fxPrevSpf = {0};
+    // static fp_vector_t fxPrevRateDot = {0};
+    // static fp_vector_t fxPrevSpf = {0};
 
     // IMU rls filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -350,16 +354,16 @@ static void updateLearningFilters(void) {
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
-        learnRun.fxRateDotDiff.A[axis] = fxRateDot - fxPrevRateDot.A[axis];
-        fxPrevRateDot.A[axis] = fxRateDot;
+        learnRun.fxRateDotDiff.A[axis] = fxRateDot; // - fxPrevRateDot.A[axis];
+        // fxPrevRateDot.A[axis] = fxRateDot;
 
         float fxSpf = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
-        learnRun.fxSpfDiff.A[axis] = fxSpf - fxPrevSpf.A[axis];
-        fxPrevSpf.A[axis] = fxSpf;
+        learnRun.fxSpfDiff.A[axis] = fxSpf; // - fxPrevSpf.A[axis];
+        // fxPrevSpf.A[axis] = fxSpf;
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
-    static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
+    // static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
     static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
     static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
 
@@ -379,8 +383,8 @@ static void updateLearningFilters(void) {
                 fxPrevOmega[act] = learnRun.fxOmega[act];
 
                 float fxOmegaDot = indiRun.indiFrequency * learnRun.fxOmegaDiff[act];
-                learnRun.fxOmegaDotDiff[act] = fxOmegaDot - fxPrevOmegaDot[act];
-                fxPrevOmegaDot[act] = fxOmegaDot;
+                learnRun.fxOmegaDotDiff[act] = fxOmegaDot; // - fxPrevOmegaDot[act];
+                // fxPrevOmegaDot[act] = fxOmegaDot;
 
                 learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], indiRun.omega[act]);
                 learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (learnRun.motorOmega[act] - motorPrevOmega[act]);
@@ -643,7 +647,7 @@ void updateLearner(timeUs_t current) {
         float ySpf[3];
         float yRateDot[3];
 
-        int m = 0, s = 0; 
+        int m = 1, s = 1; 
         for (int act = 0; act < indiRun.actNum; act++) {
             if (!(config->actMask & (1 << act))) {
                 continue; // skip unselected actuators
@@ -651,7 +655,8 @@ void updateLearner(timeUs_t current) {
 
             switch (indiRun.actType[act]) {
                 case INDI_ACT_TYPE_MOTOR:
-                    A[m] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+                    // A[m] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
+                    A[m] = 1e-5f * learnRun.fxOmega[act] * learnRun.fxOmega[act];
                     A[m + learnRun.numMotors] = 1e-3f * learnRun.fxOmegaDotDiff[act];
                     m++;
                     break;
@@ -664,10 +669,13 @@ void updateLearner(timeUs_t current) {
         }
 
         for (int ax = 0; ax < 3; ax++) {
+            // first regressor is rate cross terms for inertia ratios
+            A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+
             ySpf[ax] = learnRun.fxSpfDiff.A[ax] * 10.f; // scaling likely depends on sample time..
             yRateDot[ax] = learnRun.fxRateDotDiff.A[ax]; // scaling seems okay at this sample time/filtering
-            rlsNewSample(&fxRls[ax], A, &ySpf[ax]); // spf
-            rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax]); // RateDot
+            rlsNewSample(&fxRls[ax], A+1, &ySpf[ax]); // spf (skip inertia term)
+            rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax]); // RateDot (include inertia term)
         }
 
         // parallel alternative: perform rls step
@@ -853,12 +861,12 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[m];
         actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[m];
         actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[m];
-        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[m];
-        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[m];
-        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[m];
-        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[learnRun.numMotors + m];
-        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[learnRun.numMotors + m];
-        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[learnRun.numMotors + m];
+        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[1 + m];
+        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[1 + m];
+        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[1 + m];
+        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[1 + learnRun.numMotors + m];
+        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[1 + learnRun.numMotors + m];
+        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[1 + learnRun.numMotors + m];
 
         fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
 

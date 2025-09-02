@@ -541,6 +541,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_z_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 
+    {"sigma_rls",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"sigma_rls",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"sigma_rls",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
     {"fx_p_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
@@ -745,6 +749,7 @@ typedef struct blackboxMainState_s {
     int16_t fx_x_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_y_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_z_rls_x[BLACKBOX_LEARNER_N];
+    int16_t sigma_rls[XYZ_AXIS_COUNT];
     int16_t fx_p_rls_x[BLACKBOX_LEARNER_2N];
     int16_t fx_q_rls_x[BLACKBOX_LEARNER_2N];
     int16_t fx_r_rls_x[BLACKBOX_LEARNER_2N];
@@ -1180,6 +1185,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_x_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_y_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_z_rls_x, BLACKBOX_LEARNER_N);
+        blackboxWriteSigned16VBArray(blackboxCurrent->sigma_rls, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_p_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_q_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, BLACKBOX_LEARNER_2N);
@@ -1501,6 +1507,9 @@ static void writeInterframe(void)
 
         arraySubInt16(deltas16, blackboxCurrent->fx_z_rls_x, blackboxLast->fx_z_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(deltas16, BLACKBOX_LEARNER_N);
+
+        arraySubInt16(deltas16, blackboxCurrent->sigma_rls, blackboxLast->sigma_rls, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_p_rls_x, blackboxLast->fx_p_rls_x, BLACKBOX_LEARNER_2N);
         for (int i=0; i < BLACKBOX_LEARNER_2N; i++)
@@ -1983,14 +1992,17 @@ static void loadMainState(timeUs_t currentTimeUs)
     // two for loops for the rate, because we need to ensure that the omega_dot
     // regressors start at BLACKBOX_LEARNER_N and not fxRateDotRls.n which is unknown
     // in the logs
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[3].n >> 1); i++) {
+    blackboxCurrent->sigma_rls[0] = lrintf(1e3f*fxRls[3].x[0]);
+    blackboxCurrent->sigma_rls[1] = lrintf(1e3f*fxRls[4].x[0]);
+    blackboxCurrent->sigma_rls[2] = lrintf(1e3f*fxRls[5].x[0]);
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, (fxRls[3].n-1) >> 1); i++) {
         // rateDot (fxRls 3, 4, 5)
-        blackboxCurrent->fx_p_rls_x[i]                    = lrintf(1e3f*fxRls[3].x[i]);
-        blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[i]);
-        blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[i]);
-        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[(fxRls[3].n >> 1) + i]);
-        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[(fxRls[4].n >> 1) + i]);
-        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[(fxRls[5].n >> 1) + i]);
+        blackboxCurrent->fx_p_rls_x[i]                    = lrintf(1e3f*fxRls[3].x[1 + i]);
+        blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[1 + i]);
+        blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[1 + i]);
+        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[1 + (fxRls[3].n >> 1) + i]);
+        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[1 + (fxRls[4].n >> 1) + i]);
+        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[1 + (fxRls[5].n >> 1) + i]);
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
