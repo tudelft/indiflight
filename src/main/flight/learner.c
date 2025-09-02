@@ -714,6 +714,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     float kFf = 0.0f;
     float pFf = 0.0f;
     float zFf = 0.0f;
+    float margin = 0.05f; // Margin for pole zero cancellation (if below, dont use FF filter)
 
     // TODO: Add minimum for FF?
     if (indiRun.useGainScheduling) {
@@ -744,8 +745,13 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                         kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
                         pFf = -interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
                         zFf = ffZeroGain1D;
+                        
                         if (indiRun.useFeedforwardFilter) {
-                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
+                            if (abs(pFf - zFf) < margin * pFf - pFf) {
+                                biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
+                            } else { // if pole and zero too close together simply use a direct feedforward
+                                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, gyro.targetLooptime);
+                            }
                         } else {
                             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
                         }
