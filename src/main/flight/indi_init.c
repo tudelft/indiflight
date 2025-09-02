@@ -296,6 +296,9 @@ void initIndiRuntimeParameters(void) {
         indiRun.attCoefs[i] = p->attCoefs[i] * 1e-6f;
         indiRun.rateCoefs[i] = p->rateCoefs[i] * 1e-6f;
     }
+    for (int i = 0; i < 3; i++) {
+        indiRun.feedforwardFilterCoefs[i] = p->feedforwardFilterCoefs[i] * 1e-6f;
+    }
     // ---- housekeeping
     indiRun.dT = gyro.targetLooptime * 1e-6f; // target looptime in S
     indiRun.indiFrequency = 1.0f / indiRun.dT; // target looptime in S
@@ -397,7 +400,12 @@ void initIndiRuntime(void) {
         if (indiRun.gainScheduleFf) {
             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
         } else if (indiRun.useFeedforwardFilter) {
-            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
+            // If pole equals 0 filter not initialized or ill setup (integrating the input), set filter to a passthrough
+            if (indiRun.feedforwardCoefs[2] < 1e-6f) {
+                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, gyro.targetLooptime);
+            } else {
+                biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
+            }
         } else {
             biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
         }
