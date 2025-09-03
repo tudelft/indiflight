@@ -748,7 +748,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                         
                         if (indiRun.useFeedforwardFilter) {
                             zFf = pFf / kFf; // Based on 0 dB gain at LF
-                            if (abs(pFf - zFf) < margin * pFf - pFf) {
+                            if (fabsf(pFf - zFf) > (margin * pFf - pFf)) {
                                 biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
                             } else { // if pole and zero too close together simply use a direct feedforward
                                 biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, gyro.targetLooptime);
