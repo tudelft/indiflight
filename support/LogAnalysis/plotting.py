@@ -236,7 +236,7 @@ class FlightPlotter(FlightPlotterBase):
                          ylabel="RC Command",
                          ylimits=(-1.1, +1.1))
 
-        N = 2
+        N = 4 if 'motor[2]' in self.data.columns else 2
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
                          light=[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
                          solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(N)],
@@ -247,7 +247,8 @@ class FlightPlotter(FlightPlotterBase):
                          ylabel="Motor Commands [-]",
                          ylimits=(-0.05, 1.05))
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+        if 'servo_feedback' in self.data.columns:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(2)],
@@ -255,7 +256,7 @@ class FlightPlotter(FlightPlotterBase):
                          style_labels=[None, "Est. state", "Command"],
                          title="Servo State",
                          ylabel="Servo State [rad]",
-        )
+            )
 
 class SysIdPlotter(FlightPlotterBase):
     def __init__(self, data, name="System Identification Plotter"):
@@ -339,12 +340,18 @@ class SysIdPlotter(FlightPlotterBase):
         
 
         # fx learning data
+        if 'fx_r_rls_x[15]' in self.data.columns:
+            # we have the extended logging (like in simulation)
+            pqr_range = list(range(N)) + list(range(2*N, 3*N))
+        else:
+            pqr_range = list(range(2*N))
+
         x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(N)])
         y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(N)])
         z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(N)])
-        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in range(2*N)])
-        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(2*N)])
-        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in range(2*N)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
         fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
@@ -396,6 +403,16 @@ class SysIdPlotter(FlightPlotterBase):
                                 style_labels=[None, "Onboard", None],
                                 title=f"Fx {axis.upper()}",
                                 ylabel="Fx [Nm/(kgm^2)/(rad/s²)]")
+
+        if 'sigma_rls[0]' in self.data.columns:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
+                                  light=None,
+                                  solid=np.array([self.data[f'sigma_rls[{i}]'] for i in range(3)]) / 1000,
+                                  dashed=None,
+                                  series_labels=["Sigma X", "Sigma Y", "Sigma Z"],
+                                  style_labels=[None, "Onboard", None],
+                                  title="Principal Inertia Ratios",
+                                  ylabel="$\\sigma$ [-]")
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[4, 2]),
                                 light=None,

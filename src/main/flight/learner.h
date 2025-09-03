@@ -45,6 +45,7 @@ typedef struct learnerConfig_s {
     uint8_t fxFiltHz;
     uint8_t motorFiltHz;
     uint8_t servoFiltHz;
+    uint8_t useFortescue;
     uint8_t zetaRate;
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
@@ -94,8 +95,8 @@ typedef struct learningRuntime_s {
     float fxOmega[MAXU];
     float fxOmegaDiff[MAXU];
     float fxOmegaDotDiff[MAXU];
-    fp_vector_t fxRateDotDiff;
-    fp_vector_t fxSpfDiff;
+    fp_vector_t fxRateDot;
+    fp_vector_t fxSpf;
     float motorOmega[MAXU];
     float motorOmegaDot[MAXU];
     float motorD[MAXU];

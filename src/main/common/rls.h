@@ -74,6 +74,7 @@ typedef struct rls_s {
     float P[RLS_MAX_N*RLS_MAX_N]; // column major!!
     float lambdaBase;
     float lambda;
+    bool useFortescue;
     fortescue_tuning_t fortescue;
     uint32_t samples;
 } rls_t; // 4 * ( N + N^2 + 1 ) + 2 bytes
@@ -96,7 +97,7 @@ typedef struct rls_parallel_s {
 
 // we likely need to allocate 6 + 1 + 4 RLS's for a quad, thats 3.2KB
 
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz);
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz, bool useFortescue);
 rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y);
 rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float Tchar);
 

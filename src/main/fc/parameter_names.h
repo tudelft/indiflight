@@ -241,6 +241,8 @@
 #define PARAM_NAME_LEARNER_IMU_LOWPASS_HZ "learner_imu_lowpass_hz"
 #define PARAM_NAME_LEARNER_FX_LOWPASS_HZ "learner_fx_lowpass_hz"
 #define PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ "learner_motor_lowpass_hz"
+#define PARAM_NAME_LEARNER_SERVO_LOWPASS_HZ "learner_servo_lowpass_hz"
+#define PARAM_NAME_LEARNER_USE_FORTESCUE "learner_use_fortescue"
 #define PARAM_NAME_LEARNER_ZETA_RATE "learner_zeta_rate"
 #define PARAM_NAME_LEARNER_ZETA_ATTITUDE "learner_zeta_attitude"
 #define PARAM_NAME_LEARNER_ZETA_VELOCITY "learner_zeta_velocity"

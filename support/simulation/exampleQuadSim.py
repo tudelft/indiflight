@@ -165,6 +165,8 @@ if __name__=="__main__":
         mc.throw(height=4.,
                  wB=[2., -4., 3.], # approx body rotation in rad/s
                  vHorz=[1., -2.], # final speed in x-y-plane in m/s
+                 # wB=[0., 0., 0.], # approx body rotation in rad/s
+                 # vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=2.5)
 
     #%% run loop

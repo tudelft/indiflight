@@ -69,7 +69,7 @@ float emwvApply(emwv_t* m, float sample) {
 }
 
 // --- helpers
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz) {
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz, bool useFortescue) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -85,21 +85,29 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
     }
 
     // check bounds on gamma and assign P
-    if (gamma <= 0.f)
+    if (gamma <= 0.f) {
         return RLS_FAIL;
+    }
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         rls->P[i*n + i] = gamma;
+    }
 
     // initalize forgetting factor
     float sampleFreqHz = 1e6f / ((float) sampleTimeUs);
-    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz))
+    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz)) {
         return RLS_FAIL;
+    }
 
     rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
 
     // initialize fortescue tuner
-    fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
+    rls->useFortescue = useFortescue;
+    if (rls->useFortescue) {
+        fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
+    } else {
+        rls->fortescue = (fortescue_tuning_t){0};
+    }
 
     return RLS_SUCCESS;
 }
@@ -176,17 +184,19 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     float U[RLS_MAX_D*RLS_MAX_D] = {0};
     float iDiag[RLS_MAX_D];
     chol(U, M, iDiag, rls->d);
-    for (int col = 0; col < rls->n; col++)
+    for (int col = 0; col < rls->n; col++) {
         chol_solve(U, iDiag, rls->d, &AP[col*rls->d], &KT[col*rls->d]);
+    }
 
     // e = y - A x
     // e**T = y**T - x**T A**T
     float e[RLS_MAX_D];
     SGEMVt(rls->n, rls->d, AT, rls->x, e);
-    for (int row = 0; row < rls->d; row++)
+    for (int row = 0; row < rls->d; row++) {
         e[row] = y[row] - e[row];
+    }
 
-    if (rls->d == 1) {
+    if ((rls->useFortescue) && (rls->d == 1)) {
         // adaptive forgetting only implemented for MISO systems
         float ATK;
         SGEVV(rls->n, AT, KT, ATK);
@@ -341,7 +351,7 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
 rls_exit_code_t rlsTest(void) {
     rls_t rls;
     float gamma = 1e3f;
-    rlsInit(&rls, 3, 2, gamma, 5000, 1.f / (2.f * M_PIf * 0.011212807f));
+    rlsInit(&rls, 3, 2, gamma, 5000, 1.f / (2.f * M_PIf * 0.011212807f), false);
     rls.x[0] = 1.;
     rls.x[1] = 2.;
     rls.x[2] = 3.;

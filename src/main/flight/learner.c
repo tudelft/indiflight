@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 3);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 4);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW | LEARN_PROBING_DURING_FLIGHT),
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
@@ -82,6 +82,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .fxFiltHz = 20,
     .motorFiltHz = 40,
     .servoFiltHz = 20,
+    .useFortescue = false,
     .zetaRate = 80,
     .zetaAttitude = 80,
     .zetaVelocity = 60,
@@ -229,8 +230,8 @@ static void initLearnerRls(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     const learnerConfig_t *config = learnerConfig();
 
-    float actionBandwidthHz = 0.4f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
-    rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    float actionBandwidthHz = 0.1f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
 
     // init filters and other rls
     //rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
@@ -238,14 +239,15 @@ static void initLearnerRls(void) {
 
     // Spf
     for (int i = 0; i < 3; i++) {
-        rlsInit(&fxRls[i], learnRun.numActuators, 1, 1e-1f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], learnRun.numActuators, 1, 1e-4f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
     }
 
     // RateDot
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 1 + 2*learnRun.numActuators, 1, 1e-1f, gyro.targetLooptime, actionBandwidthHz);
+        rlsInit(&fxRls[i], 1 + 2*learnRun.numActuators, 1, 1e-3f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
     }
 
+    // princ. inertia ratios set to zero: all princ. inertias are the same
     fxRls[3].x[0] = 0.f;
     fxRls[4].x[0] = 0.f;
     fxRls[5].x[0] = 0.f;
@@ -257,7 +259,7 @@ static void initLearnerRls(void) {
 
         switch(indiRun.actType[act]) {
             case INDI_ACT_TYPE_MOTOR:
-                rlsInit(&actRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
 
                 // inverse of updateLearnedParameters
                 float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[act];
@@ -313,8 +315,6 @@ static void updateLearningFilters(void) {
     const learnerConfig_t *config = learnerConfig();
 
     static fp_vector_t imuPrevRate = {0};
-    // static fp_vector_t fxPrevRateDot = {0};
-    // static fp_vector_t fxPrevSpf = {0};
 
     // IMU rls filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -353,17 +353,11 @@ static void updateLearningFilters(void) {
     fxSpfCorrected[2] = az - ( rx * (wx*wz - dwy)    + ry * (wy*wz + dwx)    + rz * (-sq(wx)-sq(wy)) );
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
-        learnRun.fxRateDotDiff.A[axis] = fxRateDot; // - fxPrevRateDot.A[axis];
-        // fxPrevRateDot.A[axis] = fxRateDot;
-
-        float fxSpf = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
-        learnRun.fxSpfDiff.A[axis] = fxSpf; // - fxPrevSpf.A[axis];
-        // fxPrevSpf.A[axis] = fxSpf;
+        learnRun.fxRateDot.A[axis] = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
+        learnRun.fxSpf.A[axis] = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
-    // static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
     static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
     static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
 
@@ -655,7 +649,6 @@ void updateLearner(timeUs_t current) {
 
             switch (indiRun.actType[act]) {
                 case INDI_ACT_TYPE_MOTOR:
-                    // A[m] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
                     A[m] = 1e-5f * learnRun.fxOmega[act] * learnRun.fxOmega[act];
                     A[m + learnRun.numMotors] = 1e-3f * learnRun.fxOmegaDotDiff[act];
                     m++;
@@ -670,10 +663,10 @@ void updateLearner(timeUs_t current) {
 
         for (int ax = 0; ax < 3; ax++) {
             // first regressor is rate cross terms for inertia ratios
-            A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+            A[0] = 1.f * -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
 
-            ySpf[ax] = learnRun.fxSpfDiff.A[ax] * 10.f; // scaling likely depends on sample time..
-            yRateDot[ax] = learnRun.fxRateDotDiff.A[ax]; // scaling seems okay at this sample time/filtering
+            ySpf[ax] = learnRun.fxSpf.A[ax] * 10.f; // scaling likely depends on sample time..
+            yRateDot[ax] = learnRun.fxRateDot.A[ax]; // scaling seems okay at this sample time/filtering
             rlsNewSample(&fxRls[ax], A+1, &ySpf[ax]); // spf (skip inertia term)
             rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax]); // RateDot (include inertia term)
         }
