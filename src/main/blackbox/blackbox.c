@@ -300,6 +300,11 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"quatSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"quatSp",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
+    {"quatSpPreFf", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+
     {"gyroSp",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -706,6 +711,7 @@ typedef struct blackboxMainState_s {
     int16_t quat[4];
     int16_t alpha[XYZ_AXIS_COUNT];
     int16_t quatSp[4];
+    int16_t quatSpPreFf[4];
     int16_t gyroSp[XYZ_AXIS_COUNT];
     int16_t gyroFf[XYZ_AXIS_COUNT];
     int16_t alphaSp[XYZ_AXIS_COUNT];
@@ -1132,6 +1138,7 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->alpha, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->quatSp, 4);
+        blackboxWriteSigned16VBArray(blackboxCurrent->quatSpPreFf, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->gyroSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->gyroFf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->alphaSp, XYZ_AXIS_COUNT);
@@ -1362,6 +1369,13 @@ static void writeInterframe(void)
 
         // quat setpoints
         arraySubInt16(deltas16, blackboxCurrent->quatSp, blackboxLast->quatSp, 4);
+        //for (int i=0; i < 4; i++)
+        //    deltas[i] = deltas16[i];
+        //blackboxWriteTag8_4S16(deltas);
+        blackboxWriteSigned16VBArray(deltas16, 4);
+
+        // quat setpoints pre feedforward
+        arraySubInt16(deltas16, blackboxCurrent->quatSpPreFf, blackboxLast->quatSpPreFf, 4);
         //for (int i=0; i < 4; i++)
         //    deltas[i] = deltas16[i];
         //blackboxWriteTag8_4S16(deltas);
@@ -1898,6 +1912,10 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quatSp[1] = lrintf(indiRun.attSpNed.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[2] = lrintf(indiRun.attSpNed.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[3] = lrintf(indiRun.attSpNed.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+    blackboxCurrent->quatSpPreFf[0] = lrintf(indiRun.attSpNedPreFeedforward.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[1] = lrintf(indiRun.attSpNedPreFeedforward.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[2] = lrintf(indiRun.attSpNedPreFeedforward.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[3] = lrintf(indiRun.attSpNedPreFeedforward.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
     blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.X) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Y) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Z) * blackboxHighResolutionScale);
@@ -2602,6 +2620,10 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->u_pref[1],
                                                                                               indiProfile->u_pref[2],
                                                                                               indiProfile->u_pref[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_FF_FILTER, "%d",                       indiProfile->useFeedforwardFilter);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_FF_FILTER_COEFS, "%d,%d,%d",               indiProfile->feedforwardFilterCoefs[0],
+                                                                                              indiProfile->feedforwardFilterCoefs[1],
+                                                                                              indiProfile->feedforwardFilterCoefs[2]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_FF_COEFS, "%d,%d,%d,%d,%d",                indiProfile->feedforwardCoefs[0],
                                                                                               indiProfile->feedforwardCoefs[1],
                                                                                               indiProfile->feedforwardCoefs[2],

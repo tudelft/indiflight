@@ -384,6 +384,7 @@ void initIndiRuntime(void) {
         indiRun.spf_fs.A[axis] = 0.; // sync-filtered accelerometer (specific force) in N/kg
     }
     indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
+    indiRun.attSpNedPreFeedforward = ( const fp_quaternion_t ) { 1.f, 0.f, 0.f, 0.f };
     indiRun.attErrBody = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
     for (int j = 0; j < MAXV; j++) {
         indiRun.dv[j] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
@@ -401,8 +402,8 @@ void initIndiRuntime(void) {
             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
         } else if (indiRun.useFeedforwardFilter) {
             // If pole equals 0 filter not initialized or ill setup (integrating the input), set filter to a passthrough
-            if (indiRun.feedforwardCoefs[2] < 1e-6f) {
-                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, gyro.targetLooptime);
+            if (fabsf(indiRun.feedforwardFilterCoefs[2]) < 1e-6f) {
+                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
             } else {
                 biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
             }
