@@ -209,6 +209,8 @@ void getSetpoints(timeUs_t current) {
             .V.Z = 0.f,
         };
 
+        
+
         #ifdef INJECT_ATTITUDE_SETPOINTS
         if (FLIGHT_MODE(HORIZON_MODE)) {
             indiRun.attSpInjectionStarted = false;
@@ -228,7 +230,22 @@ void getSetpoints(timeUs_t current) {
         }
         #endif
 
+        // Separately log axis original to maintain the original setpoint
+        fp_vector_t axisOriginal = {
+            .V.X = axis.V.X,
+            .V.Y = axis.V.Y,
+            .V.Z = 0.f,
+        };
+
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
+        VEC3_CONSTRAIN_XY_LENGTH(axisOriginal, maxTilt);
+
+        float anglePreFeedforward = VEC3_XY_LENGTH(axisOriginal);
+        VEC3_NORMALIZE(axisOriginal);
+        fp_quaternion_t attSpYawPreFeedforward;
+        quaternion_of_axis_angle(&attSpYawPreFeedforward, &axisOriginal, anglePreFeedforward);
+
+
         // TODO: Need to figure out how to program this properly. Depends on what feedforward is kept.
         if (indiRun.useFeedforwardFilter) {
             // If feedforward filter is used, apply it to the reference itself
@@ -240,6 +257,7 @@ void getSetpoints(timeUs_t current) {
             indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
         }
         float angle = VEC3_XY_LENGTH(axis);
+
         VEC3_NORMALIZE(axis);
         fp_quaternion_t attSpYaw;
         quaternion_of_axis_angle(&attSpYaw, &axis, angle);
@@ -254,6 +272,7 @@ void getSetpoints(timeUs_t current) {
         // this is probaby the most expensive operation... can be half the cost if
         // optimized for .x = 0, .y = 0, unless compiler does that for us?
         indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        indiRun.attSpNedPreFeedforward = chain_quaternion(&yawNed, &attSpYawPreFeedforward);
 
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
