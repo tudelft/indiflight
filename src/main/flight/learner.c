@@ -744,14 +744,14 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     if (indiRun.gainScheduleFf) {
 
                         kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
-                        pFf = -interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
+                        pFf = interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
                         
                         if (indiRun.useFeedforwardFilter) {
                             zFf = pFf / kFf; // Based on 0 dB gain at LF
-                            if (fabsf(pFf - zFf) > (margin * pFf - pFf)) {
+                            if (fabsf(pFf - zFf) > fabsf(margin * pFf)) {
                                 biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
                             } else { // if pole and zero too close together simply use a direct feedforward
-                                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, gyro.targetLooptime);
+                                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
                             }
                         } else {
                             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
@@ -779,7 +779,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                     if (indiRun.gainScheduleFf) {
                         kFf = evalPoly1D(&ffKPoly1D, maxTau);
                         pFf = -evalPoly1D(&ffPolePoly1D, maxTau); // ffPolePoly is defined as the polynomial through -p
-                        zFf = ffZeroGain1D;
+                        // zFf = ffZeroGain1D;
                         if (indiRun.useFeedforwardFilter) {
                             biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
                         } else {
