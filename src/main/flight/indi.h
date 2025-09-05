@@ -241,6 +241,7 @@ typedef struct indiRuntime_s {
     // ---- runtime values -- axes
     fp_vector_t attGainsCasc; // attitude gains simulating parallel PD
     fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
+    fp_quaternion_t attSpNedPreFeedforward; // attitude setpoint in NED coordinates before feedforward
     fp_quaternion_t attErrBody; // attitude error in body coordinates
     fp_vector_t rateSpBody; // rate setpoint in body coordinates
     fp_vector_t rateSpBodyCommanded; // rate setpoint before attitude control
