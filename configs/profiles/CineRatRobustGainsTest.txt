@@ -107,7 +107,7 @@ set blackbox_disable_debug = OFF
 set blackbox_disable_indi = OFF
 set blackbox_disable_pos = OFF
 set blackbox_disable_ekf = OFF
-set blackbox_disable_learner = OFF
+set blackbox_disable_learner = ON
 set blackbox_high_resolution = ON
 set debug_mode = BARO
 
@@ -211,7 +211,7 @@ set indi_rate_gains     = 198, 198, 198
 ## Gain-scheduling
 set indi_use_gain_scheduling  = 1 # 1 yes 0 no
 set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
-set indi_gain_schedule_ff     = 1 # 1 yes 0 no
+set indi_gain_schedule_ff     = 0 # 1 yes 0 no
 
 # --- feedforward control config
 # H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
@@ -226,7 +226,7 @@ set indi_use_ff_filter = 1 # 1 use Filter instead of injection feedforward 0 use
 # H(s) = K * (s - z) / (s - p)
 # Coefficient: unitless * 1000000
 # Coefficient order:  K, z, p 
-set indi_ff_filter_coefs = 1048600, -5011300, -10941000
+set indi_ff_filter_coefs = 1303600, -8300629, -10820700
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
@@ -273,21 +273,21 @@ set indi_wls_act_penalties = 1,1,1,1
 # lead lag filtering for motor Outputs
 set indi_use_motor_lead_lag = 0
 set indi_act_time_constant_true_ms = 17,17,17,17
-set indi_act_time_constant_des_ms = 22,22,22,22
+set indi_act_time_constant_des_ms = 40,40,40,40
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
 set indi_act_g1_fx = 0,0,0,0
 set indi_act_g1_fy = 0,0,0,0
+set indi_act_g1_fz = -1050, -1050, -1050, -1050
 
-set indi_act_g1_fz = -1050, -1050, -1050, -1050p
 set indi_act_g1_roll = -4000, -4000, 4000, 4000
-# set indi_act_g1_roll = -3200, -3200, 3200, 3200
-# set indi_act_g1_roll = -4800, -4800, 4800, 4800
 set indi_act_g1_pitch = -2600, 2600, -2600, 2600
-# set indi_act_g1_pitch = -2080, 2080, -2080, 2080
-# set indi_act_g1_pitch = -3120, 3120, -3120, 3120
 set indi_act_g1_yaw = -510, 510, 510, -510
+# set indi_act_g1_roll = -3200, -3200, 3200, 3200
+# set indi_act_g1_pitch = -2080, 2080, -2080, 2080
 # set indi_act_g1_yaw = -408, 408, 408, -408
+# set indi_act_g1_roll = -4800, -4800, 4800, 4800
+# set indi_act_g1_pitch = -3120, 3120, -3120, 3120
 # set indi_act_g1_yaw = -612, 612, 612, -612
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
@@ -296,11 +296,11 @@ set indi_act_g2_pitch = 0,0,0,0
 set indi_act_g2_yaw = -100, 100, 100, -100
 
 # Attitude setpoint injection
-set indi_inject_attitude_setpoints      = 0    # 0: No 1: Yes
+set indi_inject_attitude_setpoints      = 0   # 0: No 1: Yes
 set indi_att_sp_injection_type          = 2    # 0: None, 1: Impulse, 2: Doublet, 3: Step
 set indi_att_sp_injection_amplitude     = 0  # amplitude * 10
-set indi_att_sp_injection_duration      = 1500 # signal duration in ms
-set indi_att_sp_injection_duration_down = 1000 # signal duration in ms for down step (doublet only)
+set indi_att_sp_injection_duration      = 1000 # signal duration in ms
+set indi_att_sp_injection_duration_down = 750 # signal duration in ms for down step (doublet only)
 
 # Input disturbance
 # Inject a constant step disturbance on certain motors
@@ -358,9 +358,13 @@ set indi_wls_axes_weights = 1,1,50,50,50,5
 set indi_wls_act_penalties = 1,1,1,1
 
 ## Gain-scheduling
-set indi_use_gain_scheduling  = 0 # 1 yes 0 no
+set indi_use_gain_scheduling  = 1 # 1 yes 0 no
 set indi_gain_scheduling_type = 0 # 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
-set indi_gain_schedule_ff     = 0 # 1 yes 0 no
+set indi_gain_schedule_ff     = 1 # 1 yes 0 no
+set indi_use_ff_filter        = 1 # 1 yes 0 no
+
+set indi_inject_attitude_setpoints      = 0   # 0: No 1: Yes
+set indi_att_sp_injection_amplitude     = 0  # amplitude * 10
 
 ## ----- POSITION CONTROL
 
