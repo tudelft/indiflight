@@ -147,7 +147,7 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0):
+    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
@@ -161,11 +161,14 @@ class Estimator(object):
         if outGroupsNames is None:
             outGroupsNames = [f"Group {i}" for i in outGroups]
 
+        if figsize is None:
+            figsize = (16, 9)
+
         timeLabel = "Time [s]"
         self.t_h = np.asarray(self.t_h)
 
         with plt.rc_context(rc=local_rc):
-            self.f = plt.figure(figsize=(16, 9))
+            self.f = plt.figure(figsize=figsize)
 
             left=0.04
             bottom=0.06
@@ -272,8 +275,8 @@ class Estimator(object):
                     miny -= diffy * 1.
                     parAx.set_ylim(bottom=miny, top=maxy)
                 parAx.plot(self.t_h, self.t_h*0, "g--")
-                parAx.legend()
-                varAx.legend()
+                parAx.legend(fontsize=7)
+                # varAx.legend()
 
             yLastTheta = self.predictNew(A)
             yRealTime = np.array(self.predictOnline())
@@ -295,7 +298,7 @@ class Estimator(object):
                         for j in parIdxs:
                             regAx.plot(self.t_h, A[:, i, j], label=self.regNames[i][j])
                     self.all_axes.append(regAx)
-                    regAx.legend()
+                    # regAx.legend()
 
             self.f.suptitle(f"{self.name} -- Regressors, Parameters and Variance", fontsize=18)
 

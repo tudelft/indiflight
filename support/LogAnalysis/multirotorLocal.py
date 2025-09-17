@@ -81,10 +81,12 @@ n_flight = np.sum(flight)
 
 # get indices where we are learning
 LEARNER_MODE = 11
+LEARNER_TIMEOUT = 2.
 learning = flight.copy()
 if len(log.flags) > 1 and LEARNER_MODE in log.flags.iloc[0].enable:
     learning &= (t*1e6 > log.flags.iloc[0].timeUs)
     learning &= (t*1e6 < log.flags.iloc[1].timeUs)
+    learning &= (t < arm_time + LEARNER_TIMEOUT)
 
 n_learn = np.sum(learning)
 
@@ -120,6 +122,45 @@ estimators_learning = {
     'rls_incremental': None,
 }
 
+t_plot = np.concatenate((t[learning], [t[learning][-1] + 0.002])) * 1
+
+ntg = n*3 + 3
+nrg = n*2*3 + 3
+ng = ntg + nrg
+nti = n*3
+nri = n*2*3
+
+groups_global = [
+    range(0, n), range(n, 2*n), range(2*n, 3*n),
+    range(3*n, ntg),
+    range(ntg+0*n, ntg+1*n), range(ntg+2*n, ntg+3*n), range(ntg+4*n, ntg+5*n),
+    range(ntg+1*n, ntg+2*n), range(ntg+3*n, ntg+4*n), range(ntg+5*n, ntg+6*n),
+    range(ntg+6*n, ntg+nrg)
+]
+
+ltx_o2 = "\\omega^2 \\rightarrow "
+ltx_od = "\\dot{\\omega} \\rightarrow "
+
+groupNames_global = [
+    f"${ltx_o2}f_x$", f"${ltx_o2}f_y$", f"${ltx_o2}f_z$",
+    "IMU offset",
+    f"${ltx_o2}m_x$", f"${ltx_o2}m_y$", f"${ltx_o2}m_z$",
+    f"${ltx_od}m_x$", f"${ltx_od}m_y$", f"${ltx_od}m_z$",
+    "Intertia ratios"
+]
+
+groups_incremental = [
+    range(0, n), range(n, 2*n), range(2*n, 3*n),
+    range(nti+0*n, nti+1*n), range(nti+2*n, nti+3*n), range(nti+4*n, nti+5*n),
+    range(nti+1*n, nti+2*n), range(nti+3*n, nti+4*n), range(nti+5*n, nti+6*n),
+]
+
+groupNames_incremental = [
+    f"${ltx_o2}f_x$", f"${ltx_o2}f_y$", f"${ltx_o2}f_z$",
+    f"${ltx_o2}m_x$", f"${ltx_o2}m_y$", f"${ltx_o2}m_z$",
+    f"${ltx_od}m_x$", f"${ltx_od}m_y$", f"${ltx_od}m_z$",
+]
+
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
@@ -144,7 +185,6 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
 
 #%% global model LS and RLS
     # translational regressors: motors and IMU offset
-    ntg = n*3 + 3
     Atg = np.zeros((3, n_samples, ntg))
     Atg[0, :, 0*n:1*n] = w2[np.newaxis]
     Atg[1, :, 1*n:2*n] = w2[np.newaxis]
@@ -152,7 +192,6 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     Atg[:, :, 3*n:]    = np.transpose(Odx_OxOx, (1, 0, 2))
 
     # rotational regressors: motors, derivatives, and gyro cross terms
-    nrg = n*2*3 + 3
     Arg = np.zeros((3, n_samples, nrg))
     Arg[0, :, 0*n:1*n] = w2[np.newaxis]
     Arg[1, :, 2*n:3*n] = w2[np.newaxis]
@@ -165,7 +204,6 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     Arg[2, :, 6*n+2]   = -O[:, 0] * O[:, 1]
 
     # combined regressors
-    ng = ntg + nrg
     Ag = np.zeros((6, n_samples, ng))
     Ag[0:3, :, 0:ntg] = Atg
     Ag[3:6, :, ntg:ng] = Arg
@@ -176,9 +214,6 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     yg[3:, :] = Od.T
 
 #%% incremental model
-    nti = n*3
-    nri = n*2*3
-
     # translational regressors: motors only
     Ati = np.zeros((3, n_samples, nti))
     Ati[0, :, 0*n:1*n] = w2diff[np.newaxis]
@@ -243,41 +278,79 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
         rls_incremental.newSample(Ai[:, i, :], yi[:, i], t=t[select][i])
         rls_incremental.update()
 
-t_plot = np.concatenate((t[learning], [t[learning][-1] + 0.002])) * 1
+    # plots
+    figsize = (25, 15)
+    f = ls_global.plotParameters(parGroups=groups_global, parGroupNames=groupNames_global, sharey=False, figsize=figsize)
+    f.savefig(f"output/{args.name}_{ls_global.name}.eps")
 
-groups_global = [
-    range(0, n), range(n, 2*n), range(2*n, 3*n),
-    range(3*n, ntg),
-    range(ntg+0*n, ntg+1*n), range(ntg+2*n, ntg+3*n), range(ntg+4*n, ntg+5*n),
-    range(ntg+1*n, ntg+2*n), range(ntg+3*n, ntg+4*n), range(ntg+5*n, ntg+6*n),
-    range(ntg+6*n, ntg+nrg)
-]
+    f = rls_global.plotParameters(parGroups=groups_global, parGroupNames=groupNames_global, sharey=False, figsize=figsize)
+    f.savefig(f"output/{args.name}_{rls_global.name}.eps")
 
-groups_incremental = [
-    range(0, n), range(n, 2*n), range(2*n, 3*n),
-    range(nti+0*n, nti+1*n), range(nti+2*n, nti+3*n), range(nti+4*n, nti+5*n),
-    range(nti+1*n, nti+2*n), range(nti+3*n, nti+4*n), range(nti+5*n, nti+6*n),
-]
+    f = ls_incremental.plotParameters(parGroups=groups_incremental, parGroupNames=groupNames_incremental, sharey=False, figsize=figsize)
+    f.savefig(f"output/{args.name}_{ls_incremental.name}.eps")
 
-figs = [
-    # estimators_flight["ls_global"].plotParameters(parGroups=groups_global, sharey=False),
-    # estimators_flight["rls_global"].plotParameters(parGroups=groups_global, sharey=False),
-    # estimators_flight["ls_incremental"].plotParameters(parGroups=groups_incremental, sharey=False),
-    # estimators_flight["rls_incremental"].plotParameters(parGroups=groups_incremental, sharey=False),
-    estimators_learning["ls_global"].plotParameters(parGroups=groups_global, sharey=False),
-    estimators_learning["rls_global"].plotParameters(parGroups=groups_global, sharey=False),
-    estimators_learning["ls_incremental"].plotParameters(parGroups=groups_incremental, sharey=False),
-    estimators_learning["rls_incremental"].plotParameters(parGroups=groups_incremental, sharey=False),
-]
+    f = rls_incremental.plotParameters(parGroups=groups_incremental, parGroupNames=groupNames_incremental, sharey=False, figsize=figsize)
+    f.savefig(f"output/{args.name}_{rls_incremental.name}.eps")
 
-axes = []
-for f in figs:
-    axes.extend(f.axes)
 
-bc = BlittedCursor(axes, sharex=True)
+# axes = []
+# for f in figs:
+#     axes.extend(f.axes)
+# 
+# bc = BlittedCursor(axes, sharex=True)
+# 
+# plt.show()
 
-plt.show()
+# for f in figs:
+#     f.savefig(f"outputs/{args.name}_{f._title.replace(' ', '_')}.eps", dpi=300)
 
+
+#%% output effectiveness matrices for each estimator in omega domain and indiflight format
+
+wmax = 4200 # rad/s
+for est_name, estimators in zip(["full", "throw"], [estimators_flight, estimators_learning]):
+    print()
+    print(f"----- Effectiveness Matrices for {est_name} data -----")
+    print()
+    for est_key in estimators.keys():
+        est = estimators[est_key]
+        G1 = np.zeros((6, n))
+        G2 = np.zeros((3, n))
+
+        if "incremental" in est_key:
+            G1[0, :] = est.theta[0*n:1*n].squeeze()
+            G1[1, :] = est.theta[1*n:2*n].squeeze()
+            G1[2, :] = est.theta[2*n:3*n].squeeze()
+            G1[3, :] = est.theta[3*n:4*n].squeeze()
+            G1[4, :] = est.theta[5*n:6*n].squeeze()
+            G1[5, :] = est.theta[7*n:8*n].squeeze()
+
+            G2[0, :] = est.theta[4*n:5*n].squeeze()
+            G2[1, :] = est.theta[6*n:7*n].squeeze()
+            G2[2, :] = est.theta[8*n:9*n].squeeze()
+        elif "global" in est_key:
+            G1[0, :] = est.theta[0*n:1*n].squeeze()
+            G1[1, :] = est.theta[1*n:2*n].squeeze()
+            G1[2, :] = est.theta[2*n:3*n].squeeze()
+            G1[3, :] = est.theta[3*n+3:4*n+3].squeeze()
+            G1[4, :] = est.theta[5*n+3:6*n+3].squeeze()
+            G1[5, :] = est.theta[7*n+3:8*n+3].squeeze()
+
+            G2[0, :] = est.theta[4*n+3:5*n+3].squeeze()
+            G2[1, :] = est.theta[6*n+3:7*n+3].squeeze()
+            G2[2, :] = est.theta[8*n+3:9*n+3].squeeze()
+        else:
+            raise ValueError("Unknown estimator key.")
+
+
+        print(f"--- {est.name} ---")
+        print()
+        print("Effectiveness matrix G1:")
+        print( (G1 * (wmax**2) * np.array([100, 100, 100, 10, 10, 10])[:, np.newaxis]).round(0) )
+        print()
+        print("Effectiveness matrix G2:")
+        print((1e5*G2).round(0))
+        print()
 
 #%% motor model
 
