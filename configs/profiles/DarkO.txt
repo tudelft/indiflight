@@ -47,6 +47,7 @@
 #define USE_THROW_TO_ARM
 ## #define USE_CATAPULT
 #define USE_LEARNER
+#define LEARNER_IS_TAILSITTER
 ## #define USE_NN_CONTROL
 
 
@@ -316,15 +317,16 @@ indiprofile 2
 # as the initial condition is currently always zero. This may be changed in the future.
 # the default values (values not set here) are the same as for all other profiles
 
-# these values are slightly more conservative than indiprofile 0
-
 set indi_act_num = 4
-# set indi_attitude_gains = 1552,1552,1552
-# set indi_rate_gains = 174,174,174
-set indi_attitude_max_tilt_rate = 500
-set indi_attitude_max_yaw_rate = 300
-set indi_manual_use_coordinated_yaw = 1
-set indi_manual_max_upwards_accel = 20
+set indi_attitude_gains = 800, 500, 200
+set indi_rate_gains     =  130,  100,  60
+set indi_attitude_max_tilt_rate = 800
+set indi_attitude_max_yaw_rate = 500
+set indi_manual_max_upwards_accel = 30
+set indi_manual_max_tilt = 45
+set indi_manual_use_coordinated_yaw = 0
+set indi_use_increment = 1
+set indi_use_accel_for_thrust = 1
 set indi_act_type = 1,1,2,2,0,0,0,0
 # set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
 # set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
@@ -343,7 +345,7 @@ set indi_act_max = 80, 80, 40, 40
 #set indi_act_g2_pitch = -12, 12, 12, -12
 #set indi_act_g2_yaw = -8, 8, 8, -8
 
-set indi_sync_lowpass_hz = 15
+set indi_sync_lowpass_hz = 5
 set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
@@ -455,7 +457,7 @@ set learner_pitch_misalignment = 0
 set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
-set learner_apply_indi_profile = 0
+set learner_apply_indi_profile = 1
 set learner_apply_position_profile = 0
 set learner_apply_hover_rotation = 0
 

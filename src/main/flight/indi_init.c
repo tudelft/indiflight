@@ -99,6 +99,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- Tailsitter
     indiProfile->tails_use_scheduled = false;
     indiProfile->tails_use_sine = true;
+    indiProfile->tails_d0[0] = 0;
+    indiProfile->tails_d0[1] = 0;
     indiProfile->tails_cxw = 0;
     indiProfile->tails_cyw = 0;
     indiProfile->tails_czw = 0;

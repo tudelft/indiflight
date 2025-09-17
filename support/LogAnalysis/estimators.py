@@ -1,4 +1,5 @@
 import numpy as np
+import numbers
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
@@ -9,7 +10,7 @@ class Estimator(object):
     def __init__(self, n, d=1):
         self.n = n
         self.d = d
-        self.N = 1
+        self.N = 0
 
         self.theta = np.zeros((n, 1))
         self.theta[:] = np.nan
@@ -19,11 +20,18 @@ class Estimator(object):
         self.y = np.zeros((d, 1))
         self.e = np.zeros((d, 1))
 
+        self.t = 0.
+
         self.theta_h = []
         self.P_h = []
         self.A_h = []
         self.y_h = []
         self.e_h = []
+        self.t_h = []
+
+        self.A_acc = []
+        self.y_acc = []
+        self.t_acc = []
 
         self.name = "Estimator"
         self.parNames = ["$\\theta$"] if self.n==1 else [f"$\\theta_{{ {i} }}$" for i in range(self.n)]
@@ -73,7 +81,7 @@ class Estimator(object):
 
         self.P[:] = P
 
-    def newSample(self, A, y):
+    def newSample(self, A, y, t):
         # accept one-dimensional only if either n or d are 1
         A = np.asarray(A)
         if (A.ndim == 1) and (self.d == 1):
@@ -102,18 +110,36 @@ class Estimator(object):
             if (y.shape != (self.d, 1)):
                 raise ValueError(f"If output y is ndim=2, it has to be shape {(self.d, 1)}, got {y.shape}")
 
-        self.A[:] = A
-        self.y[:] = y
+        if not isinstance(t, numbers.Number):
+            raise ValueError(f"Time t must be a number, got {type(t)}")
+
+        self.A_acc.append(A.copy())
+        self.y_acc.append(y.copy())
+        self.t_acc.append(t)
 
     def log(self):
         self.theta_h.append(self.theta.copy())
         self.P_h.append(self.P.copy())
-        self.A_h.append(self.A.copy())
-        self.y_h.append(self.y.copy())
         self.e_h.append(self.e.copy())
 
     def update(self):
-        raise NotImplementedError("update must be implemented in a child class")
+        self.N_batch = len(self.A_acc)
+
+        self.theta_h.extend([self.theta.copy()]*(self.N_batch-1))
+        self.e_h.extend([self.e.copy()]*(self.N_batch-1))
+        self.P_h.extend([self.P.copy()]*(self.N_batch-1))
+        self.A_h.extend(self.A_acc)
+        self.y_h.extend(self.y_acc)
+        self.t_h.extend(self.t_acc)
+
+        self.A[:] = self.A_acc[-1]
+        self.y[:] = self.y_acc[-1]
+
+        # reset accumulators
+        self.A_acc = []
+        self.y_acc = []
+        self.t_acc = []
+
 
     def predictNew(self, A):
         return A @ self.theta
@@ -121,7 +147,7 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, timeMs=None, sharey=True, zoomy=False, extra_rows=0):
+    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
@@ -135,12 +161,8 @@ class Estimator(object):
         if outGroupsNames is None:
             outGroupsNames = [f"Group {i}" for i in outGroups]
 
-        if timeMs is None:
-            self.timeMs = list(range(self.N))
-            timeLabel = "iterations"
-        else:
-            self.timeMs = np.asarray(timeMs)
-            timeLabel = "Time [ms]"
+        timeLabel = "Time [s]"
+        self.t_h = np.asarray(self.t_h)
 
         with plt.rc_context(rc=local_rc):
             self.f = plt.figure(figsize=(16, 9))
@@ -233,20 +255,23 @@ class Estimator(object):
             A = np.array(self.A_h)
             y = np.array(self.y_h)
 
+            if x.shape[0] == 0:
+                raise RuntimeError("No data to plot, run update() first")
+
             for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
                 maxy = 0.
                 miny = 0.
                 for i in parIdxs:
                     maxy = max(maxy, x[-1, i])
                     miny = min(miny, x[-1, i])
-                    parAx.plot(self.timeMs, x[:, i], label=self.parNames[i])
-                    varAx.plot(self.timeMs, P[:, i, i], label=f"var({self.parNames[i]})")
+                    parAx.plot(self.t_h, x[:, i], label=self.parNames[i])
+                    varAx.plot(self.t_h, P[:, i, i], label=f"var({self.parNames[i]})")
                 if zoomy:
                     diffy = maxy - miny
                     maxy += diffy * 1.
                     miny -= diffy * 1.
                     parAx.set_ylim(bottom=miny, top=maxy)
-                parAx.plot(self.timeMs, self.timeMs*0, "g--")
+                parAx.plot(self.t_h, self.t_h*0, "g--")
                 parAx.legend()
                 varAx.legend()
 
@@ -255,9 +280,9 @@ class Estimator(object):
             printLegend = True
             for yIdxs, yAx in zip(outGroups, yAxs):
                 for i in yIdxs:
-                    yAx.plot(self.timeMs, y[:, i], label="Target")
-                    yAx.plot(self.timeMs, yRealTime[:, i], label="Real Time")
-                    yAx.plot(self.timeMs, yLastTheta[:, i], label="A posteriori")
+                    yAx.plot(self.t_h, y[:, i], label="Target")
+                    yAx.plot(self.t_h, yRealTime[:, i], label="Real Time")
+                    yAx.plot(self.t_h, yLastTheta[:, i], label="A posteriori")
                 yAx.set_ylabel("Output "+self.outNames[i])
                 if printLegend:
                     legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
@@ -268,7 +293,7 @@ class Estimator(object):
                 for parIdxs, regAx in zip(parGroups, regAxRow):
                     for i in yIdxs:
                         for j in parIdxs:
-                            regAx.plot(self.timeMs, A[:, i, j], label=self.regNames[i][j])
+                            regAx.plot(self.t_h, A[:, i, j], label=self.regNames[i][j])
                     self.all_axes.append(regAx)
                     regAx.legend()
 
@@ -284,24 +309,41 @@ class Estimator(object):
         # k and e
         raise NotImplementedError("todo")
 
-class RLS(Estimator):
-    def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
+class LS(Estimator):
+    def __init__(self, n, d=1, gamma=1e8):
         super().__init__(n, d)
-
-        self.n = n
-        self.d = d
-
-        self.K = np.empty((self.n, self.d))
-        self.K[:] = np.nan
-        self.lam = forgetting
-        self.e = np.empty((self.d, 1))
-        self.e[:] = np.nan
 
         self.setParameters(np.zeros((self.n, 1)))
         self.setCovariance(gamma * np.eye(n))
 
+        self.setTitle("Least Squares")
+
+    def update(self):
+        super().update()
+
+        # vanilla LS equations
+        y = np.vstack(self.y_h)
+        A = np.vstack(self.A_h)
+
+        self.theta[:], _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+
+        # log result
+        self.N += self.N_batch
+        self.log()
+
+class RLS(Estimator):
+    def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
+        super().__init__(n, d)
+
+        self.setParameters(np.zeros((self.n, 1)))
+        self.setCovariance(gamma * np.eye(n))
+
+        # additinoal parameters for RLS
+        self.K = np.empty((self.n, self.d))
+        self.K[:] = np.nan
+        self.lam = forgetting
+
         self.K_h = []
-        self.e_h = []
         self.lam_h = []
 
         self.setTitle("Recursive Least Squares")
@@ -309,12 +351,12 @@ class RLS(Estimator):
     def log(self):
         super().log()
         self.K_h.append(self.K)
-        self.e_h.append(self.e)
         self.lam_h.append(self.lam)
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
+        # if self.N == 1:
+        #     self.log()  # log initial conditions
 
         # shorthands
         theta = self.theta
@@ -473,7 +515,7 @@ class RLS_fortescue(Estimator):
     def plotParameters(self, **kwargs):
         # Call the parent method to initialize the plot
         super().plotParameters(extra_rows=1, **kwargs)
-        self.extraAxes[0][0].plot(self.timeMs, self.lam_h, label="Forgetting factor")
+        self.extraAxes[0][0].plot(self.t_h, self.lam_h, label="Forgetting factor")
 
 class RLS_linear(Estimator):
     def __init__(self, n=4, gamma=1e8, forgetting_base=0.995, N0=1):

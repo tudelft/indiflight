@@ -47,15 +47,16 @@ class BlittedCursor(object):
                 ax.sharex(ax0)
 
             lines = ax.get_lines()
-            if not lines:
-                continue
-            min_x = min(min(line.get_xdata()) for line in lines)
-            self.cursors.append(ax.axvline(x=min_x,
-                                           color='black',
-                                           linestyle='--',
-                                           lw=0.8,
-                                           visible=False))
-            
+            if lines:
+                min_x = min(min(line.get_xdata()) for line in lines)
+                self.cursors.append(ax.axvline(x=min_x,
+                                               color='black',
+                                               linestyle='--',
+                                               lw=0.8,
+                                               visible=False))
+            else:
+                self.cursors.append(None)
+
         # get unique canvasses by iterating over axes
         # this is necessary to avoid multiple connections to the same canvas
         self.canvasses = [self.axes[0].figure.canvas]
@@ -81,9 +82,10 @@ class BlittedCursor(object):
         for ax, line, bg in zip(self.axes, self.cursors, self.backgrounds):
             canvas = ax.figure.canvas
             canvas.restore_region(bg)
-            line.set_xdata([event.xdata])
-            line.set_visible(True)
-            ax.draw_artist(line)
+            if line is not None:
+                line.set_xdata([event.xdata])
+                line.set_visible(True)
+                ax.draw_artist(line)
             canvas.blit(ax.bbox)
 
 class FlightPlotterBase(object):

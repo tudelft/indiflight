@@ -74,7 +74,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .modeFx    = (uint8_t) (LEARN_DURING_PROBING),
     .modeAct   = (uint8_t) (LEARN_DURING_PROBING),
     .modeHover = (uint8_t) (LEARN_DURING_PROBING),
-    .mixControlAfterMs = 350,
+    .mixControlAfterMs = 1000,
     .initFromProfileFx = false,
     .initFromProfileAct = false,
     .actMask = 0xFFFF, // all motors and servos
@@ -199,6 +199,7 @@ void initLearnerFilters(void) {
             case INDI_ACT_TYPE_SERVO:
                 if (s >= MAX_SUPPORTED_SERVOS) { return; } // abort if too many servos
                 // not implemented yet
+                biquadFilterInitLPF(&fxAngleFilter[m], learnerConfig()->fxFiltHz, gyro.targetLooptime);
                 s++;
                 break;
             case INDI_ACT_TYPE_OFF:
@@ -304,6 +305,8 @@ static void initLearnerRls(void) {
     learnRun.initialized = true;
 }
 
+#include "flight/servos.h"
+
 #ifdef STM32H7
 FAST_CODE
 #endif
@@ -358,13 +361,12 @@ static void updateLearningFilters(void) {
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
-    static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
+    //static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
     static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
 
-    UNUSED(fxAngleFilter);
     UNUSED(actAngleFilter);
-    UNUSED(fxPrevAngle);
 
+    int s = 0;
     for (int act = 0; act < indiRun.actNum; act++) {
         if (!(config->actMask & (1 << act))) {
             continue; // skip unselected actuators
@@ -377,8 +379,7 @@ static void updateLearningFilters(void) {
                 fxPrevOmega[act] = learnRun.fxOmega[act];
 
                 float fxOmegaDot = indiRun.indiFrequency * learnRun.fxOmegaDiff[act];
-                learnRun.fxOmegaDotDiff[act] = fxOmegaDot; // - fxPrevOmegaDot[act];
-                // fxPrevOmegaDot[act] = fxOmegaDot;
+                learnRun.fxOmegaDot[act] = fxOmegaDot;
 
                 learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], indiRun.omega[act]);
                 learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (learnRun.motorOmega[act] - motorPrevOmega[act]);
@@ -391,8 +392,19 @@ static void updateLearningFilters(void) {
                 learnRun.motorSqrtD[act] = biquadFilterApply(&actSqrtDFilter[act], sqrtf(dConstr));
 
                 break;
-            case INDI_ACT_TYPE_SERVO:
-            case INDI_ACT_TYPE_OFF:
+            case INDI_ACT_TYPE_SERVO: {
+                float servo_angle_rad = DEGREES_TO_RADIANS(((float)servo_feedback[s])*0.01f);
+                learnRun.fxOmega[act] = biquadFilterApply(&fxAngleFilter[act], servo_angle_rad);
+
+                learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], servo_angle_rad);
+                learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (servo_angle_rad - motorPrevOmega[act]);
+                motorPrevOmega[act] = servo_angle_rad;
+
+                learnRun.motorD[act] = biquadFilterApply(&actDFilter[act], indiRun.d[act]);
+                s++;
+
+                break;
+            } case INDI_ACT_TYPE_OFF:
             default:
                 break; // skip unsupported actuator types
         }
@@ -637,11 +649,12 @@ void updateLearner(timeUs_t current) {
 
     if (learnFx) {
         // setup regressors
-        float A[RLS_MAX_N];
+        float A[RLS_MAX_N] = {0};
         float ySpf[3];
         float yRateDot[3];
 
         int m = 1, s = 1; 
+//#ifndef LEARNER_IS_TAILSITTER
         for (int act = 0; act < indiRun.actNum; act++) {
             if (!(config->actMask & (1 << act))) {
                 continue; // skip unselected actuators
@@ -650,7 +663,7 @@ void updateLearner(timeUs_t current) {
             switch (indiRun.actType[act]) {
                 case INDI_ACT_TYPE_MOTOR:
                     A[m] = 1e-5f * learnRun.fxOmega[act] * learnRun.fxOmega[act];
-                    A[m + learnRun.numMotors] = 1e-3f * learnRun.fxOmegaDotDiff[act];
+                    A[m + learnRun.numMotors] = 1e-3f * learnRun.fxOmegaDot[act];
                     m++;
                     break;
                 case INDI_ACT_TYPE_SERVO:
@@ -660,10 +673,47 @@ void updateLearner(timeUs_t current) {
                     break;
             }
         }
+//#endif
 
         for (int ax = 0; ax < 3; ax++) {
             // first regressor is rate cross terms for inertia ratios
             A[0] = 1.f * -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+
+#ifdef LEARNER_IS_TAILSITTER
+            float w20 = learnRun.fxOmega[0] * learnRun.fxOmega[0];
+            float w21 = learnRun.fxOmega[1] * learnRun.fxOmega[1];
+            float w2d0 = learnRun.fxOmega[0] * learnRun.fxOmega[0] * learnRun.fxOmega[2];
+            float w2d1 = learnRun.fxOmega[1] * learnRun.fxOmega[1] * learnRun.fxOmega[3];
+            float wdot0 = learnRun.fxOmegaDot[0];
+            float wdot1 = learnRun.fxOmegaDot[1];
+            float u = 0.f;
+            float v = 0.f;
+            float w = 0.f;
+            float p = learnRun.imuRate.A[0];
+            float q = learnRun.imuRate.A[1];
+            float r = learnRun.imuRate.A[2];
+            float eta = sqrtf( (u*u+v*v+w*w) + 1.f * (p*p+q*q+r*r));
+            switch(ax){
+                case 0: // roll
+                    A[1] = 1e-5f * (w20 - w21); // motor 0 is left, motor 1 is right
+                    A[2] = 0.f;
+                    A[3] = 0.f;
+                    A[4] = 1e-1f * eta * p;
+                    break;
+                case 1: // pitch
+                    A[1] = 1e-5 * (w20 + w21); // motor 0 is left, motor 1 is right
+                    A[2] = 1e-5 * (w2d0 + w2d1);
+                    A[3] = 0.f;
+                    A[4] = 1e-1f * eta * q;
+                    break;
+                case 2: // yaw
+                    A[1] = 1e-5f * (w20 - w21); // motor 0 is left, motor 1 is right
+                    A[2] = 1e-5f * (w2d0 - w2d1);
+                    A[3] = 1e-3f * (wdot0 - wdot1);
+                    A[4] = 1e-1f * eta * r;
+                    break;
+            }
+#endif
 
             ySpf[ax] = learnRun.fxSpf.A[ax] * 10.f; // scaling likely depends on sample time..
             yRateDot[ax] = learnRun.fxRateDot.A[ax]; // scaling seems okay at this sample time/filtering
@@ -696,6 +746,12 @@ void updateLearner(timeUs_t current) {
                     y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
                     break;
                 case INDI_ACT_TYPE_SERVO:
+                    A[0] = learnRun.motorD[act];
+                    A[1] = 0.f;
+                    A[2] = 1.f;
+                    A[3] = -1e-2f * learnRun.motorOmegaDot[act];
+                    y = learnRun.motorOmega[act]; // already in radians
+                    break;
                 case INDI_ACT_TYPE_OFF:
                 default:
                     break;
@@ -827,8 +883,26 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     quaternionProducts_of_quaternion(&imu_to_hoverP, &imu_to_hover);
     rotationMatrix_of_quaternionProducts(&imu_to_hoverR, &imu_to_hoverP);
 
+#if defined(LEARNER_IS_TAILSITTER)
+    // Tailsitter specific code (see indi_init)
+    indi->tails_use_scheduled = true;
+    indi->tails_use_sine = false;
+    indi->tails_d0[0] = 0;
+    indi->tails_d0[1] = 0;
+    indi->tails_cxw  = 0;
+    indi->tails_cyw  = 0;
+    indi->tails_czw  = 0;
+    indi->tails_clw  = 0;
+    indi->tails_cmw  = 0;
+    indi->tails_cnw  = 0;
+    indi->tails_cnwd = 0;
+    indi->tails_cxd  = 0;
+    indi->tails_cmd  = 0;
+    indi->tails_cnd  = 0;
+    UNUSED(config);
+    UNUSED(actG2rotIMU);
+#else
     indi->actNum = indiRun.actNum;
-
     int m = 0;
     for (int act = 0; act < indi->actNum; act++) {
         if (!(config->actMask & (1 << act))) {
@@ -887,6 +961,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 
         m++;
     }
+#endif // LEARNER_IS_TAILSITTER
 
     // indi->imuSyncLp2Hz = 15; // lord knows
     // indi->wlsWv[0] = 1;

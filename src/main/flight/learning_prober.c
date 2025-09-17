@@ -300,7 +300,7 @@ void updateProber(timeUs_t currentTimeUs) {
     return;
 
 zeroAndReturn:
-    setZeroOutputs();
+   setZeroOutputs();
     proberRuntime.isGenRunning = false;
     return;  // Prober is not initialized or already finished, no updates needed
 }

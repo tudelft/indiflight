@@ -253,44 +253,46 @@ text = np.zeros(len(t)+1)
 text[1:] = t
 text[0] = t[0]-(t[1]-t[0])
 
+# remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
+
 rls_phi9.plotParameters(timeMs=text,
-                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [9,10], [11], [12,13,14,15], [16,17,18], [19,20]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
                         sharey=False, zoomy=False)
 
 rls_phi9_noI.plotParameters(timeMs=text,
-                            parGroups=[[3,4,5], [6,7], [8], [9,10], [11], [12,13,14,15], [16,17,18], [19,20]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+                            parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
                             sharey=False, zoomy=False)
 
 rls_phi7_noI.plotParameters(timeMs=text,
-                            parGroups=[[3,4,5], [6,7], [8], [9,10], [11], [12,13,14,15], [16,17,18]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+                            parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
                             sharey=False, zoomy=False)
 
 rls_phi3_noI.plotParameters(timeMs=text,
-                            parGroups=[[3,4,5], [6,7], [8], [9,10], [11], [16,17,18]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{m\\omega diag}$"],
+                            parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
                             sharey=False, zoomy=False)
 
 rls_noPhi_noI.plotParameters(timeMs=text,
-                            parGroups=[[3,4,5], [6,7], [8], [9,10], [11]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$"],
+                            parGroups=[[3,4,5], [6,7], [8]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
                             sharey=False, zoomy=False)
 
 rls_phi7.plotParameters(timeMs=text,
-                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [9,10], [11], [12,13,14,15], [16,17,18]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
                         sharey=False, zoomy=False)
 
 rls_phi3.plotParameters(timeMs=text,
-                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [9,10], [11], [16,17,18]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$", "$C_{m\\omega diag}$"],
+                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
                         sharey=False, zoomy=False)
 
 rls_noPhi.plotParameters(timeMs=text,
-                        parGroups=[[0,1,2], [3,4,5], [6,7], [8], [9,10], [11]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_\\dot{\\delta}$", "$C_\\ddot{\\delta}$"],
+                        parGroups=[[0,1,2], [3,4,5], [6,7], [8]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
                         sharey=False, zoomy=False)
 
 all_rls = [rls_phi9,

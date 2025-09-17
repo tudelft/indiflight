@@ -7,7 +7,6 @@ plt.close('all')
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-
 parser = ArgumentParser(description="Analyse onboard ID data from a log file.",
                         formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("logfile", type=str, help="Path to the log file.")
