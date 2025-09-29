@@ -14,6 +14,8 @@ parser.add_argument("--resetTime", action="store_true", help="Reset time to star
 parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                     help="Crop the log to the given time range (in seconds).")
 parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
+parser.add_argument("--type", type=str, default="tailsitter", choices=["tailsitter", "multirotor"],
+                    help="Type of craft for visualization.")
 
 args = parser.parse_args()
 
@@ -24,9 +26,12 @@ log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
+import matplotlib
+matplotlib.use('qtagg')
+
 fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
 
-pplt = Viewport(log.data, follow=False, name=f"{args.name} -- Onboard ID Analysis")
+pplt = Viewport(log.data, follow=False, craft=args.type, name=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
 
 cursor = BlittedCursor(fplt.all_axes, sharex=True)

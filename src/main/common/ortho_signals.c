@@ -85,10 +85,10 @@ void orthoSignalGenerate(float t, float* out, int n) {
 
         // diagonal
         int diagIdx = ((i+1)*(i+2) >> 1) - 1;
-        out[i] = 1.f*orthoSignal.mixing_matrix[diagIdx] * v[i];
+        out[i] = 1.5f*orthoSignal.mixing_matrix[diagIdx] * v[i];
 
         for (int j = 0; j < i; j++) {
-            out[i] += 1.f*orthoSignal.mixing_matrix[diagIdx - (i-j)] * v[j];
+            out[i] += 1.5f*orthoSignal.mixing_matrix[diagIdx - (i-j)] * v[j];
         }
     }
 }

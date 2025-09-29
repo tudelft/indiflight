@@ -22,7 +22,7 @@ local_rc.update({
     "axes.titlesize": 14,
     "xtick.labelsize": 10,
     "ytick.labelsize": 10,
-    "legend.loc": 'best',
+    "legend.loc": 'upper left',
     "legend.fontsize": 8,
     'figure.subplot.bottom': 0.06,
     'figure.subplot.left': 0.05,
@@ -249,7 +249,7 @@ class FlightPlotter(FlightPlotterBase):
                          ylabel="Motor Commands [-]",
                          ylimits=(-0.05, 1.05))
 
-        if 'servo_feedback' in self.data.columns:
+        if 'servo_feedback[0]' in self.data.columns:
             self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)],
@@ -525,7 +525,7 @@ class Viewport(object):
         self.ax.set_ylim(miny-0.5, maxy+0.5)
         self.ax.set_zlim(minz-0.5, maxz+0.5)
 
-        self.ax.legend(loc='best')
+        self.ax.legend(loc='upper left')
 
         self.ax.set_title(self.name)
 

@@ -166,6 +166,7 @@ def skew(x):
                      [x[2], 0, -x[0]],
                      [-x[1], x[0], 0]])
 
+all_figs = []
 for name, select, estimators in zip(["full", "throw"], [flight, learning], [estimators_flight, estimators_learning]):
     n_samples = np.sum(select)
 
@@ -293,13 +294,13 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     f.savefig(f"output/{args.name}_{rls_incremental.name}.eps")
 
 
-# axes = []
-# for f in figs:
-#     axes.extend(f.axes)
-# 
-# bc = BlittedCursor(axes, sharex=True)
-# 
-# plt.show()
+axes = []
+for f in all_figs:
+    axes.extend(f.axes)
+
+bc = BlittedCursor(axes, sharex=True)
+
+plt.show()
 
 # for f in figs:
 #     f.savefig(f"outputs/{args.name}_{f._title.replace(' ', '_')}.eps", dpi=300)
