@@ -115,13 +115,14 @@ set align_board_pitch = 0
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
 # set acc_offset = 0, 0, 0
-set acc_offset = -10, -12, 8
+# set acc_offset = -10, -12, 8
+set acc_offset = -4, -11, 6
 
 # motor setup
 set dshot_bidir = ON
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
-set motor_poles = 12
+set motor_poles = 14
 set motor_output_reordering = 0,1,2,3,4,5,6,7
 
 # failsafes

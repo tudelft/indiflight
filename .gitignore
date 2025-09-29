@@ -66,3 +66,4 @@ logs-*/
 .jlink-commandfile
 build*/
 !src/main/build
+output/
