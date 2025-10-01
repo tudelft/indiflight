@@ -140,14 +140,13 @@ class Estimator(object):
         self.y_acc = []
         self.t_acc = []
 
-
     def predictNew(self, A):
         return A @ self.theta
 
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None):
+    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None, uncertainty=False):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
@@ -261,6 +260,10 @@ class Estimator(object):
             if x.shape[0] == 0:
                 raise RuntimeError("No data to plot, run update() first")
 
+            has_bounds = hasattr(self, 'theta_bounds_h') and (len(self.theta_bounds_h) == x.shape[0])
+            if has_bounds:
+                bounds = np.array(self.theta_bounds_h)
+
             for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
                 maxy = 0.
                 miny = 0.
@@ -268,6 +271,11 @@ class Estimator(object):
                     maxy = max(maxy, x[-1, i])
                     miny = min(miny, x[-1, i])
                     parAx.plot(self.t_h, x[:, i], label=self.parNames[i])
+                    if has_bounds:
+                        # area plot of lower and upper bounds using the same color as the line
+                        parAx.fill_between(self.t_h, bounds[:, i, 0], bounds[:, i, 1],
+                                           color=parAx.lines[-1].get_color(),
+                                           alpha=0.3, label=None)
                     varAx.plot(self.t_h, P[:, i, i], label=f"var({self.parNames[i]})")
                 if zoomy:
                     diffy = maxy - miny
@@ -345,16 +353,23 @@ class RLS(Estimator):
         self.K = np.empty((self.n, self.d))
         self.K[:] = np.nan
         self.lam = forgetting
+        self.NIS = 0.
+        self.theta_bounds = np.empty((self.n, 2))
+        self.theta_bounds[:] = np.nan
 
         self.K_h = []
         self.lam_h = []
+        self.NIS_h = []
+        self.theta_bounds_h = []
 
         self.setTitle("Recursive Least Squares")
 
     def log(self):
         super().log()
-        self.K_h.append(self.K)
+        self.K_h.append(self.K.copy())
         self.lam_h.append(self.lam)
+        self.NIS_h.append(self.NIS)
+        self.theta_bounds_h.append(self.theta_bounds.copy())
 
     def update(self):
         super().update()
@@ -363,6 +378,7 @@ class RLS(Estimator):
 
         # shorthands
         theta = self.theta
+        theta_bounds = self.theta_bounds
         P = self.P
         A = self.A
         y = self.y
@@ -376,10 +392,22 @@ class RLS(Estimator):
         e[:] = y - A @ theta
 
         M = lam * np.eye(d) + A @ P @ A.T
-        K[:] = ( P @ A.T ) @ np.linalg.inv(M)
+        Minv = np.linalg.inv(M)
+
+        NISk = (e.T @ Minv @ e)[0, 0]
+        self.NIS = 0.99 * self.NIS + (1. - 0.99) * NISk
+
+        K[:] = ( P @ A.T ) @ Minv
 
         theta[:] += K @ e
         P[:] = ( P - K @ A @ P ) / lam
+
+        # 99% confidence bounds using normal test statistic (assuming N is large)
+        theta_var = self.NIS*np.diag(P)
+        from scipy.stats import norm
+        norm_val = norm.ppf(0.995) # icdf just a shittier name
+        theta_bounds[:, 0] = theta[:, 0] - norm_val * np.sqrt(theta_var)
+        theta_bounds[:, 1] = theta[:, 0] + norm_val * np.sqrt(theta_var)
 
         # log result
         self.N += 1
@@ -429,7 +457,7 @@ class LMS(Estimator):
         self.N += 1
         self.log()
 
-class EMWV(Estimator):
+class EWMV(Estimator):
     def __init__(self, forgetting=0.995):
         super().__init__(2, 1)
         self.lam = forgetting
@@ -441,8 +469,9 @@ class EMWV(Estimator):
         super().log()
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
+        # if self.N == 1:
+        #     self.log()  # log initial conditions
 
         mean = self.theta[0, 0]
         var = self.theta[1, 0]
@@ -453,6 +482,38 @@ class EMWV(Estimator):
         self.theta[1, 0] = self.lam * ( var + (1. - self.lam) * diff**2 )
 
         self.N += 1
+        self.log()
+
+class Welford(Estimator):
+    def __init__(self):
+        super().__init__(2, 1)
+
+        self.setTitle("Welford")
+        self.setNames(["mean", "variance"], [["dummy 1", "dummy 2"]], ["sample"])
+
+    def log(self):
+        super().log()
+
+    def update(self):
+        super().update()
+        # if self.N == 1:
+        #     self.log()  # log initial conditions
+
+        mean = self.theta[0, 0]
+        var = self.theta[1, 0]
+        sample = self.y[0, 0]
+
+        self.N += 1
+        diff = sample - mean
+        mean += diff / self.N
+        var += diff * (sample - mean)
+
+        self.theta[0, 0] = mean
+        if self.N > 1:
+            self.theta[1, 0] = var / (self.N - 1)
+        else:
+            self.theta[1, 0] = 0.
+
         self.log()
 
 class RLS_fortescue(Estimator):
