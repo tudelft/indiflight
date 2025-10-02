@@ -71,12 +71,12 @@ K = ni + nd
 
 start = time()
 
-# v.append(T_timeshift(v[0], -0.08))  # v2
-# v.append(T_timeshift(v[1], -0.08))  # v3
-# v.append(T_timeshift(v[2], -0.08))  # v3
-v.append(T_scale(v[0], 0.8))  # v2
-v.append(T_scale(v[1], 0.8))  # v2
-v.append(T_scale(v[2], 0.8))  # v2
+# v.append(T_timeshift(v[0], 0.15))  # v2
+# v.append(T_timeshift(v[1], 0.15))  # v3
+# v.append(T_timeshift(v[2], 0.15))  # v3
+v.append(T_scale(v[0], 0.85))  # v2
+v.append(T_scale(v[1], 0.85))  # v2
+v.append(T_scale(v[2], 0.85))  # v2
 # v.append(T_scale(v[0], 0.9**2))  # v2
 # v.append(T_scale(v[0], 0.9**3))  # v2
 # v.append(T_scale(v[0], 0.9**4))  # v2
@@ -245,10 +245,8 @@ z = cstar * yn[:, :ni] + astar
 #%% run linear program to generate v for dependent actuators
 
 T = 1
-c = pl.LpVariable(f"c", lowBound=0, upBound=None)
-a = pl.LpVariable(f"a", lowBound=None, upBound=None)
-deltalower = np.ones(nd) * (-0.8)
-deltaupper = np.ones(nd) * (+0.8)
+deltalower = np.ones(nd) * (-1.0)
+deltaupper = np.ones(nd) * (+1.0)
 
 # get min and max of the dependent actuators, and integral z
 ptilde = yn[:, ni:] / z
@@ -256,7 +254,6 @@ ptilde_min = np.min(ptilde, axis=0)
 ptilde_max = np.max(ptilde, axis=0)
 
 G = np.trapezoid(z, t, axis=0)
-
 
 cstar2, astar2 = max_excitation(ptilde_min, ptilde_max,
                                 deltalower, deltaupper,
@@ -269,54 +266,81 @@ print("Optimal Shifting Factors a* =", astar2)
 zj = cstar2 * ptilde + astar2
 
 
+#%% plotting and verification
+
+gf = g.copy()
+bf = np.zeros(K) 
+bf[:ni] = astar
+bf[ni:] = astar2
+gf *= np.hstack([cstar, cstar2])[:, np.newaxis]
+
+zf = x @ gf.T
+zf[:, :ni] += bf[:ni]
+zf[:, ni:] /= z[:, :ni]
+zf[:, ni:] += bf[ni:]
+
+p = zf[:, ni:] * zf[:, :ni]
+
+
 # plot v in same figure
-plt.figure(figsize=(10, 4))
-plt.plot(t, z, label=[f'z{i+1}' for i in range(ni)], linestyle='--')
-plt.plot(t, zj, label=[f'zj{i+1}' for i in range(nd)], linestyle='--')
-plt.title('Scaled and Shifted Orthogonalized Functions')
-plt.xlabel('t')
-plt.ylabel('z(t)')
-plt.legend()
-plt.grid(True)
+plt.close('all')
+fv, axv = plt.subplots(3, 1, figsize=(10, 8))
+axv[0].plot(t, zf, label=[f'z{i+1}' for i in range(K)], linestyle='-', linewidth=1)
+# axv[0].plot(t, z, label=[f'z{i+1}' for i in range(ni)], linestyle='--')
+# axv[0].plot(t, zj, label=[f'zj{i+1}' for i in range(nd)], linestyle='--')
+axv[0].set_title('Scaled and Shifted Orthogonalized Functions')
+axv[0].set_xlabel('t')
+axv[0].set_ylabel('z(t)')
+axv[0].legend()
+axv[0].grid(True)
+
+axv[1].plot(t, p, label=[f'zf{i+1}' for i in range(ni)], linestyle='-', linewidth=1)
+
+axv[2].plot(t, yn, label=[f'wn{i+1}' for i in range(K)], linestyle='-', linewidth=1)
+
+# blitted curser
+cursor = BlittedCursor(axv, sharex=True)
+
+
 
 #%% plot
 # plt.close('all')
 
-f, axs = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
-axs[0].plot(t, x, label=[f'v{i+1}' for i in range(K)])
-axs[0].set_ylabel('Dictorionary Functions')
-axs[1].plot(t, y, label=[f'w{i+1}' for i in range(K)])
-axs[1].set_ylabel('Orthogonalized Functions')
-axs[2].plot(t, yn, label=[f'wn{i+1}' for i in range(K)])
-axs[2].set_ylabel('Orthonormalized Functions')
-
-
-for ax in axs:
-    ax.legend()
-    ax.grid(True)
-
-axs[-1].set_xlabel('t')
-
-# add cursor
-f.subplots_adjust(left=0.1, bottom=0.1)
-
-from scipy.integrate import cumulative_trapezoid
-
-# show time evolution of the inner products
-fig, ax = plt.subplots(K, K, figsize=(10, 8), sharex=True, sharey=True)
-for k in range(K):
-    for j in range(K):
-        cumsum = cumulative_trapezoid(yn[:, k] * yn[:, j], t, initial=0)
-        ax[k, j].plot(t, cumsum, label=f'v{k+1} * v{j+1}')
-        ax[k, j].set_title(f'Inner Product wn{k+1} * wn{j+1}')
-        ax[k, j].grid(True)
-        if k == K - 1:
-            ax[k, j].set_xlabel('t')
-        if j == 0:
-            ax[k, j].set_ylabel('Inner Product')
-
-all_axes = axs.flatten().tolist() + ax.flatten().tolist()
-cursor = BlittedCursor(axs, sharex=True)
-cursor2 = BlittedCursor(ax.flatten().tolist(), sharex=True)
+# f, axs = plt.subplots(3, 1, figsize=(10, 7), sharex=True)
+# axs[0].plot(t, x, label=[f'v{i+1}' for i in range(K)])
+# axs[0].set_ylabel('Dictorionary Functions')
+# axs[1].plot(t, y, label=[f'w{i+1}' for i in range(K)])
+# axs[1].set_ylabel('Orthogonalized Functions')
+# axs[2].plot(t, yn, label=[f'wn{i+1}' for i in range(K)])
+# axs[2].set_ylabel('Orthonormalized Functions')
+# 
+# 
+# for ax in axs:
+#     ax.legend()
+#     ax.grid(True)
+# 
+# axs[-1].set_xlabel('t')
+# 
+# # add cursor
+# f.subplots_adjust(left=0.1, bottom=0.1)
+# 
+# from scipy.integrate import cumulative_trapezoid
+# 
+# # show time evolution of the inner products
+# fig, ax = plt.subplots(K, K, figsize=(10, 8), sharex=True, sharey=True)
+# for k in range(K):
+#     for j in range(K):
+#         cumsum = cumulative_trapezoid(yn[:, k] * yn[:, j], t, initial=0)
+#         ax[k, j].plot(t, cumsum, label=f'v{k+1} * v{j+1}')
+#         ax[k, j].set_title(f'Inner Product wn{k+1} * wn{j+1}')
+#         ax[k, j].grid(True)
+#         if k == K - 1:
+#             ax[k, j].set_xlabel('t')
+#         if j == 0:
+#             ax[k, j].set_ylabel('Inner Product')
+# 
+# all_axes = axs.flatten().tolist() + ax.flatten().tolist()
+# cursor = BlittedCursor(axs, sharex=True)
+# cursor2 = BlittedCursor(ax.flatten().tolist(), sharex=True)
 
 # plt.show()
