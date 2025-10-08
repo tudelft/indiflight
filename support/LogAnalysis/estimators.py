@@ -264,6 +264,18 @@ class Estimator(object):
             if has_bounds:
                 bounds = np.array(self.theta_bounds_h)
 
+            if hasattr(self, 'NIS_h') and (len(self.NIS_h) == x.shape[0]):
+                NIS = np.array(self.NIS_h)
+                axNIS = self.f.add_subplot(outerGs[0, 0])
+                axNIS.plot(self.t_h, NIS, label="NIS")
+                # axNIS.set_yscale('log')
+                axNIS.set_title("Normalized Innovation Squared")
+                axNIS.set_ylabel("NIS")
+                axNIS.set_xlabel(timeLabel)
+                axNIS.legend()
+                self.all_axes.append(axNIS)
+
+
             for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
                 maxy = 0.
                 miny = 0.
@@ -296,8 +308,10 @@ class Estimator(object):
                     yAx.plot(self.t_h, yLastTheta[:, i], label="A posteriori")
                 yAx.set_ylabel("Output "+self.outNames[i])
                 if printLegend:
-                    legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
-                    yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
+                    # legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
+                    # yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
+                    # printLegend = False
+                    yAx.legend(loc='upper center')
                     printLegend = False
 
             for yIdxs, regAxRow in zip(outGroups, regAxs):
@@ -353,7 +367,7 @@ class RLS(Estimator):
         self.K = np.empty((self.n, self.d))
         self.K[:] = np.nan
         self.lam = forgetting
-        self.NIS = 0.
+        self.NIS = 100
         self.theta_bounds = np.empty((self.n, 2))
         self.theta_bounds[:] = np.nan
 
@@ -395,7 +409,7 @@ class RLS(Estimator):
         Minv = np.linalg.inv(M)
 
         NISk = (e.T @ Minv @ e)[0, 0]
-        self.NIS = 0.99 * self.NIS + (1. - 0.99) * NISk
+        self.NIS = 0.995 * self.NIS + (1. - 0.995) * NISk
 
         K[:] = ( P @ A.T ) @ Minv
 
@@ -405,7 +419,7 @@ class RLS(Estimator):
         # 99% confidence bounds using normal test statistic (assuming N is large)
         theta_var = self.NIS*np.diag(P)
         from scipy.stats import norm
-        norm_val = norm.ppf(0.995) # icdf just a shittier name
+        norm_val = norm.ppf(1 - (1 - 0.997)/2) # icdf just a shittier name
         theta_bounds[:, 0] = theta[:, 0] - norm_val * np.sqrt(theta_var)
         theta_bounds[:, 1] = theta[:, 0] + norm_val * np.sqrt(theta_var)
 

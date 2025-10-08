@@ -10,7 +10,7 @@ from scipy.integrate import cumulative_trapezoid
 import matplotlib.pyplot as plt
 from time import time
 import pulp as pl
-# from plotting import BlittedCursor
+from plotting import BlittedCursor
 
 # helper functions
 def inner(u, v, t):
@@ -18,6 +18,40 @@ def inner(u, v, t):
 
 def normalized(v):
     return lambda t: v(t) / np.sqrt(inner(v, v, t))
+
+def solve_gram_schmidt(n, V, t):
+    # solve gram schmidt process to find orthogonalized basis for v_i on [0, 1]
+    p = np.eye(n)
+    g = np.eye(n)
+    B = np.empty_like(V)
+    bb = np.zeros(n)
+    for k in range(n):
+        for j in range(k):
+            p[k, j] = inner(V[k], B[j], t) / bb[j]
+
+        # calc gamma matrix for  w = gamma @ v  instead of  w_k = v_k - sum(p[k, :k] @ w[:k])
+        g[k] -= p[k, :k] @ g[:k]
+
+        # evaluate  w_k = gamma_k @ v
+        B[k] = V[k]
+        if k > 0:
+            B[k] += g[k, :k] @ V[:k]
+
+        # evaluate norm2 for the next iteration
+        bb[k] = inner(B[k], B[k], t)
+
+        # check for linear dependence
+        if bb[k] < 1e-2:
+            raise ValueError("Generated functions are (too) linearly dependent. Try different transformations.")
+
+    # finalize gamma matrix such that g @ V  are orthonormal basis functions
+    g /= np.sqrt(bb)[:, np.newaxis]
+    g /= np.max(np.abs(g @ V))
+
+    # finalize orthonormal basis functions
+    B = g @ V
+
+    return B, g
 
 def maximize_excitation(v_min, v_max, u_lb, u_ub, F, G, integral_mode='equal'):
     """
@@ -90,8 +124,41 @@ def maximize_excitation(v_min, v_max, u_lb, u_ub, F, G, integral_mode='equal'):
 
     return cstar, astar
 
+class BaseFunctions(object):
+    @staticmethod
+    def polynomial(p):
+        return lambda t: p*t
 
-class ExcitationGenerator:
+    @staticmethod
+    def cosine(w0):
+        return lambda t: np.cos(w0 * t)
+
+    @staticmethod
+    def chirp(w0):
+        return lambda t: np.cos(w0 * (1-t) * (1-t))
+
+    @staticmethod
+    def noise():
+        return lambda t: np.random.uniform(-1, +1, size=t.shape)
+
+class Transformations(object):
+    @staticmethod
+    def nextpower(v):
+        return lambda t: v(t)**2
+
+    @staticmethod
+    def scale(v, beta):
+        return lambda t: v(t * beta)
+
+    @staticmethod
+    def timeshift(v, tau):
+        return lambda t: v(t + tau)
+
+    @staticmethod
+    def ampshift(v, a):
+        return lambda t: a + v(t)
+
+class ExcitationGenerator(object):
     def __init__(self, f_base, t):
         # make sure f_base is a function
         if not callable(f_base):
@@ -160,7 +227,7 @@ class ExcitationGenerator:
         self.V = V
 
         # orthogonalize basis functions (g is such that B = g @ V are orthonormal)
-        self.B, self.g = self._solve_gs(self.n, self.V)
+        self.B, self.g = solve_gram_schmidt(self.n, self.V, self.t)
         b_min = np.min(self.B, axis=1)
         b_max = np.max(self.B, axis=1)
         B_int = np.trapezoid(self.B, self.t, axis=1)
@@ -176,6 +243,7 @@ class ExcitationGenerator:
 
         # optimize excitation of dependent actuators
         if not self.nd:
+            self.cstard, self.astard = [], []
             return
 
         ptilde = np.zeros_like(self.B[self.D])
@@ -192,44 +260,9 @@ class ExcitationGenerator:
         self.cstard, self.astard = maximize_excitation(ptilde_min, ptilde_max,
                                            u_lb[self.D], u_ub[self.D],
                                            B_int[self.D], G,
-                                           integral_mode='equal')
+                                           integral_mode='zero')
 
         self.U[self.D] = self.cstard[:, np.newaxis] * ptilde  +  self.astard[:, np.newaxis]
-
-
-    def _solve_gs(self, n, V):
-        # solve gram schmidt process to find orthogonalized basis for v_i on [0, 1]
-        p = np.eye(n)
-        g = np.eye(n)
-        B = np.empty_like(V)
-        bb = np.zeros(n)
-        for k in range(n):
-            for j in range(k):
-                p[k, j] = inner(V[k], B[j], self.t) / bb[j]
-
-            # calc gamma matrix for  w = gamma @ v  instead of  w_k = v_k - sum(p[k, :k] @ w[:k])
-            g[k] -= p[k, :k] @ g[:k]
-
-            # evaluate  w_k = gamma_k @ v
-            B[k] = V[k]
-            if k > 0:
-                B[k] += g[k, :k] @ V[:k]
-
-            # evaluate norm2 for the next iteration
-            bb[k] = inner(B[k], B[k], self.t)
-
-            # check for linear dependence
-            if bb[k] < 1e-2:
-                raise ValueError("Generated functions are (too) linearly dependent. Try different transformations.")
-
-        # finalize gamma matrix such that g @ V  are orthonormal basis functions
-        g /= np.sqrt(bb)[:, np.newaxis]
-        g /= np.max(np.abs(g @ V))
-
-        # finalize orthonormal basis functions
-        B = g @ V
-
-        return B, g
 
     def plot(self):
         fig, axs = plt.subplots(3, 1, figsize=(10, 6), sharex=True)
@@ -305,29 +338,52 @@ class ExcitationGenerator:
                 if j == 0:
                     axV[i, j].set_ylabel('Integral')
 
+    def output_indiflight(self):
+        """
+        Output excitation signals in a format suitable for inclusion in the indiflight codebase.
+        """
 
-def T_scale(v, beta):
-    return lambda t: v(t * beta)
+        gout = np.zeros(int( (self.n*(self.n+1))/2 ) )
+        k = 0
+        for i in range(self.n):
+            for j in range(i+1):
+                gout[k] = self.g[i, j]
+                k += 1
 
-def T_timeshift(v, tau):
-    return lambda t: v(t+tau)
-
-def T_ampshift(v, a):
-    return lambda t: a+v(t)
-
-def T_nextpower(v):
-    return lambda t: v(t)**2
+        print(f"""
+    .K = {self.n},
+    .tf = {0.5:.6f}f,
+    .base_type = ORTHO_BASE_CHIRP,
+    .base_param = {4*np.pi:.6f}f,
+    .transform_types = {{
+        ORTHO_TRANS_NONE,
+        ORTHO_TRANS_SCALE,
+        ORTHO_TRANS_SCALE,
+        ORTHO_TRANS_SCALE,
+    }},
+    .transform_params = {{
+        0.f,
+        0.85f,
+        0.85f,
+        0.85f,
+    }},
+    .alpha = {{{', '.join([f'{a:.6f}f' for a in np.concatenate((self.cstari, self.cstard))])}}},
+    .beta = {{{', '.join([f'{a:.6f}f' for a in np.concatenate((self.astari, self.astard))])}}},
+    .dependency = {{{', '.join([str(-1) if i in self.I else str(self.actuators[i]['dependent_on']) for i in range(self.n)])}}},  // -1 for independent, otherwise index of dependency
+    .mixing_matrix = {{
+        {', '.join([f'{v:.6f}f' for v in gout])}
+    }}
+        """)
 
 if __name__ == "__main__":
     t = np.linspace(0, 1, 1001)
 
-
     #%% test with independent actuators
     vi = lambda t: np.cos(4*np.pi*t)
     egi = ExcitationGenerator(vi, t)
-    egi.add_transformation(T_scale, 0.85)
-    egi.add_transformation(T_scale, 0.85)
-    egi.add_transformation(T_scale, 0.85)
+    egi.add_transformation(Transformations.scale, 0.85)
+    egi.add_transformation(Transformations.scale, 0.85)
+    egi.add_transformation(Transformations.scale, 0.85)
 
     egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
     egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
@@ -336,21 +392,31 @@ if __name__ == "__main__":
 
     egi.generate()
 
+    # print results
+    print("Quadcopter")
+    print("Coefficients for Independent Actuators:")
+    print("Ui  = ", egi.cstari, "* Bi +", egi.astari)
+
     #%% test with dependent actuators
     vd = lambda t: np.cos(4*np.pi*(1-t)*(1-t))
     egd = ExcitationGenerator(vd, t)
-    egd.add_transformation(T_scale, 0.85)
-    egd.add_transformation(T_scale, 0.85)
-    egd.add_transformation(T_scale, 0.85)
+    egd.add_transformation(Transformations.scale, 0.85)
+    egd.add_transformation(Transformations.scale, 0.85)
+    egd.add_transformation(Transformations.scale, 0.85)
 
-    egd.add_actuator(type='independent', lb=+0.2, ub=+0.8)
-    egd.add_actuator(type='independent', lb=+0.2, ub=+0.8)
-    egd.add_actuator(type='dependent', lb=-1., ub=+1., dependent_on=0)
-    egd.add_actuator(type='dependent', lb=-1., ub=+1., dependent_on=1)
+    egd.add_actuator(type='independent', lb=+0.2, ub=+0.6)
+    egd.add_actuator(type='independent', lb=+0.2, ub=+0.6)
+    egd.add_actuator(type='dependent', lb=-0.4, ub=+0.4, dependent_on=0)
+    egd.add_actuator(type='dependent', lb=-0.4, ub=+0.4, dependent_on=1)
 
+    start = time()
     egd.generate()
+    end = time()
 
     # print results
+    print("Tailsitter")
+    print()
+    print(f"Excitation generation took {end - start:.4f} seconds.")
     print()
     print("Coefficients for Independent Actuators:")
     print("Ui  = ", egd.cstari, "* Bi +", egd.astari)
@@ -362,5 +428,3 @@ if __name__ == "__main__":
     # plot results
     egd.plot()
     egd.plot_inner_products()
-
-    plt.show()

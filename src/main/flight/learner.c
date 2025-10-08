@@ -79,7 +79,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .initFromProfileAct = false,
     .actMask = 0xFFFF, // all motors and servos
     .imuFiltHz = 10,
-    .fxFiltHz = 20,
+    .fxFiltHz = 15,
     .motorFiltHz = 40,
     .servoFiltHz = 20,
     .useFortescue = false,
@@ -192,19 +192,19 @@ void initLearnerFilters(void) {
                 biquadFilterInitLPF(&actDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
                 biquadFilterInitLPF(&actSqrtDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
 
-                biquadFilterInitLPF(&fxOmegaFilter[m], learnerConfig()->fxFiltHz, gyro.targetLooptime);
-                biquadFilterInitLPF(&actOmegaFilter[m], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
                 m++;
                 break;
             case INDI_ACT_TYPE_SERVO:
                 if (s >= MAX_SUPPORTED_SERVOS) { return; } // abort if too many servos
                 // not implemented yet
-                biquadFilterInitLPF(&fxAngleFilter[m], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&fxAngleFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
                 s++;
                 break;
             case INDI_ACT_TYPE_OFF:
             default:
-                continue; // skip unsupported actuator types
+                break; // skip unsupported actuator types
         }
     }
 
@@ -231,7 +231,7 @@ static void initLearnerRls(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     const learnerConfig_t *config = learnerConfig();
 
-    float actionBandwidthHz = 0.1f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 0.01f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
 
     // init filters and other rls
@@ -245,7 +245,7 @@ static void initLearnerRls(void) {
 
     // RateDot
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 1 + 2*learnRun.numActuators, 1, 1e-3f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
+        rlsInit(&fxRls[i], 1 + 2*learnRun.numActuators, 1, 1e-2f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
     }
 
     // princ. inertia ratios set to zero: all princ. inertias are the same
@@ -677,13 +677,13 @@ void updateLearner(timeUs_t current) {
 
         for (int ax = 0; ax < 3; ax++) {
             // first regressor is rate cross terms for inertia ratios
-            A[0] = 1.f * -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+            A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
 
 #ifdef LEARNER_IS_TAILSITTER
             float w20 = learnRun.fxOmega[0] * learnRun.fxOmega[0];
             float w21 = learnRun.fxOmega[1] * learnRun.fxOmega[1];
-            float w2d0 = learnRun.fxOmega[0] * learnRun.fxOmega[0] * learnRun.fxOmega[2];
-            float w2d1 = learnRun.fxOmega[1] * learnRun.fxOmega[1] * learnRun.fxOmega[3];
+            float w2d0 = w20 * learnRun.fxOmega[2];
+            float w2d1 = w21 * learnRun.fxOmega[3];
             float wdot0 = learnRun.fxOmegaDot[0];
             float wdot1 = learnRun.fxOmegaDot[1];
             float u = 0.f;
@@ -815,12 +815,12 @@ void updateLearner(timeUs_t current) {
 
     appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
 
-    // if (learnFx) {
-    //     if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
-    //         changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-    //     }
-    //     initIndiRuntimeParameters();
-    // }
+    if (learnFx) {
+        if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
+            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
+        }
+        initIndiRuntimeParameters();
+    }
 
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
@@ -886,19 +886,33 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 #if defined(LEARNER_IS_TAILSITTER)
     // Tailsitter specific code (see indi_init)
     indi->tails_use_scheduled = true;
-    indi->tails_use_sine = false;
+    indi->tails_use_sine = true;
+    indi->tails_d0[0] = -1816;
+    indi->tails_d0[1] = -904;
+    indi->tails_cxw  = 405;
+    indi->tails_cyw  = 0;
+    indi->tails_czw  = -2481;
+    indi->tails_clw  = (int16_t) (2597); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmw  = (int16_t) (0); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnw  = (int16_t) (-702); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnwd = (int16_t) (260); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    indi->tails_cxd  = -42;
+    indi->tails_cmd  = (int16_t) (-2234); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnd  = (int16_t) (-1200); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+
     indi->tails_d0[0] = 0;
     indi->tails_d0[1] = 0;
-    indi->tails_cxw  = 0;
-    indi->tails_cyw  = 0;
-    indi->tails_czw  = 0;
-    indi->tails_clw  = 0;
-    indi->tails_cmw  = 0;
-    indi->tails_cnw  = 0;
-    indi->tails_cnwd = 0;
-    indi->tails_cxd  = 0;
-    indi->tails_cmd  = 0;
-    indi->tails_cnd  = 0;
+    // indi->tails_cxw  = 405;
+    // indi->tails_cyw  = 0;
+    // indi->tails_czw  = -2481;
+    indi->tails_clw  = (int16_t) (1e8f * fxRls[0+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmw  = (int16_t) (1e8f * fxRls[1+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnw  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnwd = (int16_t) (1e5f * fxRls[2+3].x[3] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    // indi->tails_cxd  = -42;
+    indi->tails_cmd  = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnd  = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+
     UNUSED(config);
     UNUSED(actG2rotIMU);
 #else

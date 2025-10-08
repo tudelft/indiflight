@@ -64,7 +64,7 @@ float tt_vel_gain = 3.0; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 3.0f;
+float tt_R = 2.0f;
 
 // recovery algorithm
 bool tt_recovery_active = false;

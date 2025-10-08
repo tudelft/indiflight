@@ -74,9 +74,9 @@ start = time()
 # v.append(T_timeshift(v[0], 0.15))  # v2
 # v.append(T_timeshift(v[1], 0.15))  # v3
 # v.append(T_timeshift(v[2], 0.15))  # v3
-v.append(T_scale(v[0], 0.85))  # v2
-v.append(T_scale(v[1], 0.85))  # v2
-v.append(T_scale(v[2], 0.85))  # v2
+v.append(T_scale(v[0], 0.9))  # v2
+v.append(T_scale(v[1], 0.9))  # v2
+v.append(T_scale(v[2], 0.9))  # v2
 # v.append(T_scale(v[0], 0.9**2))  # v2
 # v.append(T_scale(v[0], 0.9**3))  # v2
 # v.append(T_scale(v[0], 0.9**4))  # v2

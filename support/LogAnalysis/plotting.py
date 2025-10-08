@@ -261,8 +261,9 @@ class FlightPlotter(FlightPlotterBase):
             )
 
 class SysIdPlotter(FlightPlotterBase):
-    def __init__(self, data, name="System Identification Plotter"):
+    def __init__(self, data, name="System Identification Plotter", craft="quadrotor"):
         super().__init__(data, name)
+        self.craft = craft
 
         self.define_layout(figsize=(12, 8), nrows=6, ncols=4,
                            width_ratios=[1, 1, 1, 1],
@@ -360,14 +361,27 @@ class SysIdPlotter(FlightPlotterBase):
         fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
 
         for i, axis in enumerate(['x', 'y', 'z']):
-            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
-                                light=None,
-                                solid=x if axis == 'x' else y if axis == 'y' else z,
-                                dashed=None,
-                                series_labels=[f"Motor {j}" for j in range(N)],
-                                style_labels=[None, "Onboard", None],
-                                title=f"Fx {axis.upper()}",
-                                ylabel="Fx [N/kg/(rad/s)²]")
+            if self.craft == "quadrotor":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                    light=None,
+                                    solid=x if axis == 'x' else y if axis == 'y' else z,
+                                    dashed=None,
+                                    series_labels=[f"Motor {j}" for j in range(N)],
+                                    style_labels=[None, "Onboard", None],
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [N/kg/(rad/s)²]")
+            elif self.craft == "tailsitter":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                    light=None,
+                                    solid=x if axis == 'x' else y if axis == 'y' else z,
+                                    dashed=None,
+                                    series_labels=[
+                                        "Motors", "Elevons", "Motor Derivative", "Body Rates"
+                                    ],
+                                    style_labels=[None, "Onboard", None],
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [N/kg/(rad/s)²]")
+
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
                                 light=None,
@@ -388,14 +402,26 @@ class SysIdPlotter(FlightPlotterBase):
                                 ylabel="Forgetting Factor")
 
         for i, axis in enumerate(['p', 'q', 'r']):
-            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
-                                light=None,
-                                solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
-                                dashed=None,
-                                series_labels=[f"Motor {j}" for j in range(N)],
-                                style_labels=[None, "Onboard", None],
-                                title=f"Fx {axis.upper()}",
-                                ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+            if self.craft == "quadrotor":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
+                                    light=None,
+                                    solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
+                                    dashed=None,
+                                    series_labels=[f"Motor {j}" for j in range(N)],
+                                    style_labels=[None, "Onboard", None],
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+            elif self.craft == "tailsitter":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
+                                    light=None,
+                                    solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
+                                    dashed=None,
+                                    series_labels=[
+                                        "Motors", "Elevons", "Motor Derivative", "Body Rates"
+                                    ],
+                                    style_labels=[None, "Onboard", None],
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
                                 light=None,

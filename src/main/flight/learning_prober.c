@@ -69,7 +69,7 @@ PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     // .numMotors = 2,
     // .numServos = 2,
     .preDelayMs = 200,
-    .postDelayMs = 150,
+    .postDelayMs = 0,
     .steps_stepMs = 70,
     .steps_overlapMs = 0,
     .steps_amp = 35,
@@ -181,12 +181,9 @@ static void updateSteps(timeUs_t currentTimeUs) {
 static void updateOrtho(timeUs_t currentTimeUs) {
     timeDelta_t timeSinceStartUs = cmpTimeUs(currentTimeUs, proberRuntime.genStartTimeUs);
     float t = 0.000001f * timeSinceStartUs; // convert to seconds
-    t *= 2.f; // shrink time 
 
-    if (t < 1.f) {
-        setZeroOutputs();
-        orthoSignalGenerate(t, proberRuntime.output, learnRun.numActuators);
-    } else {
+    setZeroOutputs();
+    if (!orthoSignalGenerate(t, proberRuntime.output, learnRun.numActuators)) {
         // All steps done, set finished flag
         proberRuntime.isGenFinished = true;
         proberRuntime.genFinishTimeUs = currentTimeUs;
@@ -228,8 +225,9 @@ void initProber(timeUs_t currentTimeUs) {
             // Initialize noise prober runtime
             break;
         case PROBER_ORTHO:
-            proberRuntime.safetyTimeoutUs += 1000e3;  // add half a second // TODO THIS IS BEUN AF
+            proberRuntime.safetyTimeoutUs += 500000;  // add half a second // TODO THIS IS BEUN AF
             // Initialize orthogonal signal prober runtime not needed
+            // TODO: do properly
             break;
         default:
             // Handle unknown prober type
@@ -300,7 +298,7 @@ void updateProber(timeUs_t currentTimeUs) {
     return;
 
 zeroAndReturn:
-   setZeroOutputs();
+    setZeroOutputs();
     proberRuntime.isGenRunning = false;
     return;  // Prober is not initialized or already finished, no updates needed
 }

@@ -1,6 +1,6 @@
 from indiflight_log_tools import IndiflightLog
 from handy_signal_tools import Signal
-from estimators import LMS, RLS, EMWV, RLS_fortescue
+from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford
 from plotting import FlightPlotter, Viewport, SysIdPlotter, BlittedCursor
 
 import numpy as np
@@ -194,6 +194,17 @@ rls_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
 rls_noPhi = deepcopy(rls_phi9)
 rls_noPhi.setTitle("RLS Moments -- Inertias and Actuators only")
 
+
+rls_var = EWMV(forgetting=0.99)
+rls_var.setTitle("EMWV Moments Variance")
+rls_var.setParameters([0, 0])
+
+rls_var_welford = Welford()
+rls_var_welford.setTitle("Welford Moments Variance")
+rls_var_welford.setParameters([0, 0])
+
+
+
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
@@ -249,6 +260,11 @@ for ti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, 
     A_noPhi[0:3, 16:19] = 0.
     rls_noPhi.newSample(A_noPhi, y, ti); rls_noPhi.update()
 
+    # EMWV variance estimation
+    e_sample = rls_noPhi.predictNew(A_noPhi).squeeze() - y
+    rls_var.newSample(np.zeros(2), e_sample[0], ti); rls_var.update()
+
+
 text = np.zeros(len(t)+1)
 text[1:] = t
 text[0] = t[0]-(t[1]-t[0])
@@ -267,13 +283,13 @@ text[0] = t[0]-(t[1]-t[0])
 #                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
 #                             sharey=False, zoomy=False)
 
-rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
-                            sharey=False, zoomy=False)
-
-rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
-                            sharey=False, zoomy=False)
+# rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
+#                             sharey=False, zoomy=False)
+# 
+# rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
+#                             sharey=False, zoomy=False)
 
 # rls_phi7.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
 #                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
@@ -283,9 +299,11 @@ rls_phi3.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
                         sharey=False, zoomy=False)
 
-rls_noPhi.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
-                        sharey=False, zoomy=False)
+# rls_noPhi.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8]],
+#                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
+#                         sharey=False, zoomy=False)
+
+rls_var.plotParameters()
 
 all_rls = [
            # rls_phi9, rls_phi9_noI, rls_phi7_noI,
@@ -293,6 +311,9 @@ all_rls = [
            # rls_phi7,
            rls_phi3, rls_noPhi,
            ]
+
+all_rls = [rls_phi3, rls_var]
+# all_rls = [rls_noPhi, rls_var]
 
 # display figures
 all_axes = []

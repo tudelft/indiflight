@@ -26,10 +26,12 @@ if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
 
+# fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
+# splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
 fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
-splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
+splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis", craft="tailsitter")
 
-pplt = Viewport(log.data, follow=False, name=f"{args.name} -- Onboard ID Analysis")
+pplt = Viewport(log.data, follow=False, name=f"{args.name} -- Onboard ID Analysis", craft="tailsitter")
 fplt.connect_viewport(pplt)
 splt.connect_viewport(pplt)
 
