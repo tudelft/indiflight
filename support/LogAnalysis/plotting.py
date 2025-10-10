@@ -484,6 +484,7 @@ class Viewport(object):
                 [    l,   -l/4,     0.],
             ])
         elif craft == "tailsitter":
+            l = 0.3
             self.arms = np.array([
                 [ 0., +l, -2*l],
                 [ 0., -l, -2*l],
@@ -492,10 +493,14 @@ class Viewport(object):
                 [    0,   2*l,     0.],
                 [    0,   2*l,   -  l],
                 [    0,    0.,   -2*l],
+                [    l,    0.,   -2*l],
+                [    0,    0.,   -2*l],
                 [    0,  -2*l,   -  l],
                 [    0,  -2*l,   0.],
                 [    0,   2*l,   0.],
             ])
+            self.arms += np.array([0, 0, l])  # shift arms up to center of mass
+            self.front += np.array([0, 0, l])  # shift arms up to center of mass
         else:
             raise ValueError(f"Unknown craft type: {craft}")
 
@@ -515,6 +520,9 @@ class Viewport(object):
                 "vel": {"raw": self.data[[f"vel[{i}]" for i in range(3)]].to_numpy()       , "style": "solid",  "color": COLORS[2], "marker": None, "width": 1.5, "label": "Estimate"},
                 "velSp": {"raw": self.data[[f"velSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[2], "marker": None, "width": 1.0,  "label": "Setpoint"},
                 "accSp": {"raw": self.data[[f"accSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[3], "marker": None, "width": 1.0,  "label": "Setpoint"},
+                "localPos": {"raw": self.data[[f"localPos[{i}]" for i in range(3)]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
+                "localVel": {"raw": self.data[[f"localVel[{i}]" for i in range(3)]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
+                "localQuat": {"raw": self.data[[f"localQuat[{i}]" for i in [1,2,3,0]]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
             })
 
         for key, value in self.series.items():
@@ -572,7 +580,7 @@ class Viewport(object):
         for ser in self.series.keys():
             interpolates[ser] = self.series[ser]['interpolator'](event.xdata)
 
-        for ser in ["quat", "quatSp"]:
+        for ser in ["quat", "quatSp", "localQuat"]:
             rotation = R.from_quat(interpolates[ser])
             rotated_front = rotation.apply(self.front)
 
@@ -596,9 +604,16 @@ class Viewport(object):
             zs = np.concatenate((zs, rotated_front[:, 2]))
 
             if self.has_pos:
-                xs += interpolates["pos"][0]
-                ys += interpolates["pos"][1]
-                zs += interpolates["pos"][2]
+                if ser == "localQuat":
+                    # offset by measured position
+                    xs += interpolates["localPos"][0] * 1e-3
+                    ys += interpolates["localPos"][1] * 1e-3
+                    zs += interpolates["localPos"][2] * 1e-3
+                else:
+                    # offset by estimator position
+                    xs += interpolates["pos"][0]
+                    ys += interpolates["pos"][1]
+                    zs += interpolates["pos"][2]
 
             self.series[ser]['line'] = self.ax.plot(xs, ys, zs,
                 linestyle=self.series[ser]['style'],

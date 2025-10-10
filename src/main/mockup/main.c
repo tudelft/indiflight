@@ -105,6 +105,9 @@ void setMocapT(const float *pos, const float *vel, const float *q, const uint32_
     new_pos.quat.y = q[2];
     new_pos.quat.z = q[3];
 
+    new_pos.vel_valid = true;
+    new_pos.quat_valid = true;
+
     setLocalPosMeas(&new_pos);
 }
 

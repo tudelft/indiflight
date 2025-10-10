@@ -1093,8 +1093,8 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            // when armed, only switch if converged ekf and good setpoint
-            if ( !ARMING_FLAG(ARMED) || (isConvergedEkf() && posSpNed.new) ) {
+            // only switch if converged ekf and good setpoint
+            if (isConvergedEkf() && posSpNed.new) {
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }

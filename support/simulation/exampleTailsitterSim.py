@@ -129,8 +129,10 @@ if __name__=="__main__":
 
 
     #%% initial conditions
-    #tail.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
-    tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
+    # tail.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
+    # tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
+    tail.setPose(x=[0., 0., -0.1], q=[0, -0.707, 0., 0.707])
+    # tail.setPose(x=[0., 0., -0.1], q=[0, 0, 0, 1.])
     tail.setTwist(v=[0., 0., 0.], w=[0., 0., 0.])
 
     sim = Sim(tail, imu, mocap, hil, sil)

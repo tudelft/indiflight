@@ -181,6 +181,9 @@ static void sub_cb_pose(const void *msgin) {
     new_pos.quat.y = msg->pose.orientation.y;
     new_pos.quat.z = msg->pose.orientation.z;
 
+    new_pos.vel_valid = false;
+    new_pos.quat_valid = true;
+
     setLocalPosMeas(&new_pos);
 #else
     UNUSED(msgin);

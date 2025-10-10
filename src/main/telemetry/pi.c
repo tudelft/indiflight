@@ -214,6 +214,10 @@ static void processNewMessage(uint8_t msgId) {
             pos.quat.x = piMsgExternalPoseRx->body_qx;
             pos.quat.y = piMsgExternalPoseRx->body_qy;
             pos.quat.z = piMsgExternalPoseRx->body_qz;
+
+            pos.vel_valid = true;
+            pos.quat_valid = true;
+
             setLocalPosMeas(&pos);
             break;
         }
