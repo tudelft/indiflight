@@ -8,7 +8,7 @@
 
 ortho_signal_t orthoSignal = {
     .K = 4,
-    .tf = 0.5f, // time shrink factor: 0.5f means the signal is compressed to half the time
+    .tf = 0.500000f,
     .base_type = ORTHO_BASE_CHIRP,
     .base_param = 12.566371f,
     .transform_types = {
@@ -18,13 +18,13 @@ ortho_signal_t orthoSignal = {
         ORTHO_TRANS_SCALE,
     },
     .transform_params = {
-        1.f,
-        0.85f,
-        0.85f*0.85f,
-        0.85f*0.85f*0.85f,
+        0.f,
+        0.850000f,
+        0.722500f,
+        0.614125f,
     },
-    .alpha = {0.418543f, 0.245190f, 0.118029f, 0.236798f},
-    .beta = {0.400000f, 0.450956f, -0.005313f, 0.015259f},
+    .alpha = {0.470860f, 0.275839f, 0.221061f, 0.425642f},
+    .beta = {0.475000f, 0.532326f, -0.008415f, 0.023196f},
     .dependency = {-1, -1, 0, 1},  // -1 for independent, otherwise index of dependency
     .mixing_matrix = {
         0.477849f, -0.502383f, 0.744380f, 1.573077f, -2.297061f, 1.723984f, -1.744169f, 4.450476f, -4.672701f, 2.316842f

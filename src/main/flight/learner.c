@@ -231,7 +231,7 @@ static void initLearnerRls(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     const learnerConfig_t *config = learnerConfig();
 
-    float actionBandwidthHz = 0.01f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 0.001f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
 
     // init filters and other rls
@@ -682,8 +682,8 @@ void updateLearner(timeUs_t current) {
 #ifdef LEARNER_IS_TAILSITTER
             float w20 = learnRun.fxOmega[0] * learnRun.fxOmega[0];
             float w21 = learnRun.fxOmega[1] * learnRun.fxOmega[1];
-            float w2d0 = w20 * learnRun.fxOmega[2];
-            float w2d1 = w21 * learnRun.fxOmega[3];
+            float w2d0 = w20 * (learnRun.fxOmega[2]);
+            float w2d1 = w21 * (learnRun.fxOmega[3]);
             float wdot0 = learnRun.fxOmegaDot[0];
             float wdot1 = learnRun.fxOmegaDot[1];
             float u = 0.f;
@@ -886,7 +886,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
 #if defined(LEARNER_IS_TAILSITTER)
     // Tailsitter specific code (see indi_init)
     indi->tails_use_scheduled = true;
-    indi->tails_use_sine = true;
+    indi->tails_use_sine = false;
     indi->tails_d0[0] = -1816;
     indi->tails_d0[1] = -904;
     indi->tails_cxw  = 405;

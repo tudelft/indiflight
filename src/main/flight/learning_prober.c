@@ -225,7 +225,7 @@ void initProber(timeUs_t currentTimeUs) {
             // Initialize noise prober runtime
             break;
         case PROBER_ORTHO:
-            proberRuntime.safetyTimeoutUs += 500000;  // add half a second // TODO THIS IS BEUN AF
+            proberRuntime.safetyTimeoutUs += 700000;  // add half a second // TODO THIS IS BEUN AF
             // Initialize orthogonal signal prober runtime not needed
             // TODO: do properly
             break;

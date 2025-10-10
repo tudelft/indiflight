@@ -41,8 +41,8 @@ def solve_gram_schmidt(n, V, t):
         bb[k] = inner(B[k], B[k], t)
 
         # check for linear dependence
-        if bb[k] < 1e-2:
-            raise ValueError("Generated functions are (too) linearly dependent. Try different transformations.")
+        if bb[k] < 1e-3:
+            raise ValueError(f"Generated function {k+1} are (too) linearly dependent ({bb[k]} < 1e-3). Try different transformations.")
 
     # finalize gamma matrix such that g @ V  are orthonormal basis functions
     g /= np.sqrt(bb)[:, np.newaxis]
@@ -159,24 +159,21 @@ class Transformations(object):
         return lambda t: a + v(t)
 
 class ExcitationGenerator(object):
-    def __init__(self, f_base, t):
-        # make sure f_base is a function
-        if not callable(f_base):
-            raise ValueError("f_base must be a callable function of time")
+    def __init__(self, t):
 
         self.t = t
         self.S = len(t)
         self.T = t[-1] - t[0]
-        self.vf = [f_base]
-        self.transformations = []
+        self.vf = []
+        # self.transformations = []
         self.actuators = []
 
-    def add_transformation(self, transformation, *args):
-        # make sure transformation is a functional
-        if not callable(transformation):
-            raise ValueError("transformation must be a callable functional")
+    def add_library_function(self, v):
+        # make sure v is a function
+        if not callable(v):
+            raise ValueError("v must be a callable function of time")
 
-        self.transformations.append((transformation, args))
+        self.vf.append(v)
 
     def add_actuator(self, type='independent', dependent_on=None, lb=-1., ub=+1.):
         if type not in ['independent', 'dependent']:
@@ -192,8 +189,8 @@ class ExcitationGenerator(object):
         })
 
     def generate(self):
-        if (len(self.transformations) + 1) != len(self.actuators):
-            raise ValueError("Number of transformations must match number of actuators.")
+        if len(self.vf) != len(self.actuators):
+            raise ValueError("Number of monomials must match number of actuators.")
 
         # assemble dependent and indenpendent actuator sets and check
         self.I = [i for i, act in enumerate(self.actuators) if act['type'] == 'independent']
@@ -215,14 +212,11 @@ class ExcitationGenerator(object):
         u_lb = np.array([self.actuators[i]['lb'] for i in range(self.n)])
         u_ub = np.array([self.actuators[i]['ub'] for i in range(self.n)])
 
-        # generate and evaluate basis functions prototypes
-        # by successively applying transformations to seed function v0
+        # just use vf list
         V = np.zeros((self.n, self.S))
         V[0] = self.vf[0](self.t)
-        for i, Tr in enumerate(self.transformations):
-            func, args = Tr
-            self.vf.append(func(self.vf[i], *args))
-            V[i+1] = self.vf[i+1](self.t)
+        for i, v in enumerate(self.vf):
+            V[i] = v(self.t)
 
         self.V = V
 
@@ -270,6 +264,14 @@ class ExcitationGenerator(object):
         axs[0].plot(self.t, self.V.T)
         axs[1].plot(self.t, self.B.T)
         axs[2].plot(self.t, self.U.T)
+
+        # plot products for dependent actuators
+        if self.nd:
+            # plot with the same colours as last actuators previously plotted
+            for d in self.D:
+                axs[2].plot(self.t, self.U[d].T * self.U[self.actuators[d]['dependent_on']].T,
+                            '--',
+                            color=axs[2].lines[d].get_color())
 
         axs[0].set_title("Basis Functions")
         axs[1].set_title("Orthogonal Basis Functions")
@@ -363,9 +365,9 @@ class ExcitationGenerator(object):
     }},
     .transform_params = {{
         0.f,
-        0.85f,
-        0.85f,
-        0.85f,
+        {0.85:.6f}f,
+        {0.85**2:.6f}f,
+        {0.85**3:.6f}f,
     }},
     .alpha = {{{', '.join([f'{a:.6f}f' for a in np.concatenate((self.cstari, self.cstard))])}}},
     .beta = {{{', '.join([f'{a:.6f}f' for a in np.concatenate((self.astari, self.astard))])}}},
@@ -380,10 +382,11 @@ if __name__ == "__main__":
 
     #%% test with independent actuators
     vi = lambda t: np.cos(4*np.pi*t)
-    egi = ExcitationGenerator(vi, t)
-    egi.add_transformation(Transformations.scale, 0.85)
-    egi.add_transformation(Transformations.scale, 0.85)
-    egi.add_transformation(Transformations.scale, 0.85)
+    egi = ExcitationGenerator(t)
+    egi.add_library_function(vi)
+    egi.add_library_function(Transformations.scale(vi, 0.85**1))
+    egi.add_library_function(Transformations.scale(vi, 0.85**2))
+    egi.add_library_function(Transformations.scale(vi, 0.85**3))
 
     egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
     egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
@@ -399,15 +402,16 @@ if __name__ == "__main__":
 
     #%% test with dependent actuators
     vd = lambda t: np.cos(4*np.pi*(1-t)*(1-t))
-    egd = ExcitationGenerator(vd, t)
-    egd.add_transformation(Transformations.scale, 0.85)
-    egd.add_transformation(Transformations.scale, 0.85)
-    egd.add_transformation(Transformations.scale, 0.85)
+    egd = ExcitationGenerator(t)
+    egd.add_library_function(vd)
+    egd.add_library_function(Transformations.scale(vd, 0.85))
+    egd.add_library_function(Transformations.scale(vd, 0.85**2))
+    egd.add_library_function(Transformations.scale(vd, 0.85**3))
 
-    egd.add_actuator(type='independent', lb=+0.2, ub=+0.6)
-    egd.add_actuator(type='independent', lb=+0.2, ub=+0.6)
-    egd.add_actuator(type='dependent', lb=-0.4, ub=+0.4, dependent_on=0)
-    egd.add_actuator(type='dependent', lb=-0.4, ub=+0.4, dependent_on=1)
+    egd.add_actuator(type='independent', lb=+0.25, ub=+0.7)
+    egd.add_actuator(type='independent', lb=+0.25, ub=+0.7)
+    egd.add_actuator(type='dependent', lb=-0.6, ub=+0.6, dependent_on=0)
+    egd.add_actuator(type='dependent', lb=-0.6, ub=+0.6, dependent_on=1)
 
     start = time()
     egd.generate()
