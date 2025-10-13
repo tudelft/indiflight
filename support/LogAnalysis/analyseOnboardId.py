@@ -1,9 +1,12 @@
-
-from plotting import FlightPlotter, SysIdPlotter, Viewport, BlittedCursor
 from indiflight_log_tools import IndiflightLog
 import matplotlib.pyplot as plt
+import matplotlib
 
 plt.close('all')
+matplotlib.use('tkagg') 
+
+from indiflightPlotter import IndiflightPlotter, IndiflightSysIdPlotter, IndiflightViewport
+from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
@@ -28,14 +31,18 @@ if args.crop:
 
 # fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
 # splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
-fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
-splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis", craft="tailsitter")
+fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+splt = IndiflightSysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis", craft="tailsitter")
 
-pplt = Viewport(log.data, follow=False, name=f"{args.name} -- Onboard ID Analysis", craft="tailsitter")
+# craft = Quadrotor()
+craft = Tailsitter()
+pplt = IndiflightViewport(craft, log.data, follow=False, title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
 splt.connect_viewport(pplt)
 
 cursor = BlittedCursor(fplt.all_axes + splt.all_axes, sharex=True)
+
+plt.show()
 
 
 #%% extract IMU location from effectiveness matrix
