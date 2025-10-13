@@ -89,13 +89,14 @@ class BlittedCursor(object):
             canvas.blit(ax.bbox)
 
 class FlightPlotterBase(object):
-    def __init__(self, data, name="Flight Plotter"):
-        self.data = data
+    def __init__(self, time, name="Flight Plotter"):
+        self.t = np.asarray(time, dtype=float)
+        # make sure time is a 1D array
+        if self.t.ndim != 1:
+            raise ValueError("time must be a 1D array")
+
         self.name = name
         self.all_axes = []
-
-        # preprocess data
-        self.t = self.data['timeS'].to_numpy()
 
     def define_layout(self, figsize=(12, 8), nrows=3, ncols=3, width_ratios=None, height_ratios=None):
         if width_ratios is None:
@@ -115,7 +116,7 @@ class FlightPlotterBase(object):
         self.fig.show()
 
     def _populate(self):
-        raise NotImplementedError("Subclasses should implement this method to populate the plot.")
+        raise NotImplementedError("Child class should implement this method to populate the plot.")
 
     def connect_viewport(self, viewport):
         self._add_callback('motion_notify_event', viewport.update)
@@ -180,9 +181,13 @@ class FlightPlotterBase(object):
 
         self.fig.suptitle(self.name)
 
-class FlightPlotter(FlightPlotterBase):
+class IndiflightPlotter(FlightPlotterBase):
+    """This wrapper class for FlightPlotterBase that implements the layout and populates the plots for general Indiflight analysis"""
     def __init__(self, data, name="Flight Plotter"):
-        super().__init__(data, name)
+        # extract time and intialize base class
+        self.data = data
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
 
         self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
                            width_ratios=[1, 1, 1],
@@ -260,9 +265,14 @@ class FlightPlotter(FlightPlotterBase):
                          ylabel="Servo State [rad]",
             )
 
-class SysIdPlotter(FlightPlotterBase):
+class IndiflightSysIdPlotter(FlightPlotterBase):
+    """This wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
     def __init__(self, data, name="System Identification Plotter", craft="quadrotor"):
-        super().__init__(data, name)
+        # extract time and intialize base class
+        self.data = data
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
         self.craft = craft
 
         self.define_layout(figsize=(12, 8), nrows=6, ncols=4,
@@ -340,7 +350,6 @@ class SysIdPlotter(FlightPlotterBase):
                             style_labels=[None, "Onboard", None],
                             title="Motor Forgetting Factor",
                             ylabel="Forgetting Factor")
-        
 
         # fx learning data
         if 'fx_r_rls_x[15]' in self.data.columns:
@@ -459,90 +468,318 @@ class SysIdPlotter(FlightPlotterBase):
                                 title="Fx Forgetting Factor",
                                 ylabel="Forgetting Factor")
 
+class Craft3D(object):
+    def __init__(self, body_geometry=[np.array([[0,0,0]])]):
+
+        # check that array is Nx3
+        self.Ng = len(body_geometry)
+        self.geometry = []
+        for element in body_geometry:
+            self.geometry.append(np.asarray(element, dtype=float))
+            if self.geometry[-1].ndim != 2 or self.geometry[-1].shape[1] != 3:
+                raise ValueError("Base geometry must be a list of Nx3 arrays")
+
+        self.rotors = []
+        self.surfaces = []
+
+    def generate(self, quat, rotor_controls=None, surface_controls=None):
+        body_rotation = R.from_quat(quat)
+
+        xs, ys, zs = np.array([]), np.array([]), np.array([])
+        for geo in self.geometry:
+            geo_rotated = body_rotation.apply(geo)
+            xs = np.concatenate((xs, geo_rotated[:, 0], np.array([np.nan])))
+            ys = np.concatenate((ys, geo_rotated[:, 1], np.array([np.nan])))
+            zs = np.concatenate((zs, geo_rotated[:, 2], np.array([np.nan])))
+
+        if rotor_controls is None:
+            rotor_controls = np.zeros((len(self.rotors), 3))
+        elif rotor_controls.shape[0] != len(self.rotors):
+            raise ValueError("rotor_controls must have the same length as the number of rotors")
+
+        if surface_controls is None:
+            surface_controls = np.zeros((len(self.surfaces),))
+        elif surface_controls.shape[0] != len(self.surfaces):
+            raise ValueError("surface_controls must have the same length as the number of surfaces")
+
+        arrows = []
+        for rotor, controls in zip(self.rotors, rotor_controls):
+            # generate circle in the rotor plane by using xyz, axis
+            Rr = rotor["R"]
+            xyz = rotor["xyz"]
+            axis = rotor["axis"]
+            tilt_xyz = rotor["tilt_xyz"]
+
+            tilt1_axis = rotor["tilt_axis"]
+            tilt1_angle = controls[1]
+            tilt1_rotation = R.from_rotvec(tilt1_axis*tilt1_angle)
+
+            tilt2_axis = rotor["tilt2_axis"]
+            tilt2_angle = controls[2]
+            tilt2_rotation = R.from_rotvec(tilt2_axis*tilt2_angle)
+            tilt_rotation = tilt2_rotation * tilt1_rotation
+
+            N = rotor["N"]
+            u = np.linspace(0, 2*np.pi, N)
+
+            # generate circle in xy plane
+            x = Rr * np.cos(u)
+            y = Rr * np.sin(u)
+            z = np.zeros_like(u)
+            circle = np.vstack((x, y, z)).T
+
+            # rotate circle to align with rotor axis
+            circle_tilted = tilt_rotation.apply(circle)
+
+            foot_xyz = xyz - tilt_xyz
+            real_xyz = foot_xyz + tilt_rotation.apply(tilt_xyz)
+
+            circle_tilted += real_xyz
+
+            circle_rotated = body_rotation.apply(circle_tilted)
+
+
+            xs = np.concatenate((xs, circle_rotated[:, 0], np.array([np.nan])))
+            ys = np.concatenate((ys, circle_rotated[:, 1], np.array([np.nan])))
+            zs = np.concatenate((zs, circle_rotated[:, 2], np.array([np.nan])))
+
+            # arrow for thrust
+            thrust = controls[0]
+            real_axis = tilt_rotation.apply(axis)
+
+            arrow_start = real_xyz
+            arrow_end = real_xyz + real_axis * thrust * 2. * Rr  # scale thrust for visualization
+            arrow_max = real_xyz + real_axis * 2. * Rr  # max arrow length for visualization
+
+            arrows.append([arrow_start, arrow_end, arrow_max])
+
+        for surface in self.surfaces:
+            geometry = surface["geometry"]
+            tilt_xyz = surface["tilt_xyz"]
+            tilt_axis = surface["tilt_axis"]
+            tilt_angle = surface_controls[0]
+            tilt_rotation = R.from_rotvec(tilt_axis*tilt_angle)
+
+            for geo in geometry:
+                geo_tilted = tilt_rotation.apply(geo - tilt_xyz) + tilt_xyz
+                geo_rotated = body_rotation.apply(geo_tilted)
+                xs = np.concatenate((xs, geo_rotated[:, 0], np.array([np.nan])))
+                ys = np.concatenate((ys, geo_rotated[:, 1], np.array([np.nan])))
+                zs = np.concatenate((zs, geo_rotated[:, 2], np.array([np.nan])))
+
+        return xs, ys, zs, arrows
+
+    def addRotor(self,
+                 xyz=[0, 0, 0], axis=[0, 0, 1], 
+                 tilt_xyz=[0, 0, 0], tilt_axis=[1, 0, 0],
+                 R=0.1, N=20):
+
+        xyz = np.asarray(xyz, dtype=float)
+        axis = np.asarray(axis, dtype=float)
+        axis /= np.linalg.norm(axis)
+
+        tilt_xyz = np.asarray(tilt_xyz, dtype=float)
+        tilt_axis = np.asarray(tilt_axis, dtype=float)
+        tilt_axis /= np.linalg.norm(tilt_axis)
+
+        # compute cross tilt axis, and check that tilt_axis is not parallel to axis
+        cross = np.cross(axis, tilt_axis)
+        if np.linalg.norm(cross) < 1e-4:
+            raise ValueError("tilt_axis cannot be parallel to axis")
+        cross /= np.linalg.norm(cross)
+
+        self.rotors.append({
+            "xyz": xyz,
+            "axis": axis,
+            "tilt_xyz": tilt_xyz,
+            "tilt_axis": tilt_axis,
+            "tilt2_axis": cross,
+            "R": R,
+            "N": N,
+        })
+
+    def addSurface(self,
+                   tilt_xyz=[0, 0, 0], tilt_axis=[0, 0, 1],
+                   geometry=[np.array([0, 0, 0])]):
+        tilt_xyz = np.asarray(tilt_xyz, dtype=float)
+        tilt_axis = np.asarray(tilt_axis, dtype=float)
+        geometry = [np.asarray(g, dtype=float) for g in geometry]
+
+        self.surfaces.append({
+            "tilt_xyz": tilt_xyz,
+            "tilt_axis": tilt_axis,
+            "geometry": geometry
+        })
+
+
+class Quadrotor(Craft3D):
+    def __init__(self, l=0.2, R=0.1):
+        body = np.array([
+            [    l,   -l/4,     0.],
+            [    l,   +l/4,     0.],
+            [    l+l/4,   0,     0.],
+            [    l,   -l/4,     0.],
+        ])
+        geometry = [body]
+        super().__init__(body_geometry=geometry)
+
+        arms = np.array([
+            [ -l, +l, 0.],
+            [ +l, +l, 0.],
+            [ -l, -l, 0.],
+            [ +l, -l, 0.],
+        ])
+
+        for arm in arms:
+            self.addRotor(xyz=arm, axis=[0, 0, -1], R=R)
+
+class Tailsitter(Craft3D):
+    def __init__(self, l=0.3, R=0.1):
+        body = np.array([
+            [    0,   2*l,     l],
+            [    0,   2*l,     0.],
+            [    0,    0.,   -1*l],
+            [    l,    0.,   -1*l],
+            [    0,    0.,   -1*l],
+            [    0,  -2*l,   0.],
+            [    0,  -2*l,   l],
+            [    0,   2*l,   l],
+        ])
+        geometry = [body]
+        super().__init__(body_geometry=geometry)
+
+        self.addRotor(xyz=[0, l, -l] , axis=[0, 0, -1], R=R)
+        self.addRotor(xyz=[0, -l, -l], axis=[0, 0, -1], R=R)
+
+        surface = np.array([
+            [0, 2.*l, 1.0*l],
+            [0, 2.*l, 1.5*l],
+            [0, 0.5*l, 1.5*l],
+            [0, 0.5*l, 1.0*l],
+        ])
+        self.addSurface(
+            tilt_xyz=[0., 0., 1.*l], tilt_axis=[0., +1., 0.], geometry=[surface]
+        )
+        self.addSurface(
+            tilt_xyz=[0., 0., 1.*l], tilt_axis=[0., -1., 0.], geometry=[surface*np.array([1., -1., 1.])]
+        )
+
+
 class Viewport(object):
-    def __init__(self, data, follow=False, craft="quad", name="Viewport"):
-        self.data = data
-        self.name = name
+    """Generate an updatable 3D viewport for visualizing the state of a craft
+    """
+    def __init__(self, craft: Craft3D,
+                 time,
+                 att, attSet=None, attMeas=None,
+                 pos=None, posSet=None, posMeas=None,
+                 vel=None, velSet=None, velMeas=None,
+                 acc=None, accSet=None, accMeas=None,
+                 rotorSet=None, surfaceSet=None,
+                 follow=False, interpolation="previous", title="Viewport"):
+        """Initialize the viewport and open its plot window. Numpy arrays expected.
+
+        Args:
+            craft: Craft3D object defining the vehicle geometry
+            time: 1D array of time stamps
+            att: Nx4 array of attitude quaternions [w, x, y, z]
+            attSet: Nx4 array of attitude setpoint quaternions [w, x, y, z]
+            attMeas: Nx4 array of attitude measurement quaternions [w, x, y, z]
+            pos: Nx3 array of position [x, y, z]
+            posSet: Nx3 array of position setpoint [x, y, z]
+            posMeas: Nx3 array of position measurement [x, y, z]
+            vel: Nx3 array of velocity [vx, vy, vz]
+            velSet: Nx3 array of velocity setpoint [vx, vy, vz]
+            velMeas: Nx3 array of velocity measurement [vx, vy, vz]
+            acc: Nx3 array of acceleration [ax, ay, az]
+            accSet: Nx3 array of acceleration setpoint [ax, ay, az]
+            accMeas: Nx3 array of acceleration measurement [ax, ay, az]
+            rotorSet: NxMx3 array of rotor controls (thrust, tilt1, tilt2) for M rotors
+            surfaceSet: NxK array of surface controls for K surfaces
+            follow: if True, the camera will follow the vehicle position
+            interpolation: interpolation method for data ("previous", "linear", "cubic")
+            title: title of the plot
+
+        Returns:
+            Viewport object
+        """
+
+        self.craft = craft
+        self.name = title
+        self.t = time
         self.follow = follow
-        self.has_pos = "pos[0]" in self.data.columns
-        self.fig = plt.figure(figsize=(4, 4))
+        self.has_pos = pos is not None
+        self.interpolation = interpolation
+
+        if self.interpolation not in ["previous", "linear", "cubic"]:
+            raise ValueError("interpolation must be one of 'nearest', 'linear', or 'cubic'")
+
+        #%% define data series and their plotting styles
+        # attitude
+        self.att = {"att": {"raw": att[:, [1,2,3,0]], "style": "solid",  "color": COLORS[0], "marker": None, "width": 2.0, "label": "Attitude Estimate"}}
+        if attSet is not None:
+            self.att["attSet"] = {"raw": attSet[:, [1,2,3,0]], "style": "dashed", "color": COLORS[1], "marker": None, "width": 0.8,  "label": "Attitude Setpoint"}
+        if attMeas is not None:
+            self.att["attMeas"] = {"raw": attMeas[:, [1,2,3,0]], "style": "dashed", "color": COLORS[2], "marker": None, "width": 0.8,  "label": "Attitude Measurement"}
+
+        # position
+        self.pos = {}
+        if pos is not None:
+            self.pos["pos"] = {"raw": pos, "style": "solid",  "color": COLORS[0], "marker": ".", "width": 1.5, "label": "Position Estimate"}
+        if posSet is not None:
+            self.pos["posSet"] = {"raw": posSet, "style": "dashed", "color": COLORS[1], "marker": "o", "width": 1.0,  "label": "Position Setpoint"}
+        if posMeas is not None:
+            self.pos["posMeas"] = {"raw": posMeas, "style": "solid", "color": COLORS[2], "marker": "o", "width": 3.0, "label": "Position Measurement"}
+
+        # velocity
+        self.vel = {}
+        if vel is not None:
+            self.vel["vel"] = {"raw": vel, "style": "solid",  "color": COLORS[0], "marker": None, "width": 2.0, "label": "Velocity Estimate"}
+        if velSet is not None:
+            self.vel["velSet"] = {"raw": velSet, "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Velocity Setpoint"}
+        if velMeas is not None:
+            self.vel["velMeas"] = {"raw": velMeas, "style": "dashed", "color": COLORS[2], "marker": None, "width": 1.0,  "label": "Velocity Measurement"}
+
+        # acceleration
+        self.acc = {}
+        if acc is not None:
+            self.acc["acc"] = {"raw": acc, "style": "solid",  "color": COLORS[3], "marker": None, "width": 2.0, "label": "Acceleration Estimate"}
+        if accSet is not None:
+            self.acc["accSet"] = {"raw": accSet, "style": "dashed", "color": COLORS[4], "marker": None, "width": 1.0,  "label": "Acceleration Setpoint"}
+        if accMeas is not None:
+            self.acc["accMeas"] = {"raw": accMeas, "style": "dashed", "color": COLORS[5], "marker": None, "width": 1.0,  "label": "Acceleration Measurement"}
+
+        # controls
+        self.controls = {}
+        if rotorSet is not None:
+            self.controls["rotorSet"] = {"raw": rotorSet, "style": "solid",  "color": COLORS[6], "marker": "s", "width": 3.0, "label": "Rotor Controls"}
+        if surfaceSet is not None:
+            self.controls["surfaceSet"] = {"raw": surfaceSet, "style": "solid",  "color": COLORS[7], "marker": None, "width": 3.0, "label": None}
+
+        # collect all series
+        self.series = {**self.att, **self.pos, **self.vel, **self.acc, **self.controls}
+
+        #%% figure setup
+        self.fig = plt.figure(figsize=(8, 8))
         self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax.set_xlabel("X")
+        self.ax.set_ylabel("Y")
+        self.ax.set_zlabel("Z")
 
-        # Quadrotor geometry (in local frame)
-        l = 0.2
-        if craft == "quad":
-            self.arms = np.array([
-                [ -l, +l, 0.],
-                [ +l, +l, 0.],
-                [ -l, -l, 0.],
-                [ +l, -l, 0.],
-            ])
-            self.front = np.array([
-                [    l,   -l/4,     0.],
-                [    l,   +l/4,     0.],
-                [    l+l/4,   0,     0.],
-                [    l,   -l/4,     0.],
-            ])
-        elif craft == "tailsitter":
-            l = 0.3
-            self.arms = np.array([
-                [ 0., +l, -2*l],
-                [ 0., -l, -2*l],
-            ])
-            self.front = np.array([
-                [    0,   2*l,     0.],
-                [    0,   2*l,   -  l],
-                [    0,    0.,   -2*l],
-                [    l,    0.,   -2*l],
-                [    0,    0.,   -2*l],
-                [    0,  -2*l,   -  l],
-                [    0,  -2*l,   0.],
-                [    0,   2*l,   0.],
-            ])
-            self.arms += np.array([0, 0, l])  # shift arms up to center of mass
-            self.front += np.array([0, 0, l])  # shift arms up to center of mass
-        else:
-            raise ValueError(f"Unknown craft type: {craft}")
-
-        # preprocess data
-        self.t = self.data['timeS'].to_numpy()
-
-        # interpolators
-        self.series = {
-            "quat": {"raw": self.data[[f"quat[{i}]" for i in [1,2,3,0]]].to_numpy()    , "style": "solid",  "color": COLORS[0], "marker": None, "width": 1.5, "label": "Estimate"},
-            "quatSp": {"raw": self.data[[f"quatSp[{i}]" for i in [1,2,3,0]]].to_numpy(), "style": "dashed", "color": COLORS[0], "marker": None, "width": 1.0,  "label": "Setpoint"},
-        }
-
-        if self.has_pos:
-            self.series.update({
-                "pos": {"raw": self.data[[f"pos[{i}]" for i in range(3)]].to_numpy()       , "style": "solid",  "color": COLORS[1], "marker": ".", "width": 1.5, "label": "Estimate"},
-                "posSp": {"raw": self.data[[f"posSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[1], "marker": "o", "width": 1.0,  "label": "Setpoint"},
-                "vel": {"raw": self.data[[f"vel[{i}]" for i in range(3)]].to_numpy()       , "style": "solid",  "color": COLORS[2], "marker": None, "width": 1.5, "label": "Estimate"},
-                "velSp": {"raw": self.data[[f"velSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[2], "marker": None, "width": 1.0,  "label": "Setpoint"},
-                "accSp": {"raw": self.data[[f"accSp[{i}]" for i in range(3)]].to_numpy()   , "style": "dashed", "color": COLORS[3], "marker": None, "width": 1.0,  "label": "Setpoint"},
-                "localPos": {"raw": self.data[[f"localPos[{i}]" for i in range(3)]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
-                "localVel": {"raw": self.data[[f"localVel[{i}]" for i in range(3)]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
-                "localQuat": {"raw": self.data[[f"localQuat[{i}]" for i in [1,2,3,0]]].to_numpy(), "style": "dashed", "color": COLORS[1], "marker": None, "width": 1.0,  "label": "Setpoint"},
-            })
-
+        # interpolators and initial plotting lines
         for key, value in self.series.items():
-            self.series[key]['interpolator'] = interp1d(
+            value['interpolator'] = interp1d(
                 self.t,
-                value["raw"].T,
-                kind="nearest",
+                np.moveaxis(value['raw'], 0, -1),
+                kind=self.interpolation,
                 bounds_error=False,
                 fill_value=(value["raw"][0], value["raw"][-1]))
 
-            self.series[key]['line'] = self.ax.plot(
+            value['line'] = self.ax.plot(
                 [np.nan], [np.nan], [np.nan],
                 linestyle=value['style'],
                 color=value['color'],
                 lw=value['width'],
                 label=value["label"])[0]
-
-        self.ax.set_xlabel("X")
-        self.ax.set_ylabel("Y")
-        self.ax.set_zlabel("Z")
 
         # set view angle
         self.ax.view_init(elev=-25, azim=150, roll=180)
@@ -559,19 +796,29 @@ class Viewport(object):
         self.ax.set_ylim(miny-0.5, maxy+0.5)
         self.ax.set_zlim(minz-0.5, maxz+0.5)
 
+        # legend, title and show
         self.ax.legend(loc='upper left')
-
         self.ax.set_title(self.name)
-
         self.fig.show()
 
     def update(self, event):
+        """Callback function to update the viewport on mouse hover
+
+        Args:
+            event (matplotlib.backend_bases.MouseEvent): mouse event
+
+        Returns:
+            None
+        """
+
+        # abort if event doesnt contain what we need
         if event.xdata is None:
             return
 
-        for ser in self.series.keys():
+        # remove old lines
+        for _, ser in self.series.items():
             try:
-                self.series[ser]['line'].remove()
+                ser['line'].remove()
             except ValueError:
                 pass
 
@@ -580,75 +827,104 @@ class Viewport(object):
         for ser in self.series.keys():
             interpolates[ser] = self.series[ser]['interpolator'](event.xdata)
 
-        for ser in ["quat", "quatSp", "localQuat"]:
-            rotation = R.from_quat(interpolates[ser])
-            rotated_front = rotation.apply(self.front)
+        # plot attitude
+        for ser in [x for x in ["att", "attSet", "attMeas"] if x in self.series.keys()]:
+            # invoke craft to get the rotated geometry
+            rotor_controls = interpolates["rotorSet"] if "rotorSet" in interpolates.keys() else None
+            surface_controls = interpolates["surfaceSet"] if "surfaceSet" in interpolates.keys() else None
+            xs, ys, zs, q = self.craft.generate(interpolates[ser],
+                                                rotor_controls=rotor_controls,
+                                                surface_controls=surface_controls,
+                                                )
 
-            # Plot circles (representing rotors)
-            xs = np.array([])
-            ys = np.array([])
-            zs = np.array([])
-            for arm in self.arms:
-                u = np.linspace(0, 2*np.pi, 20)
-                x = arm[0] + 0.1 * np.cos(u)
-                y = arm[1] + 0.1 * np.sin(u)
-                z = np.ones_like(x) * arm[2]
-                x, y, z = rotation.apply(np.array([x,y,z]).T).T
-                xs = np.concatenate((xs, x, np.array([np.nan])))
-                ys = np.concatenate((ys, y, np.array([np.nan])))
-                zs = np.concatenate((zs, z, np.array([np.nan])))
+            qs = np.empty((0, 3))
+            for arrow in q:
+                arrow_start, arrow_end, arrow_max = arrow
+                qs = np.concatenate((qs,
+                                     arrow_start[np.newaxis],
+                                     arrow_end[np.newaxis],
+                                     np.array([[np.nan, np.nan, np.nan]]),
+                                     arrow_max[np.newaxis],
+                                     np.array([[np.nan, np.nan, np.nan]]),
+                                     ))
 
-            # plot front triangle
-            xs = np.concatenate((xs, rotated_front[:, 0]))
-            ys = np.concatenate((ys, rotated_front[:, 1]))
-            zs = np.concatenate((zs, rotated_front[:, 2]))
+            if "pos" in interpolates.keys():
+                qs += interpolates["pos"]
 
-            if self.has_pos:
-                if ser == "localQuat":
+            # translate geometry, if necessary
+            if "pos" in interpolates.keys():
+                if ser == "attMeas" and "posMeas" in interpolates.keys():
                     # offset by measured position
-                    xs += interpolates["localPos"][0] * 1e-3
-                    ys += interpolates["localPos"][1] * 1e-3
-                    zs += interpolates["localPos"][2] * 1e-3
+                    xs += interpolates["posMeas"][0]
+                    ys += interpolates["posMeas"][1]
+                    zs += interpolates["posMeas"][2]
                 else:
                     # offset by estimator position
                     xs += interpolates["pos"][0]
                     ys += interpolates["pos"][1]
                     zs += interpolates["pos"][2]
 
+            # update plot line
             self.series[ser]['line'] = self.ax.plot(xs, ys, zs,
                 linestyle=self.series[ser]['style'],
                 color=self.series[ser]['color'],
                 lw=self.series[ser]['width'])[0]
 
-        if self.has_pos:
-            for ser in ["pos", "posSp"]:
-                self.series[ser]['line'] = self.ax.scatter(
-                    interpolates[ser][0],
-                    interpolates[ser][1],
-                    interpolates[ser][2],
-                    linestyle=self.series[ser]['style'],
-                    color=self.series[ser]['color'],
-                    lw=self.series[ser]['width'],
-                    marker=self.series[ser]['marker'],
-                    facecolor='none',
-                    s=50)
+            # add arrows for rotors
+            if ser == "att" and len(q) > 0 and "rotorSet" in self.series.keys():
+                self.series["rotorSet"]['line'] = self.ax.plot(qs[:, 0], qs[:, 1], qs[:, 2],
+                             linestyle=self.series["rotorSet"]['style'],
+                             color=self.series["rotorSet"]['color'],
+                             marker=self.series["rotorSet"]['marker'],
+                             markersize=1,
+                             lw=self.series["rotorSet"]['width'])[0]
 
-            for ser in ["vel", "velSp"]:
-                self.series[ser]['line'] = self.ax.plot(
-                    [interpolates['pos'][0], 0.2*interpolates[ser][0] + interpolates['pos'][0]],
-                    [interpolates['pos'][1], 0.2*interpolates[ser][1] + interpolates['pos'][1]],
-                    [interpolates['pos'][2], 0.2*interpolates[ser][2] + interpolates['pos'][2]],
-                    linestyle=self.series[ser]['style'],
-                    color=self.series[ser]['color'],
-                    lw=self.series[ser]['width'])[0]
+        # scatter plot for position
+        for ser in [x for x in ["pos", "posSet", "posMeas"] if x in self.series.keys()]:
+            self.series[ser]['line'] = self.ax.scatter(
+                interpolates[ser][0],
+                interpolates[ser][1],
+                interpolates[ser][2],
+                linestyle=self.series[ser]['style'],
+                color=self.series[ser]['color'],
+                lw=self.series[ser]['width'],
+                marker=self.series[ser]['marker'],
+                facecolor='none',
+                s=50*self.series[ser]['width'])
 
-            self.series["accSp"]['line'] = self.ax.plot(
-                [interpolates['pos'][0], 0.1*interpolates['accSp'][0] + interpolates['pos'][0]],
-                [interpolates['pos'][1], 0.1*interpolates['accSp'][1] + interpolates['pos'][1]],
-                [interpolates['pos'][2], 0.1*interpolates['accSp'][2] + interpolates['pos'][2]],
-                linestyle=self.series["accSp"]['style'],
-                color=self.series["accSp"]['color'],
-                lw=self.series["accSp"]['width'])[0]
+        # line to show velocity
+        for ser in [x for x in ["vel", "velSet", "velMeas"] if x in self.series.keys()]:
+            if ser == "velMeas" and "posMeas" in interpolates.keys():
+                offset = interpolates["posMeas"]
+            elif "pos" in interpolates.keys():
+                offset = interpolates["pos"]
+            else:
+                offset = np.array([0, 0, 0])
+
+            self.series[ser]['line'] = self.ax.plot(
+                [offset[0], 0.2*interpolates[ser][0] + offset[0]],
+                [offset[1], 0.2*interpolates[ser][1] + offset[1]],
+                [offset[2], 0.2*interpolates[ser][2] + offset[2]],
+                linestyle=self.series[ser]['style'],
+                color=self.series[ser]['color'],
+                lw=self.series[ser]['width'])[0]
+
+        # line to show acceleration
+        for ser in [x for x in ["acc", "accSet", "accMeas"] if x in self.series.keys()]:
+            if ser == "accMeas" and "posMeas" in interpolates.keys():
+                offset = interpolates["posMeas"]
+            elif "pos" in interpolates.keys():
+                offset = interpolates["pos"]
+            else:
+                offset = np.array([0, 0, 0])
+
+            self.series[ser]['line'] = self.ax.plot(
+                [offset[0], 0.1*interpolates[ser][0] + offset[0]],
+                [offset[1], 0.1*interpolates[ser][1] + offset[1]],
+                [offset[2], 0.1*interpolates[ser][2] + offset[2]],
+                linestyle=self.series[ser]['style'],
+                color=self.series[ser]['color'],
+                lw=self.series[ser]['width'])[0]
 
         # make sure all the axes are equal
         if self.follow:
@@ -656,4 +932,70 @@ class Viewport(object):
         else:
             self.ax.set_aspect('equal', adjustable='box')
 
+        # finally, update the canvas
         self.fig.canvas.draw()
+
+class IndiflightViewport(Viewport):
+    def __init__(self, craft: Craft3D, data, follow=False, interpolation="previous", title="Viewport"):
+        # thin wrapper: extract series from log and intialize base class
+
+        super().__init__(
+            craft,
+            time=data['timeS'].to_numpy(),
+            att=data[[f'quat[{str(i)}]' for i in range(4)]].to_numpy(),
+            attSet=data[[f'quatSp[{str(i)}]' for i in range(4)]].to_numpy(),
+            attMeas=data[[f'localQuat[{str(i)}]' for i in range(4)]].to_numpy() if 'localQuat[0]' in data.columns else None,
+            pos=data[[f'pos[{str(i)}]' for i in range(3)]].to_numpy() if 'pos[0]' in data.columns else None,
+            posSet=data[[f'posSp[{str(i)}]' for i in range(3)]].to_numpy() if 'posSp[0]' in data.columns else None,
+            posMeas=data[[f'localPos[{str(i)}]' for i in range(3)]].to_numpy() if 'localPos[0]' in data.columns else None,
+            vel=data[[f'vel[{str(i)}]' for i in range(3)]].to_numpy() if 'vel[0]' in data.columns else None,
+            velSet=data[[f'velSp[{str(i)}]' for i in range(3)]].to_numpy() if 'velSp[0]' in data.columns else None,
+            velMeas=data[[f'localVel[{str(i)}]' for i in range(3)]].to_numpy() if 'localVel[0]' in data.columns else None,
+            acc=data[[f'acc[{str(i)}]' for i in range(3)]].to_numpy() if 'acc[0]' in data.columns else None,
+            accSet=data[[f'accSp[{str(i)}]' for i in range(3)]].to_numpy() if 'accSp[0]' in data.columns else None,
+            accMeas=None, # not measured
+            follow=follow,
+            interpolation=interpolation,
+            title=title
+        )
+
+
+if __name__ == "__main__":
+    import numpy as np
+    ts = Tailsitter()
+    vp = Viewport(ts,
+                  time=np.array([0., 1., 2.]),
+                  att=np.array([[1., 0., 0., 0.], [1., 0., 0., 0.], [0., 0., 0., 1.]]),
+                  attSet=np.array([[1., 0., 0., 0.], [1., 0., 0., 0.1], [0., 0., 0., 1.]]),
+                  attMeas=np.array([[1., 0., 0., 0.], [1., 0., 0., -0.1], [0., 0., 0., 1.]]),
+                  pos=np.array([[0., 0., 0.], [0.2, 0.2, 0.2], [0.4, 0.4, 0.4]]),
+                  posSet=np.array([[0.4, 0.4, 0.4], [0.4, 0.4, 0.4], [0.4, 0.4, 0.4]]),
+                  posMeas=np.array([[0., 0., 0.], [0.1, 0.1, 0.1], [0.4, 0.4, 0.4]]),
+                  vel=3*np.array([[0., 0., 0.], [0.2, 0.2, 0.2], [0.4, 0.4, 0.4]]),
+                  velSet=3*np.array([[0.4, 0.4, 0.4], [0.4, 0.4, 0.4], [0.4, 0.4, 0.4]]),
+                  velMeas=3*np.array([[0., 0., 0.], [0.1, 0.1, 0.1], [0.4, 0.4, 0.4]]),
+                  acc=5*np.array([[0., 0., 0.], [0.2, -0.2, -0.2], [0.4, -0.4, -0.4]]),
+                  accSet=5*np.array([[0.4, 0.4, 0.4], [0.4, -0.4, -0.4], [0.4, -0.4, -0.4]]),
+                  accMeas=5*np.array([[0., 0., 0.], [0.1, -0.1, -0.1], [0.4, -0.4, -0.4]]),
+                  rotorSet=np.array([
+                      [[1., 0., 0.], [1., 0., 0.]],
+                      [[0.5, 0.5, 0.], [0.5, 0., 0.5]],
+                      [[1., 0.2, 0.2], [1., -0.2, -0.2]]
+                  ]),
+                  surfaceSet=np.array([[0., 0.], [0.5, -0.5], [1.0, -0.5]]),
+                  )
+
+    # put slider onto the plot so we can test the mouse events 
+    from matplotlib.widgets import Slider
+    from matplotlib.backend_bases import MouseEvent
+    axcolor = 'lightgoldenrodyellow'
+    axfreq = plt.axes([0.25, 0.02, 0.50, 0.03], facecolor=axcolor)
+    sfreq = Slider(axfreq, 'Time', 0.0, 2.0, valinit=0.0)
+    def update(val):
+        me = MouseEvent('motion_notify_event', vp.fig.canvas, 1.0, 1.0)
+        me.xdata = val
+        vp.update(me)
+    sfreq.on_changed(update)
+
+    update(0)
+
