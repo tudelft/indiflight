@@ -23,7 +23,7 @@ blackbox_decode = Extension(
 # Call the setup function
 setup(
     name="indiflight_log_tools",               # Package name
-    version="0.2.0",                           # Initial version
+    version="0.2.1",                           # Initial version
     description="Import Indiflight BFL logs fast and in correct units.",  # Package description
     author="Till Blaha",                       # Author name
     author_email="t.m.blaha@tudelft.nl",      # Author email

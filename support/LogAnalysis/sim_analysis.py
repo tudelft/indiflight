@@ -1,7 +1,9 @@
 from indiflight_log_tools import IndiflightLog
-from handy_signal_tools import Signal
-from estimators import LMS, RLS, EMWV, RLS_fortescue
-from plotting import FlightPlotter, Viewport, BlittedCursor
+from indiflight_log_tools.signal_tools import Signal
+from estimators import LMS, RLS, EWMV, RLS_fortescue
+from pyFlightPlotter import BlittedCursor
+from pyFlightPlotter.crafts import Quadrotor, Tailsitter
+from indiflightPlotter import IndiflightPlotter, IndiflightViewport
 
 import numpy as np
 from tqdm import tqdm
@@ -17,6 +19,8 @@ parser.add_argument("--id", required=False, type=int, default=1, metavar="ID",
 parser.add_argument("--reset-time", required=False, action="store_true", help="Reset the time in the log to start at 0.")
 parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                     help="Crop the log to the given time range (in seconds).")
+parser.add_argument("--type", type=str, default="multirotor", choices=["tailsitter", "multirotor"],
+                    help="Type of craft for visualization.")
 
 args = parser.parse_args()
 
@@ -30,9 +34,10 @@ log_name = args.log.split("/")[-1].split(".")[0]
 import matplotlib.pyplot as plt
 plt.close('all')
 
-fplt = FlightPlotter(log.data, name=log_name)
-pplt = Viewport(log.data, follow=False, name=log_name)
-aplt = Viewport(log.data, follow=True, name=log_name)
+craft = Tailsitter() if args.type == "tailsitter" else Quadrotor()
+fplt = IndiflightPlotter(log.data, name=log_name)
+pplt = IndiflightViewport(craft, log.data, follow=False, title=log_name)
+aplt = IndiflightViewport(craft, log.data, follow=True, title=log_name)
 fplt.connect_viewport(pplt)
 fplt.connect_viewport(aplt)
 
@@ -116,19 +121,16 @@ for i in tqdm(range(N), desc="Fitting RLS model"):
         [ 0,  0,  0,  0,  0,  0, Oz, Ox,   0,   0,   0,   0,     0,     0,     0,     0, ww1d1, 0*ww1d2, 0*ww2d1, ww2d2],
     ])
     y = np.concatenate((af.y[i], Ofd.y[i]))
-    rls.newSample(A, y); rls.update()
+    rls.newSample(A, y, t[i]); rls.update()
 
 #%% plotting
 
-text = np.zeros(len(t)+1)
-text[1:] = t
-text[0] = t[0]-(t[1]-t[0])
-
-frls = rls.plotParameters(timeMs=text,
-                          parGroups=[[0,1,2,3], [4,5,6,7], [8,9], [10,11], [12,13,14,15], [16,17,18,19]],
+frls = rls.plotParameters(parGroups=[[0,1,2,3], [4,5,6,7], [8,9], [10,11], [12,13,14,15], [16,17,18,19]],
                           sharey=False,
                           zoomy=False)
 frls.show()
 
 cursor = BlittedCursor(fplt.all_axes + rls.all_axes, sharex=True)
+
+plt.show()
 

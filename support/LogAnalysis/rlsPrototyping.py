@@ -1,7 +1,8 @@
 from indiflight_log_tools import IndiflightLog
-from handy_signal_tools import Signal
-from estimators import LMS, RLS, EMWV, RLS_fortescue
-from plotting import FlightPlotter, Viewport, SysIdPlotter, BlittedCursor
+from indiflight_log_tools.signal_tools import Signal
+from estimators import LMS, RLS, EWMV, RLS_fortescue
+from pyFlightPlotter import BlittedCursor
+from indiflightPlotter import IndiflightPlotter, IndiflightSysIdPlotter, IndiflightViewport
 
 import numpy as np
 from tqdm import tqdm
@@ -222,42 +223,42 @@ lms_yaw = LMS(8, 1, mu=1e-13)
 lms_yaw.setTitle("LMS Yaw")
 # lms_yaw.setParameters([yawfx, -yawfx, yawfx, -yawfx])
 
-emwv = EMWV(forgetting=0.5)
-emwv.setParameters([0., 0.])
+ewmv = EWMV(forgetting=0.5)
+ewmv.setParameters([0., 0.])
 
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
                      [-x[1], x[0], 0]])
 
-for Aai, Adi, yOi, yai, Oi, Odiffi in tqdm(zip(Aa, Ad, yO, ya, Of.y, Odiff.y), total=len(yO)):
+for Aai, Adi, yOi, yai, Oi, Odiffi, ti in tqdm(zip(Aa, Ad, yO, ya, Of.y, Odiff.y, t), total=len(yO)):
     Ad = np.concatenate((Aai, Adi))
-    rls_fy.newSample(Aai, yai[1]); rls_fy.update()
-    rls8_fy.newSample(Ad, yai[1]); rls8_fy.update()
+    rls_fy.newSample(Aai, yai[1], ti); rls_fy.update()
+    rls8_fy.newSample(Ad, yai[1], ti); rls8_fy.update()
 
     AIMU_diff = np.empty((3, 3+3*4))
     AIMU_diff[:, :3] = skew(Odiffi) @ skew(Oi) + skew(Oi) @ skew(Odiffi)
     AIMU_diff[:, 3:15] = np.kron(np.eye(3), Aai)
-    rlsIMU_f_diff.newSample(AIMU_diff, yai); rlsIMU_f_diff.update()
+    rlsIMU_f_diff.newSample(AIMU_diff, yai, ti); rlsIMU_f_diff.update()
 
     # rls_fz.newSample(A, yai[2]); rls_fz.update()
     # rls_fort_fz.newSample(A, yai[2]); rls_fort_fz.update()
     # lms_fz.newSample(A, yai[2]); lms_fz.update()
 
-    rls_pitch.newSample(Aai, yOi[1]); rls_pitch.update()
-    rls_fort_pitch.newSample(Aai, yOi[1]); rls_fort_pitch.update()
-    lms_pitch.newSample(Aai, yOi[1]); lms_pitch.update()
+    rls_pitch.newSample(Aai, yOi[1], ti); rls_pitch.update()
+    rls_fort_pitch.newSample(Aai, yOi[1], ti); rls_fort_pitch.update()
+    lms_pitch.newSample(Aai, yOi[1], ti); lms_pitch.update()
 
-    rls_yaw.newSample(Ad, yOi[2]); rls_yaw.update()
-    rls_fort_yaw.newSample(Ad, yOi[2]); rls_fort_yaw.update()
-    lms_yaw.newSample(Ad, yOi[2]); lms_yaw.update()
+    rls_yaw.newSample(Ad, yOi[2], ti); rls_yaw.update()
+    rls_fort_yaw.newSample(Ad, yOi[2], ti); rls_fort_yaw.update()
+    lms_yaw.newSample(Ad, yOi[2], ti); lms_yaw.update()
 
 # repeat for absolute regression
 delta_v = 0
-for Aai, Adi, yOi, yai, Oi, Ri in tqdm(zip(absAa, absAd, absyO, absya, Of.y, R_I_to_B), total=len(absyO)):
+for Aai, Adi, yOi, yai, Oi, Ri, ti in tqdm(zip(absAa, absAd, absyO, absya, Of.y, R_I_to_B, t), total=len(absyO)):
     # calculate vertical speed increment since throw
     delta_v += dt * np.linalg.inv(Ri) @ yai
-    vzi = 
+    # vzi = 
 
     a_app_mtx = skew(Oi) @ skew(Oi) + skew(yOi)
     AIMU = np.empty((3, 3+3*4))
@@ -270,7 +271,7 @@ for Aai, Adi, yOi, yai, Oi, Ri in tqdm(zip(absAa, absAd, absyO, absya, Of.y, R_I
 
     AIMUv2 = np.empty((3, 3+3*4+2))
     AIMUv2[:, :15] = AIMU[:, :15]
-    AIMUv2[:, 15] = Ri[:, 2] * ()
+    AIMUv2[:, 15] = Ri[:, 2]
     AIMUv2[:, 16] = Ri[:, 2]
 
     Ad = np.concatenate((Aai, Adi))
@@ -278,16 +279,16 @@ for Aai, Adi, yOi, yai, Oi, Ri in tqdm(zip(absAa, absAd, absyO, absya, Of.y, R_I
     AIMU8[:, :3] = a_app_mtx
     AIMU8[:, 3:] = np.kron(np.eye(3), Ad)
 
-    rlsIMU_f.newSample(AIMU, yai); rlsIMU_f.update()
-    rlsIMU_fv.newSample(AIMUv, yai); rlsIMU_fv.update()
-    rlsIMU_f8.newSample(AIMU8, yai); rlsIMU_f8.update()
+    rlsIMU_f.newSample(AIMU, yai, ti); rlsIMU_f.update()
+    rlsIMU_fv.newSample(AIMUv, yai, ti); rlsIMU_fv.update()
+    rlsIMU_f8.newSample(AIMU8, yai, ti); rlsIMU_f8.update()
 
     AIMU_m = np.empty((3, 3+3*8))
     Ireg_mtx = -np.diag([Oi[1]*Oi[2], Oi[0]*Oi[2], Oi[0]*Oi[1]])
     AIMU_m[:, :3] = Ireg_mtx
     AIMU_m[:, 3:] = np.kron(np.eye(3), Ad)
 
-    rlsIMU_m.newSample(AIMU_m, yOi); rlsIMU_m.update()
+    rlsIMU_m.newSample(AIMU_m, yOi, ti); rlsIMU_m.update()
 
 
 # e = np.array(rls.predictOnline()).squeeze()[1:] - yO[:, 0]
@@ -303,10 +304,6 @@ for Aai, Adi, yOi, yai, Oi, Ri in tqdm(zip(absAa, absAd, absyO, absya, Of.y, R_I
 # ax.plot(t, eHP.squeeze())
 # ax.legend(["pure", "highpass"])
 # fig.show()
-
-text = np.zeros(len(t)+1)
-text[1:] = t
-text[0] = t[0]-(t[1]-t[0])
 
 # all_rls = [rls_fx, rls_fy, rls_fz, rls_roll, rls_pitch, rls_yaw]
 # for rls in all_rls:
@@ -327,11 +324,11 @@ text[0] = t[0]-(t[1]-t[0])
 # rls_fort_yaw.plotParameters(timeMs=text, parGroups=[[0,1,2,3], [4,5,6,7]], sharey=False, zoomy=False)
 # lms_yaw.plotParameters(timeMs=text, parGroups=[[0,1,2,3], [4,5,6,7]], sharey=False, zoomy=False)
 
-rlsIMU_f.plotParameters(timeMs=text, parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14]], sharey=False, zoomy=False)
-rlsIMU_f_diff.plotParameters(timeMs=text, parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14]], sharey=False, zoomy=False)
-rlsIMU_fv.plotParameters(timeMs=text, parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14], [15]], sharey=False, zoomy=False)
-rlsIMU_f8.plotParameters(timeMs=text, parGroups=[[0,1,2], range(3, 7), range(7, 11), range(11, 15), range(15, 19), range(19, 23), range(23, 27)], sharey=False, zoomy=False)
-rlsIMU_m.plotParameters(timeMs=text, parGroups=[[0,1,2], range(3, 7), range(7, 11), range(11, 15), range(15, 19), range(19, 23), range(23, 27)], sharey=False, zoomy=False)
+rlsIMU_f.plotParameters(parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14]], sharey=False, zoomy=False)
+rlsIMU_f_diff.plotParameters(parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14]], sharey=False, zoomy=False)
+rlsIMU_fv.plotParameters(parGroups=[[0,1,2], [3,4,5,6], [7,8,9,10], [11,12,13,14], [15]], sharey=False, zoomy=False)
+rlsIMU_f8.plotParameters(parGroups=[[0,1,2], range(3, 7), range(7, 11), range(11, 15), range(15, 19), range(19, 23), range(23, 27)], sharey=False, zoomy=False)
+rlsIMU_m.plotParameters(parGroups=[[0,1,2], range(3, 7), range(7, 11), range(11, 15), range(15, 19), range(19, 23), range(23, 27)], sharey=False, zoomy=False)
 
 # asdf = BlittedCursor(rlsIMU_f.all_axes + rlsIMU_f8.all_axes + rlsIMU_m.all_axes, sharex=True)
 asdf = BlittedCursor(rlsIMU_f.all_axes, sharex=True)

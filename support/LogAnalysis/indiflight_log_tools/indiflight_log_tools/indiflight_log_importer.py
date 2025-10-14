@@ -521,7 +521,7 @@ class IndiflightLog(object):
             elif re.match(r'^motor\[[0-9]+\]$', col):
                 data[col] -= self.DSHOT_MIN
                 data[col] /= (self.DSHOT_MAX - self.DSHOT_MIN)
-            elif col.startswith('quat') or col.startswith('extQuat') or col.startswith('ekf_quat'):
+            elif col.startswith('quat') or col.startswith('extQuat') or col.startswith('ekf_quat') or col.startswith('localQuat'):
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('alpha'):
                 data[col] /= self.RADIANS_TO_DECADEGREES
@@ -537,9 +537,9 @@ class IndiflightLog(object):
                 data[col] *= 100
             elif col.startswith('omega'):
                 data[col] /= 1.
-            elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos'):
+            elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos') or col.startswith('localPos'):
                 data[col] /= self.METER_TO_MM
-            elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel'):
+            elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel') or col.startswith('localVel'):
                 data[col] /= self.METER_TO_CM
             elif col.startswith('extAtt') or col.startswith('ekf_att'):
                 data[col] /= 1000.

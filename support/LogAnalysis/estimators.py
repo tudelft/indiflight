@@ -3,7 +3,7 @@ import numbers
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-from plotting import local_rc, BlittedCursor
+from pyFlightPlotter import local_rc
 plt.rcParams.update(local_rc)
 
 class Estimator(object):
@@ -387,8 +387,6 @@ class RLS(Estimator):
 
     def update(self):
         super().update()
-        # if self.N == 1:
-        #     self.log()  # log initial conditions
 
         # shorthands
         theta = self.theta
@@ -561,8 +559,7 @@ class RLS_fortescue(Estimator):
         self.lam_h.append(self.lam)
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
 
         # shorthands
         theta = self.theta
@@ -620,13 +617,12 @@ class RLS_linear(Estimator):
 
     def log(self):
         super().log()
-        self.K_h.append(self.K)
+        self.K_h.append(self.K.copy())
         self.e_h.append(self.e)
         self.lam_h.append(self.lam)
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
 
         # shorthands
         theta = self.theta

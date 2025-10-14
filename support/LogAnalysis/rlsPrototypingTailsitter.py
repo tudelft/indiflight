@@ -1,7 +1,9 @@
 from indiflight_log_tools import IndiflightLog
-from handy_signal_tools import Signal
+from indiflight_log_tools.signal_tools import Signal
 from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford
-from plotting import FlightPlotter, Viewport, SysIdPlotter, BlittedCursor
+from pyFlightPlotter import BlittedCursor
+from pyFlightPlotter.crafts import Tailsitter
+from indiflightPlotter import IndiflightPlotter, IndiflightViewport
 
 import numpy as np
 from tqdm import tqdm
@@ -29,9 +31,10 @@ log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
-fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
+fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
 
-pplt = Viewport(log.data, follow=False, craft="tailsitter", name=f"{args.name} -- Flight Data")
+craft = Tailsitter()
+pplt = IndiflightViewport(craft, log.data, follow=False, title=f"{args.name} -- Flight Data")
 fplt.connect_viewport(pplt)
 
 # splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
@@ -54,7 +57,7 @@ w_raw = log.data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
 dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy()
 d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy() / 100 / 180 * np.pi
 q_raw = log.data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
-v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy() / 100
+v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
 
 t = np.linspace(t_raw[0], t_raw[-1], N)
 dt = np.mean(np.diff(t))
@@ -264,10 +267,6 @@ for ti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, 
     e_sample = rls_noPhi.predictNew(A_noPhi).squeeze() - y
     rls_var.newSample(np.zeros(2), e_sample[0], ti); rls_var.update()
 
-
-text = np.zeros(len(t)+1)
-text[1:] = t
-text[0] = t[0]-(t[1]-t[0])
 
 # remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
 

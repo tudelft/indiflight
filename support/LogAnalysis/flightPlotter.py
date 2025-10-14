@@ -1,10 +1,14 @@
 
-from plotting import FlightPlotter, Viewport, BlittedCursor
+from pyFlightPlotter import BlittedCursor, local_rc
+from pyFlightPlotter import Quadrotor, Tailsitter
+from indiflightPlotter import IndiflightPlotter, IndiflightViewport
 from indiflight_log_tools import IndiflightLog
-import matplotlib.pyplot as plt
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+import matplotlib.pyplot as plt
+plt.close('all')
+plt.rcParams.update(local_rc)
 
 parser = ArgumentParser(description="Analyse onboard ID data from a log file.",
                         formatter_class=ArgumentDefaultsHelpFormatter)
@@ -14,7 +18,7 @@ parser.add_argument("--resetTime", action="store_true", help="Reset time to star
 parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                     help="Crop the log to the given time range (in seconds).")
 parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
-parser.add_argument("--type", type=str, default="tailsitter", choices=["tailsitter", "multirotor"],
+parser.add_argument("--type", type=str, default="multirotor", choices=["tailsitter", "multirotor"],
                     help="Type of craft for visualization.")
 
 args = parser.parse_args()
@@ -26,12 +30,15 @@ log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
-import matplotlib
-matplotlib.use('qtagg')
+fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+cursor = BlittedCursor(fplt.all_axes, sharex=True)
 
-fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
-
-pplt = Viewport(log.data, follow=False, craft=args.type, name=f"{args.name} -- Onboard ID Analysis")
+craft = Tailsitter() if args.type == "tailsitter" else Quadrotor()
+pplt = IndiflightViewport(craft,
+                          log.data,
+                          follow=False,
+                          interpolation="previous",
+                          title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
 
-cursor = BlittedCursor(fplt.all_axes, sharex=True)
+plt.show()

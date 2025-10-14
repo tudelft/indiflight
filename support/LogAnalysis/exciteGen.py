@@ -10,7 +10,6 @@ from scipy.integrate import cumulative_trapezoid
 import matplotlib.pyplot as plt
 from time import time
 import pulp as pl
-from plotting import BlittedCursor
 
 # helper functions
 def inner(u, v, t):

@@ -5,9 +5,9 @@ from matplotlib import pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from handy_signal_tools import Signal
+from indiflight_log_tools.signal_tools import Signal
 from estimators import LS, RLS
-from plotting import BlittedCursor
+from pyFlightPlotter import BlittedCursor
 
 # plt.close('all')
 
@@ -59,7 +59,7 @@ wf = w.filtfilt("lowpass", order, freq_hz)
 df = d.filtfilt("lowpass", order, freq_hz)
 
 # get arming time
-arm_time = None
+arm_time = t[0]
 for event in log.events:
     if event['name'] == 'Sync beep':
         arm_time = event['time'] * 1e-6
@@ -298,9 +298,10 @@ axes = []
 for f in all_figs:
     axes.extend(f.axes)
 
-bc = BlittedCursor(axes, sharex=True)
+if len(axes) > 0:
+    bc = BlittedCursor(axes, sharex=True)
 
-plt.show()
+    plt.show()
 
 # for f in figs:
 #     f.savefig(f"outputs/{args.name}_{f._title.replace(' ', '_')}.eps", dpi=300)
