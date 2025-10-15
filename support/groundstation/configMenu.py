@@ -102,15 +102,15 @@ FC_FLY_ITEMS = [
     ("p", "go to above nn_init"),
     ("t", "takeoff"),
     ("s", "set waypoint here"),
+    ("h", "toggle heading mode"),
     ("1", "initTrajectoryTracker"),
     ("2", "decrease speed by 0.1"),
     ("3", "increase speed by 0.1"),
-    ("9", "startTrajectoryTracker"),
     ("4", "stopTrajectoryTracker"),
+    ("8", "recovery_mode"),
     ("5", "land"),
     ("6", "nn_init"),
-    ("7", "nn_activate"),
-    ("8", "recovery_mode"),
+    ("7", "nn_activate / nn_deactivate"),
 ]
 
 # menu of menu's must be a dict where the keys are the displayed text, and the submenu is the item

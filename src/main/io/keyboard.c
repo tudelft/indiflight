@@ -26,6 +26,7 @@
 #include "io/local_pos.h"            // for posSpNed
 #include "flight/trajectory_tracker.h"  // for initTrajectoryTracker, stopTrajectoryTracker, trajectoryTrackerSetSpeed
 #include "flight/nn_control.h"          // for nn_init, nn_activate
+#include "flight/ekf.h"
 
 // HID Codes (https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2)
 #define KEY_A           0x04
@@ -79,21 +80,32 @@
 uint8_t key = 0;
 
 void processKey(uint8_t key) {
-    // 0 = go to center
-    // 1 = initTrajectoryTracker
-    // 2 = decrease speed by 0.5 m/s
-    // 3 = increase speed by 0.5 m/s
-    // 4 = stopTrajectoryTracker
-    // 5 = land
-    // 6 = nn_init
-    // 7 = nn_activate
-    // 8 = recovery_mode
-    // 9 = kill
-
     switch (key) {
 #ifdef USE_LOCAL_POSITION
-        case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpNed.trackPsi = true; posSpNed.new = true; posSpNed.time_us = micros(); break;
-        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSpNed.new = true; posSpNed.time_us = micros(); break;
+        // goto center
+        case KEY_0: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = -1.5; posSpNed.trackPsi = true; posSpNed.valid = true; posSpNed.time_us = micros(); break;
+        // land
+        case KEY_5: posSpNed.pos.V.X = 0.; posSpNed.pos.V.Y = 0.; posSpNed.pos.V.Z = 0.; posSpNed.valid = true; posSpNed.time_us = micros(); break;
+        // set position setpoint here
+        case KEY_S:
+            if (isConvergedEkf()) {
+                posSpNed.pos.V.X = posEstNed.V.X;
+                posSpNed.pos.V.Y = posEstNed.V.Y;
+                posSpNed.pos.V.Z = posEstNed.V.Z;
+                posSpNed.valid = true;
+                posSpNed.time_us = micros();
+            }
+            break;
+        case KEY_T: // takeoff
+            if (isConvergedEkf()) {
+                posSpNed.pos.V.X = posEstNed.V.X;
+                posSpNed.pos.V.Y = posEstNed.V.Y;
+                posSpNed.pos.V.Z = -1.5f; // takeoff to 1.5m
+                posSpNed.trackPsi = true;
+                posSpNed.valid = true;
+                posSpNed.time_us = micros();
+            }
+            break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         case KEY_1: initTrajectoryTracker(); break;
@@ -107,7 +119,7 @@ void processKey(uint8_t key) {
         case KEY_6: nn_init(); break;
         case KEY_7: if (nn_is_active()) { nn_deactivate(); } else { nn_activate(); } break;
 #endif
-        case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
+        //case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
     }
 }
 

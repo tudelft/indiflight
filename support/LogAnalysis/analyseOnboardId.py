@@ -5,8 +5,12 @@ import matplotlib
 plt.close('all')
 matplotlib.use('tkagg') 
 
+from pyFlightPlotter import local_rc
 from indiflightPlotter import IndiflightPlotter, IndiflightSysIdPlotter, IndiflightViewport
 from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor
+
+# set local_rc
+plt.rcParams.update(local_rc)
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 

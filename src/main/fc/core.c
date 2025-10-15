@@ -411,7 +411,7 @@ void updateArmingStatus(void)
 #ifdef USE_EKF
         if ( ( shouldBeUsedEkf() && !isConvergedEkf() )
 #ifdef USE_LOCAL_POSITION
-                || ( FLIGHT_MODE(POSITION_MODE) && !posSpNed.new )
+                || ( FLIGHT_MODE(POSITION_MODE) && !posSpNed.valid )
 #endif
 #ifdef USE_GEOFENCE
                 || ( geofenceState == GEOFENCE_STATE_ERROR )
@@ -543,7 +543,7 @@ void disarm(flightLogDisarmReason_e reason)
 #endif
 #ifdef USE_LOCAL_POSITION
         // invalidate previous setpoint
-        posSpNed.new = false;
+        posSpNed.valid = false;
 #endif
 #ifdef USE_GPS
         DISABLE_STATE(GPS_FIX_HOME);
@@ -670,6 +670,14 @@ void tryArm(void)
         }
 #else
         beeper(BEEPER_ARMING);
+#endif
+
+#ifdef USE_LOCAL_POS
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            // we should only be here if ekf converged
+            setLocalPosSpHere();
+            setSticksReference();
+        }
 #endif
 
 #ifdef USE_PERSISTENT_STATS
@@ -1094,7 +1102,9 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             // only switch if converged ekf and good setpoint
-            if (isConvergedEkf() && posSpNed.new) {
+            if (isConvergedEkf()) {
+                setLocalPosSpHere();
+                setSticksReference();
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1104,11 +1114,19 @@ void processRxModes(timeUs_t currentTimeUs)
             stopTrajectoryTracker();
         }
 #endif
+        posSpNed.valid = false;
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 
-    if (!isConvergedEkf() && !ARMING_FLAG(ARMED)) {
-        DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+    if (!isConvergedEkf()) {
+        if (!ARMING_FLAG(ARMED)) {
+            posSpNed.valid = false;
+            DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+        } 
+        if (ARMING_FLAG(ARMED) && !FLIGHT_MODE(POSITION_MODE)) {
+            // invalidate setpoint even if were are flying, because we're not in position mode
+            posSpNed.valid = false;
+        }
     }
 #endif
 

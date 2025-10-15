@@ -15,7 +15,7 @@
 #define USE_TELEMETRY_PI
 
 ## ----- Other features
-## #define USE_GPS
+#define USE_GPS
 ## #define USE_GEOFENCE
 
 ## ----- FPV features: LED and onscreen display
@@ -72,8 +72,7 @@ set gps_update_rate_hz = 15
 # serial ports
 #serial 0 64 115200 57600 0 115200 # RC
 #serial 3 2 115200 115200 0 115200 # GPS
-#serial 0 262144 115200 57600 0 115200 # PI
-serial 3 262144 115200 57600 115200 115200 # ESP
+serial 0 262144 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
 #serial 6 524288 115200 57600 0 115200 # HIL
@@ -139,7 +138,7 @@ set ahrs_process_denom = 4      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
-# ekf (these are the defaults)
+# ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
 set ekf_meas_source = 0
@@ -229,7 +228,7 @@ set indi_use_increment = 1
 set indi_use_accel_for_thrust = 1
 set indi_use_rpm_dot_feedback = 0  # todo: check if make sense to enable
 set indi_act_num = 4
-set indi_sync_lowpass_hz = 5       # no higher!
+set indi_sync_lowpass_hz = 3       # no higher!
 
 # fx, fy, fz, roll, pitch, yaw
 set indi_wls_axes_weights = 1,1,50,50,50,5
@@ -434,7 +433,7 @@ set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 7
+set learner_mode = 6 # inoperable!
 set learner_num_actuators = 4
 set learner_delay_time_ms = 150
 set learner_step_time_ms = 50

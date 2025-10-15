@@ -94,5 +94,6 @@ void resetIterms();
 void posCtlInit(void);
 void updatePosCtl(timeUs_t current);
 void posGetAccSpNed(timeUs_t current);
+void posGetAccSpNedFromSticks(timeUs_t current);
 void posGetAttSpNedAndSpfSpBody(timeUs_t current);
 void posGetRateSpBody(timeUs_t current);

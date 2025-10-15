@@ -65,7 +65,7 @@ void nn_init(void) {
 	posSpNed.pos.V.Z = start_pos[2];
 	posSpNed.psi = start_yaw;
     posSpNed.trackPsi = true;
-    posSpNed.new = true;
+    posSpNed.valid = true;
     posSpNed.time_us= micros();
 }
 

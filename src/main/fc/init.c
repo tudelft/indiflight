@@ -90,6 +90,7 @@
 #include "fc/board_info.h"
 #include "fc/dispatch.h"
 #include "fc/init.h"
+#include "fc/rc.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
 #include "fc/stats.h"
@@ -751,6 +752,7 @@ void init(void)
 #ifdef USE_LOCAL_POSITION
     posCtlInit();
 #endif
+    setSticksReference();
 
     mixerInitProfile();
 

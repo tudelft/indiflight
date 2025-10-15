@@ -99,6 +99,29 @@ static float rcDeflectionSmoothed[3];
 #define RC_RX_RATE_MIN_US                       950   // 0.950ms to fit 1kHz without an issue
 #define RC_RX_RATE_MAX_US                       65500 // 65.5ms or 15.26hz
 
+static float sticksReference[4];
+
+void setSticksReference(void)
+{
+    for (int i = 0; i < 3; i++) {
+        sticksReference[i] = getRcDeflection(i);
+    }
+    sticksReference[THROTTLE] = 1e-3f * (rcCommand[THROTTLE] - 1000.f); // should be [0., 1.]
+}
+
+bool haveSticksMoved(void)
+{
+    for (int i = 0; i < 3; i++) {
+        if (fabsf(getRcDeflection(i) - sticksReference[i]) > RC_STICK_MOVEMENT_THRESHOLD) {
+            return true;
+        }
+    }
+    if (fabsf(1e-3f * (rcCommand[THROTTLE] - 1000.f) - sticksReference[THROTTLE]) > RC_STICK_MOVEMENT_THRESHOLD) {
+        return true;
+    }
+    return false;
+}
+
 bool getShouldUpdateFeedforward(void)
 // only used in pid.c, when feedforward is enabled, to initiate a new FF value
 {

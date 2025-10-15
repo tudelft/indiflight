@@ -28,6 +28,7 @@
 #include "ekf.h"
 
 #include "io/local_pos.h"  		    // for posMeasNed
+#include "io/gps.h"      		    // for indicating if we are converged
 #include "fc/runtime_config.h"		// for FLIGHT_MODE
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
 #include "sensors/gyro.h"			// for gyro
@@ -257,6 +258,10 @@ void updateEkf(timeUs_t currentTimeUs) {
     // --- check init and convergence
     // if not init, try init and exit
     if (!ekf_initialized) {
+#ifdef USE_GPS
+        // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+        gpsSetFixState(false);
+#endif
         ekf_converged = false;
         initEkf(currentTimeUs);
         return;
@@ -266,6 +271,13 @@ void updateEkf(timeUs_t currentTimeUs) {
     if (!ekf_converged && cmpTimeUs(currentTimeUs, lastInitializedTimeUs) > EKF_CONVERGE_TIME_US) {
         ekf_converged = true;
     }
+
+#ifdef USE_GPS
+    // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+    if (ekf_converged) {
+        gpsSetFixState(true);
+    }
+#endif
 
     // --- check if ekf will be used by control/ahrs
     ekf_should_use = ( FLIGHT_MODE(POSITION_MODE) 
@@ -289,6 +301,10 @@ void updateEkf(timeUs_t currentTimeUs) {
     if ( !ekf_inhibit_deinit && cmpTimeUs(currentTimeUs, posMeasNed.time_us) > deinit_timeout ) {
         ekf_initialized = false;
         ekf_converged = false;
+#ifdef USE_GPS
+        // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+        gpsSetFixState(false);
+#endif
         return;
     }
 

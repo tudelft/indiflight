@@ -62,6 +62,9 @@ void setLocalPosMeas(local_pos_ned_t* pos) {
             ) {
         posMeasNed = *pos;
         posMeasNed.new = true;
+#ifdef USE_GPS
+        sensorsSet(SENSOR_GPS);
+#endif
 #if defined(USE_GPS) && false
         // this is just for debugging geofence
         if (pos->source != LOCAL_POS_SOURCE_GPS) {
@@ -83,7 +86,17 @@ void setLocalPosSp(local_pos_sp_ned_t* sp) {
         return;
     }
     posSpNed = *sp;
-    posSpNed.new = true;
+    posSpNed.valid = true;
+}
+
+void setLocalPosSpHere(void) {
+    if (isConvergedEkf()) {
+        local_pos_sp_ned_t sp;
+        sp.time_us = micros();
+        sp.pos = posEstNed;
+        sp.valid = true;
+        setLocalPosSp(&sp);
+    }
 }
 
 #ifdef USE_GPS

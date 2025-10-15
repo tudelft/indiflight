@@ -158,7 +158,7 @@ void runCatapultStateMachine(timeUs_t current) {
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
                 || !FLIGHT_MODE(CATAPULT_MODE)
                 || !isConvergedEkf()
-                || !posSpNed.new
+                || !posSpNed.valid
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
 #endif

@@ -31,6 +31,7 @@
 #include "flight/ekf.h"
 #include "common/maths.h"
 #include "fc/runtime_config.h"
+#include "fc/rc.h"
 #include "pg/pg_ids.h"
 #include "config/config.h"
 #include "flight/indi.h"
@@ -66,7 +67,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->vert_max_v_down = 100;
         p->vert_max_a_up = 500;
         p->vert_max_a_down = 500;
-        p->vert_max_iterm = 100;
+        p->vert_max_iterm = 200;
         p->yaw_p = 30;
         p->weathervane_p = 0;
         p->weathervane_min_v = 200;
@@ -128,11 +129,25 @@ void resetIterms(void) {
 
 void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
-    bool setpoint_valid = posSpNed.new;
     static bool latch_descend = false;
+    static bool manual_control = false;
+
+    manual_control &= ARMING_FLAG(ARMED); // reset on disarm
+
+    // check for takeover by sticks
+    if (!manual_control && haveSticksMoved()) {
+        posSpNed.valid = false;
+        manual_control = true;
+    }
+    if (manual_control && posSpNed.valid) {
+        // no more manual control because new setpoint received
+        // reset sticks, so that we can detect new stick movement later
+        manual_control = false;
+        setSticksReference();
+    }
 
     if ( latch_descend
-            || !setpoint_valid || !isConvergedEkf()
+            || (!posSpNed.valid && !manual_control) || !isConvergedEkf()
             || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)
             || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
         // panic and level craft in slight downwards motion
@@ -158,7 +173,7 @@ void updatePosCtl(timeUs_t current) {
 #endif
         {
             posSpNed.pos = posEstNed; // hold position
-            posSpNed.new = true; // simulate new message
+            posSpNed.valid = true; // simulate new message
             posSpNed.time_us = current;
 
             posGetAccSpNed(current);
@@ -175,18 +190,87 @@ void updatePosCtl(timeUs_t current) {
 #ifdef USE_TRAJECTORY_TRACKER
         // use acc and body rate setpoints from trajectory tracker if it is active
         updateTrajectoryTracker(current);
-        if (!isActiveTrajectoryTracker())
+        if (!isActiveTrajectoryTracker() || manual_control)
 #endif
         {
-            posGetAccSpNed(current);
-            rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
-            rateSpBodyFromPos.V.Y = 0;
-            rateSpBodyFromPos.V.Z = 0;
+            if (!manual_control) {
+                posGetAccSpNed(current);
+                rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
+                rateSpBodyFromPos.V.Y = 0;
+                rateSpBodyFromPos.V.Z = 0;
+            } else {
+                posGetAccSpNedFromSticks(current);
+            }
         }
     }
 
     // always use NDI function to map acc setpoints
     posGetAttSpNedAndSpfSpBody(current);
+}
+
+void posGetAccSpNedFromSticks(timeUs_t current) {
+    // for now: just velocity control, no holding mode implemented
+
+    // get velocity setpoints from sticks in body frame
+    float velSpBodyX = -getRcDeflection(PITCH) * posRuntime.horz_max_v;
+    float velSpBodyY = getRcDeflection(ROLL) * posRuntime.horz_max_v;
+
+    // use yaw angle to convert to NED frame
+    float Psi = getYawWithoutSingularity();
+    float cPsi = cos_approx(Psi);
+    float sPsi = sin_approx(Psi);
+    posSpNed.vel.V.X = velSpBodyX * cPsi - velSpBodyY * sPsi;
+    posSpNed.vel.V.Y = velSpBodyX * sPsi + velSpBodyY * cPsi;
+
+    // vertical velocity from throttle
+    float normThrottle = (rcCommand[THROTTLE] - 1000.f) * 1e-3f; // 0..1
+    normThrottle -= 0.5f; // -0.5 .. +0.5
+    normThrottle *= 2.f; // -1 .. +1
+    posSpNed.vel.V.Z = (normThrottle) > 0 ? (-normThrottle * posRuntime.vert_max_v_up) : (-normThrottle * posRuntime.vert_max_v_down);
+
+    // PID control --> copied from posGetAccSpNed
+    // vel error = vel setpoint - vel estimate
+    fp_vector_t velError = posSpNed.vel;
+    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
+    VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
+
+    static bool accSpXYSaturated = true;
+    static bool accSpZSaturated = true;
+    static timeUs_t lastCall = 0;
+    timeDelta_t delta = cmpTimeUs(current, lastCall);
+    if ((lastCall > 0) && (delta > 0) && (delta < 50000)) {
+        if (!accSpXYSaturated) {
+            velIError.V.X += delta * 1e-6f * velError.V.X;
+            velIError.V.Y += delta * 1e-6f * velError.V.Y;
+        }
+
+        if (!accSpZSaturated)
+            velIError.V.Z += delta * 1e-6f * velError.V.Z;
+
+        VEC3_CONSTRAIN_XY_LENGTH(velIError, posRuntime.horz_max_iterm);
+        velIError.V.Z = constrainf(velIError.V.Z, -posRuntime.vert_max_iterm, posRuntime.vert_max_iterm);
+    }
+    lastCall = current;
+
+    // acceleration setpoint = velGains * velError
+    accSpNedFromPos.V.X = velError.V.X * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
+    accSpNedFromPos.V.Y = velError.V.Y * posRuntime.horz_d  +  velIError.V.Y * posRuntime.horz_i;
+    accSpNedFromPos.V.Z = velError.V.Z * posRuntime.vert_d  +  velIError.V.Z * posRuntime.vert_i;
+
+    // limit such that max acceleration likely results in bank angle below 40 deg
+    // but log if acceleration saturated, so we can pause error integration
+    accSpXYSaturated = VEC3_XY_LENGTH(accSpNedFromPos) > posRuntime.horz_max_a;
+    accSpZSaturated = (accSpNedFromPos.V.Z < -posRuntime.vert_max_a_up) || (accSpNedFromPos.V.Z > posRuntime.vert_max_a_down);
+
+    VEC3_CONSTRAIN_XY_LENGTH(accSpNedFromPos, posRuntime.horz_max_a);
+    accSpNedFromPos.V.Z = constrainf(accSpNedFromPos.V.Z, -posRuntime.vert_max_a_up, posRuntime.vert_max_a_down);
+
+    // yaw stuff
+    // dont track psi
+    posSpNed.trackPsi = false;
+
+    // pass through yaw rate
+    rateSpBodyFromPos = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
 }
 
 void posGetAccSpNed(timeUs_t current) {

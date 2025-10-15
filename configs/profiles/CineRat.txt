@@ -47,7 +47,7 @@
 #define USE_THROW_TO_ARM
 #define USE_CATAPULT
 #define USE_LEARNER
-#define USE_NN_CONTROL
+## #define USE_NN_CONTROL
 
 
 ################################################
@@ -96,6 +96,7 @@ aux 7 56 6 1700 2100 0 0
 aux 8 56 6 1700 2100 0 0 ## reset home
 
 # blackbox config
+set blackbox_mode = NORMAL
 set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
 set blackbox_disable_alt = OFF
@@ -226,8 +227,7 @@ set indi_sync_lowpass_hz = 15
 set indi_wls_axes_weights = 1,1,50,50,50,5
 
 # --- actuators: fields can have up to 8 elements ---
-set indi_act_is_motor = 1,1,1,1,0,0,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
+set indi_act_type = 1,1,1,1,0,0,0,0
 set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
 set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
 set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
@@ -268,7 +268,6 @@ set indi_attitude_max_yaw_rate = 300
 set indi_manual_use_coordinated_yaw = 1
 set indi_manual_max_upwards_accel = 20
 set indi_act_is_motor = 1,1,1,1,0,0,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
 set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
 set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
 set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
@@ -307,12 +306,12 @@ set position_vertical_i = 5
 set position_vertical_d = 40
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 2000
-set position_max_horizontal_accel = 10000
-set position_max_upwards_speed = 500
-set position_max_downwards_speed = 500
-set position_max_upwards_accel = 2000
-set position_max_downwards_accel = 800
+set position_max_horizontal_speed = 200
+set position_max_horizontal_accel = 500
+set position_max_upwards_speed = 100
+set position_max_downwards_speed =100 
+set position_max_upwards_accel = 250
+set position_max_downwards_accel = 250
 
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 180
@@ -379,7 +378,7 @@ set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 6
+set learner_mode = 6 # inoperable!
 # set learner_mode = 7
 set learner_num_actuators = 4
 set learner_delay_time_ms = 150
