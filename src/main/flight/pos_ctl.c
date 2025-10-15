@@ -130,24 +130,20 @@ void resetIterms(void) {
 void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
     static bool latch_descend = false;
-    static bool manual_control = false;
+    static bool manual_takeover = false;
 
-    manual_control &= ARMING_FLAG(ARMED); // reset on disarm
-
-    // check for takeover by sticks
-    if (!manual_control && haveSticksMoved()) {
-        posSpNed.valid = false;
-        manual_control = true;
-    }
-    if (manual_control && posSpNed.valid) {
+    if (manual_takeover && posSpNed.valid) {
         // no more manual control because new setpoint received
         // reset sticks, so that we can detect new stick movement later
-        manual_control = false;
+        manual_takeover = false;
         setSticksReference();
+    } else if (!manual_takeover && ARMING_FLAG(ARMED) && haveSticksMoved()) {
+        manual_takeover = true;
+        posSpNed.valid = false;
     }
 
     if ( latch_descend
-            || (!posSpNed.valid && !manual_control) || !isConvergedEkf()
+            || (!posSpNed.valid && !manual_takeover) || !isConvergedEkf()
             || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)
             || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
         // panic and level craft in slight downwards motion
@@ -159,8 +155,8 @@ void updatePosCtl(timeUs_t current) {
         rateSpBodyFromPos.V.Z = 0.f;
         posSpNed.trackPsi = false;
 
-        // latch reactivation until new arming cycle
-        latch_descend = ARMING_FLAG(ARMED);
+        // latch reactivation until new arming cycle or non-position mode
+        latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE);
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
                 || (geofenceAction == GEOFENCE_ACTION_HOLD) ) {
         // more than 2 sec but less than 3.5 seconds --> arrest motion
@@ -190,10 +186,10 @@ void updatePosCtl(timeUs_t current) {
 #ifdef USE_TRAJECTORY_TRACKER
         // use acc and body rate setpoints from trajectory tracker if it is active
         updateTrajectoryTracker(current);
-        if (!isActiveTrajectoryTracker() || manual_control)
+        if (!isActiveTrajectoryTracker() || manual_takeover)
 #endif
         {
-            if (!manual_control) {
+            if (!manual_takeover) {
                 posGetAccSpNed(current);
                 rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
                 rateSpBodyFromPos.V.Y = 0;
