@@ -650,6 +650,9 @@ void updateLearner(timeUs_t current) {
             for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
                 learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
         }
+        indiRun.attSpNedPreFeedforward.w = indiRun.feedforwardFilterCoefs[0];
+        indiRun.attSpNedPreFeedforward.x = indiRun.feedforwardFilterCoefs[1];
+        indiRun.attSpNedPreFeedforward.y = indiRun.feedforwardFilterCoefs[2];
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -714,12 +717,12 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     float kFf = 0.0f;
     float pFf = 0.0f;
     float zFf = 0.0f;
-    float margin = 0.05f; // Margin for pole zero cancellation (if below, dont use FF filter)
+    // float margin = 0.05f; // Margin for pole zero cancellation (if below, dont use FF filter)
 
     // TODO: Add minimum for FF?
     if (indiRun.useGainScheduling) {
         // get slowest actuator
-        float maxTau = 0.f;
+        float maxTau = 0.0f;
         for (int act = 0; act < learnerConfig()->numAct; act++)
             maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
             // TODO: What to do if maxTau stays 0
@@ -741,23 +744,18 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                 case GAIN_SCHEDULE_1D_INTERP:
                     indi->rateGains[axis] = (uint16_t)(10.0f * interpolate1D(kOmega1D.xAxis, kOmega1D.table, kOmega1D.xSize, maxTau));
                     indi->attGains[axis] = (uint16_t)(interpolate1D(kEta1D.xAxis, kEta1D.table, kEta1D.xSize, maxTau) * indi->rateGains[axis]);
+                    
                     if (indiRun.gainScheduleFf) {
-
                         kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
                         pFf = interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
-                        
-                        if (indiRun.useFeedforwardFilter) {
-                            zFf = pFf / kFf; // Based on 0 dB gain at LF
-                            if (fabsf(pFf - zFf) > fabsf(margin * pFf)) {
-                                biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
-                            } else { // if pole and zero too close together simply use a direct feedforward
-                                biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-                            }
-                        } else {
-                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
-                        }
-
-
+                        zFf = pFf / kFf; // Based on 0 dB gain at LF
+                        // 1209727, -8168513, -9881670
+                        indi->feedforwardFilterCoefs[0] = kFf * 1e6f;
+                        indi->feedforwardFilterCoefs[1] = zFf * 1e6f;
+                        indi->feedforwardFilterCoefs[2] = pFf * 1e6f;
+                        indiRun.feedforwardFilterCoefs[0] = kFf;
+                        indiRun.feedforwardFilterCoefs[1] = zFf;
+                        indiRun.feedforwardFilterCoefs[2] = pFf;
                     }                   
                     break;
                 case GAIN_SCHEDULE_2D_INTERP:

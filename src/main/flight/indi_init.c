@@ -67,7 +67,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
 
     indiProfile->feedforwardFilterCoefs[1] = 1; // Theoretically this makes the filter a straight pass-through, for safety probably better to disable if no values given.
     for (int i = 1; i < 3; i++) {
-        indiProfile->feedforwardFilterCoefs[i] = 0;
+        indiProfile->feedforwardFilterCoefs[i] = 1;
     }
     indiProfile->useFeedforwardFilter = false;
 
@@ -398,10 +398,14 @@ void initIndiRuntime(void) {
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        if (!indiRun.useGainScheduling) {
+            biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f); // initialize as static gain of 1
+        } else {
         if (indiRun.gainScheduleFf) {
             // biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], 0.0f, 0.0f, 0.0f, gyro.targetLooptime); // wait until gains scheduled for initializing filter fully
             // Initialize filter as a static gain
-            biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+            // biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], indiRun.feedforwardFilterCoefs[0], indiRun.feedforwardFilterCoefs[1], indiRun.feedforwardFilterCoefs[2], gyro.targetLooptime);
         } else if (indiRun.useFeedforwardFilter) {
             if (fabsf(indiRun.feedforwardFilterCoefs[2]) < 1e-6f) {
                 biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -410,6 +414,7 @@ void initIndiRuntime(void) {
             }
         } else {
             biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], indiRun.feedforwardCoefs[0], indiRun.feedforwardCoefs[1], indiRun.feedforwardCoefs[2], indiRun.feedforwardCoefs[3], indiRun.feedforwardCoefs[4]);
+        }
         }
         biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);
         biquadFilterInitLeadLag(&indiRun.attLlFilter[axis], indiRun.attCoefs[0], indiRun.attCoefs[1], indiRun.attCoefs[2], indiRun.attCoefs[3], indiRun.attCoefs[4]);
