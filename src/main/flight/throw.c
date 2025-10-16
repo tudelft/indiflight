@@ -35,6 +35,7 @@
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
 #include "flight/ekf.h"
+#include "flight/pos_ctl.h"
 
 #include "pg/pg_ids.h"
 
@@ -176,15 +177,21 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
             if (timeSinceRelease > (1e3 * throwConfig()->releaseDelayMs)) {
                 throwState = THROW_STATE_THROWN;
+#ifdef USE_LOCAL_POSITION
+                if (autoMode && isConvergedEkf() && !posSpNed.valid) {
+                    posArrestMotion();
+                }
+#endif
                 beeper(BEEPER_SILENCE);
             }
             break;
         case THROW_STATE_THROWN:
-            if (ARMING_FLAG(ARMED))
+            if (ARMING_FLAG(ARMED)) {
                 throwState = THROW_STATE_ARMED_AFTER_THROW;
-            else if (cmpTimeUs(currentTimeUs, leftHandSince) > 3e6)
+            } else if (cmpTimeUs(currentTimeUs, leftHandSince) > 3e6) {
                 // 3 seconds timeout
                 throwState = THROW_STATE_IDLE;
+            }
             break;
         case THROW_STATE_ARMED_AFTER_THROW:
             if (!ARMING_FLAG(ARMED))

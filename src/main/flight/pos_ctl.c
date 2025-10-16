@@ -67,7 +67,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->vert_max_v_down = 100;
         p->vert_max_a_up = 500;
         p->vert_max_a_down = 500;
-        p->vert_max_iterm = 200;
+        p->vert_max_iterm = 50;
         p->yaw_p = 30;
         p->weathervane_p = 0;
         p->weathervane_min_v = 200;
@@ -101,6 +101,7 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_p = p->weathervane_p * 0.1f;
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
+    posRuntime.arrest_motion = false;
 }
 
 void changePositionProfile(uint8_t profileIndex)
@@ -127,6 +128,12 @@ void resetIterms(void) {
     velIError.V.Z = 0.f;
 }
 
+void posArrestMotion(void) {
+    posRuntime.arrest_motion = true;
+    posSpNed.valid = true;
+    resetIterms();
+}
+
 void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
     static bool latch_descend = false;
@@ -140,6 +147,11 @@ void updatePosCtl(timeUs_t current) {
     } else if (!manual_takeover && ARMING_FLAG(ARMED) && haveSticksMoved()) {
         manual_takeover = true;
         posSpNed.valid = false;
+#ifdef USE_TRAJECTORY_TRACKER
+        if (isActiveTrajectoryTracker()) {
+            stopTrajectoryTracker();
+        }
+#endif
     }
 
     if ( latch_descend
@@ -172,6 +184,7 @@ void updatePosCtl(timeUs_t current) {
             posSpNed.valid = true; // simulate new message
             posSpNed.time_us = current;
 
+            posGetVelSpNedFromPosSp();
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
             rateSpBodyFromPos.V.Y = 0;
@@ -189,14 +202,39 @@ void updatePosCtl(timeUs_t current) {
         if (!isActiveTrajectoryTracker() || manual_takeover)
 #endif
         {
-            if (!manual_takeover) {
-                posGetAccSpNed(current);
+            if (manual_takeover) {
+                posGetVelSpNedFromSticks();
+
+                // yaw stuff
+                posSpNed.trackPsi = false;
+                rateSpBodyFromPos = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
+            } else if (posRuntime.arrest_motion) {
+                // just command zero velocity until it is reached
+                posSpNed.vel.V.X = 0.f;
+                posSpNed.vel.V.Y = 0.f;
+                posSpNed.vel.V.Z = 0.f;
+                posSpNed.trackPsi = false;
+                rateSpBodyFromPos.V.X = 0;
+                rateSpBodyFromPos.V.Y = 0;
+                rateSpBodyFromPos.V.Z = 0;
+#define ARREST_MOTION_VEL_THRESHOLD 0.5f
+                if (VEC3_LENGTH(velEstNed) < ARREST_MOTION_VEL_THRESHOLD) {
+                    posRuntime.arrest_motion = false;
+                    posSpNed.pos = posEstNed; // reset position setpoint to current position
+                    posSpNed.valid = true; // simulate new message
+                    posSpNed.time_us = current;
+                    resetIterms();
+                }
+            } else {
+                // normal position control
+                posGetVelSpNedFromPosSp();
                 rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
                 rateSpBodyFromPos.V.Y = 0;
                 rateSpBodyFromPos.V.Z = 0;
-            } else {
-                posGetAccSpNedFromSticks(current);
             }
+
+            // convert velocity setpoint to acceleration setpoint
+            posGetAccSpNed(current);
         }
     }
 
@@ -204,9 +242,27 @@ void updatePosCtl(timeUs_t current) {
     posGetAttSpNedAndSpfSpBody(current);
 }
 
-void posGetAccSpNedFromSticks(timeUs_t current) {
-    // for now: just velocity control, no holding mode implemented
+void posGetVelSpNedFromPosSp(void) {
+    // precalculations
+    float horzPCasc = posRuntime.horz_p / posRuntime.horz_d; // emulate parallel PD with Casc system
+    float vertPCasc = posRuntime.vert_p / posRuntime.vert_d; // emulate parallel PD with Casc system
 
+    // pos error = pos setpoint - pos estimate
+    fp_vector_t posError = posSpNed.pos;
+    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // posMeasNed.pos
+
+    // vel setpoint = posGains * posError
+    posSpNed.vel.V.X = posError.V.X * horzPCasc;
+    posSpNed.vel.V.Y = posError.V.Y * horzPCasc;
+    posSpNed.vel.V.Z = posError.V.Z * vertPCasc;
+
+    // constrain magnitude here
+    VEC3_CONSTRAIN_XY_LENGTH(posSpNed.vel, posRuntime.horz_max_v);
+
+    posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
+}
+
+void posGetVelSpNedFromSticks(void) {
     // get velocity setpoints from sticks in body frame
     float velSpBodyX = -getRcDeflection(PITCH) * posRuntime.horz_max_v;
     float velSpBodyY = getRcDeflection(ROLL) * posRuntime.horz_max_v;
@@ -223,8 +279,9 @@ void posGetAccSpNedFromSticks(timeUs_t current) {
     normThrottle -= 0.5f; // -0.5 .. +0.5
     normThrottle *= 2.f; // -1 .. +1
     posSpNed.vel.V.Z = (normThrottle) > 0 ? (-normThrottle * posRuntime.vert_max_v_up) : (-normThrottle * posRuntime.vert_max_v_down);
+}
 
-    // PID control --> copied from posGetAccSpNed
+void posGetAccSpNed(timeUs_t current) {
     // vel error = vel setpoint - vel estimate
     fp_vector_t velError = posSpNed.vel;
     //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
@@ -250,69 +307,6 @@ void posGetAccSpNedFromSticks(timeUs_t current) {
 
     // acceleration setpoint = velGains * velError
     accSpNedFromPos.V.X = velError.V.X * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
-    accSpNedFromPos.V.Y = velError.V.Y * posRuntime.horz_d  +  velIError.V.Y * posRuntime.horz_i;
-    accSpNedFromPos.V.Z = velError.V.Z * posRuntime.vert_d  +  velIError.V.Z * posRuntime.vert_i;
-
-    // limit such that max acceleration likely results in bank angle below 40 deg
-    // but log if acceleration saturated, so we can pause error integration
-    accSpXYSaturated = VEC3_XY_LENGTH(accSpNedFromPos) > posRuntime.horz_max_a;
-    accSpZSaturated = (accSpNedFromPos.V.Z < -posRuntime.vert_max_a_up) || (accSpNedFromPos.V.Z > posRuntime.vert_max_a_down);
-
-    VEC3_CONSTRAIN_XY_LENGTH(accSpNedFromPos, posRuntime.horz_max_a);
-    accSpNedFromPos.V.Z = constrainf(accSpNedFromPos.V.Z, -posRuntime.vert_max_a_up, posRuntime.vert_max_a_down);
-
-    // yaw stuff
-    // dont track psi
-    posSpNed.trackPsi = false;
-
-    // pass through yaw rate
-    rateSpBodyFromPos = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
-}
-
-void posGetAccSpNed(timeUs_t current) {
-    // precalculations
-    float horzPCasc = posRuntime.horz_p / posRuntime.horz_d; // emulate parallel PD with Casc system
-    float vertPCasc = posRuntime.vert_p / posRuntime.vert_d; // emulate parallel PD with Casc system
-
-    // pos error = pos setpoint - pos estimate
-    fp_vector_t posError = posSpNed.pos;
-    VEC3_SCALAR_MULT_ADD(posError, -1.0f, posEstNed); // posMeasNed.pos
-
-    // vel setpoint = posGains * posError
-    posSpNed.vel.V.X = posError.V.X * horzPCasc;
-    posSpNed.vel.V.Y = posError.V.Y * horzPCasc;
-    posSpNed.vel.V.Z = posError.V.Z * vertPCasc;
-
-    // constrain magnitude here
-    VEC3_CONSTRAIN_XY_LENGTH(posSpNed.vel, posRuntime.horz_max_v);
-
-    posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
-
-    // vel error = vel setpoint - vel estimate
-    fp_vector_t velError = posSpNed.vel;
-    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
-    VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
-
-    static bool accSpXYSaturated = true;
-    static bool accSpZSaturated = true;
-    static timeUs_t lastCall = 0;
-    timeDelta_t delta = cmpTimeUs(current, lastCall);
-    if ((lastCall > 0) && (delta > 0) && (delta < 50000)) {
-        if (!accSpXYSaturated) {
-            velIError.V.X += delta * 1e-6f * velError.V.X;
-            velIError.V.Y += delta * 1e-6f * velError.V.Y;
-        }
-
-        if (!accSpZSaturated)
-            velIError.V.Z += delta * 1e-6f * velError.V.Z;
-
-        VEC3_CONSTRAIN_XY_LENGTH(velIError, posRuntime.horz_max_iterm);
-        velIError.V.Z = constrainf(velIError.V.Z, -posRuntime.vert_max_iterm, posRuntime.vert_max_iterm);
-    }
-    lastCall = current;
-
-    // acceleration setpoint = velGains * velError
-    accSpNedFromPos.V.X = (velError.V.X + 0.0f*indiRun.rate_f.V.Y) * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
     accSpNedFromPos.V.Y = velError.V.Y * posRuntime.horz_d  +  velIError.V.Y * posRuntime.horz_i;
     accSpNedFromPos.V.Z = velError.V.Z * posRuntime.vert_d  +  velIError.V.Z * posRuntime.vert_i;
 

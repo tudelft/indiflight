@@ -288,7 +288,7 @@ void updateTrajectoryTracker(timeUs_t current) {
         // overwrite yawSetpoint (from pos_ctl.c)
         posSpNed.psi = tt_yaw_ref;
 
-        posSpNed.valid = true;
+        //posSpNed.valid = true;
         posSpNed.time_us = current;
 
         // overwrite rateSpBody 

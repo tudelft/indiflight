@@ -358,6 +358,14 @@ class IndiflightViewport(Viewport):
         rotorSet[:, :, 0] = self.data[[f'u[{i}]' for i in range(self.Nr) ]].to_numpy()
         surfaceSet = self.data[[f'u[{i}]' for i in range(self.Nr,self.Ns+self.Nr)]].to_numpy()
 
+        # rotate IMU acceleration to global frame
+        if 'accSmooth[0]' in self.data.columns:
+            from scipy.spatial.transform import Rotation as R
+            accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
+            quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
+            rot = R.from_quat(quat)
+            accI = rot.apply(accB) + np.array([0, 0, 9.81])
+
         super().__init__(
             craft,
             time=self.data['timeS'].to_numpy(),
@@ -370,7 +378,7 @@ class IndiflightViewport(Viewport):
             vel=self.data[[f'vel[{i}]' for i in range(3)]].to_numpy() if 'vel[0]' in self.data.columns else None,
             velSet=self.data[[f'velSp[{i}]' for i in range(3)]].to_numpy() if 'velSp[0]' in self.data.columns else None,
             velMeas=self.data[[f'localVel[{i}]' for i in range(3)]].to_numpy() if 'localVel[0]' in self.data.columns else None,
-            acc=self.data[[f'acc[{i}]' for i in range(3)]].to_numpy() if 'acc[0]' in self.data.columns else None,
+            acc=accI if 'accSmooth[0]' in self.data.columns else None,
             accSet=self.data[[f'accSp[{i}]' for i in range(3)]].to_numpy() if 'accSp[0]' in self.data.columns else None,
             accMeas=None, # not measured
             rotorSet=rotorSet,

@@ -115,7 +115,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
+        # sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -164,7 +164,7 @@ if __name__=="__main__":
         #     sil.mockup.arm() if sil else None
         #     armed = True
 
-        if not start_trajectory and sim.t > 6. and sil is not None:
+        if not start_trajectory and sim.t > 9. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
             sil.mockup.sendKeyboard('1')
             # sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )

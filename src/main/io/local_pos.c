@@ -28,6 +28,7 @@
 #include "common/time.h"
 #include "io/local_pos.h"
 #include "fc/runtime_config.h"
+#include "fc/rc.h"
 #include "sensors/sensors.h"
 #include "flight/ahrs.h"
 #include "flight/ekf.h"
@@ -87,6 +88,7 @@ void setLocalPosSp(local_pos_sp_ned_t* sp) {
     }
     posSpNed = *sp;
     posSpNed.valid = true;
+    setSticksReference();
 }
 
 void setLocalPosSpHere(void) {

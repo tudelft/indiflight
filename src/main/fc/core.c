@@ -675,8 +675,11 @@ void tryArm(void)
 #ifdef USE_LOCAL_POS
         if (FLIGHT_MODE(POSITION_MODE)) {
             // we should only be here if ekf converged
+            if (throwState == THROW_STATE_THROWN) {
+                // when throwing
+
+            }
             setLocalPosSpHere();
-            setSticksReference();
         }
 #endif
 
@@ -1102,9 +1105,8 @@ void processRxModes(timeUs_t currentTimeUs)
             }
 #endif
             // only switch if converged ekf and good setpoint
-            if (isConvergedEkf()) {
+            if (isConvergedEkf() && ARMING_FLAG(ARMED)) {
                 setLocalPosSpHere();
-                setSticksReference();
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }

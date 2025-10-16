@@ -73,17 +73,20 @@ typedef struct positionRuntime_s {
     float weathervane_p; // deg/s per deg
     float weathervane_min_v; // m/s min speed to use weathervaneing
     bool use_spf_attenuation;
+    bool arrest_motion; // if true, command zero velocity until it is reached
 } positionRuntime_t;
 
 #define POSITION_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles);
 
-extern positionRuntime_t posRuntime;
-void initPositionRuntime();
-void changePositionProfile(uint8_t profileIndex);
+void posCtlInit(void);
 
 #define DEADRECKONING_TIMEOUT_HOLD_POSITION_US  2000000  // 1 sec
 #define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 3500000  // 2.5 sec
+
+extern positionRuntime_t posRuntime;
+void initPositionRuntime();
+void changePositionProfile(uint8_t profileIndex);
 
 extern fp_vector_t accSpNedFromPos;
 extern fp_quaternion_t attSpNedFromPos;
@@ -91,9 +94,9 @@ extern fp_vector_t spfSpBodyFromPos;
 extern fp_vector_t rateSpBodyFromPos;
 
 void resetIterms();
-void posCtlInit(void);
+void posArrestMotion();
 void updatePosCtl(timeUs_t current);
+void posGetVelSpNedFromPosSp(void);
+void posGetVelSpNedFromSticks(void);
 void posGetAccSpNed(timeUs_t current);
-void posGetAccSpNedFromSticks(timeUs_t current);
 void posGetAttSpNedAndSpfSpBody(timeUs_t current);
-void posGetRateSpBody(timeUs_t current);

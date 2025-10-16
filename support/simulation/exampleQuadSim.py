@@ -89,16 +89,16 @@ if __name__=="__main__":
     #%% Generate craft
     mc = MultiRotor()
     # approx model of CineRat 3inch race drone
-    #mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
-    #mc.setRotor(0, X=[-0.05, +0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
-    #mc.setRotor(1, X=[+0.05, +0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
-    #mc.setRotor(2, X=[-0.05, -0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
-    #mc.setRotor(3, X=[+0.05, -0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
-    mc.setInertia(m=0.5, I=np.diag([1e-3, 1.5e-3, 2e-3]))
-    mc.setRotor(0, X=[-0.05, +0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
-    mc.setRotor(1, X=[+0.05, +0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
-    mc.setRotor(2, X=[-0.05, -0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
-    mc.setRotor(3, X=[+0.05, -0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
+    mc.setInertia(m=0.41, I=np.diag([0.75e-3, 0.8e-3, 0.9e-3]))
+    mc.setRotor(0, X=[-0.05, +0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
+    mc.setRotor(1, X=[+0.05, +0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
+    mc.setRotor(2, X=[-0.05, -0.0635, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
+    mc.setRotor(3, X=[+0.05, -0.0635, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
+    # mc.setInertia(m=0.5, I=np.diag([1e-3, 1.5e-3, 2e-3]))
+    # mc.setRotor(0, X=[-0.05, +0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RR
+    # mc.setRotor(1, X=[+0.05, +0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FR
+    # mc.setRotor(2, X=[-0.05, -0.05, 0.0], k=1.88e-7, cm=+0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # RL
+    # mc.setRotor(3, X=[+0.05, -0.05, 0.0], k=1.88e-7, cm=-0.01, wmax=4900., tau=0.02, kESC=0.5, I=5e-7) # FL
     # some additional rotors
     #mc.addRotor(Rotor(r=[+0.0, -0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='lh', axis=[0, -1., -1.]))
     #mc.addRotor(Rotor(r=[+0.0, +0.1, 0.05], Tmax=5., kESC=0.5, tau=0.02, Izz=5e-7, dir='rh', axis=[0, 1., -1.]))
@@ -135,7 +135,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
+        #sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -190,7 +190,7 @@ if __name__=="__main__":
         # if sim.t > 11.:
         #     sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE)
 
-        if not heading and sim.t > 10. and sil is not None:
+        if not heading and sim.t > 15. and sil is not None:
             sil.mockup.sendKeyboard('h')
             heading = True
             # test recovery mode
