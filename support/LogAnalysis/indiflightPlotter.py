@@ -28,9 +28,9 @@ class IndiflightPlotter(FlightPlotterBase):
         self.has_pos = 'pos[0]' in self.data.columns
         self.has_servo_feedback = 'servo_feedback[0]' in self.data.columns
 
-        self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
+        self.define_layout(figsize=(12, 8), nrows=4, ncols=3,
                            width_ratios=[1, 1, 1],
-                           height_ratios=[1, 1, 1])
+                           height_ratios=[1, 1, 1, 1])
 
         self.plot()
 
@@ -96,7 +96,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylimits=ylim)
 
         if self.has_servo_feedback and self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 3]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Ns)],
@@ -105,6 +105,42 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="Servo State",
                          ylabel="Servo State [rad]",
             )
+
+        if self.has_pos:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 2]),
+                             light=[self.data[f'localPos[{i}]'].to_numpy() for i in range(3)] if 'localPos[0]' in self.data.columns else None,
+                             solid=[self.data[f'pos[{i}]'].to_numpy() for i in range(3)],
+                             dashed=[self.data[f'posSp[{i}]'].to_numpy() for i in range(3)],
+                             series_labels=["X", "Y", "Z"],
+                             style_labels=["Mocap", "Estimated", "Setpoint"],
+                             title="Position",
+                             ylabel="Position [m]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
+                             light=[self.data[f'localVel[{i}]'].to_numpy() for i in range(3)] if 'localVel[0]' in self.data.columns else None,
+                             solid=[self.data[f'vel[{i}]'].to_numpy() for i in range(3)],
+                             dashed=[self.data[f'velSp[{i}]'].to_numpy() for i in range(3)],
+                             series_labels=["X", "Y", "Z"],
+                             style_labels=["Mocap", "Estimated", "Setpoint"],
+                             title="Velocity",
+                             ylabel="Velocity [m/s]")
+
+            # rotate IMU acceleration to global frame
+            from scipy.spatial.transform import Rotation as R
+            accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
+            quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
+            quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
+            rot = R.from_quat(quat)
+            accI = rot.apply(accB) + np.array([0, 0, 9.81])
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                             light=None,
+                             solid=[accI[:, i] for i in range(3)],
+                             dashed=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],
+                             series_labels=["X", "Y", "Z"],
+                             style_labels=[None, "Estimated", "Setpoint"],
+                             title="Global Acceleration",
+                             ylabel="Acceleration [m/s²]")
 
 class IndiflightSysIdPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
@@ -363,6 +399,7 @@ class IndiflightViewport(Viewport):
             from scipy.spatial.transform import Rotation as R
             accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
             quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
+            quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
             rot = R.from_quat(quat)
             accI = rot.apply(accB) + np.array([0, 0, 9.81])
 
