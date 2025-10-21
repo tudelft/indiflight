@@ -68,7 +68,7 @@ PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     .actMask = 0xFFFF, // all motors and servos
     // .numMotors = 2,
     // .numServos = 2,
-    .preDelayMs = 200,
+    .preDelayMs = 100,
     .postDelayMs = 0,
     .steps_stepMs = 70,
     .steps_overlapMs = 0,

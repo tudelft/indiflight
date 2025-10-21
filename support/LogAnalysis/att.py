@@ -24,7 +24,7 @@ def get_w_des(theta, phi):
 
     tiltError = tiltAxis*tiltErrorAngle
 
-    w_des = tiltError*1. # gain.. 1.0
+    w_des = tiltError*2. # gain.. 1.0
 #     w_des[0] *= 2.
 
     return w_des

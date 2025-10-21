@@ -482,15 +482,15 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG1[1][motor] = ( indiRun.tailsCyw + 0.f                      );
             indiRun.actG1[2][motor] = ( indiRun.tailsCzw + 0.f                      );
             indiRun.actG1[3][motor] = ( indiRun.tailsClw + 0.f                      ) * ((motor==0) ? +1.f : -1.f);
-            indiRun.actG1[4][motor] = 0 * ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
-            indiRun.actG1[5][motor] = 0 * ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
+            indiRun.actG1[4][motor] = ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
+            indiRun.actG1[5][motor] = ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
             for (int axis = 0; axis < 6; axis++) {
                 indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
             }
 
             indiRun.actG2[0][motor] = 0.f;
             indiRun.actG2[1][motor] = 0.f;
-            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
+            indiRun.actG2[2][motor] = indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
         }
         for (int servo = 0; servo < 2; servo++) {
             float cosdp = cosf(d_eff[servo]);

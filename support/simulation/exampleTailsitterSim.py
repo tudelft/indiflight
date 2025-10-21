@@ -115,7 +115,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        # sil.mockup.sendPositionSetpoint( [0., 0., -1.], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -129,7 +129,7 @@ if __name__=="__main__":
 
 
     #%% initial conditions
-    tail.setPose(x=[0., 0., -0.1], q=[1., 0., 0., 0.])
+    tail.setPose(x=[0, -3.5, -0.1], q=[1., 0., 0., 0.])
     # tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
     # tail.setPose(x=[0., 0., -0.1], q=[0, -0.707, 0., 0.707])
     # tail.setPose(x=[0., 0., -0.1], q=[0, 0, 0, 1.])
@@ -144,10 +144,12 @@ if __name__=="__main__":
         visThread.start( )
 
     if args.throw:
-        tail.throw(height=4.,
+        tail.throw(height=7.,
+                 #wB=[1., -1., 2.], # approx body rotation in rad/s
+                 #vHorz=[3., 0.], # final speed in x-y-plane in m/s
+                 wB=[-10., -1., 1.], # approx body rotation in rad/s
+                 vHorz=[0., 3.], # final speed in x-y-plane in m/s
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
-                 vHorz=[1., 0.], # final speed in x-y-plane in m/s
-                 wB=[0., -1., 0.], # approx body rotation in rad/s
                  #vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=3.5)
 

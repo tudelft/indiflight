@@ -96,7 +96,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylimits=ylim)
 
         if self.has_servo_feedback and self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 3]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Ns)],
