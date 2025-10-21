@@ -75,7 +75,7 @@ set gps_update_rate_hz = 15
 serial 0 262144 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
-#serial 6 524288 115200 57600 0 115200 # HIL
+serial 2 524288 115200 57600 0 115200 # HIL
 serial 1 1048576 115200 57600 0 115200 # actuator teensy board. has to be last somehow
 
 # rx

@@ -97,7 +97,6 @@ void setLocalPosSpHere(void) {
         sp.time_us = micros();
         sp.pos = posEstNed;
         sp.trackPsi = false;
-        sp.valid = true;
         setLocalPosSp(&sp);
     }
 }

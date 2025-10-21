@@ -410,9 +410,6 @@ void updateArmingStatus(void)
 
 #ifdef USE_EKF
         if ( ( shouldBeUsedEkf() && !isConvergedEkf() )
-#ifdef USE_LOCAL_POSITION
-                || ( FLIGHT_MODE(POSITION_MODE) && !posSpNed.valid )
-#endif
 #ifdef USE_GEOFENCE
                 || ( geofenceState == GEOFENCE_STATE_ERROR )
                 || ( geofenceAction != GEOFENCE_ACTION_NONE )
@@ -672,14 +669,15 @@ void tryArm(void)
         beeper(BEEPER_ARMING);
 #endif
 
-#ifdef USE_LOCAL_POS
+#ifdef USE_LOCAL_POSITION
         if (FLIGHT_MODE(POSITION_MODE)) {
             // we should only be here if ekf converged
-            if (throwState == THROW_STATE_THROWN) {
-                // when throwing
-
+#ifdef USE_THROW_TO_ARM
+            if (throwState == THROW_STATE_THROWN && !posSpNed.valid)
+#endif
+            {
+                setLocalPosSpHere();
             }
-            setLocalPosSpHere();
         }
 #endif
 
@@ -1104,9 +1102,11 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            // only switch if converged ekf and good setpoint
-            if (isConvergedEkf() && ARMING_FLAG(ARMED)) {
-                setLocalPosSpHere();
+            // only switch if converged ekf
+            if (isConvergedEkf()) {
+                if (ARMING_FLAG(ARMED)) {
+                    setLocalPosSpHere();
+                }
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1116,7 +1116,10 @@ void processRxModes(timeUs_t currentTimeUs)
             stopTrajectoryTracker();
         }
 #endif
-        posSpNed.valid = false;
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            // invalidate previous setpoint when leaving position mode
+            posSpNed.valid = false;
+        }
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
 
