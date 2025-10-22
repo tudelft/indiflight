@@ -330,7 +330,7 @@ class TailsitterPhi(Craft):
 
         # servo data/states
         self.s_u = np.zeros((self.Ns), dtype=np.float32)
-        self.s_d = np.zeros((self.Ns), dtype=np.float32)
+        self.s_d = np.zeros((self.Ns), dtype=np.float32) # degrees? radians?
         self.s_dd = np.zeros((self.Ns), dtype=np.float32)
         self.s_dmin   = -1.75*np.ones((self.Ns), dtype=np.float32)
         self.s_dmax   = +1.75*np.ones((self.Ns), dtype=np.float32)
@@ -391,8 +391,8 @@ class Tailsitter(Craft):
         self.cddd = np.array([0., 0., 0., 0., -3.702e-5, 0.], dtype=np.float32)
 
         # servo data/states
-        self.s_u = np.zeros((self.Ns), dtype=np.float32)
-        self.s_d = np.zeros((self.Ns), dtype=np.float32)
+        self.s_u = np.zeros((self.Ns), dtype=np.float32) # input command: +1 equals +100 deg
+        self.s_d = np.zeros((self.Ns), dtype=np.float32) # servo state in radians
         self.s_dd = np.zeros((self.Ns), dtype=np.float32)
         self.s_dmin   = -1.75*np.ones((self.Ns), dtype=np.float32)
         self.s_dmax   = +1.75*np.ones((self.Ns), dtype=np.float32)

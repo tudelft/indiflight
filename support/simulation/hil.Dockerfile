@@ -30,11 +30,11 @@ RUN apt-get update && \
 RUN pip install --upgrade pip
 
 # do requirements first, so rebuilding caches this even if Simulation code changes
-COPY Simulation/requirements.txt /requirements.txt
+COPY support/simulation/requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
 # copy sim code
-COPY Simulation/PyNDIflight /PyNDIflight
+COPY support/simulation/PyNDIflight /PyNDIflight
 
 EXPOSE 5000
 

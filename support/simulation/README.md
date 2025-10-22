@@ -169,10 +169,10 @@ repo (see its README).
 
 Now compile and flash the resulting binary (also check README):
 
-    docker run --privileged                                  \
-        -v </path/to/indiflight>:/indiflight                 \
-        indiflight                                           \
-        DEBUG=GDB EXTRA_FLAGS_CMDLINE=-DHIL_BUILD dfu_flash
+    docker run --privileged -it                              \
+        -v .:/indiflight                                     \
+        -e DEBUG=GDB -e BOARD=??? -e PROFILE=??? -e EXTRA_FLAGS=-DHIL_BUILD \
+        indiflight-builder dfu_flash
 
 (if configured, you can also use `remote_flash_swd`, see indiflight README)
 
@@ -184,7 +184,7 @@ Setup the HIL interface in the Ports tab of the Configurator (use `auto` baudrat
 
 #### Step 4 -- Build the hil-simulation container
 
-    docker build . -t pyndiflight-hil -f Simulation/hil.Dockerfile
+    docker build . -t pyndiflight-hil -f support/simulation/hil.Dockerfile
 
 
 #### Step 5 -- Run the container and open http://localhost:5000

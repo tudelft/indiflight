@@ -1544,12 +1544,18 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
         for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
             motor[i] = motor_disarmed[i];
             motor_normalized[i] = scaleRangef(motor_disarmed[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+        }
+        for (int i=0; i < MAX_SUPPORTED_SERVOS; i++) {
             servo_normalized[i] = 0.f;
         }
     }
 
 #ifdef HIL_BUILD
     hilSendActuators();
+    // todo: find better place for the returns of servos
+    for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+        servo_feedback[i] = hilInput.servo_angle[i];
+    }
 #else
 
 #ifdef USE_SERVOS

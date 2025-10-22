@@ -153,17 +153,19 @@ class IndiflightSITLWrapper():
 
 
 #%% hardware in the loop interface
+import serial
+from crc import Configuration, Calculator
 
 class IndiflightHIL:
     # serial interface with an INDIflight controller compiled with HIL_BUILD
     HIL_TO_DEGS = 0.1
     HIL_TO_G = 0.001
     HIL_TO_RPM = 10.
+    HIL_TO_SERVO_CENTIDEGREES = 1.
     HIL_IN_ID = 5
-    HIL_IN_PAYLOAD_LEN = 26
     HIL_OUT_ID = 6
-    HIL_OUT_PAYLOAD_LEN = 12
     MOTOR_TO_HIL = 32767
+    SERVO_TO_HIL = 32767
     STX = 0xFE
     ESC = 0x01
     STX_ESC = 0x02
@@ -177,8 +179,9 @@ class IndiflightHIL:
         self.imu = imu
         self.ser = serial.Serial(port=device, baudrate=baud, timeout=0.0001)
         self.ser.set_low_latency_mode(True) # only works on linux, i think
-        self.fmtSend = '< B I hhh hhh h hhhh'
-        self.fmtReceive = '< B I hhhh B' # checksum byte at the end
+        self.fmtSend = '< B I hhh hhh h hhhh hhhh  hhhh hhhh'
+        self.len_fmtSend = struct.calcsize(self.fmtSend)
+        self.fmtReceive = '< B I hhhh hhhh  hhhh hhhh  B' # checksum byte at the end
         self.len_fmtReceive = struct.calcsize(self.fmtReceive)
         self.parse_state = self.IDLE
         self.escape_state = False
@@ -188,26 +191,40 @@ class IndiflightHIL:
         self.len_bytes = 0
         self.num_msgs = 0
 
+        config = Configuration(
+            width=8,
+            polynomial=0xe7,
+            init_value=0x00,
+            final_xor_value=0x00,
+            reverse_input=False,
+            reverse_output=False,
+        )
+        self.crc_calc = Calculator(config, optimized=True)
+
     def send(self):
-        w = np.zeros(4, dtype=np.float32)
-        if self.uav.n > 4:
-            w[:] = self.uav.rotorVelocity[:4]
+        w = np.zeros(8, dtype=np.float32)
+        if self.uav.Nr > 8:
+            w[:] = self.uav.r_w[:8]
         else:
-            w[:self.uav.n] = self.uav.rotorVelocity
+            w[:self.uav.Nr] = self.uav.r_w[:self.uav.Nr]
+
+        s = np.zeros(8, dtype=np.float32)
+        if self.uav.Ns > 8:
+            s[:] = self.uav.s_d[:8] # radians
+        else:
+            s[:self.uav.Ns] = self.uav.s_d[:self.uav.Ns] # radians
 
         msg_packed = struct.pack(self.fmtSend,
                                  self.HIL_IN_ID,
-                                 #self.HIL_IN_PAYLOAD_LEN,
                                  0, # timestamp
                                  *(self.imu.gyro * 180 / np.pi / self.HIL_TO_DEGS).astype(np.int16),
                                  *(self.imu.acc / 9.81 / self.HIL_TO_G).astype(np.int16),
                                  0, # baro
-                                 *(w * 60 / (2*3.1415) / self.HIL_TO_RPM).astype(np.int16),
+                                 *(w * 60 / (2*3.1415) / self.HIL_TO_RPM).astype(np.int16), # motors
+                                 *(s * 180. / np.pi * 100. / self.HIL_TO_SERVO_CENTIDEGREES).astype(np.int16) # servos
                                  )
 
-        checksum = msg_packed[0]
-        for byte in msg_packed[1:]:
-            checksum ^= byte
+        checksum = self.crc_calc.checksum(msg_packed)
 
         msg_with_checksum = bytearray(msg_packed)
         msg_with_checksum.append(checksum)
@@ -261,18 +278,16 @@ class IndiflightHIL:
             if self.len_bytes == self.len_fmtReceive:
                 self.parse_state = self.IDLE # definitely return to idle, but checksum decides if we accept the package
 
-                checksum = self.bytes[0]
-                for byte in self.bytes[1:-1]:
-                    checksum ^= byte
-
-                if checksum != self.bytes[-1]:
+                if self.bytes[-1] != self.crc_calc.checksum(self.bytes[:-1]):
                     continue
 
                 self.num_msgs += 1
                 msg_unpacked = struct.unpack(self.fmtReceive, self.bytes)
                 if msg_unpacked[0] == self.HIL_OUT_ID:
-                    self.uav.inputs[0] = msg_unpacked[2] / self.MOTOR_TO_HIL
-                    self.uav.inputs[1] = msg_unpacked[3] / self.MOTOR_TO_HIL
-                    self.uav.inputs[2] = msg_unpacked[4] / self.MOTOR_TO_HIL
-                    self.uav.inputs[3] = msg_unpacked[5] / self.MOTOR_TO_HIL
-                    self.uav.inputs = np.clip(self.uav.inputs, 0., 1.)
+                    for i in range(self.uav.Nr):
+                        self.uav.r_u[i] = msg_unpacked[2 + i] / self.MOTOR_TO_HIL
+                    for i in range(self.uav.Ns):
+                        self.uav.s_u[i] = msg_unpacked[10 + i] / self.SERVO_TO_HIL # servo command in -1..1 where 1 equals 100 degrees
+
+                    self.uav.r_u = np.clip(self.uav.r_u, 0., 1.)
+                    self.uav.s_u = np.clip(self.uav.s_u, -1., 1.)

@@ -129,7 +129,7 @@ void sendActuatorsT4(void)
 
     // todo: fix this hardcoding
     in.servo_1_cmd = (int16_t) (servo_normalized[0] * 100.f * 100.f);
-    in.servo_2_cmd = (int16_t) (-servo_normalized[1] * 100.f * 100.f);
+    in.servo_2_cmd = (int16_t) (servo_normalized[1] * 100.f * 100.f); // now flipped in t4 firmware
     in.servo_3_cmd = (int16_t) (servo_normalized[2] * 100.f * 100.f);
     in.servo_4_cmd = (int16_t) (servo_normalized[3] * 100.f * 100.f);
 
@@ -188,7 +188,7 @@ void handleActuatorsT4(void)
 
                     // todo: hardcode for now
                     servo_feedback[0] = t4_out.servo_1_angle; // centidegree
-                    servo_feedback[1] = -t4_out.servo_2_angle; // flipped in tailsitter
+                    servo_feedback[1] = t4_out.servo_2_angle; // flipped in t4 firmware now
                     servo_feedback[2] = t4_out.servo_3_angle;
                     servo_feedback[3] = t4_out.servo_4_angle;
 #ifdef USE_CLI_DEBUG_PRINT

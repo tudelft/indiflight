@@ -55,6 +55,7 @@
 #include "flight/ahrs.h"
 #include "flight/failsafe.h"
 #include "flight/position.h"
+#include "flight/servos.h"
 
 #include "io/serial.h"
 #include "io/gimbal.h"
@@ -171,23 +172,45 @@ void hilSendActuators(void)
 
     piMsgHilOutTx.time_us = micros();
 #define MOTOR_TO_HIL 32767
-    piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[0], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
-    piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[1], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
-    piMsgHilOutTx.set_3 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[2], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
-    piMsgHilOutTx.set_4 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[3], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+#define SERVO_TO_HIL 32767
+    int i = 0;
+    if (MAX_SUPPORTED_MOTORS > i)
+        piMsgHilOutTx.set_1 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_2 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_3 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_4 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_5 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_6 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_7 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
+    if ((MAX_SUPPORTED_MOTORS) > i)
+        piMsgHilOutTx.set_8 = (int16_t) (MOTOR_TO_HIL * constrainf(scaleRangef(motor[i++], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f));
 
-    //UNUSED(serialWriter);
+    i = 0;
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_1 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_2 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_3 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_4 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_5 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_6 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_7 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+    if (MAX_SUPPORTED_SERVOS > i)
+        piMsgHilOutTx.servo_8 = (int16_t) (SERVO_TO_HIL * constrainf(servo_normalized[i++], -1.f, 1.f));
+
     piSendMsg(&piMsgHilOutTx, &serialWriter);
 }
-
-//void processHilOutput(void)
-//{
-//    // could do rate limiting with the stream stuffs above
-//    hilSendActuators();
-//    //piSendIMU();
-//    //serialWrite(hilPort, 'b');
-//    //serialWrite(hilPort, '\n');
-//}
 
 pi_parse_states_t p_hil;
 
@@ -206,6 +229,7 @@ void processHilInput(void)
 #define HIL_TO_DEGS 0.1f
 #define HIL_TO_G 0.001f
 #define HIL_TO_RPM 10.f
+#define HIL_TO_SERVO_CENTIDEGREES 1.f
     if (piMsgHilInRxState != PI_MSG_RX_STATE_NONE) {
         hilInput.gyro[0] = HIL_TO_DEGS * piMsgHilInRx->gyro_x;
         hilInput.gyro[1] = HIL_TO_DEGS * piMsgHilInRx->gyro_y;
@@ -213,10 +237,42 @@ void processHilInput(void)
         hilInput.acc[0]  = HIL_TO_G * piMsgHilInRx->acc_x;
         hilInput.acc[1]  = HIL_TO_G * piMsgHilInRx->acc_y;
         hilInput.acc[2]  = HIL_TO_G * piMsgHilInRx->acc_z;
-        hilInput.rpm[0]  = HIL_TO_RPM * piMsgHilInRx->rpm_1;
-        hilInput.rpm[1]  = HIL_TO_RPM * piMsgHilInRx->rpm_2;
-        hilInput.rpm[2]  = HIL_TO_RPM * piMsgHilInRx->rpm_3;
-        hilInput.rpm[3]  = HIL_TO_RPM * piMsgHilInRx->rpm_4;
+
+        int i = 0;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_1;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_2;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_3;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_4;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_5;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_6;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_7;
+        if (MAX_SUPPORTED_MOTORS > i)
+            hilInput.rpm[i++] = HIL_TO_RPM * piMsgHilInRx->rpm_8;
+
+        i = 0;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_1;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_2;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_3;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_4;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_5;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_6;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_7;
+        if (MAX_SUPPORTED_SERVOS > i)
+            hilInput.servo_angle[i++] = HIL_TO_SERVO_CENTIDEGREES * piMsgHilInRx->servo_8;
     }
 }
 
