@@ -58,7 +58,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->horz_d = 40;
         p->horz_max_v = 250;
         p->horz_max_a = 500;
-        p->horz_max_iterm = 400;
+        p->horz_max_iterm = 500;
         p->max_tilt = 30;
         p->vert_p = 30;
         p->vert_i = 2;

@@ -90,8 +90,8 @@ if __name__=="__main__":
     tail = Tailsitter()
     # approx model of CineRat 3inch race drone
     tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
-    tail.setRotor(0, X=[-0., -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
-    tail.setRotor(1, X=[+0., +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
+    tail.setRotor(0, X=[-0.01, -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
+    tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
 
     inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
                                (tail.I[0,0] - tail.I[2,2]) / tail.I[1,1],
@@ -101,7 +101,7 @@ if __name__=="__main__":
 
 
     #%% craft interfaces
-    imu = IMU(tail, r=[0., 0., 0.], qBody=[0.707, 0., 0.707, 0.], accStd=0.8, gyroStd=0.08)
+    imu = IMU(tail, r=[0., 0., 0.], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
 
     mocap = Mocap(tail, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(tail, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -166,7 +166,7 @@ if __name__=="__main__":
         #     sil.mockup.arm() if sil else None
         #     armed = True
 
-        if not start_trajectory and sim.t > 9. and sil is not None:
+        if not start_trajectory and sim.t > 12. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
             sil.mockup.sendKeyboard('1')
             # sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
@@ -176,7 +176,7 @@ if __name__=="__main__":
                     sil.mockup.sendKeyboard('3')
                 start_trajectory = True
 
-        if not heading and sim.t > 15. and sil is not None:
+        if not heading and sim.t > 17. and sil is not None:
             sil.mockup.sendKeyboard('h')
             heading = True
 

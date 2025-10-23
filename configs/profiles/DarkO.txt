@@ -231,7 +231,7 @@ set indi_act_num = 4
 set indi_sync_lowpass_hz = 3       # no higher!
 
 # fx, fy, fz, roll, pitch, yaw
-set indi_wls_axes_weights = 1,1,50,50,50,5
+set indi_wls_axes_weights = 1,1,10,50,50,5
 
 # actuators (1 to 4, could be up to 8)
 
@@ -354,7 +354,7 @@ positionprofile 0
 
 # gains * 10
 set position_horizontal_p = 30
-set position_horizontal_i = 4
+set position_horizontal_i = 8
 set position_horizontal_d = 20
 set position_vertical_p = 50
 set position_vertical_i = 5
