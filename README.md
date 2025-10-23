@@ -20,8 +20,9 @@ separate onboard storage chip ("EEPROM"), but this chip can also be written to.
 In INDIflight we now include both compile-time and run-time in the same files:
 
 - One file (`./configs/boards/*.txt`) contains compile-time and run-time 
-configuration for a specific flight control board, e.g. MCU type, compile-time 
-defines for sensors present on the board, run-time config for MCU pins, ...
+configuration for a specific flight control board. For example:
+  - compile-time: `#define`s to compile driver for the right MCU type and sensors 
+  - run-time: config variables intrinsic to the board such as pin configuration and sensor config such as `set gyro_1_sensor_align = CW180`
 - another file (`./configs/profile/*.txt`) contains compile-time and run-time
 configuration for a certain drone configuration, including e.g. ESC setup,
 tuning, RC switch configuration, serial port setup, ...

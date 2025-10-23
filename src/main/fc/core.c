@@ -1341,15 +1341,19 @@ bool isTouchingGround(void) {
         )) > sq(0.8f);
 
     bool throttleLow = true;
+#ifdef USE_LOCAL_POSITION
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
         throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+    } else
+#endif
 #ifdef USE_GPS_RESCUE
-    } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
+    if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
         throttleLow = gpsRescueGetThrottle() < 0.1f;
+    } else
 #endif
-    } else {
+    {
         // human pilot, get RC throttle
         float throttleLowThresh = (float) (rxConfig()->mincheck + 50);
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
@@ -1719,11 +1723,11 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     subTaskRcCommand(currentTimeUs);
 
     uint8_t numMotors = getMotorCount();
+
     for (int motor = 0; motor < MAX_SUPPORTED_MOTORS; motor++) {
         motor_normalized[motor] = 0.;
     }
 
-    uint8_t numServos = MAX_SUPPORTED_SERVOS; // todo: something better here?
     for (int servo = 0; servo < MAX_SUPPORTED_SERVOS; servo++) {
         servo_normalized[servo] = 0.;
     }
@@ -1754,7 +1758,7 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
             if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && (m < numMotors)) {
                 motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
             }
-            if ((indiRun.actType[i] == INDI_ACT_TYPE_SERVO) && (s < numServos)) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_SERVO) && (s < MAX_SUPPORTED_SERVOS)) {
                 servo_normalized[s++] = constrainf(indiRun.d[i], -1., 1.);
             }
         }
