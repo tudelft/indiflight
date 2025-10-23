@@ -580,8 +580,9 @@ void getMotorCommands(timeUs_t current) {
     if (as_exit_code >= AS_NAN_FOUND_Q) {
         indiRun.nanCounter++;
     } else {
-        if (ARMING_FLAG(ARMED))
+        if (ARMING_FLAG(ARMED)) {
             indiRun.nanCounter = 0;
+        }
     }
 
     if (indiRun.nanCounter > indiRun.wlsNanLimit) {

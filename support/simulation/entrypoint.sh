@@ -11,9 +11,9 @@ if [[ -z ${SIM} ]]; then
     exit 1
 fi
 
-source /opt/ros/humble/setup.bash
-source /uros_ws/install/local_setup.bash
-export RMW_IMPLEMENTATION=rmw_microxrcedds
+# source /opt/ros/humble/setup.bash
+# source /uros_ws/install/local_setup.bash
+# export RMW_IMPLEMENTATION=rmw_microxrcedds
 
 make -j -e DEBUG=${DEBUG} -e PROFILE=${PROFILE} TARGET=MOCKUP
 

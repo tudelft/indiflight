@@ -58,7 +58,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->horz_d = 40;
         p->horz_max_v = 250;
         p->horz_max_a = 500;
-        p->horz_max_iterm = 200;
+        p->horz_max_iterm = 400;
         p->max_tilt = 30;
         p->vert_p = 30;
         p->vert_i = 2;
@@ -121,11 +121,11 @@ fp_vector_t spfSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 1. };
 fp_vector_t rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
 
 // locals
-fp_vector_t velIError = {0};
+fp_vector_t velIErrorBody = {0};
 void resetIterms(void) {
-    velIError.V.X = 0.f;
-    velIError.V.Y = 0.f;
-    velIError.V.Z = 0.f;
+    velIErrorBody.V.X = 0.f;
+    velIErrorBody.V.Y = 0.f;
+    velIErrorBody.V.Z = 0.f;
 }
 
 void posArrestMotion(void) {
@@ -287,25 +287,41 @@ void posGetAccSpNed(timeUs_t current) {
     //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
+    // use quaternion attitude to decompose velocity error to body frame
+    fp_quaternion_t quat, iquat;
+    getHoverAttitudeQuaternion(&quat);
+    iquat = quat;
+    iquat.w = -iquat.w;
+
+    // rotate velError to body frame
+    fp_vector_t velErrorBody;
+    velErrorBody = velError;
+    rotate_vector_with_quaternion(&velErrorBody, &iquat);
+
     static bool accSpXYSaturated = true;
     static bool accSpZSaturated = true;
     static timeUs_t lastCall = 0;
     timeDelta_t delta = cmpTimeUs(current, lastCall);
     if ((lastCall > 0) && (delta > 0) && (delta < 50000)) {
         if (!accSpXYSaturated) {
-            velIError.V.X += delta * 1e-6f * velError.V.X;
-            velIError.V.Y += delta * 1e-6f * velError.V.Y;
+            velIErrorBody.V.X += delta * 1e-6f * velErrorBody.V.X;
+            velIErrorBody.V.Y += delta * 1e-6f * velErrorBody.V.Y;
         }
 
-        if (!accSpZSaturated)
-            velIError.V.Z += delta * 1e-6f * velError.V.Z;
+        if (!accSpZSaturated) {
+            velIErrorBody.V.Z += delta * 1e-6f * velErrorBody.V.Z;
+        }
 
-        VEC3_CONSTRAIN_XY_LENGTH(velIError, posRuntime.horz_max_iterm);
-        velIError.V.Z = constrainf(velIError.V.Z, -posRuntime.vert_max_iterm, posRuntime.vert_max_iterm);
+        VEC3_CONSTRAIN_XY_LENGTH(velIErrorBody, posRuntime.horz_max_iterm);
+        velIErrorBody.V.Z = constrainf(velIErrorBody.V.Z, -posRuntime.vert_max_iterm, posRuntime.vert_max_iterm);
     }
     lastCall = current;
 
     // acceleration setpoint = velGains * velError
+    fp_vector_t velIError;
+    velIError = velIErrorBody;
+    rotate_vector_with_quaternion(&velIError, &quat);
+
     accSpNedFromPos.V.X = velError.V.X * posRuntime.horz_d  +  velIError.V.X * posRuntime.horz_i;
     accSpNedFromPos.V.Y = velError.V.Y * posRuntime.horz_d  +  velIError.V.Y * posRuntime.horz_i;
     accSpNedFromPos.V.Z = velError.V.Z * posRuntime.vert_d  +  velIError.V.Z * posRuntime.vert_i;

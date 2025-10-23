@@ -48,9 +48,6 @@ CFLAGS += -fPIC \
 			-ffunction-sections
 
 LD_FLAGS    := \
-			  -L/opt/ros/humble/lib \
-			  -Llib/main/micro_ros_build/lib \
-			  -lrclc -lrcl -lrcutils -lrmw_microxrcedds \
               -lm \
               -lpthread \
               -lc \
@@ -62,27 +59,30 @@ LD_FLAGS    := \
               -Wl,-L$(LINKER_DIR) \
               -Wl,--cref \
 			  -Wl,--no-undefined \
-              -T$(LD_SCRIPT)
+              -T$(LD_SCRIPT)# \
+# 			  -L/opt/ros/humble/lib \
+# 			  -Llib/main/micro_ros_build/lib \
+# 			  -lrclc -lrcl -lrcutils -lrmw_microxrcedds \
 
-# Add libraries for uros message types manually
-MESSAGE_TYPES = action_msgs actionlib_msgs diagnostic_msgs geometry_msgs \
-                lifecycle_msgs nav_msgs rosgraph_msgs sensor_msgs shape_msgs \
-                statistics_msgs std_msgs stereo_msgs test_msgs tf2_msgs \
-				trajectory_msgs unique_identifier_msgs visualization_msgs
-# control_msgs service_msgs
-
-define add_flags
-  LD_FLAGS += -l$(1)__rosidl_typesupport_c
-endef
-
-# Iterate over MESSAGE_TYPES to add flags for each message type
-$(foreach type,$(MESSAGE_TYPES),$(eval $(call add_flags,$(type))))
-
-#ifneq ($(filter SITL_STATIC,$(OPTIONS)),)
-#LD_FLAGS     += \
-#              -static \
-#              -static-libgcc
-#endif
+# # Add libraries for uros message types manually
+# MESSAGE_TYPES = action_msgs actionlib_msgs diagnostic_msgs geometry_msgs \
+#                 lifecycle_msgs nav_msgs rosgraph_msgs sensor_msgs shape_msgs \
+#                 statistics_msgs std_msgs stereo_msgs test_msgs tf2_msgs \
+# 				trajectory_msgs unique_identifier_msgs visualization_msgs
+# # control_msgs service_msgs
+# 
+# define add_flags
+#   LD_FLAGS += -l$(1)__rosidl_typesupport_c
+# endef
+# 
+# # Iterate over MESSAGE_TYPES to add flags for each message type
+# $(foreach type,$(MESSAGE_TYPES),$(eval $(call add_flags,$(type))))
+# 
+# #ifneq ($(filter SITL_STATIC,$(OPTIONS)),)
+# #LD_FLAGS     += \
+# #              -static \
+# #              -static-libgcc
+# #endif
 
 ifneq ($(DEBUG),GDB)
 OPTIMISE_DEFAULT    := -Ofast
