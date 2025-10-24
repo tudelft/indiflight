@@ -51,59 +51,59 @@ plt.show()
 
 #%% extract IMU location from effectiveness matrix
 
-iend = log.data.index[-1]
-n = 4
-
-fx = log.data.loc[iend][[f'fx_x_rls_x[{i}]' for i in range(n)]].to_numpy()
-fy = log.data.loc[iend][[f'fx_y_rls_x[{i}]' for i in range(n)]].to_numpy()
-fz = log.data.loc[iend][[f'fx_z_rls_x[{i}]' for i in range(n)]].to_numpy()
-fp = log.data.loc[iend][[f'fx_p_rls_x[{i}]' for i in range(n)]].to_numpy()
-fq = log.data.loc[iend][[f'fx_q_rls_x[{i}]' for i in range(n)]].to_numpy()
-fr = log.data.loc[iend][[f'fx_r_rls_x[{i}]' for i in range(n)]].to_numpy()
-
-fdp = log.data.loc[iend][[f'fx_p_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
-fdq = log.data.loc[iend][[f'fx_q_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
-fdr = log.data.loc[iend][[f'fx_r_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
-
-import numpy as np
-
-G1 = np.vstack((fx, fy, fz, fp, fq, fr))
-G2 = np.vstack((fdp, fdq, fdr))
-G2n = G2 / np.linalg.norm(G2, axis=0)
-G2n = np.zeros((3, n))
-G2n[2, :] = 1.0
-
-def skew(x):
-    return np.array([[0, -x[2], x[1]],
-                     [x[2], 0, -x[0]],
-                     [-x[1], x[0], 0]])
-
-A = np.zeros((3*n, 3))
-b = np.zeros((3*n))
-for m in range(n):
-    G1m = G1[:, m]
-    G2nm = G2n[:, m]
-
-    # build skew-symmetric matrix of rotational part of G1
-    M = -skew(G1m[3:])
-
-    Pperp = np.eye(3) - G2nm.reshape(3, 1) @ G2nm.reshape(1, 3)
-
-    # normal equations  Pperp @ M @ x = -Pperp @ G2nm
-    A[3*m:3*m+3, :3] = Pperp @ M
-    b[3*m:3*m+3] = -Pperp @ G1m[:3] # only take the translational part of G1m
-
-# solve for x
-x = np.linalg.lstsq(A, b, rcond=None)[0]
-
-
-G1fixed = G1.copy()
-for m in range(n):
-    G1fixed[:3, m] -= skew(G1[3:, m]) @ x
-
-print("IMU location (x, y, z):")
-print(x)
-print("G1 standard:")
-print( (1e6*G1).round(2))
-print("G1 fixed:")
-print( (1e6*G1fixed).round(2))
+# iend = log.data.index[-1]
+# n = 4
+# 
+# fx = log.data.loc[iend][[f'fx_x_rls_x[{i}]' for i in range(n)]].to_numpy()
+# fy = log.data.loc[iend][[f'fx_y_rls_x[{i}]' for i in range(n)]].to_numpy()
+# fz = log.data.loc[iend][[f'fx_z_rls_x[{i}]' for i in range(n)]].to_numpy()
+# fp = log.data.loc[iend][[f'fx_p_rls_x[{i}]' for i in range(n)]].to_numpy()
+# fq = log.data.loc[iend][[f'fx_q_rls_x[{i}]' for i in range(n)]].to_numpy()
+# fr = log.data.loc[iend][[f'fx_r_rls_x[{i}]' for i in range(n)]].to_numpy()
+# 
+# fdp = log.data.loc[iend][[f'fx_p_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
+# fdq = log.data.loc[iend][[f'fx_q_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
+# fdr = log.data.loc[iend][[f'fx_r_rls_x[{i}]' for i in range(2*n, 3*n)]].to_numpy()
+# 
+# import numpy as np
+# 
+# G1 = np.vstack((fx, fy, fz, fp, fq, fr))
+# G2 = np.vstack((fdp, fdq, fdr))
+# G2n = G2 / np.linalg.norm(G2, axis=0)
+# G2n = np.zeros((3, n))
+# G2n[2, :] = 1.0
+# 
+# def skew(x):
+#     return np.array([[0, -x[2], x[1]],
+#                      [x[2], 0, -x[0]],
+#                      [-x[1], x[0], 0]])
+# 
+# A = np.zeros((3*n, 3))
+# b = np.zeros((3*n))
+# for m in range(n):
+#     G1m = G1[:, m]
+#     G2nm = G2n[:, m]
+# 
+#     # build skew-symmetric matrix of rotational part of G1
+#     M = -skew(G1m[3:])
+# 
+#     Pperp = np.eye(3) - G2nm.reshape(3, 1) @ G2nm.reshape(1, 3)
+# 
+#     # normal equations  Pperp @ M @ x = -Pperp @ G2nm
+#     A[3*m:3*m+3, :3] = Pperp @ M
+#     b[3*m:3*m+3] = -Pperp @ G1m[:3] # only take the translational part of G1m
+# 
+# # solve for x
+# x = np.linalg.lstsq(A, b, rcond=None)[0]
+# 
+# 
+# G1fixed = G1.copy()
+# for m in range(n):
+#     G1fixed[:3, m] -= skew(G1[3:, m]) @ x
+# 
+# print("IMU location (x, y, z):")
+# print(x)
+# print("G1 standard:")
+# print( (1e6*G1).round(2))
+# print("G1 fixed:")
+# print( (1e6*G1fixed).round(2))

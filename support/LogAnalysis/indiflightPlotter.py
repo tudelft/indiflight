@@ -28,14 +28,18 @@ class IndiflightPlotter(FlightPlotterBase):
         self.has_pos = 'pos[0]' in self.data.columns
         self.has_servo_feedback = 'servo_feedback[0]' in self.data.columns
 
-        self.define_layout(figsize=(12, 8), nrows=4, ncols=3,
-                           width_ratios=[1, 1, 1],
+        self.define_layout(figsize=(12, 8), nrows=4, ncols=4,
+                           width_ratios=[1, 1, 1, 1],
                            height_ratios=[1, 1, 1, 1])
 
         self.plot()
 
     def _populate(self):
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+        # | pos | rate  | velB  | rc
+        # | vel | drate | spf   | voltage
+        # | acc | act   | ---   | amperage
+        # |     | rpm   | servo |
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
                          light=[self.data[f'gyroADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'gyroADC[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'gyroSp[{i}]'].to_numpy() for i in range(3)],
@@ -44,7 +48,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="Body Angular Rates",
                          ylabel="Angular Rate [rad/s]")
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
                          light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'accSmooth[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'spfSp[{i}]'].to_numpy() for i in range(3)],
@@ -53,7 +57,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="Body Accelerations",
                          ylabel="Acceleration [m/s²]")
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
                          light=None,
                          solid=[self.data[f'alpha[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'alphaSp[{i}]'].to_numpy() for i in range(3)],
@@ -63,7 +67,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylabel="Angular Accel. [rad/s²]")
 
         if self.Nr > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                              light=[self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(self.Nr)],
                              solid=[self.data[f'omega[{i}]'].to_numpy() for i in range(self.Nr)],
                              dashed=None,
@@ -73,7 +77,7 @@ class IndiflightPlotter(FlightPlotterBase):
                              ylabel="Motor Speed [rad/s]",
                              ylimits=(-100, None))
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 3]),
                          light=None,
                          solid=[self.data[f'rcCommand[{i}]'].to_numpy() for i in range(4)],
                          dashed=None,
@@ -87,27 +91,42 @@ class IndiflightPlotter(FlightPlotterBase):
         ylim = (-0.05, 1.05) if self.Ns == 0 else (-1.05, 1.05)
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
                          light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
-                         solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(N)],
-                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(N)],
-                         series_labels=[f"Actuator {str(i)}" for i in range(1,N+1)],
-                         style_labels=["Final command", "Est. state", "Command"],
-                         title="Actuator Commands",
+                         solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr)],
+                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr)],
+                         series_labels=[f"Actuator {str(i)}" for i in range(1,self.Nr+1)],
+                         style_labels=[None, "Est. state", "Command"],
+                         title="Actuator Commands Motors",
                          ylabel="Actuator Commands [-]",
                          ylimits=ylim)
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                            light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
+                            solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr, N)],
+                            dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr, N)],
+                            series_labels=[f"Actuator {str(i)}" for i in range(self.Nr+1,N+1)],
+                            style_labels=[None, "Est. state", "Command"],
+                            title="Actuator Commands Servos",
+                            ylabel="Actuator Commands [-]",
+                            ylimits=ylim)
 
         if self.has_servo_feedback and self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
-                         dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Ns)],
+                         dashed=None,
                          series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
-                         style_labels=[None, "Est. state", "Command"],
+                         style_labels=[None, "Unfiltered state", None],
                          title="Servo State",
                          ylabel="Servo State [rad]",
             )
 
+        from scipy.spatial.transform import Rotation as R
+        quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
+        quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
+        rot = R.from_quat(quat)
+        irot = rot.inv()
+
         if self.has_pos:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 2]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
                              light=[self.data[f'localPos[{i}]'].to_numpy() for i in range(3)] if 'localPos[0]' in self.data.columns else None,
                              solid=[self.data[f'pos[{i}]'].to_numpy() for i in range(3)],
                              dashed=[self.data[f'posSp[{i}]'].to_numpy() for i in range(3)],
@@ -116,30 +135,45 @@ class IndiflightPlotter(FlightPlotterBase):
                              title="Position",
                              ylabel="Position [m]")
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
-                             light=[self.data[f'localVel[{i}]'].to_numpy() for i in range(3)] if 'localVel[0]' in self.data.columns else None,
-                             solid=[self.data[f'vel[{i}]'].to_numpy() for i in range(3)],
-                             dashed=[self.data[f'velSp[{i}]'].to_numpy() for i in range(3)],
+            velMeas = self.data[[f'localVel[{i}]' for i in range(3)]].to_numpy() if 'localVel[0]' in self.data.columns else None
+            vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
+            velSp = self.data[[f'velSp[{i}]' for i in range(3)]].to_numpy()
+
+            velMeasB = irot.apply(velMeas) if velMeas is not None else None
+            velB = irot.apply(vel)
+            velSpB = irot.apply(velSp)
+
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+                             light=[velMeas[:, i] for i in range(3)] if velMeas is not None else None,
+                             solid=[vel[:, i] for i in range(3)] if vel is not None else None,
+                             dashed=[velSp[:, i] for i in range(3)] if velSp is not None else None,
                              series_labels=["X", "Y", "Z"],
                              style_labels=["Mocap", "Estimated", "Setpoint"],
-                             title="Velocity",
+                             title="Velocity Global",
                              ylabel="Velocity [m/s]")
 
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+                                light=[velMeasB[:, i] for i in range(3)] if velMeas is not None else None,
+                                solid=[velB[:, i] for i in range(3)] if vel is not None else None,
+                                dashed=[velSpB[:, i] for i in range(3)] if velSp is not None else None,
+                                series_labels=["X", "Y", "Z"],
+                                style_labels=["Mocap", "Estimated", "Setpoint"],
+                                title="Velocity Body",
+                                ylabel="Velocity [m/s]")
+
+
             # rotate IMU acceleration to global frame
-            from scipy.spatial.transform import Rotation as R
             accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
-            quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
-            quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
-            rot = R.from_quat(quat)
             accI = rot.apply(accB) + np.array([0, 0, 9.81])
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
                              light=None,
                              solid=[accI[:, i] for i in range(3)],
                              dashed=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],
                              series_labels=["X", "Y", "Z"],
                              style_labels=[None, "Estimated", "Setpoint"],
-                             title="Global Acceleration",
+                             title="Acceleration Global",
                              ylabel="Acceleration [m/s²]")
 
 class IndiflightSysIdPlotter(FlightPlotterBase):
@@ -390,9 +424,17 @@ class IndiflightViewport(Viewport):
             raise ValueError(f"Craft definition has {len(craft.rotors)} rotors and {len(craft.surfaces)} servos, but log data has {self.Nr} rotors and {self.Ns} servos.")
 
         # get into format for base class
+        rotor = np.zeros((len(self.data), self.Nr, 3))
         rotorSet = np.zeros((len(self.data), self.Nr, 3))
+        rotor[:, :, 0] = self.data[[f'omega[{i}]' for i in range(self.Nr)]].to_numpy()
+        rotor[:, :, 0] /= np.max(rotor[:, :, 0]) + 1e-6  # normalize for visualization
         rotorSet[:, :, 0] = self.data[[f'u[{i}]' for i in range(self.Nr) ]].to_numpy()
-        surfaceSet = self.data[[f'u[{i}]' for i in range(self.Nr,self.Ns+self.Nr)]].to_numpy()
+
+        if 'servo_feedback[0]' in self.data.columns:
+            surface = self.data[[f'servo_feedback[{i}]' for i in range(self.Ns)]].to_numpy()
+        else:
+            surface = None
+        surfaceSet = self.data[[f'u[{i}]' for i in range(self.Nr,self.Ns+self.Nr)]].to_numpy() * 100 * np.pi / 180.0  # scale to radians for visualization
 
         # rotate IMU acceleration to global frame
         if 'accSmooth[0]' in self.data.columns:
@@ -418,7 +460,9 @@ class IndiflightViewport(Viewport):
             acc=accI if 'accSmooth[0]' in self.data.columns else None,
             accSet=self.data[[f'accSp[{i}]' for i in range(3)]].to_numpy() if 'accSp[0]' in self.data.columns else None,
             accMeas=None, # not measured
+            rotor=rotor,
             rotorSet=rotorSet,
+            surface=surface,
             surfaceSet=surfaceSet,
             follow=follow,
             interpolation=interpolation,

@@ -537,6 +537,8 @@ class IndiflightLog(object):
                 data[col] *= 100
             elif col.startswith('omega'):
                 data[col] /= 1.
+            elif col.startswith('servo_feedback'):
+                data[col] /= 100 * self.RADIANS_TO_DEGREES
             elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos') or col.startswith('localPos'):
                 data[col] /= self.METER_TO_MM
             elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel') or col.startswith('localVel'):
