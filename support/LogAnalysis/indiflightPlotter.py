@@ -28,18 +28,18 @@ class IndiflightPlotter(FlightPlotterBase):
         self.has_pos = 'pos[0]' in self.data.columns
         self.has_servo_feedback = 'servo_feedback[0]' in self.data.columns
 
-        self.define_layout(figsize=(12, 8), nrows=4, ncols=4,
-                           width_ratios=[1, 1, 1, 1],
+        self.define_layout(figsize=(12, 8), nrows=4, ncols=3,
+                           width_ratios=[1, 1, 1],
                            height_ratios=[1, 1, 1, 1])
 
         self.plot()
 
     def _populate(self):
-        # | pos | rate  | velB  | rc
-        # | vel | drate | spf   | voltage
-        # | acc | act   | ---   | amperage
-        # |     | rpm   | servo |
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
+        # | pos | velB  | rate
+        # | vel | spf   | drate
+        # | acc | actS  | actM
+        # | rc  | servo | rpm
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 2]),
                          light=[self.data[f'gyroADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'gyroADC[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'gyroSp[{i}]'].to_numpy() for i in range(3)],
@@ -48,16 +48,16 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="Body Angular Rates",
                          ylabel="Angular Rate [rad/s]")
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
                          light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'accSmooth[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'spfSp[{i}]'].to_numpy() for i in range(3)],
                          series_labels=["X", "Y", "Z"],
                          style_labels=["Raw", "Filtered", "Setpoint"],
-                         title="Body Accelerations",
-                         ylabel="Acceleration [m/s²]")
+                         title="Body Specific Forces",
+                         ylabel="Specific Force [N/kg]")
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
                          light=None,
                          solid=[self.data[f'alpha[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'alphaSp[{i}]'].to_numpy() for i in range(3)],
@@ -67,7 +67,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylabel="Angular Accel. [rad/s²]")
 
         if self.Nr > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
                              light=[self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(self.Nr)],
                              solid=[self.data[f'omega[{i}]'].to_numpy() for i in range(self.Nr)],
                              dashed=None,
@@ -77,7 +77,7 @@ class IndiflightPlotter(FlightPlotterBase):
                              ylabel="Motor Speed [rad/s]",
                              ylimits=(-100, None))
 
-        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 3]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
                          light=None,
                          solid=[self.data[f'rcCommand[{i}]'].to_numpy() for i in range(4)],
                          dashed=None,
@@ -88,8 +88,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylimits=(-1.1, +1.1))
 
         N = self.Nr + self.Ns
-        ylim = (-0.05, 1.05) if self.Ns == 0 else (-1.05, 1.05)
-        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
                          light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
                          solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr)],
                          dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr)],
@@ -97,8 +96,8 @@ class IndiflightPlotter(FlightPlotterBase):
                          style_labels=[None, "Est. state", "Command"],
                          title="Actuator Commands Motors",
                          ylabel="Actuator Commands [-]",
-                         ylimits=ylim)
-        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                         ylimits=(-0.05, 1.05))
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
                             light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
                             solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr, N)],
                             dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr, N)],
@@ -106,10 +105,10 @@ class IndiflightPlotter(FlightPlotterBase):
                             style_labels=[None, "Est. state", "Command"],
                             title="Actuator Commands Servos",
                             ylabel="Actuator Commands [-]",
-                            ylimits=ylim)
+                            ylimits=(-1.05, 1.05))
 
         if self.has_servo_feedback and self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
                          dashed=None,
@@ -153,7 +152,7 @@ class IndiflightPlotter(FlightPlotterBase):
                              title="Velocity Global",
                              ylabel="Velocity [m/s]")
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
                                 light=[velMeasB[:, i] for i in range(3)] if velMeas is not None else None,
                                 solid=[velB[:, i] for i in range(3)] if vel is not None else None,
                                 dashed=[velSpB[:, i] for i in range(3)] if velSp is not None else None,
@@ -167,7 +166,7 @@ class IndiflightPlotter(FlightPlotterBase):
             accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
             accI = rot.apply(accB) + np.array([0, 0, 9.81])
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
                              light=None,
                              solid=[accI[:, i] for i in range(3)],
                              dashed=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],

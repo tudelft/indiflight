@@ -384,25 +384,35 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     //            attitude setpoint
 
     // z is easy:  z = -spfSpNed / || spfSpNed ||
-    fp_vector_t x,y,z;
-    z = spfSpNed;
-    VEC3_SCALAR_MULT(z, -1.f);
-    VEC3_NORMALIZE(z);
+    fp_vector_t xSp,ySp,zSp;
+    zSp = spfSpNed;
+    VEC3_SCALAR_MULT(zSp, -1.f);
+    VEC3_NORMALIZE(zSp);
 
     if (posRuntime.use_spf_attenuation) {
-        // discount thrust if we have not yet reached our attitude
+        // if we havent reached out attitude yet, we may need to reduce thrust
+        // setpoint to avoid thrusting into the wrong direction.
+        // This is done by trying to match the thrust along z-axis, but limiting
+        // the total thrust to the total thrust commanded
         fp_quaternion_t qHover;
         getHoverAttitudeQuaternion(&qHover);
-        fp_vector_t zHoverFrame = quatRotMatCol(&qHover, 2);
+        fp_vector_t zB = quatRotMatCol(&qHover, 2);
 
-        spfSpBodyFromPos.V.Z *= constrainf(VEC3_DOT(z, zHoverFrame), 0.f, 1.f);
+        float ratio;
+        if (fabsf(zB.V.Z) < 1e-6f) {
+            ratio = (zSp.V.Z > 0.f) ? 1.f : -1.f;
+        } else {
+            ratio = zSp.V.Z / zB.V.Z;
+        }
+        ratio = constrainf(ratio, 0.f, 1.f);
+        spfSpBodyFromPos.V.Z *= ratio;
     }
 
     if (!posSpNed.trackPsi) {
         // just use minimum-norm quaternion rotation that rotates current z axis
         // to the desired z axis.
         fp_quaternion_t attError; // in NED coordinates!
-        quaternion_of_two_vectors(&attError, &currentZ, &z, &currentX);
+        quaternion_of_two_vectors(&attError, &currentZ, &zSp, &currentX);
 
         // exterinsic rotation, first attitude_q then attError.
         attSpNedFromPos = chain_quaternion(&attError, &attitude_q);
@@ -414,22 +424,22 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     fp_vector_t headingSp   = { .A = { cos_approx(posSpNed.psi), sin_approx(posSpNed.psi), 0} };
     fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
 
-    VEC3_CROSS(x, starboardSp, z);
-    if (VEC3_LENGTH(x) < 1e-6f) {
+    VEC3_CROSS(xSp, starboardSp, zSp);
+    if (VEC3_LENGTH(xSp) < 1e-6f) {
         // thrust is perp to the heading, so our nose should point towards
         // the heading
-        x = headingSp;
+        xSp = headingSp;
     } else {
-        VEC3_NORMALIZE(x);
+        VEC3_NORMALIZE(xSp);
     }
-    VEC3_CROSS(y, z, x);
+    VEC3_CROSS(ySp, zSp, xSp);
 
     // convert to rotation matrix
     fp_rotationMatrix_t rotM;
     for (int row = 0; row < 3; row++) {
-        rotM.m[row][0] = x.A[row];
-        rotM.m[row][1] = y.A[row];
-        rotM.m[row][2] = z.A[row];
+        rotM.m[row][0] = xSp.A[row];
+        rotM.m[row][1] = ySp.A[row];
+        rotM.m[row][2] = zSp.A[row];
     }
     quaternion_of_rotationMatrix( &attSpNedFromPos, &rotM );
 }
