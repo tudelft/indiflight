@@ -1550,7 +1550,12 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
             motor_normalized[i] = scaleRangef(motor_disarmed[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
         }
         for (int i=0; i < MAX_SUPPORTED_SERVOS; i++) {
-            servo_normalized[i] = 0.f;
+#ifdef USE_LEARNER
+            if (!(FLIGHT_MODE(LEARNER_MODE)))
+#endif
+            {
+                servo_normalized[i] = 0.f;
+            }
         }
     }
 

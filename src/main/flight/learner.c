@@ -117,7 +117,7 @@ static biquadFilter_t actAngleFilter[MAXU];
 static biquadFilter_t actDFilter[MAXU];
 static biquadFilter_t actSqrtDFilter[MAXU];
 static biquadFilter_t fxOmegaFilter[MAXU];
-static biquadFilter_t fxAngleFilter[MAXU];
+// static biquadFilter_t fxAngleFilter[MAXU];
 static biquadFilter_t fxRateFilter[3];
 static biquadFilter_t fxSpfFilter[3];
 
@@ -199,7 +199,11 @@ void initLearnerFilters(void) {
             case INDI_ACT_TYPE_SERVO:
                 if (s >= MAX_SUPPORTED_SERVOS) { return; } // abort if too many servos
                 // not implemented yet
-                biquadFilterInitLPF(&fxAngleFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actSqrtDFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+
+                biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+                biquadFilterInitLPF(&actOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
                 s++;
                 break;
             case INDI_ACT_TYPE_OFF:
@@ -290,6 +294,8 @@ static void initLearnerRls(void) {
                 }
                 break;
             case INDI_ACT_TYPE_SERVO:
+                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
+                break;
             case INDI_ACT_TYPE_OFF:
             default:
                 break; // skip unsupported actuator types
@@ -394,7 +400,7 @@ static void updateLearningFilters(void) {
                 break;
             case INDI_ACT_TYPE_SERVO: {
                 float servo_angle_rad = DEGREES_TO_RADIANS(((float)servo_feedback[s])*0.01f);
-                learnRun.fxOmega[act] = biquadFilterApply(&fxAngleFilter[act], servo_angle_rad);
+                learnRun.fxOmega[act] = biquadFilterApply(&fxOmegaFilter[act], servo_angle_rad);
 
                 learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], servo_angle_rad);
                 learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (servo_angle_rad - motorPrevOmega[act]);
@@ -746,15 +752,17 @@ void updateLearner(timeUs_t current) {
                     y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
                     break;
                 case INDI_ACT_TYPE_SERVO:
-                    A[0] = learnRun.motorD[act];
-                    A[1] = 0.f;
-                    A[2] = 1.f;
-                    A[3] = -1e-2f * learnRun.motorOmegaDot[act];
-                    y = learnRun.motorOmega[act]; // already in radians
-                    break;
+                    // now done before throw. see updateServoProber()
+                    continue;
+                    // A[0] = learnRun.motorD[act];
+                    // A[1] = 0.f;
+                    // A[2] = 0.f;
+                    // A[3] = -1e-1f * learnRun.motorOmegaDot[act];
+                    // y = 1e1f * learnRun.motorOmega[act]; // already in radians
+                    // break;
                 case INDI_ACT_TYPE_OFF:
                 default:
-                    break;
+                    continue;
             }
 
             rlsNewSample( &actRls[act], A, &y );
@@ -771,6 +779,10 @@ void updateLearner(timeUs_t current) {
         for (int act = 0; act < indiRun.actNum; act++) {
             if (!(config->actMask & (1 << act))) {
                 continue; // skip unselected actuators
+            }
+
+            if (indiRun.actType[act] == INDI_ACT_TYPE_OFF) {
+                continue; // skip unsupported actuator types
             }
 
             maxTau = MAX(maxTau, actRls[act].x[3] * 0.1f);
@@ -1095,6 +1107,7 @@ doMore:
                 }
 
                 initLearnerRls(); // reset all RLS filters to 0 initial state, and reset lowpass filters
+                initServoProber(current); // reset prober state
                 learningQueryState = LEARNING_QUERY_WAITING_FOR_LAUNCH; goto doMore;
             }
             break;
@@ -1139,6 +1152,23 @@ doMore:
                 theEkfX[8] = newAttitude.y;
                 theEkfX[9] = newAttitude.z; // this probably messes up covariances, who cares
 #endif
+            }
+
+            // cue servo identification
+            if (!inflight_query_requested) {
+                updateServoProber(current);
+                // update output from prober
+                for (int act = 0; act < indiRun.actNum; act++) {
+                    if ((config->actMask & (1 << act))
+                        && (indiRun.actType[act] == INDI_ACT_TYPE_SERVO)) {
+
+                        if (proberRuntime.isGenRunningServo) {
+                            outputFromLearningQuery[act] = constrainf(proberRuntime.output[act], -1.f, 1.f);
+                        } else {
+                            outputFromLearningQuery[act] = 0.f;
+                        }
+                    }
+                }
             }
 
             // considered launched if succesfully activated inflight_query, or catapult/throw states correct

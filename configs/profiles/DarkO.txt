@@ -445,10 +445,10 @@ set learner_gyro_max = 1150
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
-set learner_zeta_rate = 90
-set learner_zeta_attitude = 80
+set learner_zeta_rate = 80
+set learner_zeta_attitude = 70
 set learner_zeta_velocity = 70
-set learner_zeta_position = 90
+set learner_zeta_position = 70
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0
@@ -456,7 +456,7 @@ set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
 set learner_apply_indi_profile = 1
-set learner_apply_position_profile = 0
+set learner_apply_position_profile = 1
 set learner_apply_hover_rotation = 0
 
 

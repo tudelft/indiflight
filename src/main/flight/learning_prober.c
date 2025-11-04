@@ -57,7 +57,9 @@
 #include "flight/learner.h"
 #include "learning_prober.h"
 #include "common/ortho_signals.h"
+#include "common/filter.h"
 #include "flight/indi.h"
+#include "flight/servos.h"
 
 #ifdef USE_LEARNER
 
@@ -197,14 +199,6 @@ void initProber(timeUs_t currentTimeUs) {
     proberRuntime.type = (prober_type_t) config->type;
 
     // get number of actuators
-    proberRuntime.numActuators = 0;
-    for (int i = 0; i < indiRun.actNum; i++) {
-        if (config->actMask & (1 << i)
-                && (indiRun.actType[i] != INDI_ACT_TYPE_OFF)) {
-            proberRuntime.numActuators++;
-        }
-    }
-
     proberRuntime.initTimeUs = currentTimeUs;
     proberRuntime.safetyTimeoutUs = currentTimeUs + 100000 + 1000 * (config->preDelayMs + config->postDelayMs);
     proberRuntime.genStartTimeUs = currentTimeUs + config->preDelayMs * 1000;
@@ -239,6 +233,105 @@ void initProber(timeUs_t currentTimeUs) {
     proberRuntime.isFinished = false;
 
     setZeroOutputs();
+}
+
+static pt1Filter_t servoFeedbackFilter[MAXU];
+
+void initServoProber(timeUs_t currentTimeUs) {
+    for (int i = 0; i < indiRun.actNum; i++) {
+        if (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) {
+            pt1FilterInit(&servoFeedbackFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * 0.005f), indiRun.dT)); // 32Hz
+        }
+    }
+    proberRuntime.isInitializedServo = true;
+    proberRuntime.isGenRunningServo = false;
+    proberRuntime.lastStepTimeUs = currentTimeUs;
+}
+
+#define LEARNER_SERVO_TIMESTEP_US (250000) // 250ms
+#define LEARNER_SERVO_NUM_STEPS (5)
+
+void updateServoProber(timeUs_t currentTimeUs) {
+    if (!proberRuntime.isInitializedServo) {
+        return;
+    }
+
+    const proberConfig_t* config = proberConfig();
+
+    static int stepIndex = 0;
+    proberRuntime.isGenRunningServo = true;
+
+    float steps[LEARNER_SERVO_NUM_STEPS] = {0.2f, -0.2f, 0.0f, 0.2f, 0.0f};
+    // filter the servo_feedback returns
+    float servoRadFiltered[MAXU];
+    static float servoRadFilteredPrev[MAXU] = {0.0f};
+    static timeUs_t crossTimeUs[MAXU] = {0};
+    int s = 0;
+    for (int i = 0; i < indiRun.actNum; i++) {
+        if (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) {
+            float servoRadRaw = DEGREES_TO_RADIANS( 0.01f * ((float)servo_feedback[s++]) );
+            servoRadFiltered[i] = pt1FilterApply(&servoFeedbackFilter[i], servoRadRaw);
+
+            // detect crossing of 0.632 * (actRls[i].x[0] - actRls[i].x[2])
+            // and save time instant
+            float thresh = 0.632f * (actRls[i].x[0]+actRls[i].x[1] - actRls[i].x[2]);
+
+            if (servoRadFilteredPrev[i] < thresh && servoRadFiltered[i] >= thresh) {
+                // rising edge
+                crossTimeUs[i] = currentTimeUs;
+            }
+            servoRadFilteredPrev[i] = servoRadFiltered[i];
+        }
+    }
+
+    timeDelta_t delta = cmpTimeUs(currentTimeUs, proberRuntime.lastStepTimeUs);
+    if (delta > LEARNER_SERVO_TIMESTEP_US) {
+        if (stepIndex >= LEARNER_SERVO_NUM_STEPS) {
+            // finished
+            stepIndex = 0;
+            proberRuntime.isGenFinishedServo = true;
+            proberRuntime.isGenRunningServo = false;
+            proberRuntime.isInitializedServo = false;
+            return;
+        }
+
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if (config->actMask & (1 << i)
+                    && (indiRun.actType[i] == INDI_ACT_TYPE_SERVO)) {
+
+                // generate new output
+                proberRuntime.output[i] = steps[stepIndex];
+
+                // analyse return
+                switch(stepIndex)
+                {
+                    case 0:
+                        // first step, do nothing
+                        break;
+                    case 1:
+                        // second step, record max
+                        actRls[i].x[0] = 0.0f;
+                        actRls[i].x[1] = servoRadFiltered[i];
+                        break;
+                    case 2:
+                        // back to center, record average
+                        actRls[i].x[2] = (actRls[i].x[0]+actRls[i].x[1] + servoRadFiltered[i]) * 0.5f;
+                        break;
+                    case 3:
+                        break;
+                    case 4:
+                        // get rise time at 63.2% in whatever stupid unit i decided on
+                        actRls[i].x[3] = 1e-5f * cmpTimeUs(crossTimeUs[i], proberRuntime.lastStepTimeUs);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        proberRuntime.lastStepTimeUs = currentTimeUs;
+        stepIndex++;
+    }
 }
 
 void updateProber(timeUs_t currentTimeUs) {

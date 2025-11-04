@@ -91,7 +91,7 @@ void initPositionRuntime(void) {
     posRuntime.max_tilt = DEGREES_TO_RADIANS(p->max_tilt);
     posRuntime.vert_p = p->vert_p * 0.1f;
     posRuntime.vert_i = p->vert_i * 0.1f;
-    posRuntime.vert_d = p->vert_d * 0.1f;
+    posRuntime.vert_d = MAX(p->vert_d, 1) * 0.1f;
     posRuntime.vert_max_v_up = p->vert_max_v_up * 0.01f;
     posRuntime.vert_max_v_down = p->vert_max_v_down * 0.01f;
     posRuntime.vert_max_a_up = p->vert_max_a_up * 0.01f;

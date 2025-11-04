@@ -1,6 +1,6 @@
 from indiflight_log_tools import IndiflightLog
 from indiflight_log_tools.signal_tools import Signal
-from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford
+from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford, LS
 from pyFlightPlotter import BlittedCursor
 from pyFlightPlotter.crafts import Tailsitter
 from indiflightPlotter import IndiflightPlotter, IndiflightViewport
@@ -54,8 +54,10 @@ t_raw = log.data["timeS"]                                    .to_numpy()
 O_raw = log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]].to_numpy()
 a_raw = log.data[[f"accADCafterRpm[{i}]"  for i in range(3)]].to_numpy()
 w_raw = log.data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
-dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy()
-d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy() / 100 / 180 * np.pi
+dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy() + 0.084
+u_raw = log.data[[f"u[{i}]" for i in range(4)]]              .to_numpy()
+d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy()
+d_raw = np.roll(d_raw, -16, axis=0)
 q_raw = log.data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
 v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
 
@@ -66,6 +68,7 @@ O = Signal(t_raw, O_raw, rebase=t)
 a = Signal(t_raw, a_raw, rebase=t)
 w = Signal(t_raw, w_raw, rebase=t)
 dm = Signal(t_raw, dm_raw, rebase=t)
+u = Signal(t_raw, u_raw, rebase=t)
 d = Signal(t_raw, d_raw, rebase=t)
 q = Signal(t_raw, q_raw, rebase=t)
 v = Signal(t_raw, v_raw, rebase=t)
@@ -76,6 +79,7 @@ Of = O.filter("lowpass", order, freq_hz)
 af = a.filter("lowpass", order, freq_hz)
 wf = w.filter("lowpass", order, freq_hz)
 dmf = dm.filter("lowpass", order, freq_hz)
+uf = u.filter("lowpass", order, freq_hz)
 df = d.filter("lowpass", order, freq_hz)
 qf = q.filter("lowpass", order, freq_hz)
 vf = v.filter("lowpass", order, freq_hz)
@@ -113,6 +117,63 @@ w2dt = np.array([w2d[:,0] - w2d[:,1], w2d[:,0] + w2d[:,1], w2d[:,0] - w2d[:,1]])
 ddott = np.array([ddot[:,0] - ddot[:,1], ddot[:,0] + ddot[:,1], ddot[:,0] - ddot[:,1]]).T
 ddotdott = np.array([ddotdot[:,0] - ddotdot[:,1], ddotdot[:,0] + ddotdot[:,1], ddotdot[:,0] - ddotdot[:,1]]).T
 
+rls_motors = RLS(8, 2, gamma=1e-11, forgetting=0.9999)
+rls_motors.setTitle("RLS for Motors")
+rls_motors.setParameters(              [0, 0, 0, 0,  0, 0, 0, 0])
+rls_motors.setCovariance(1e1 * np.diag([1, 1, 1, 1,  1, 1, 1, 1]))
+
+rls_servos = RLS(8, 2, gamma=1e-11, forgetting=0.9999)
+rls_servos.setTitle("RLS for Servos")
+rls_servos.setParameters(              [0, 0, 0, 0,  0, 0, 0, 0])
+rls_servos.setCovariance(1e1 * np.diag([1, 1, 1, 1,  1, 1, 1, 1]))
+
+ls_servos = LS(8, 2)
+ls_servos.setTitle("LS for Servos")
+ls_servos.setParameters(              [0, 0, 0, 0,  0, 0, 0, 0])
+
+count = 0
+for ti, dmi, wi, wdoti, ui, di, ddoti, dddoti in tqdm(zip(t, dmf.y, wf.y, wf.dot().y, uf.y, df.y, df.dot().y, df.dot().dot().y), total=len(dmf.y)):
+    y = wi
+    A = np.zeros((2, 8))
+    for i in range(2):
+        A[i, i*4]   = dmi[i]
+        A[i, i*4+1] = np.sqrt( dmi[i] ) if dmi[i] >= 0 else 0.0
+        A[i, i*4+2] = 1.0
+        A[i, i*4+3] = -1e-3*wdoti[i]
+
+    rls_motors.newSample(A, y, ti); rls_motors.update()
+
+    y = di
+    for i in range(2):
+        A[i, i*4]   = ui[i+2]
+        A[i, i*4+1] = 1.0
+        A[i, i*4+2] = -ddoti[i]
+        A[i, i*4+3] = -dddoti[i]
+
+    rls_servos.newSample(A, y, ti); rls_servos.update()
+    ls_servos.newSample(A, y, ti)
+
+    count += 1
+    if count % 20 == 0:
+        ls_servos.update()
+
+
+rls_motors.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+                        parGroupNames=["a", "b", "idle", "tau"],
+                        sharey=False, zoomy=False)
+
+rls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+                        parGroupNames=["a", "b", "c", "d"],
+                        sharey=False, zoomy=False)
+
+ls_servos.theta[4] = 1.75
+ls_servos.theta[5] = 0.0
+ls_servos.theta[6] = 0.03333
+ls_servos.theta[7] = 4.2e-4
+
+ls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+                        parGroupNames=["a", "b", "c", "d"],
+                        sharey=False, zoomy=False)
 
 rls_m_act = RLS(9, 3, gamma=1e-11, forgetting=0.9999)
 rls_m_act.setTitle("RLS Moments -- Actuators Only")
@@ -270,30 +331,30 @@ for ti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, 
 
 # remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
 
-# rls_phi9.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
-#                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
-#                         sharey=False, zoomy=False)
-# 
-# rls_phi9_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
-#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
-#                             sharey=False, zoomy=False)
-# 
-# rls_phi7_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
-#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
-#                             sharey=False, zoomy=False)
+rls_phi9.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+                        sharey=False, zoomy=False)
 
-# rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
-#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
-#                             sharey=False, zoomy=False)
-# 
-# rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
-#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
-#                             sharey=False, zoomy=False)
+rls_phi9_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+                            sharey=False, zoomy=False)
 
-# rls_phi7.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
-#                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
-#                         sharey=False, zoomy=False)
-# 
+rls_phi7_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+                            sharey=False, zoomy=False)
+
+rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
+                            sharey=False, zoomy=False)
+
+rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
+                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
+                            sharey=False, zoomy=False)
+
+rls_phi7.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+                        sharey=False, zoomy=False)
+ 
 rls_phi3.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
                         sharey=False, zoomy=False)
@@ -305,13 +366,13 @@ rls_phi3.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
 rls_var.plotParameters()
 
 all_rls = [
-           # rls_phi9, rls_phi9_noI, rls_phi7_noI,
+           rls_phi9, rls_phi9_noI, rls_phi7_noI,
            rls_phi3_noI, rls_noPhi_noI,
-           # rls_phi7,
-           rls_phi3, rls_noPhi,
+           rls_phi7,
+           rls_phi3
            ]
 
-all_rls = [rls_phi3, rls_var]
+# all_rls = [rls_phi3, rls_var]
 # all_rls = [rls_noPhi, rls_var]
 
 # display figures
@@ -319,7 +380,7 @@ all_axes = []
 for rls in all_rls:
     all_axes.extend(rls.all_axes)
 
-cursor = BlittedCursor(all_axes + fplt.all_axes, sharex=True)
+cursor = BlittedCursor(all_axes + fplt.all_axes + rls_motors.all_axes + rls_servos.all_axes + ls_servos.all_axes, sharex=True)
 plt.show()
 
 

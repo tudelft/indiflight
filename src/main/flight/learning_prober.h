@@ -107,9 +107,16 @@ typedef struct prober_runtime_s {
         prober_runtime_noise_t noise;
     } sub;
     float output[MAXU];  // output values for each motor during probing
+    // servo
+    bool isInitializedServo;
+    bool isGenRunningServo;
+    bool isGenFinishedServo;
+    timeUs_t lastStepTimeUs;
 } prober_runtime_t;
 
 extern prober_runtime_t proberRuntime;
 
 void initProber(timeUs_t currentTimeUs);
 void updateProber(timeUs_t currentTimeUs);
+void initServoProber(timeUs_t currentTimeUs);
+void updateServoProber(timeUs_t currentTimeUs);

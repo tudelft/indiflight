@@ -161,22 +161,23 @@ void getRefsTrajectoryTracker(float p) {
     // psi(t) = p(t) + pi/2
     // where:
     // dp/dt  = speed_factor (piecewise constant)
-    while (tt_progress >  M_PIf) tt_progress -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
-    while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
+    // while (tt_progress >  M_PIf) tt_progress -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
+    // while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
 
     // position refs
-    tt_pos_ref[0] = tt_R*cosf(p);
-    tt_pos_ref[1] = tt_R*sinf(p);
+    float R = 0.1f*p;
+    tt_pos_ref[0] = R*tt_R*cosf(p);
+    tt_pos_ref[1] = R*tt_R*sinf(p);
     tt_pos_ref[2] = -1.5f;
 
     // velocity refs
-    tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
+    tt_vel_ref[0] = -R*tt_R*tt_speed_factor*sinf(p);
+    tt_vel_ref[1] = +R*tt_R*tt_speed_factor*cosf(p);
     tt_vel_ref[2] = 0.0f;
 
     // acceleration refs
-    tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
+    tt_acc_ref[0] = -R*tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
+    tt_acc_ref[1] = -R*tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
     tt_acc_ref[2] = 0.0f;
 
     // heading

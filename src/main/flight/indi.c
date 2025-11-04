@@ -55,6 +55,7 @@
 #include "solveActiveSet.h"
 #include "flight/learner.h"
 #include "flight/learning_prober.h"
+#include "flight/ekf.h"
 
 #include "io/local_pos.h"
 #include "io/beeper.h"
@@ -468,6 +469,18 @@ void getMotorCommands(timeUs_t current) {
     indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
 
     if (indiRun.tailsUseScheduled) {
+#ifdef USE_LOCAL_POSITION
+        // get airspeed for scheduling. for now assume no wind
+        fp_quaternion_t attEstNed;
+        getHoverAttitudeQuaternion(&attEstNed);
+        fp_vector_t velEstBody = velEstNed;
+        if (isConvergedEkf()) {
+            // rotate inertial ground speed to body frame
+            rotate_vector_with_quaternion(&velEstBody, &attEstNed);
+        }
+#else
+        fp_vector_t velEstBody = {0};
+#endif
         // N.B. this specific motor/servo assignment is enforced in indi_init for this case
         float d_eff[2];
         for (int i = 0; i < 2; i++) {
@@ -504,7 +517,7 @@ void getMotorCommands(timeUs_t current) {
 
             float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {
-                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim; // todo: add vz velocity here?
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim - 0e6f * MIN(velEstBody.V.Z, +0.f); // todo: add vz velocity here?
                 indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
             }
         }
@@ -615,7 +628,7 @@ void getMotorCommands(timeUs_t current) {
     if (FLIGHT_MODE(LEARNER_MODE)
             && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
             && (learningQueryState < LEARNING_QUERY_DONE)
-            && i < proberRuntime.numActuators) {
+            && (proberConfig()->actMask & (1 << i)) ) {
         if (learnRun.mixControl) {
             indiRun.u[i] += outputFromLearningQuery[i];
         } else {
