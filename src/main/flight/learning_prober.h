@@ -120,3 +120,5 @@ void initProber(timeUs_t currentTimeUs);
 void updateProber(timeUs_t currentTimeUs);
 void initServoProber(timeUs_t currentTimeUs);
 void updateServoProber(timeUs_t currentTimeUs);
+
+void initProberDebugPin(void);

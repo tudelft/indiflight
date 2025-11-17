@@ -109,6 +109,7 @@
 #include "flight/servos.h"
 #include "flight/learner.h"
 #include "flight/geofence.h"
+#include "flight/learning_prober.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -1067,6 +1068,10 @@ void init(void)
 #endif
 
     swdPinsInit();
+
+#ifdef USE_LEARNER
+    initProberDebugPin();
+#endif
 
     unusedPinsInit();
 

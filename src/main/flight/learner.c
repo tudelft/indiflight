@@ -785,7 +785,12 @@ void updateLearner(timeUs_t current) {
                 continue; // skip unsupported actuator types
             }
 
-            maxTau = MAX(maxTau, actRls[act].x[3] * 0.1f);
+            if (indiRun.actType[act] == INDI_ACT_TYPE_SERVO) {
+                maxTau = MAX(maxTau, (actRls[act].x[3]+actRls[act].x[2]) * 0.1f);
+            } else {
+                maxTau = MAX(maxTau, (actRls[act].x[3]) * 0.1f);
+            }
+
         }
 
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
@@ -794,8 +799,11 @@ void updateLearner(timeUs_t current) {
         learnRun.gains[LEARNER_LOOP_RATE] = 
             0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
 
-        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
+        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++) {
             learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+        }
+        // learnRun.gains[LEARNER_LOOP_RATE] = 18.f;
+        // learnRun.gains[LEARNER_LOOP_ATTITUDE] = 2.777f;
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -827,7 +835,7 @@ void updateLearner(timeUs_t current) {
 
     appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
 
-    if (learnFx) {
+    if (learnFx && learnerConfig()->applyIndi) {
         if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
             changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
         }

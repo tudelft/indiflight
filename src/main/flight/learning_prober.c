@@ -60,6 +60,7 @@
 #include "common/filter.h"
 #include "flight/indi.h"
 #include "flight/servos.h"
+#include "drivers/light_led.h"
 
 #ifdef USE_LEARNER
 
@@ -194,6 +195,36 @@ static void updateOrtho(timeUs_t currentTimeUs) {
 
 #define PROBER_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
 
+// #define DEBUG_SERVOS 1
+
+#ifdef DEBUG_SERVOS
+
+#include "drivers/exti.h"
+#include "drivers/io_types.h"
+#include "drivers/exti.h"
+
+static IO_t signalPin;
+
+void initProberDebugPin(void) {
+    // see accgyro_mpu.c:mpuIntextiInit() for this code
+    signalPin = IOGetByTag(IO_TAG(PE6));
+    IOInit(signalPin, OWNER_CAMERA_CONTROL, 0);
+
+    GPIO_InitTypeDef init = {
+        .Pin = IO_Pin(signalPin),
+        .Mode = GPIO_MODE_OUTPUT_PP, // internal push pull
+        .Speed = GPIO_SPEED_FREQ_HIGH, // high slew rate, i guess
+        .Pull = GPIO_NOPULL, // chatGPT says so
+    };
+    if (signalPin) {
+        HAL_GPIO_Init(IO_GPIO(signalPin), &init);
+    }
+}
+#else
+void initProberDebugPin(void) {
+}
+#endif
+
 void initProber(timeUs_t currentTimeUs) {
     const proberConfig_t* config = proberConfig();
     proberRuntime.type = (prober_type_t) config->type;
@@ -256,7 +287,6 @@ void updateServoProber(timeUs_t currentTimeUs) {
         return;
     }
 
-    const proberConfig_t* config = proberConfig();
 
     static int stepIndex = 0;
     proberRuntime.isGenRunningServo = true;
@@ -265,22 +295,58 @@ void updateServoProber(timeUs_t currentTimeUs) {
     // filter the servo_feedback returns
     float servoRadFiltered[MAXU];
     static float servoRadFilteredPrev[MAXU] = {0.0f};
-    static timeUs_t crossTimeUs[MAXU] = {0};
+    static float delay_thresh = 0.f;
+    static float tau_thresh = 0.f;
     int s = 0;
     for (int i = 0; i < indiRun.actNum; i++) {
         if (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) {
             float servoRadRaw = DEGREES_TO_RADIANS( 0.01f * ((float)servo_feedback[s++]) );
             servoRadFiltered[i] = pt1FilterApply(&servoFeedbackFilter[i], servoRadRaw);
 
-            // detect crossing of 0.632 * (actRls[i].x[0] - actRls[i].x[2])
-            // and save time instant
-            float thresh = 0.632f * (actRls[i].x[0]+actRls[i].x[1] - actRls[i].x[2]);
+            // detect stuff 
+            float divisor = proberRuntime.output[i];
+            if (divisor < 1e-3f && divisor > -1e-3f) {
+                divisor = 1e-3f; // prevent div by zero
+            }
 
-            if (servoRadFilteredPrev[i] < thresh && servoRadFiltered[i] >= thresh) {
-                // rising edge
-                crossTimeUs[i] = currentTimeUs;
+
+            switch (stepIndex)
+            {
+                case 0:
+                    // first step, record maximum
+                    actRls[i].x[0] = servoRadFiltered[i] / divisor;
+                    break;
+                case 1:
+                    // second step, record max
+                    actRls[i].x[1] = (-actRls[i].x[0] * divisor + servoRadFiltered[i]) * 0.5f;
+                    break;
+                case 2:
+                    // back to center, wait for things to settle, record last value as threshold for delay detection
+                    delay_thresh = servoRadFiltered[i] + 0.5f*0.01745f; // 1deg deadzone
+                    tau_thresh = 0.632f * (actRls[i].x[0]*steps[0] - actRls[i].x[1]);
+                    break;
+                case 3:
+                    // rising edge
+                    if (servoRadFilteredPrev[i] < delay_thresh && servoRadFiltered[i] >= delay_thresh) {
+                        actRls[i].x[2] = 1e-5f * cmpTimeUs(currentTimeUs, proberRuntime.lastStepTimeUs);
+                    }
+                    if (servoRadFilteredPrev[i] < tau_thresh && servoRadFiltered[i] >= tau_thresh) {
+                        actRls[i].x[3] = 1e-5f * cmpTimeUs(currentTimeUs, proberRuntime.lastStepTimeUs) - actRls[i].x[2];
+                    }
+                    break;
+                case 4:
+                    // back to center
+                    break;
+                default:
+                    break;
             }
             servoRadFilteredPrev[i] = servoRadFiltered[i];
+
+            proberRuntime.output[i] = steps[stepIndex];
+
+            // add ramp to investigate delay TODO
+            // proberRuntime.output[i] += 0.5f * 1e-6f * (float) (currentTimeUs - proberRuntime.lastStepTimeUs);
+            proberRuntime.output[i] = constrainf(proberRuntime.output[i], -0.4f, 0.4f);
         }
     }
 
@@ -295,39 +361,12 @@ void updateServoProber(timeUs_t currentTimeUs) {
             return;
         }
 
-        for (int i = 0; i < indiRun.actNum; i++) {
-            if (config->actMask & (1 << i)
-                    && (indiRun.actType[i] == INDI_ACT_TYPE_SERVO)) {
-
-                // generate new output
-                proberRuntime.output[i] = steps[stepIndex];
-
-                // analyse return
-                switch(stepIndex)
-                {
-                    case 0:
-                        // first step, do nothing
-                        break;
-                    case 1:
-                        // second step, record max
-                        actRls[i].x[0] = 0.0f;
-                        actRls[i].x[1] = servoRadFiltered[i];
-                        break;
-                    case 2:
-                        // back to center, record average
-                        actRls[i].x[2] = (actRls[i].x[0]+actRls[i].x[1] + servoRadFiltered[i]) * 0.5f;
-                        break;
-                    case 3:
-                        break;
-                    case 4:
-                        // get rise time at 63.2% in whatever stupid unit i decided on
-                        actRls[i].x[3] = 1e-5f * cmpTimeUs(crossTimeUs[i], proberRuntime.lastStepTimeUs);
-                        break;
-                    default:
-                        break;
-                }
-            }
+#ifdef DEBUG_SERVOS
+        LED1_TOGGLE;
+        if (signalPin) {
+            IOToggle(signalPin);
         }
+#endif
 
         proberRuntime.lastStepTimeUs = currentTimeUs;
         stepIndex++;

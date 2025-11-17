@@ -31,10 +31,10 @@ log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
-fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+fplt = IndiflightPlotter(log.data, Ns=2, Nr=2, name=f"{args.name} -- Flight Data")
 
 craft = Tailsitter()
-pplt = IndiflightViewport(craft, log.data, follow=False, title=f"{args.name} -- Flight Data")
+pplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=False, title=f"{args.name} -- Flight Data")
 fplt.connect_viewport(pplt)
 
 # splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
@@ -57,7 +57,7 @@ w_raw = log.data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
 dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy() + 0.084
 u_raw = log.data[[f"u[{i}]" for i in range(4)]]              .to_numpy()
 d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy()
-d_raw = np.roll(d_raw, -16, axis=0)
+# d_raw = np.roll(d_raw, -15, axis=0)
 q_raw = log.data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
 v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
 

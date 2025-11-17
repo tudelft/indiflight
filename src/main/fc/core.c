@@ -1807,7 +1807,12 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_INDI
-    indiUpdateActuatorState( motor_normalized, servo_normalized );
+    float servo_normalized_feedback[MAX_SUPPORTED_SERVOS];
+    for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+        servo_normalized_feedback[i] = constrainf(((float)servo_feedback[i]) * 1e-4f, -1.f, 1.f);
+    }
+    // indiUpdateActuatorState( motor_normalized, servo_normalized );
+    indiUpdateActuatorState( motor_normalized, servo_normalized_feedback );
 #endif
 
     // get real motor outputs for the hardware implementation used

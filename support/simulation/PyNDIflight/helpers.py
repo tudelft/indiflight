@@ -127,3 +127,38 @@ def wingElevonForcesMoments(vB, OB, w, d, dd, ddd, d0, cv, cvx, cO, cd, cdd, cdd
     FM_B[5] += cd[5] * elev_diff   +   delev_diff * cdd[5]
 
     return FM_B
+
+@njit("f4[::1](f4[::1],f4[::1],f4, f4[:, ::1])")
+def phiTheoryForcesMoments(vB, OB, phi, Phi):
+    V2 = np.dot(vB, vB)
+    O2 = np.dot(OB, OB)
+
+    eta = np.sqrt(V2 + phi*O2)
+    etaB = np.hstack((vB, OB))
+
+    return -eta * ( Phi @ etaB )
+
+@njit("f4[::1](f4[::1],f4[::1],f4[::1],f4[::1], f4[::1], f4[::1], f4[::1], f4[::1])")
+def elevonForcesMoments(w, d, dd, ddd, d0, cd, cdd, cddd):
+    # regressors
+    ww = w*w
+    wwDd0 = ww * ( d )          # prop speeds ** 2 * sin ( elevon angles )
+    wwDd = ww * ( d - d0 )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
+
+    wwDd_diff = wwDd[0] - wwDd[1]
+    dd_diff = dd[0] - dd[1]
+    ddd_diff = ddd[0] - ddd[1]
+
+    # elevon contribution
+    FM_B = np.empty((6,), dtype=np.float32)
+
+    # ACTUATION MODEL (elevons only)
+    #              deflection              rate                      accel
+    FM_B[0] += cd[0] * np.sum(wwDd0)   +  cdd[0] * np.sum(dd)   +  cddd[0] * np.sum(ddd)
+    FM_B[1] += 0.
+    FM_B[2] += 0.
+    FM_B[3] += 0.
+    FM_B[4] += cd[4] * np.sum(wwDd0)   +  cdd[4] * np.sum(dd)   +  cddd[4] * np.sum(ddd)
+    FM_B[5] += cd[5] * wwDd_diff       +  cdd[5] * dd_diff      +  cddd[5] * ddd_diff
+
+    return FM_B

@@ -23,7 +23,7 @@ import threading
 import os
 import sys
 
-from PyNDIflight.crafts import Tailsitter, IMU
+from PyNDIflight.crafts import Tailsitter, TailsitterPhi, IMU
 from PyNDIflight.interfaces import Mocap, IndiflightHIL, IndiflightSITLWrapper, visApp, visData
 from PyNDIflight.sim import Sim
 
@@ -87,21 +87,23 @@ if __name__=="__main__":
 
 
     #%% Generate craft
-    tail = Tailsitter()
+    # tail = Tailsitter()
+    tail = TailsitterPhi()
     # approx model of CineRat 3inch race drone
     tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
-    tail.setRotor(0, X=[-0.01, -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
-    tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
+    # tail.setRotor(0, X=[-0.01, -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
+    # tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
+    tail.setRotor(0, X=[5.831e-03, -1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=-6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # RR
+    tail.setRotor(1, X=[5.831e-03, +1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=+6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # FR
 
     inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
                                (tail.I[0,0] - tail.I[2,2]) / tail.I[1,1],
                                (tail.I[1,1] - tail.I[0,0]) / tail.I[2,2]])
-    print(f"Craft inertia ratios: {inertia_ratios}") # [-0.50000006  0.6666667  -0.24999997]
-
+    print(f"Craft inertia ratios: {inertia_ratios}") # [ 0.74999994 -0.25000003 -0.6153846]
 
 
     #%% craft interfaces
-    imu = IMU(tail, r=[0., 0., 0.], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
+    imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
 
     mocap = Mocap(tail, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(tail, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -128,7 +130,7 @@ if __name__=="__main__":
     #%% initial conditions
     tail.setPose(x=[0, -3.5, -0.1], q=[1., 0., 0., 0.])
     # tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
-    # tail.setPose(x=[0., 0., -0.1], q=[0, -0.707, 0., 0.707])
+    # tail.setPose(x=[0., 0., -20.1], q=[0, -0.707, 0., 0.707])
     # tail.setPose(x=[0., 0., -0.1], q=[0, 0, 0, 1.])
     tail.setTwist(v=[0., 0., 0.], w=[0., 0., 0.])
 
@@ -187,8 +189,9 @@ if __name__=="__main__":
         #     # test recovery mode
         #     # sil.sendMocap = lambda *args: None
 
-        # if sim.t > 12. and sil is not None:
-        #     sil.mockup.sendPositionSetpoint( [20., 0., -1.5], 0. )
+        if sim.t > 12. and sil is not None:
+            # sil.mockup.sendPositionSetpoint( [20., 0., -1.5], 0. )
+            sil.mockup.sendPositionSetpoint( [2., 2., -1.5], 0. )
         # if sim.t > 10. and sil is not None:
         #     sil.mockup.sendPositionSetpoint( [-1., 0., -2.], 0. )
         # if sim.t > 10.6 and sil is not None:

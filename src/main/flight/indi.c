@@ -654,11 +654,14 @@ void indiUpdateActuatorState( float* motors, float* servos ) {
     int motor = 0;
     int servo = 0;
     for (int i = 0; i < indiRun.actNum; i++) {
-        float d;
+        float d, u;
         switch (indiRun.actType[i]) {
             case INDI_ACT_TYPE_MOTOR:
                 if (motor >= getMotorCount()) { continue; }
                 d = motors[motor];
+
+                u = indiOutputCurve( &indiRun.lin[i], d );
+                indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
                 // is motor, also get motor speed for control
 #if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
@@ -681,15 +684,15 @@ void indiUpdateActuatorState( float* motors, float* servos ) {
             case INDI_ACT_TYPE_SERVO:
                 if (servo >= MAX_SUPPORTED_SERVOS) { continue; } // todo: fix the macro
                 d = servos[servo++];
+                u = indiOutputCurve( &indiRun.lin[i], d );
+                // do not apply filter
+                indiRun.uState[i] = u;
                 break;
             default:
             case INDI_ACT_TYPE_OFF:
                 d = 0.f; // do nothing
                 break;
         }
-
-        float u = indiOutputCurve( &indiRun.lin[i], d );
-        indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
     }
 }
 

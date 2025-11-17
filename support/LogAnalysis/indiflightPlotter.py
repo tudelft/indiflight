@@ -1,28 +1,19 @@
 import numpy as np
 
 from pyFlightPlotter import FlightPlotterBase, Viewport, Craft3D
+from scipy.spatial.transform import Rotation as R
 
 class IndiflightPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for general Indiflight analysis"""
-    def __init__(self, data, name="Flight Plotter"):
+    def __init__(self, data, Nr=0, Ns=0, name="Flight Plotter"):
         # extract time and intialize base class
         self.data = data
         t = self.data['timeS'].to_numpy()
         super().__init__(t, name)
 
-        # check amount of rotors
-        self.Nr = 0
-        for i in range(8):
-            if f'motor[{i}]' not in self.data.columns or (self.data[f'motor[{i}]'] == 0.).all():
-                break
-            self.Nr += 1
-
-        # check amount of servos
-        self.Ns = -self.Nr
-        for i in range(16):
-            if f'u[{i}]' not in self.data.columns or (self.data[f'u[{i}]'] == 0.).all():
-                break
-            self.Ns += 1
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
 
         # check for fields
         self.has_pos = 'pos[0]' in self.data.columns
@@ -111,14 +102,13 @@ class IndiflightPlotter(FlightPlotterBase):
             self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                          light=None,
                          solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
-                         dashed=None,
+                         dashed=[self.data[f'u[{i}]'].to_numpy() * 100. * np.pi / 180. for i in range(self.Nr, N)],
                          series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
-                         style_labels=[None, "Unfiltered state", None],
+                         style_labels=[None, "Unfiltered state", "Scaled Command"],
                          title="Servo State",
                          ylabel="Servo State [rad]",
             )
 
-        from scipy.spatial.transform import Rotation as R
         quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
         quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
         rot = R.from_quat(quat)
@@ -175,32 +165,24 @@ class IndiflightPlotter(FlightPlotterBase):
                              title="Acceleration Global",
                              ylabel="Acceleration [m/s²]")
 
-class IndiflightSysIdPlotter(FlightPlotterBase):
-    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
-    def __init__(self, data, name="System Identification Plotter", craft="quadrotor"):
+class IndiflightMotorSysIdPlotter(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for Motor SysId analysis"""
+    def __init__(self, data, Nr=0, true=None, name="System Identification Plotter -- Motor"):
         # extract time and intialize base class
         self.data = data
+        self.true = true
         t = self.data['timeS'].to_numpy()
         super().__init__(t, name)
 
-        self.craft = craft
-
         # do some investigation
-        self.has_motor_learning = 'motor_0_rls_x[0]' in self.data.columns
-        self.has_fx_learning = 'fx_x_rls_x[0]' in self.data.columns
+        # self.has_motor_learning = 'motor_0_rls_x[0]' in self.data.columns
+        # self.has_fx_learning = 'fx_x_rls_x[0]' in self.data.columns
         self.has_extended_fx_learning = 'fx_r_rls_x[15]' in self.data.columns
-        self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
+        # self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
         # self.has_servo = 'servo_feedback[0]' in self.data.columns
 
         # check amount of actuators
-        self.N = 0
-        for i in range(8):
-            if f'u[{i}]' not in self.data.columns or (self.data[f'u[{i}]'] == 0.).all():
-                break
-            self.N += 1
-
-        if self.N == 0:
-            raise ValueError("No spinning actuators found in the log data!")
+        self.Nr = Nr
 
         self.define_layout(figsize=(12, 8), nrows=6, ncols=4,
                            width_ratios=[1, 1, 1, 1],
@@ -209,183 +191,458 @@ class IndiflightSysIdPlotter(FlightPlotterBase):
         self.plot()
 
     def _populate(self):
-        N = self.N
+        Nr = self.Nr
 
         # motor learning data
-        if self.has_motor_learning:
-            a = np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(N)])
-            b = np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(N)])
-            widle = np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(N)])
-            tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(N)])
-            wmax = a + b
-            kappa = np.zeros_like(wmax)
-            kappa[a+b > 0] = a[a+b > 0] / (a[a+b > 0] + b[a+b > 0])
+        a = np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(Nr)])
+        b = np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(Nr)])
+        widle = np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(Nr)])
+        tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(Nr)])
+        wmax = a + b
+        kappa = np.zeros_like(wmax)
+        kappa[a+b > 0] = a[a+b > 0] / (a[a+b > 0] + b[a+b > 0])
 
-            motor_e_var = np.array([self.data[f'motor_{i}_rls_e_var'] for i in range(N)])
-            motor_lambda = np.array([self.data[f'motor_{i}_rls_lambda'] for i in range(N)])
+        motor_e_var = np.array([self.data[f'motor_{i}_rls_e_var'] for i in range(Nr)])
+        motor_lambda = np.array([self.data[f'motor_{i}_rls_lambda'] for i in range(Nr)])
 
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+                            light=None,
+                            solid=wmax,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Max Motor Speed",
+                            ylabel="Angular Rate [rad/s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+                            light=None,
+                            solid=widle,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Idle Motor Speed",
+                            ylabel="Angular Rate [rad/s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+                            light=None,
+                            solid=tau,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Time Constant",
+                            ylabel="Time Constant [s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+                            light=None,
+                            solid=kappa,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Kappa",
+                            ylabel="Kappa [rad/s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 0]),
+                            light=None,
+                            solid=motor_e_var,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Error Variance",
+                            ylabel="Variance")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 0]),
+                            light=None,
+                            solid=motor_lambda,
+                            dashed=None,
+                            series_labels=[f"Motor {i}" for i in range(Nr)],
+                            style_labels=[None, "Onboard", None],
+                            title="Motor Forgetting Factor",
+                            ylabel="Forgetting Factor")
+
+        # fx learning data
+        if self.has_extended_fx_learning:
+            # we have the extended logging (like in simulation)
+            pqr_range = list(range(Nr)) + list(range(2*Nr, 3*Nr))
+        else:
+            pqr_range = list(range(2*Nr))
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+        fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
+        fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+
+        for i, axis in enumerate(['x', 'y', 'z']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
                                 light=None,
-                                solid=wmax,
+                                solid=x if axis == 'x' else y if axis == 'y' else z,
                                 dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
+                                series_labels=[f"Motor {j}" for j in range(Nr)],
                                 style_labels=[None, "Onboard", None],
-                                title="Max Motor Speed",
-                                ylabel="Angular Rate [rad/s]")
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [N/kg/(rad/s)²]")
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
                                 light=None,
-                                solid=widle,
+                                solid=fx_e_var[:3],
                                 dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
                                 style_labels=[None, "Onboard", None],
-                                title="Idle Motor Speed",
-                                ylabel="Angular Rate [rad/s]")
-
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
-                                light=None,
-                                solid=tau,
-                                dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
-                                style_labels=[None, "Onboard", None],
-                                title="Motor Time Constant",
-                                ylabel="Time Constant [s]")
-
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
-                                light=None,
-                                solid=kappa,
-                                dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
-                                style_labels=[None, "Onboard", None],
-                                title="Motor Kappa",
-                                ylabel="Kappa [rad/s]")
-        
-            self._plot_timeseries(self.fig.add_subplot(self.gs[4, 0]),
-                                light=None,
-                                solid=motor_e_var,
-                                dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
-                                style_labels=[None, "Onboard", None],
-                                title="Motor Error Variance",
+                                title="Fx Error Variance",
                                 ylabel="Variance")
-        
-            self._plot_timeseries(self.fig.add_subplot(self.gs[5, 0]),
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
                                 light=None,
-                                solid=motor_lambda,
+                                solid=fx_lambda[:3],
                                 dashed=None,
-                                series_labels=[f"Motor {i}" for i in range(N)],
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
                                 style_labels=[None, "Onboard", None],
-                                title="Motor Forgetting Factor",
+                                title="Fx Forgetting Factor",
                                 ylabel="Forgetting Factor")
 
-        if self.has_fx_learning:
-            # fx learning data
-            if self.has_extended_fx_learning:
-                # we have the extended logging (like in simulation)
-                pqr_range = list(range(N)) + list(range(2*N, 3*N))
-            else:
-                pqr_range = list(range(2*N))
+        for i, axis in enumerate(['p', 'q', 'r']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
+                                light=None,
+                                solid=p[:Nr] if axis == 'p' else q[:Nr] if axis == 'q' else r[:Nr],
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(Nr)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
 
-            x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(N)])
-            y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(N)])
-            z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(N)])
-            p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
-            q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
-            r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
+                                light=None,
+                                solid=p[Nr:] if axis == 'p' else q[Nr:] if axis == 'q' else r[Nr:],
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(Nr)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s²)]")
 
-            AXES = ['x', 'y', 'z', 'p', 'q', 'r']
-            fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
-            fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 2]),
+                                light=None,
+                                solid=fx_e_var[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
 
-            for i, axis in enumerate(['x', 'y', 'z']):
-                if self.craft == "quadrotor":
-                    self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
-                                        light=None,
-                                        solid=x if axis == 'x' else y if axis == 'y' else z,
-                                        dashed=None,
-                                        series_labels=[f"Motor {j}" for j in range(N)],
-                                        style_labels=[None, "Onboard", None],
-                                        title=f"Fx {axis.upper()}",
-                                        ylabel="Fx [N/kg/(rad/s)²]")
-                elif self.craft == "tailsitter":
-                    self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
-                                        light=None,
-                                        solid=x if axis == 'x' else y if axis == 'y' else z,
-                                        dashed=None,
-                                        series_labels=[
-                                            "Motors", "Elevons", "Motor Derivative", "Body Rates"
-                                        ],
-                                        style_labels=[None, "Onboard", None],
-                                        title=f"Fx {axis.upper()}",
-                                        ylabel="Fx [N/kg/(rad/s)²]")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 2]),
+                                light=None,
+                                solid=fx_lambda[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
+
+class IndiflightServoSysIdPlotter(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
+    def __init__(self, data, Nr=0, Ns=0, true=None, name="System Identification Plotter -- Servo"):
+        # extract time and intialize base class
+        self.data = data
+        self.true = true
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
+        self.has_extended_fx_learning = 'fx_r_rls_x[15]' in self.data.columns
+        self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
+
+        # check amount of actuators
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
+
+        self.define_layout(figsize=(12, 8), nrows=6, ncols=3,
+                           width_ratios=[1, 1, 1],
+                           height_ratios=[1, 1, 1, 1, 1, 1])
+
+        self.plot()
+
+    def _populate(self):
+        Nr = self.Nr
+        Ns = self.Ns
+        N = self.N
+
+        dmax = 1e-3*np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(Nr,N)])
+        d0 = 1e-3*np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(Nr,N)])
+        delay = 1e-4*np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(Nr,N)])
+        tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(Nr,N)])
+        # motor_e_var = np.array([self.data[f'motor_{i}_rls_e_var'] for i in range(Nr)])
+        # motor_lambda = np.array([self.data[f'motor_{i}_rls_lambda'] for i in range(Nr)])
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+                            light=None,
+                            solid=dmax,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[0]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Scaler",
+                            ylabel="Angle/cmd [rad/1]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+                            light=None,
+                            solid=d0,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[1]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Neutral Servo Angle",
+                            ylabel="Angle [rad]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+                            light=None,
+                            solid=delay,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[2]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Delay",
+                            ylabel="Delay [s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+                            light=None,
+                            solid=tau,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[3]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Time Constant",
+                            ylabel="Time Constant [s]")
+
+        if self.has_extended_fx_learning:
+            # we have the extended logging (like in simulation)
+            pqr_range = list(range(Nr)) + list(range(2*Nr, 3*Nr))
+        else:
+            pqr_range = list(range(2*Nr))
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+        fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
+        fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+
+        # for i, axis in enumerate(['x', 'y', 'z']):
+        #     self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+        #                         light=None,
+        #                         solid=x if axis == 'x' else y if axis == 'y' else z,
+        #                         dashed=None,
+        #                         series_labels=[
+        #                             "Motors", "Elevons", "Motor Derivative", "Body Rates"
+        #                         ],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title=f"Fx {axis.upper()}",
+        #                         ylabel="Fx [N/kg/(rad/s)²]")
 
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+        # self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+        #                         light=None,
+        #                         solid=fx_e_var[:3],
+        #                         dashed=None,
+        #                         series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title="Fx Error Variance",
+        #                         ylabel="Variance")
+
+        # self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+        #                         light=None,
+        #                         solid=fx_lambda[:3],
+        #                         dashed=None,
+        #                         series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title="Fx Forgetting Factor",
+        #                         ylabel="Forgetting Factor")
+
+        M = 4
+        for i, axis in enumerate(['p', 'q', 'r']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                light=None,
+                                solid=p[:M] if axis == 'p' else q[:M] if axis == 'q' else r[:M],
+                                dashed=None,
+                                true_values=[self.true[f'fx_{axis}_rls_x[{i}]'] for i in range(M)] if self.true is not None else None,
+                                series_labels=[
+                                    "Motors", "Elevons", "Motor Derivative", "Body Rates"
+                                ],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+                                light=None,
+                                solid=fx_e_var[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+                                light=None,
+                                solid=fx_lambda[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
+
+        if self.has_inertia_learning:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
+                                  light=None,
+                                  solid=np.array([self.data[f'sigma_rls[{i}]'] for i in range(3)]) / 1000,
+                                  dashed=None,
+                                  true_values=[self.true[f'sigma_rls[{i}]'] for i in range(3)] if self.true is not None else None,
+                                  series_labels=["Sigma X", "Sigma Y", "Sigma Z"],
+                                  style_labels=[None, "Onboard", None],
+                                  title="Principal Inertia Ratios",
+                                  ylabel="$\\sigma$ [-]")
+
+class IndiflightFxSysIdPlotter(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
+    def __init__(self, data, Nr=0, Ns=0, true=None, name="System Identification Plotter -- Servo"):
+        # extract time and intialize base class
+        self.data = data
+        self.true = true
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
+        # do some investigation
+        # self.has_fx_learning = 'fx_x_rls_x[0]' in self.data.columns
+        # self.has_extended_fx_learning = 'fx_r_rls_x[15]' in self.data.columns
+        # self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
+        # self.has_servo = 'servo_feedback[0]' in self.data.columns
+
+        # check amount of actuators
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
+
+        self.define_layout(figsize=(12, 8), nrows=6, ncols=4,
+                           width_ratios=[1, 1, 1, 1],
+                           height_ratios=[1, 1, 1, 1, 1, 1])
+
+        self.plot()
+
+    def _populate(self):
+        Nr = self.Nr
+
+        # fx learning data
+        if self.has_extended_fx_learning:
+            # we have the extended logging (like in simulation)
+            pqr_range = list(range(Nr)) + list(range(2*Nr, 3*Nr))
+        else:
+            pqr_range = list(range(2*Nr))
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+        fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
+        fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+
+        for i, axis in enumerate(['x', 'y', 'z']):
+            if self.craft == "quadrotor":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
                                     light=None,
-                                    solid=fx_e_var[:3],
+                                    solid=x if axis == 'x' else y if axis == 'y' else z,
                                     dashed=None,
-                                    series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
-                                    style_labels=[None, "Onboard", None],
-                                    title="Fx Error Variance",
-                                    ylabel="Variance")
-
-            self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
-                                    light=None,
-                                    solid=fx_lambda[:3],
-                                    dashed=None,
-                                    series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
-                                    style_labels=[None, "Onboard", None],
-                                    title="Fx Forgetting Factor",
-                                    ylabel="Forgetting Factor")
-
-            for i, axis in enumerate(['p', 'q', 'r']):
-                if self.craft == "quadrotor":
-                    self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
-                                        light=None,
-                                        solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
-                                        dashed=None,
-                                        series_labels=[f"Motor {j}" for j in range(N)],
-                                        style_labels=[None, "Onboard", None],
-                                        title=f"Fx {axis.upper()}",
-                                        ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
-                elif self.craft == "tailsitter":
-                    self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
-                                        light=None,
-                                        solid=p[:N] if axis == 'p' else q[:N] if axis == 'q' else r[:N],
-                                        dashed=None,
-                                        series_labels=[
-                                            "Motors", "Elevons", "Motor Derivative", "Body Rates"
-                                        ],
-                                        style_labels=[None, "Onboard", None],
-                                        title=f"Fx {axis.upper()}",
-                                        ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
-
-                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
-                                    light=None,
-                                    solid=p[N:] if axis == 'p' else q[N:] if axis == 'q' else r[N:],
-                                    dashed=None,
-                                    series_labels=[f"Motor {j}" for j in range(N)],
+                                    series_labels=[f"Motor {j}" for j in range(Nr)],
                                     style_labels=[None, "Onboard", None],
                                     title=f"Fx {axis.upper()}",
-                                    ylabel="Fx [Nm/(kgm^2)/(rad/s²)]")
+                                    ylabel="Fx [N/kg/(rad/s)²]")
+            elif self.craft == "tailsitter":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                    light=None,
+                                    solid=x if axis == 'x' else y if axis == 'y' else z,
+                                    dashed=None,
+                                    series_labels=[
+                                        "Motors", "Elevons", "Motor Derivative", "Body Rates"
+                                    ],
+                                    style_labels=[None, "Onboard", None],
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [N/kg/(rad/s)²]")
 
-            self._plot_timeseries(self.fig.add_subplot(self.gs[4, 2]),
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+                                light=None,
+                                solid=fx_e_var[:3],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+                                light=None,
+                                solid=fx_lambda[:3],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
+
+        for i, axis in enumerate(['p', 'q', 'r']):
+            if self.craft == "quadrotor":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
                                     light=None,
-                                    solid=fx_e_var[3:],
+                                    solid=p[:Nr] if axis == 'p' else q[:Nr] if axis == 'q' else r[:Nr],
                                     dashed=None,
-                                    series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                    series_labels=[f"Motor {j}" for j in range(Nr)],
                                     style_labels=[None, "Onboard", None],
-                                    title="Fx Error Variance",
-                                    ylabel="Variance")
-            self._plot_timeseries(self.fig.add_subplot(self.gs[5, 2]),
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+            elif self.craft == "tailsitter":
+                self._plot_timeseries(self.fig.add_subplot(self.gs[i, 2]),
                                     light=None,
-                                    solid=fx_lambda[3:],
+                                    solid=p[:Nr] if axis == 'p' else q[:Nr] if axis == 'q' else r[:Nr],
                                     dashed=None,
-                                    series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                    series_labels=[
+                                        "Motors", "Elevons", "Motor Derivative", "Body Rates"
+                                    ],
                                     style_labels=[None, "Onboard", None],
-                                    title="Fx Forgetting Factor",
-                                    ylabel="Forgetting Factor")
+                                    title=f"Fx {axis.upper()}",
+                                    ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 3]),
+                                light=None,
+                                solid=p[Nr:] if axis == 'p' else q[Nr:] if axis == 'q' else r[Nr:],
+                                dashed=None,
+                                series_labels=[f"Motor {j}" for j in range(Nr)],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s²)]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 2]),
+                                light=None,
+                                solid=fx_e_var[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 2]),
+                                light=None,
+                                solid=fx_lambda[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
 
         if self.has_inertia_learning:
             self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
@@ -397,26 +654,14 @@ class IndiflightSysIdPlotter(FlightPlotterBase):
                                   title="Principal Inertia Ratios",
                                   ylabel="$\\sigma$ [-]")
 
-
 class IndiflightViewport(Viewport):
     """Thin wrapper: extract series from log and intialize base class"""
 
-    def __init__(self, craft: Craft3D, data, follow=False, interpolation="previous", title="Viewport"):
+    def __init__(self, craft: Craft3D, data, Nr=0, Ns=0, follow=False, interpolation="previous", title="Viewport"):
         self.data = data
-
-        # check amount of rotors
-        self.Nr = 0
-        for i in range(8):
-            if f'motor[{i}]' not in self.data.columns or (self.data[f'motor[{i}]'] == 0.).all():
-                break
-            self.Nr += 1
-
-        # check amount of servos
-        self.Ns = -self.Nr
-        for i in range(16):
-            if f'u[{i}]' not in self.data.columns or (self.data[f'u[{i}]'] == 0.).all():
-                break
-            self.Ns += 1
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
 
         # check if these numbers match the craft definition
         if self.Nr != len(craft.rotors) or self.Ns != len(craft.surfaces):
@@ -467,3 +712,55 @@ class IndiflightViewport(Viewport):
             interpolation=interpolation,
             title=title
         )
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+    from indiflight_log_tools import IndiflightLog
+    import matplotlib.pyplot as plt
+
+    from pyFlightPlotter import BlittedCursor, Quadrotor, Tailsitter
+
+    parser = ArgumentParser(description="Analyse onboard ID data from a log file.",
+                            formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("logfile", type=str, help="Path to the log file.")
+    parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
+    parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
+    parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
+                        help="Crop the log to the given time range (in seconds).")
+    parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
+    parser.add_argument("--type", type=str, default="multirotor", choices=["tailsitter", "multirotor"],
+                        help="Type of craft for visualization.")
+    parser.add_argument("--follow", action="store_true", help="Follow the craft in the viewport.")
+
+    args = parser.parse_args()
+
+    if args.name is None:
+        args.name = args.logfile.split("/")[-1].split(".")[0]
+
+    log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
+    if args.crop:
+        log.data, _ = log.crop(args.crop[0], args.crop[1])
+
+    if args.type == "tailsitter":
+        fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data")
+        craft = Tailsitter()
+    elif args.type == "multirotor":
+        fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+        craft = Quadrotor()
+    else:
+        raise ValueError(f"Unknown craft type: {args.type}")
+
+    cursor = BlittedCursor(fplt.all_axes, sharex=True)
+
+    pplt = IndiflightViewport(craft,
+                              log.data,
+                              Nr=fplt.Nr,
+                              Ns=fplt.Ns,
+                              follow=args.follow,
+                              interpolation="previous",
+                              title=f"{args.name} -- Onboard ID Analysis")
+
+    fplt.connect_viewport(pplt)
+
+    plt.show()
+

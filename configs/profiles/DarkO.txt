@@ -213,6 +213,13 @@ indiprofile 0
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
 set indi_attitude_gains = 800, 500, 200
 set indi_rate_gains     =  130,  100,  60
+# set indi_attitude_gains = 500, 500, 500
+# set indi_rate_gains     =  180,  180,  180
+# set indi_attitude_gains = 200, 200, 200
+# set indi_rate_gains     =  75,  75,  75
+
+# set indi_attitude_gains = 756, 200, 200
+# set indi_rate_gains     =  140,  75,  75
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
