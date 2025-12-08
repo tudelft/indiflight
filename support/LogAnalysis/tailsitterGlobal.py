@@ -123,26 +123,27 @@ class Motor(nn.Module):
 
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/MIRROR_DarkO/LOG00043.BFL", resetTime=True, timeRange=(10000, 50000))  # first dataset
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/MIRROR_DarkO/LOG00063.BFL", resetTime=True, timeRange=(8000, 91000))   # after tuning, higher speeds
-log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00066_simplifiedDynFx.BFL", resetTime=True, timeRange=(9000, 50000))   # dynamic fx, hover
+#log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00066_simplifiedDynFx.BFL", resetTime=True, timeRange=(9000, 50000))   # dynamic fx, hover
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00079.BFL", resetTime=True, timeRange=(6587, 50000))   # dynamic fx, hover
+log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
 
 # preproc columns that are not in indiflight log tools yet
 data = log.data
 t = data['timeS']
 mean_dt = t.diff().mean()
-data[[f'extAtt[{i}]' for i in range(4)]] /= 8.128
+#data[[f'extAtt[{i}]' for i in range(4)]] /= 8.128
 #data[[f'localQuat[{i}]' for i in range(4)]] /= 8128.
 #data[[f'localVel[{i}]' for i in range(3)]] /= 100.
-data[[f'servo_feedback[{i}]' for i in range(4)]] *= np.pi/180 / 100
+#data[[f'servo_feedback[{i}]' for i in range(4)]] *= np.pi/180 / 100
 data['servo_feedback[1]'] *= 1 # set to -1 for old datafiles
 
 # convert columns to tensors
 # series = {'localVel': range(3), 'localQuat': range(4), 'accADCafterRpm': range(3),
 #           'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
 #           'motor': range(2)}
-series = {'extVel': range(3), 'extAtt': range(4), 'accADCafterRpm': range(3),
+series = {'localVel': range(3), 'localQuat': range(4), 'accADCafterRpm': range(3),
           'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
-          'motor': range(4)}
+          'motor': range(2), 'u': range(4)}
 order = 2
 freq = 20
 butter_sos = butter(order, Wn=freq, btype='lowpass', output='sos', fs=1/mean_dt)
@@ -156,10 +157,10 @@ for key, val in series.items():
     tmp_fdd = torch.tensor( savgol_filter(tmp_f, window_length=25, polyorder=3, deriv=2, delta=mean_dt) ).to(device=device)
     series[key] = [tmp_f, tmp_fd, tmp_fdd]
 
-v_true = series['extVel'][0]
-q_true = series['extAtt'][0]
-# v_true = series['localVel'][0]
-# q_true = series['localQuat'][0]
+# v_true = series['extVel'][0]
+# q_true = series['extAtt'][0]
+v_true = series['localVel'][0]
+q_true = series['localQuat'][0]
 a_true = series['accADCafterRpm'][0]
 O_true = series['gyroADCafterRpm'][0]
 Od_true = series['gyroADCafterRpm'][1]
@@ -268,7 +269,7 @@ axs[1, 1].set_ylabel(f"${VEL_LABELS[1]}$")
 axs[1, 1].set_ylim((-4, 4))
 
 for i in range(2):
-    axs[2, 1].plot(t, series['motor'][0][2+i].T, label=f"u servo")
+    axs[2, 1].plot(t, series['u'][0][2+i].T, label=f"u servo")
     axs[2, 1].set_ylabel("u servo")
     axs[3, 1].plot(t, 180/np.pi*d_true[i].cpu().T, label=f"Elevon {i+1}")
     axs[3, 1].set_ylabel("$\delta\ (deg)$")

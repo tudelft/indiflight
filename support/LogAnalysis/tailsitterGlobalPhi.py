@@ -39,7 +39,7 @@ class Tailsitter(nn.Module):
 
         self.r = nn.Parameter(torch.zeros(3, 1))  # IMU offset
         self.d0 = nn.Parameter(torch.zeros(2, 1)) # 0-force elevon angle
-        self.phi = nn.Parameter(torch.ones(1))
+        self.sqrtphi = nn.Parameter(1*torch.ones(1))
         actuation_coeffs = [
             'cxww',         'cxd', 'cxdd', 
 
@@ -77,14 +77,14 @@ class Tailsitter(nn.Module):
         O  = torch.vstack((Ox, Oy, Oz))
         Od = torch.vstack((Odx, Ody, Odz))
 
-        eta = torch.sqrt(torch.sum(v**2, axis=0) + self.phi**2 * torch.sum(O**2, axis=0))
+        eta = torch.sqrt(torch.sum(v**2, axis=0) + self.sqrtphi**2 * torch.sum(O**2, axis=0))
 
         # REGRESSOR primitives
         ww = torch.stack([w1*w1, w2*w2])                              # prop speeds ** 2
-        #wwDd0 = ww * torch.sin( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
-        #wwDd = ww * torch.sin( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
-        wwDd0 = ww * ( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
-        wwDd = ww * ( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles )
+        # wwDd = ww * torch.sin( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
+        # wwDd = ww * torch.sin( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
+        # wwDd = ww * ( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
+        wwDd = ww * ( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles - zero-moment angle)
         d2abs = torch.sin( d1 ).abs() + torch.sin( d2 ).abs()         # for reduction of the prop thrust
 
         # AERO MODEL using phi-theory
@@ -127,11 +127,11 @@ class Tailsitter(nn.Module):
 
         # ACTUATION MODEL
         #      prop thrust contribution         prop rate contribution           elevon contribution           elev rate contrib              elev acc contrib
-        screw[0] +=  self.cxww * (ww[0] + ww[1])  +  0                        +  self.cxd * (wwDd0[0] + wwDd0[1])  +  self.cxdd * (d1d + d2d)
+        screw[0] +=  self.cxww * (ww[0] + ww[1])  +  0                        +  self.cxd * (wwDd[0] + wwDd[1])  +  self.cxdd * (d1d + d2d)
         screw[1] +=  0                            +  0                        +  0                               +  0
         screw[2] +=  self.czww * (ww[0] + ww[1])  +  0                        +  self.czd2 * d2abs               +  0
         screw[3] +=  self.clww * (ww[0] - ww[1])  +  0                        +  0                               +  0
-        screw[4] +=  self.cmww * (ww[0] + ww[1])  +  0                        +  self.cmd * (wwDd0[0] + wwDd0[1])  +  self.cmdd * (d1d + d2d)  +   self.cmddd * (d1dd + d2dd)
+        screw[4] +=  self.cmww * (ww[0] + ww[1])  +  0                        +  self.cmd * (wwDd[0] + wwDd[1])  +  self.cmdd * (d1d + d2d)  +   self.cmddd * (d1dd + d2dd)
         screw[5] +=  self.cnww * (ww[0] - ww[1])  +  self.cnwd * (w1d - w2d)  +  self.cnd * (wwDd[0] - wwDd[1])  +  self.cndd * (d1d - d2d)
 
         f = screw[:3]
@@ -147,22 +147,9 @@ model = Tailsitter()
 model.to(device=device)
 
 # ablations: keep parameters at their initial value from __init__
-exclude = ['czd2', 'cmddd', 'cndd', 'cxdd']
+exclude = ['czd2', 'cndd', 'cxdd', 'cmww']
 for par in exclude:
     model.get_parameter(par).requires_grad = False
-
-
-class Motor(nn.Module):
-    def __init__(self):
-        super(Motor, self).__init__()
-
-        self.tau = nn.Parameter(0.1*torch.ones(1))
-        self.idle = nn.Parameter(0*torch.ones(1))
-        self.max = nn.Parameter(1000*torch.ones(1))
-        self.k = nn.Parameter(0.0*torch.ones(1))
-
-    def forward(self, delta, wd):
-        return self.max * (self.k * delta + (1-self.k) * delta**0.5) + self.idle - self.tau * wd
 
 
 #%% DATA loading
@@ -220,7 +207,6 @@ del_12 = series['motor'][0][:2]
 # get velocity in body frame for drag model
 v_body_true  = quaternion_rotate(q_true, v_true, inverse=True)
 
-#%% MODEL optimisation
 # regressors and targets
 scale = np.array([ 1,1,1, 1,1,1, 1,1,1, 1e-3,1e-3, 5e-2,5e-2, 1,1, .1,.1, .01,.01 ], dtype=np.float32)
 x = torch.vstack([ v_body_true, O_true, Od_true, w_true, wd_true, d_true, dd_true, ddd_true ])
@@ -247,37 +233,6 @@ for epoch in range(epochs):
 
     if epoch % 1 == 0:
         print(f'Model Epoch {epoch}: Loss = {closure().item():.5f}')
-
-
-#%% MOTOR optimization for Motor 1 only for now
-# motor = Motor()
-# motor.to(device=device)
-# 
-# # ablations: keep parameters at their initial value from __init__
-# motor.get_parameter('idle').requires_grad = False
-# 
-# # regressors and targets
-# x1, x2 = del_12[0], wd_true[0]
-# y_motor_true = w_true[0]
-# 
-# # loss
-# def mse_loss(pred, true):
-#     return torch.sum((pred - true)**2)
-# 
-# optimizer = optim.LBFGS(motor.parameters(), lr=2e-1); epochs = 100
-# 
-# for epoch in range(epochs):
-#     def closure():
-#         optimizer.zero_grad()
-#         y_pred = motor(x1, x2)
-#         loss = mse_loss(y_pred, y_motor_true)
-#         loss.backward()
-#         return loss
-# 
-#     optimizer.step(closure)
-# 
-#     if epoch % 10 == 0:
-#         print(f'Motor Epoch {epoch}: Loss = {closure().item():.5f}')
 
 
 #%% PLOTS
@@ -373,12 +328,9 @@ def format_scientific(num):
     else:
         return f"{num:.3e}"
 
-# d0 for elevon yaw, also 3 significant digits
-d0 = model.d0.detach().cpu().numpy().squeeze()
-print(f"d0_elevon_yaw = np.array([{', '.join(format_scientific(val) for val in d0)}], dtype=np.float32)")
 
-print(f"self.phi = {model.phi.item():.3e}")
-print(f"self.Phi = np.array([")
+print(f"phi = {model.sqrtphi.item()**2:.3e}")
+print(f"Phi = np.array([")
 for row in PHI:
     formatted_row = [format_scientific(val) for val in row]
     print("[" + ", ".join(formatted_row) + "],")
@@ -394,9 +346,11 @@ cddd = np.array([ 0, 0, 0, 0, model.cmddd.item(), 0 ])
 cddd *= scale[17]
 
 # output in scientific format with 3 significant digits
-print(f"self.cd = np.array([{', '.join(format_scientific(val) for val in cd)}], dtype=np.float32)")
-print(f"self.cdd = np.array([{', '.join(format_scientific(val) for val in cdd)}], dtype=np.float32)")
-print(f"self.cddd = np.array([{', '.join(format_scientific(val) for val in cddd)}], dtype=np.float32)")
+print(f"cd = np.array([{', '.join(format_scientific(val) for val in cd)}], dtype=np.float32)")
+print(f"cdd = np.array([{', '.join(format_scientific(val) for val in cdd)}], dtype=np.float32)")
+print(f"cddd = np.array([{', '.join(format_scientific(val) for val in cddd)}], dtype=np.float32)")
+d0 = model.d0.detach().cpu().numpy().squeeze()
+print(f"d0 = np.array([{', '.join(format_scientific(val) for val in d0)}], dtype=np.float32)")
 
 # motor max thrust and location
 k_tot = np.sqrt(model.czww.item()**2 + model.cxww.item()**2)
@@ -407,14 +361,33 @@ axis = np.array([ model.cxww.item(), 0, model.czww.item() ])
 axis /= np.linalg.norm(axis)
 print(f"axis = np.array([{axis[0]:.3e}, {axis[1]:.3e}, {axis[2]:.3e}], dtype=np.float32)")
 
+# motor position n := axis
+# 
+#  Clww / k_tot = +nz dy + cm nx
+#  Cmww / k_tot = -nz dx + nx dz
+#  Cnww / k_tot = -nx dy + cm nz
+#
+# nx, nz known. choose ny = 0, and dz = -0.07. solve for dx, dy, cm
+#
 dz = -0.07
+nx = axis[0]
+nz = axis[2]
+
+A = np.array([[  0, +nz, +nx],
+              [-nz,   0,   0],
+              [  0, -nx, +nz]], dtype=np.float32)
+b = np.array([ model.clww.item()*scale[9]**2 / k_tot,
+               model.cmww.item()*scale[9]**2 / k_tot - nx*dz,
+               model.cnww.item()*scale[9]**2 / k_tot ])
+dx, dy, cmotor = np.linalg.solve(A, b)
+
 # L = model.cmww / k
-dy = model.clww.item()*scale[9]**2 / (k_tot*axis[2]) # meter offset of motor in y
-dx = (-model.cmww.item()*scale[9]**2 / k_tot + axis[0]*dz) / axis[2]
+# dy = model.clww.item()*scale[9]**2 / (k_tot*axis[2]) # meter offset of motor in y
+# dx = (-model.cmww.item()*scale[9]**2 / k_tot + axis[0]*dz) / axis[2]
 print(f"r_motor = np.array([{dx:.3e}, {dy:.3e}, {dz:.3e}], dtype=np.float32)")
 
 # motor moment coefficient
-cmotor = model.cnww.item() * scale[9]**2 / k_tot
+# cmotor = model.cnww.item() * scale[9]**2 / k_tot
 print(f"cmotor = {cmotor:.3e}  # motor torque coefficient")
 
 Imotor = np.abs(model.cnwd.item() * scale[11])
@@ -424,202 +397,70 @@ print(f"I_motor = {Imotor:.3e}  # motor rotational inertia")
 # imu offset
 print(f"r_IMU = np.array([{', '.join(format_scientific(val) for val in model.r.detach().cpu().numpy().flatten())}], dtype=np.float32)")
 
-# actuation_coeffs = [
-#     'cxww',         'cxd', 'cxdd', 
-# 
-#     'czww',         'czd2',
-#     'clww',
-#     'cmww',         'cmd',  'cmdd', 'cmddd',
-#     'cnww', 'cnwd', 'cnd',  'cndd',
-# ]
-
 print()
 print("Eigenvalues of PHI matrix:", eigenvalues)
 
 
+#%% verification with pyIndiflight simulator
 
-#%% TRIM
-# trim condition / initial guesses. False means not optimized
-#v_trim   = nn.Parameter(torch.zeros(3, 1), requires_grad=False) # body speed
-#O_trim   = nn.Parameter(torch.zeros(3, 1), requires_grad=False) # body rates
-#Od_trim  = nn.Parameter(torch.zeros(3, 1), requires_grad=False) # body rate derivatives
-#w_trim   = nn.Parameter(torch.ones (2, 1), requires_grad=True)  # motor speeds
-#wd_trim  = nn.Parameter(torch.zeros(2, 1), requires_grad=False) # motor rate
-#d_trim   = nn.Parameter(torch.zeros(2, 1), requires_grad=True)  # elevon angle
-#dd_trim  = nn.Parameter(torch.zeros(2, 1), requires_grad=True)  # elevon angle first derivative
-#ddd_trim = nn.Parameter(torch.zeros(2, 1), requires_grad=False) # elevon angle second derivative
-#trim_pars = [v_trim, O_trim, Od_trim, w_trim, wd_trim, d_trim, dd_trim, ddd_trim]
-#
-## dont allow model parameters to change, and set IMU offset to zero for the jacobians to make more sense
-#from copy import deepcopy
-#model_to_trim = deepcopy(model)
-#model_to_trim.requires_grad_(False)
-#model_to_trim.r.set_(torch.zeros((3,1)))
-#
-## define loss as  norm(dOdt)**2  +  (norm(f)**2 - G**2) ** 2
-#def trim_loss(output):
-#    return torch.sum(output[3:, 0] ** 2)  +  ( torch.sum(output[:3, 0] ** 2) - 9.81**2 ) ** 2
-#
-## optimize!
-#optimizer = optim.LBFGS(trim_pars, lr=1e-1)
-#for epoch in range(100):
-#    def closure():
-#        optimizer.zero_grad()
-#        v = model_to_trim(torch.concat(trim_pars))
-#        loss = trim_loss(v)
-#        loss.backward()
-#        return loss
-#
-#    optimizer.step(closure)
-#
-#    if epoch % 10 == 0:
-#        print(f'Trimming epoch {epoch+1}: Loss = {closure().item():.5f}')
-#
-#
-## %% Hover jacobian
-#
-## turn on automatic gradient computation for all inputs
-##with torch.no_grad():
-#    #w_trim.set_(torch.tensor([[1, 1.]]).T)
-#    #d_trim.set_(torch.tensor([[0.8, 0.8]]).T)
-#wd_trim.requires_grad = True
-#dd_trim.requires_grad = True
-#ddd_trim.requires_grad = True
-#
-## calculate 
-#y = model_to_trim(torch.concat(trim_pars))
-#
-## assemble jacobians 
-#G1 = torch.zeros((6, 4))
-#G2 = torch.zeros((6, 4))
-#G3 = torch.zeros((6, 4))
-#for i in range(6):
-#    output = torch.zeros((6, 1))
-#    output[i, 0] = 1.
-#
-#    G1[i, 0:2] = 1/(1000**2 * 2*w_trim.T) * torch.autograd.grad(y, w_trim, grad_outputs=output, retain_graph=True)[0].T
-#    G1[i, 2:4] = torch.autograd.grad(y, d_trim, grad_outputs=output, retain_graph=True)[0].T
-#    G2[i, 0:2] = 1/20 * torch.autograd.grad(y, wd_trim, grad_outputs=output, retain_graph=True)[0].T
-#    G2[i, 2:4] = 1/10 * torch.autograd.grad(y, dd_trim, grad_outputs=output, retain_graph=True)[0].T
-#    G3[i, 2:4] = 1/100 * torch.autograd.grad(y, ddd_trim, grad_outputs=output, retain_graph=True)[0].T
-#
-##M = np.zeros((6,6), dtype=np.float32)
-##M[0,0] = M[1,1] = M[2,2] = model.m
-##M[3:, 3:] = model.I
-##Minv = torch.tensor( np.linalg.inv(M) )
-##G1 = Minv @ G1
-##G2 = Minv @ G2
-##G3 = Minv @ G3
-#
-#G1_indi = G1.detach().numpy().copy()
-#G2_indi = G2.detach().numpy().copy()
-#G3_indi = G3.detach().numpy().copy()
-#
-## to u-units
-#G1_indi[:, :2] *= float(motor.max[0]) ** 2 # omega**2 = omega_max**2 * u
-#G1_indi[:, 2:] *= 100*np.pi / 180   # u is in hectodegrees (...)
-#G1_indi[:,  3] *= -1                # I have no idea why
-#G1_indi[5, :2] *= -1                # I have no idea why
-#G2_indi[5, :2] *= -1                # I have no idea why
-#G2_indi[5,  2] *= 100*np.pi / 180   # u is in hectodefgrees
-#G3_indi[:,  3] *= -1                # I have no idea why
-#
-## to integers
-#G1_indi[:3, :] *= 100
-#G1_indi[3:, :] *= 10
-#G2_indi        *= 1e5
-#G3_indi        *= 1e3
-#
-#print("\n===== G1 =====")
-#print(G1_indi.round().astype(np.int16))
-#
-#print("\n===== G2 =====")
-#print(G2_indi.round().astype(np.int16))
-#
-#print("\n===== G3 =====")
-#print(G3_indi.round().astype(np.int16))
-#
-#print("\n===== TAILSITTER parameters =====")
-#
-#d0 = np.array([
-#    float(model.d0[0,0]),
-#    float(model.d0[1,0]),
-#])
-##iM = np.array([model.m, model.m, model.m, model.I[0,0], model.I[1,1], model.I[2,2]])
-#cv = np.array([
-#    float(model.cxv[0]),
-#    float(model.cyv[0]),
-#    float(model.czv[0]),
-#    float(0.),
-#    float(model.cmx[0]),
-#    float(0.),
-#])
-#cw = 1e-6 * np.array([
-#    float(model.cxw[0]),
-#    float(0.),
-#    float(model.czw[0]),
-#    float(model.clw[0]),
-#    float(model.cmw[0]),
-#    float(model.cnw[0]),
-#])
-#cO = 1.   * np.array([
-#    float(0.),
-#    float(0.),
-#    float(0.),
-#    float(model.clp[0]),
-#    float(model.cmq[0]),
-#    float(model.cnr[0]),
-#])
-#cd = 1e-6 * np.array([
-#    float(model.cxd[0]),
-#    float(0.),
-#    float(0.),
-#    float(0.),
-#    float(model.cmd[0]),
-#    float(model.cnd[0]),
-#])
-#cdd = 1e-1 * np.array([
-#    float(model.cxdd[0]),
-#    float(0.),
-#    float(0.),
-#    float(0.),
-#    float(model.cmdd[0]),
-#    float(model.cndd[0]),
-#])
-#cddd = 1e-2 * np.array([
-#    float(0.),
-#    float(0.),
-#    float(0.),
-#    float(0.),
-#    float(model.cmddd[0]),
-#    float(0.),
-#])
-#
-#print(f"d0: {d0}")
-#print(f"cv: {cv}")
-#print(f"cw: {cw}")
-#print(f"cO: {cO}")
-#print(f"cd: {cd}")
-#print(f"cdd: {cdd}")
-#print(f"cddd: {cddd}")
-#
-#print()
-#print(f"set indi_tails_use_scheduled = 1")
-#print(f"set indi_tails_use_sine = 1")
-#print()
-#print(f"set indi_tails_d0 = {int(d0[0]*100*180/np.pi)}, {int(model.d0[1]*100*180/np.pi)}")
-#print()
-#print(f"set indi_tails_cxw = {int(cw[0]/model.m*1e9)}")
-#print(f"set indi_tails_cyw = 0")
-#print(f"set indi_tails_czw = {int(cw[2]/model.m*1e9)}")
-#print(f"set indi_tails_clw = {int(cw[3]/model.I[0,0]*1e8)}")
-#print(f"set indi_tails_cmw = {int(cw[4]/model.I[1,1]*1e8)}")
-#print(f"set indi_tails_cnw = {int(cw[5]/model.I[2,2]*1e8)}")
-#print()
-#print(f"set indi_tails_cnwd = {int(model.cnwd[0]/model.I[2,2]*1e5)}")
-#print()
-#print(f"set indi_tails_cxd = {int(cd[0]/model.m*1e8)}")
-#print(f"set indi_tails_cmd = {int(cd[4]/model.I[1,1]*1e8)}")
-#print(f"set indi_tails_cnd = {int(cd[5]/model.I[2,2]*1e8)}")
-#print()
-#
+test_cases = [
+    {'name': 'off',       'w': [0., 0.]      , 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'motors',    'w': [1500., 1500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'motorHigh', 'w': [2500., 2500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'roll',      'w': [1500.,    0.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'pureRoll',  'w': [1500.,    0.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'hover',     'w': [1500., 1500.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'pitch',     'w': [1500., 1500.], 'd': d0+[0.1, 0.1]  , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'yaw',       'w': [1500., 1500.], 'd': d0+[-0.1, +0.1], 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+    {'name': 'throw',     'w': [0., 0.]      , 'd': d0             , 'velI': [3., 3., -10.], 'OB': [4., 5., 6.]},
+]
+
+# add __file__/../simulation/PyNDIflight to path for pyNDIflight import
+import os
+import sys
+sys.path.append( os.path.abspath( os.path.join( os.path.dirname(__file__), '..', 'simulation' ) ) )
+
+from PyNDIflight.crafts import TailsitterPhi
+from PyNDIflight.helpers import quatRotate
+
+
+model.r.requires_grad = False
+model.r *= 0. # pretend IMU is at CG for simulator comparison
+test_x = torch.zeros((19,1))
+
+for case in test_cases:
+    tail = TailsitterPhi()
+    tail.setRotor(0, X=[dx, +dy, dz], ax=axis, k=k_tot, cm=-cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
+    tail.setRotor(1, X=[dx, -dy, dz], ax=axis, k=k_tot, cm=+cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
+    tail.setInertia(model.m, np.array(model.I))
+    tail.setPhiModel(model.sqrtphi.item()**2, PHI)
+    tail.setElevonModel(cd, cdd, cddd, d0)
+
+    tail.r_w[:] = case['w']
+    tail.r_wdot[:] = [0., 0.]
+    tail.r_tau[:] = np.inf
+    tail.s_d[:] = case['d']
+    tail.s_dd[:] = [0., 0.]
+    tail.s_D *= 0.
+    tail.s_P *= 0.
+    tail.setPose(np.array([0., 0., -10.]), np.array([1., 0., 0., 0.]))
+    tail.setTwist(np.array(case['velI']), np.array(case['OB']))
+    tail.vB = quatRotate(tail.qInv, tail.vI)
+
+    tail.tick(1e-9)
+
+    ysim = np.concatenate((tail.fspB, tail.ODotB))
+
+    test_x[0:3] = torch.tensor(case['velI']).unsqueeze(1)
+    test_x[3:6] = torch.tensor(case['OB']).unsqueeze(1)
+    test_x[9:11] = torch.tensor(case['w']).unsqueeze(1)
+    test_x[13:15] = torch.tensor(case['d']).unsqueeze(1)
+
+    ymodel = model.forward( test_x * scale[:, np.newaxis] ).detach().cpu().numpy().squeeze()
+    e = ymodel - ysim
+
+    if e.dot(e) < 1e-6:
+        print(f"Test case '{case['name']}' passed.")
+    else:
+        print(f"Test case '{case['name']}' FAILED with error norm {np.linalg.norm(e)}.")
+        print(f"w: {case['w']}, d: {case['d']}  =>  fspB sim: {ysim[:3]}, ODotB sim: {ysim[3:6]} => fspB model: {ymodel[:3]}, ODotB model: {ymodel[3:6]}")

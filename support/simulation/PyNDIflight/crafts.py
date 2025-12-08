@@ -383,23 +383,15 @@ class TailsitterPhi(Craft):
 #        if (self.Nr != 2) or (self.Ns != 2):
 #            raise NotImplementedError("Must be 2 rotors and 2 servos")
 
-        self.d0 = np.array([-1.042e-01, +1.022e-01], dtype=np.float32)
-
         # phi theory coefficients
-        self.phi = 5.024e-03
-        self.Phi = np.array([
-            [+2.735e-01,          0, +3.644e-02,          0, -1.951e-04,          0],
-            [         0, +3.104e-02,          0, +1.414e-03,          0, -4.235e-03],
-            [+3.644e-02,          0, +3.924e-02,          0, +8.971e-05,          0],
-            [         0, +1.414e-03,          0, +8.162e-04,          0, +7.459e-04],
-            [-1.951e-04,          0, +8.971e-05,          0, +8.788e-04,          0],
-            [         0, -4.235e-03,          0, +7.459e-04,          0, +3.201e-03],
-        ], dtype=np.float32)
+        self.phi = 0.0
+        self.Phi = np.zeros((6,6), dtype=np.float32)
 
         # elevon contribution
-        self.cd = np.array([-6.258e-07,          0,          0,          0, -2.381e-08, -7.286e-08], dtype=np.float32)
-        self.cdd = np.array([         0,          0,          0,          0, -1.958e-03,          0], dtype=np.float32)
-        self.cddd = np.array([         0,          0,          0,          0,          0,          0], dtype=np.float32)
+        self.cd = np.zeros((6,), dtype=np.float32)
+        self.cdd = np.zeros((6,), dtype=np.float32)
+        self.cddd = np.zeros((6,), dtype=np.float32)
+        self.d0 = np.zeros((2,), dtype=np.float32)
 
         # servo data/states
         self.s_u = np.zeros((self.Ns), dtype=np.float32) # input command: +1 equals +100 deg
@@ -415,6 +407,16 @@ class TailsitterPhi(Craft):
         self.s_D  = +80.*np.ones((self.Ns), dtype=np.float32)
         self.s_delay = 0.03
         self.s_u_buffer = collections.deque(maxlen=1000)
+
+    def setPhiModel(self, phi, Phi):
+        self.phi = phi
+        self.Phi[:] = np.asarray(Phi, dtype=np.float32)
+
+    def setElevonModel(self, cd, cdd, cddd, d0):
+        self.cd[:] = np.asarray(cd, dtype=np.float32)
+        self.cdd[:] = np.asarray(cdd, dtype=np.float32)
+        self.cddd[:] = np.asarray(cddd, dtype=np.float32)
+        self.d0[:] = np.asarray(d0, dtype=np.float32)
 
     def customPhysics(self, dt):
         self.s_u_buffer.append((dt, self.s_u.copy()))

@@ -94,7 +94,7 @@ v_norm = np.linalg.norm(v_B, axis=1)
 O_norm = np.linalg.norm(Of.y, axis=1)
 
 eta_B = np.hstack((v_B, Of.y))
-phi = 1.
+phi = 0.0
 eta = np.sqrt(v_norm**2 + phi * O_norm**2)
 
 #%% do moments first
@@ -158,22 +158,22 @@ for ti, dmi, wi, wdoti, ui, di, ddoti, dddoti in tqdm(zip(t, dmf.y, wf.y, wf.dot
         ls_servos.update()
 
 
-rls_motors.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
-                        parGroupNames=["a", "b", "idle", "tau"],
-                        sharey=False, zoomy=False)
-
-rls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
-                        parGroupNames=["a", "b", "c", "d"],
-                        sharey=False, zoomy=False)
-
-ls_servos.theta[4] = 1.75
-ls_servos.theta[5] = 0.0
-ls_servos.theta[6] = 0.03333
-ls_servos.theta[7] = 4.2e-4
-
-ls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
-                        parGroupNames=["a", "b", "c", "d"],
-                        sharey=False, zoomy=False)
+# rls_motors.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+#                         parGroupNames=["a", "b", "idle", "tau"],
+#                         sharey=False, zoomy=False)
+# 
+# rls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+#                         parGroupNames=["a", "b", "c", "d"],
+#                         sharey=False, zoomy=False)
+# 
+# ls_servos.theta[4] = 1.75
+# ls_servos.theta[5] = 0.0
+# ls_servos.theta[6] = 0.03333
+# ls_servos.theta[7] = 4.2e-4
+# 
+# ls_servos.plotParameters(parGroups=[[0,4], [1,5], [2,6], [3,7]],
+#                         parGroupNames=["a", "b", "c", "d"],
+#                         sharey=False, zoomy=False)
 
 rls_m_act = RLS(9, 3, gamma=1e-11, forgetting=0.9999)
 rls_m_act.setTitle("RLS Moments -- Actuators Only")
@@ -258,6 +258,21 @@ rls_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
 rls_noPhi = deepcopy(rls_phi9)
 rls_noPhi.setTitle("RLS Moments -- Inertias and Actuators only")
 
+rls_act = RLS(18, 3, gamma=1e-11, forgetting=0.9999)
+rls_act.setTitle("RLS Moments -- Actuators")
+rls_act.setParameters([0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0])
+rls_act.setCovariance(1e-12*np.diag([1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3]))
+
+rls_act_phi3_noI = RLS(21, 3, gamma=1e-11, forgetting=0.9999)
+rls_act_phi3_noI.setTitle("RLS Moments -- Actuators and 3-param Phi")
+rls_act_phi3_noI.setParameters([0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
+rls_act_phi3_noI.setCovariance(1e-12*np.diag([1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e9, 1e9, 1e9]))
+
+rls_act_phi3 = RLS(24, 3, gamma=1e-11, forgetting=0.9999)
+rls_act_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
+rls_act_phi3.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
+rls_act_phi3.setCovariance(1e-12*np.diag([1e11, 1e11, 1e11,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e11, 1e11, 1e11]))
+
 
 rls_var = EWMV(forgetting=0.99)
 rls_var.setTitle("EMWV Moments Variance")
@@ -274,7 +289,7 @@ def skew(x):
                      [x[2], 0, -x[0]],
                      [-x[1], x[0], 0]])
 
-for ti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i in tqdm(zip(t, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta), total=len(w2a)):
+for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i in tqdm(zip(t, df.y, w2, wdot, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta), total=len(w2a)):
     y = Odoti
     # first try: actuayors only, negelct aerodynamics
     # T = Cw2 * w2ti  +  Cw2d * w2dti  +  Cwdot * wdotti  +  Cddot * ddti  +  Cddotdot * dddti
@@ -328,49 +343,96 @@ for ti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, 
     e_sample = rls_noPhi.predictNew(A_noPhi).squeeze() - y
     rls_var.newSample(np.zeros(2), e_sample[0], ti); rls_var.update()
 
+    #  |  w1*w1  |  w1*w1*delta1  |  wdot1  |  w2*w2  |  w2*w2*delta2  |  wdot2  |
+    A_actuators = np.zeros((3, 18))
+    A_actuators[0, 0:3]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_actuators[0, 3:6]   = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    A_actuators[1, 6:9]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_actuators[1, 9:12]  = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    A_actuators[2, 12:15] = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_actuators[2, 15:18] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    rls_act.newSample(A_actuators, y, ti); rls_act.update()
+
+    A_act_phi3 = np.zeros((3, 24))
+    A_act_phi3[:, :3] = inertia_regs
+    A_act_phi3[:, 3:21] = A_actuators
+    A_act_phi3[:, 21:24] = eta_i * np.diag(eta_Bi[3:]) # C_m_w
+    rls_act_phi3.newSample(A_act_phi3, y, ti); rls_act_phi3.update()
+
+    A_act_phi3_noI = np.zeros((3, 21))
+    A_act_phi3_noI[:, :18] = A_actuators
+    A_act_phi3_noI[:, 18:21] = eta_i * np.diag(eta_Bi[3:]) # C_m_w
+    rls_act_phi3_noI.newSample(A_act_phi3_noI, y, ti); rls_act_phi3_noI.update()
 
 # remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
 
-rls_phi9.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
-                        sharey=False, zoomy=False)
-
-rls_phi9_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
-                            sharey=False, zoomy=False)
-
-rls_phi7_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
-                            sharey=False, zoomy=False)
-
-rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
-                            sharey=False, zoomy=False)
-
-rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
-                            parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
-                            sharey=False, zoomy=False)
-
-rls_phi7.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
-                        parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
-                        sharey=False, zoomy=False)
- 
+# rls_phi9.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+#                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+#                         sharey=False, zoomy=False)
+# 
+# rls_phi9_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18], [19,20]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$", "$C_{m\\omega_{cross}}$"],
+#                             sharey=False, zoomy=False)
+# 
+# rls_phi7_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+#                             sharey=False, zoomy=False)
+# 
+# rls_phi3_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8], [16,17,18]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
+#                             sharey=False, zoomy=False)
+# 
+# rls_noPhi_noI.plotParameters(parGroups=[[3,4,5], [6,7], [8]],
+#                             parGroupNames=["$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
+#                             sharey=False, zoomy=False)
+# 
+# rls_phi7.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [12,13,14,15], [16,17,18]],
+#                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{mv}$", "$C_{m\\omega diag}$"],
+#                         sharey=False, zoomy=False)
+#  
 rls_phi3.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$", "$C_{m\\omega diag}$"],
                         sharey=False, zoomy=False)
-
 # rls_noPhi.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8]],
 #                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
 #                         sharey=False, zoomy=False)
+# rls_act.plotParameters(parGroups=[[0,3], [1,4], [2,5],   [6,9], [7,10], [8,11],   [12,15], [13,16], [14,17]],
+#                             truePars=[[1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
+#                                       [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
+#                                       [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3]],
+#                              parGroupNames=["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+#                                             "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
+#                                             "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$"],
+#                              sharey=False, zoomy=False)
+# 
+# rls_act_phi3_noI.plotParameters(parGroups=[[0,3], [1,4], [2,5],   [6,9], [7,10], [8,11],   [12,15], [13,16], [14,17], [18,19,20]],
+#                                 truePars=[[1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
+#                                           [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
+#                                           [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3], [0,0,0]],
+#                                 parGroupNames=["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+#                                                "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
+#                                                "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+#                                                "$C_{m\\omega diag}$"],
+#                                 sharey=False, zoomy=False)
 
-rls_var.plotParameters()
+rls_act_phi3.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [10,13], [11,14],   [15,18], [16,19], [17,20], [21,22,23]],
+                           truePars=[[0,0,0], 
+                                     [1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
+                                     [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
+                                     [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3],
+                                     [0, 0, 0]],
+                           parGroupNames=["$\\sigma$",
+                                          "$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+                                          "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
+                                          "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+                                          "$C_{m\\omega diag}$"],
+                           sharey=False, zoomy=False)
 
-all_rls = [
-           rls_phi9, rls_phi9_noI, rls_phi7_noI,
-           rls_phi3_noI, rls_noPhi_noI,
-           rls_phi7,
-           rls_phi3
-           ]
+
+
+# rls_var.plotParameters()
+
+all_rls = [rls_phi3, rls_act_phi3]
 
 # all_rls = [rls_phi3, rls_var]
 # all_rls = [rls_noPhi, rls_var]
@@ -380,7 +442,8 @@ all_axes = []
 for rls in all_rls:
     all_axes.extend(rls.all_axes)
 
-cursor = BlittedCursor(all_axes + fplt.all_axes + rls_motors.all_axes + rls_servos.all_axes + ls_servos.all_axes, sharex=True)
+# cursor = BlittedCursor(all_axes + fplt.all_axes + rls_motors.all_axes + rls_servos.all_axes + ls_servos.all_axes, sharex=True)
+cursor = BlittedCursor(all_axes + fplt.all_axes, sharex=True)
 plt.show()
 
 

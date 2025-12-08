@@ -88,26 +88,27 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="Actuator Commands Motors",
                          ylabel="Actuator Commands [-]",
                          ylimits=(-0.05, 1.05))
-        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
-                            light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
-                            solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr, N)],
-                            dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr, N)],
-                            series_labels=[f"Actuator {str(i)}" for i in range(self.Nr+1,N+1)],
-                            style_labels=[None, "Est. state", "Command"],
-                            title="Actuator Commands Servos",
-                            ylabel="Actuator Commands [-]",
-                            ylimits=(-1.05, 1.05))
+        if self.Ns > 0:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
+                                light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
+                                solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr, N)],
+                                dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr, N)],
+                                series_labels=[f"Actuator {str(i)}" for i in range(self.Nr+1,N+1)],
+                                style_labels=[None, "Est. state", "Command"],
+                                title="Actuator Commands Servos",
+                                ylabel="Actuator Commands [-]",
+                                ylimits=(-1.05, 1.05))
 
-        if self.has_servo_feedback and self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
-                         light=None,
-                         solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
-                         dashed=[self.data[f'u[{i}]'].to_numpy() * 100. * np.pi / 180. for i in range(self.Nr, N)],
-                         series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
-                         style_labels=[None, "Unfiltered state", "Scaled Command"],
-                         title="Servo State",
-                         ylabel="Servo State [rad]",
-            )
+            if self.has_servo_feedback and self.Ns > 0:
+                self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
+                             light=None,
+                             solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
+                             dashed=[self.data[f'u[{i}]'].to_numpy() * 100. * np.pi / 180. for i in range(self.Nr, N)],
+                             series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
+                             style_labels=[None, "Unfiltered state", "Scaled Command"],
+                             title="Servo State",
+                             ylabel="Servo State [rad]",
+                )
 
         quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
         quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
@@ -745,7 +746,7 @@ if __name__ == "__main__":
         fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data")
         craft = Tailsitter()
     elif args.type == "multirotor":
-        fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+        fplt = IndiflightPlotter(log.data, Nr=4, Ns=0, name=f"{args.name} -- Flight Data")
         craft = Quadrotor()
     else:
         raise ValueError(f"Unknown craft type: {args.type}")

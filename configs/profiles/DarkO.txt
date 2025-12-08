@@ -271,7 +271,7 @@ set indi_act_g2_yaw   =    0,    0,    0,    0
 
 # --- Tailsitter scheduled linear model
 set indi_tails_use_scheduled = 1
-set indi_tails_use_sine = 1
+set indi_tails_use_sine = 0
 
 ## # no-lift elevon angles in centi-degrees
 ## set indi_tails_d0 = 1818, 2729

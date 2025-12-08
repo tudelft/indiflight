@@ -146,10 +146,13 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None, uncertainty=False):
+    def plotParameters(self, parGroups=None, truePars=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None, uncertainty=False):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
+
+        if truePars is None:
+            truePars = [[None]*len(g) for g in parGroups]
 
         if parGroupNames is None:
             parGroupNames = [f"Group {i}" for i in parGroups]
@@ -276,10 +279,10 @@ class Estimator(object):
                 self.all_axes.append(axNIS)
 
 
-            for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
+            for parIdxs, parAx, varAx, truePar in zip(parGroups, parAxs, varAxs, truePars):
                 maxy = 0.
                 miny = 0.
-                for i in parIdxs:
+                for i, trueParVal in zip(parIdxs, truePar):
                     maxy = max(maxy, x[-1, i])
                     miny = min(miny, x[-1, i])
                     parAx.plot(self.t_h, x[:, i], label=self.parNames[i])
@@ -288,13 +291,15 @@ class Estimator(object):
                         parAx.fill_between(self.t_h, bounds[:, i, 0], bounds[:, i, 1],
                                            color=parAx.lines[-1].get_color(),
                                            alpha=0.3, label=None)
+                    if trueParVal is not None:
+                        parAx.plot(self.t_h, np.ones_like(self.t_h)*trueParVal, "k--", label=None)
                     varAx.plot(self.t_h, P[:, i, i], label=f"var({self.parNames[i]})")
                 if zoomy:
                     diffy = maxy - miny
                     maxy += diffy * 1.
                     miny -= diffy * 1.
                     parAx.set_ylim(bottom=miny, top=maxy)
-                parAx.plot(self.t_h, self.t_h*0, "g--")
+                # parAx.plot(self.t_h, self.t_h*0, "g--")
                 parAx.legend(fontsize=7)
                 # varAx.legend()
 

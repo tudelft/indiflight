@@ -88,13 +88,55 @@ if __name__=="__main__":
 
     #%% Generate craft
     # tail = Tailsitter()
-    tail = TailsitterPhi()
-    # approx model of CineRat 3inch race drone
-    tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
+    # tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
     # tail.setRotor(0, X=[-0.01, -0.13, -0.07], k=1.e-6, cm=-0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # RR
     # tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
-    tail.setRotor(0, X=[5.831e-03, -1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=-6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # RR
-    tail.setRotor(1, X=[5.831e-03, +1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=+6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # FR
+
+    tail = TailsitterPhi()
+    tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
+
+    # with d0 only for yaw
+    # tail.setRotor(0, X=[5.831e-03, -1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=-6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # RR
+    # tail.setRotor(1, X=[5.831e-03, +1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=+6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # FR
+
+    # phi theory coefficients
+    # phi = 5.024e-03
+    # Phi = np.array([
+    #     [+2.735e-01,          0, +3.644e-02,          0, -1.951e-04,          0],
+    #     [         0, +3.104e-02,          0, +1.414e-03,          0, -4.235e-03],
+    #     [+3.644e-02,          0, +3.924e-02,          0, +8.971e-05,          0],
+    #     [         0, +1.414e-03,          0, +8.162e-04,          0, +7.459e-04],
+    #     [-1.951e-04,          0, +8.971e-05,          0, +8.788e-04,          0],
+    #     [         0, -4.235e-03,          0, +7.459e-04,          0, +3.201e-03],
+    # ], dtype=np.float32)
+
+    # # elevon contribution
+    # d0 = np.array([-1.042e-01, +1.022e-01], dtype=np.float32)
+    # cd = np.array([-6.258e-07,          0,          0,          0, -2.381e-08, -7.286e-08], dtype=np.float32)
+    # cdd = np.array([         0,          0,          0,          0, -1.958e-03,          0], dtype=np.float32)
+    # cddd = np.array([         0,          0,          0,          0,          0,          0], dtype=np.float32)
+
+    # with d0 for all, but cmww=0, seems to be better
+    phi = 3.370e-01
+    Phi = np.array([
+        [+2.748e-01,          0, +3.666e-02,          0, -1.479e-04,          0],
+        [         0, +3.128e-02,          0, +1.425e-03,          0, -4.223e-03],
+        [+3.666e-02,          0, +3.950e-02,          0, +1.490e-04,          0],
+        [         0, +1.425e-03,          0, +8.233e-04,          0, +7.577e-04],
+        [-1.479e-04,          0, +1.490e-04,          0, +8.688e-04,          0],
+        [         0, -4.223e-03,          0, +7.577e-04,          0, +3.282e-03],
+    ], dtype=np.float32)
+    cd = np.array([-6.241e-07,          0,          0,          0, -2.601e-08, -7.293e-08], dtype=np.float32)
+    cdd = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
+    cddd = np.array([         0,          0,          0,          0, -2.961e-05,          0], dtype=np.float32)
+    d0 = np.array([-3.665e-01, -1.602e-01], dtype=np.float32)
+
+    tail.setPhiModel(phi, Phi)
+    tail.setElevonModel(cd, cdd, cddd, d0)
+
+    tail.setRotor(0, X=[1.124e-02, -1.260e-01, -7.000e-02], ax=[1.585e-01, 0.000e+00, -9.874e-01], k=1.254e-06, cm=-1.856e-03, wmax=3000., tau=0.03, kESC=0.5, I=3.336e-6) # RR
+    tail.setRotor(1, X=[1.124e-02, +1.260e-01, -7.000e-02], ax=[1.585e-01, 0.000e+00, -9.874e-01], k=1.254e-06, cm=+1.856e-03, wmax=3000., tau=0.03, kESC=0.5, I=3.336e-6) # FR
+
 
     inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
                                (tail.I[0,0] - tail.I[2,2]) / tail.I[1,1],
@@ -128,7 +170,7 @@ if __name__=="__main__":
 
 
     #%% initial conditions
-    tail.setPose(x=[0, -3.5, -0.1], q=[1., 0., 0., 0.])
+    tail.setPose(x=[0, -3.5, -0.1], q=[0.707, 0., 0., 0.707])
     # tail.setPose(x=[0., 0., -0.1], q=[0.707, 0., 0.707, 0.])
     # tail.setPose(x=[0., 0., -20.1], q=[0, -0.707, 0., 0.707])
     # tail.setPose(x=[0., 0., -0.1], q=[0, 0, 0, 1.])
@@ -143,11 +185,11 @@ if __name__=="__main__":
         visThread.start( )
 
     if args.throw:
-        tail.throw(height=7.,
+        tail.throw(height=6.,
                  #wB=[1., -1., 2.], # approx body rotation in rad/s
                  #vHorz=[3., 0.], # final speed in x-y-plane in m/s
-                 wB=[-10., -1., 1.], # approx body rotation in rad/s
-                 vHorz=[0., 3.], # final speed in x-y-plane in m/s
+                 wB=[-0., -4., 0.], # approx body rotation in rad/s
+                 vHorz=[0., 2.], # final speed in x-y-plane in m/s
                  #wB=[2., -4., 3.], # approx body rotation in rad/s
                  #vHorz=[0., 0.], # final speed in x-y-plane in m/s
                  at_time=6.5)
@@ -163,6 +205,7 @@ if __name__=="__main__":
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if args.learn and sim.t > 3.0:
             sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE) if sil else None
+            sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
 
         # if not args.throw and sim.t > 2.5 and not armed:
         #     sil.mockup.arm() if sil else None
@@ -189,9 +232,9 @@ if __name__=="__main__":
         #     # test recovery mode
         #     # sil.sendMocap = lambda *args: None
 
-        if sim.t > 12. and sil is not None:
-            # sil.mockup.sendPositionSetpoint( [20., 0., -1.5], 0. )
-            sil.mockup.sendPositionSetpoint( [2., 2., -1.5], 0. )
+        # if sim.t > 12. and sil is not None:
+        #     # sil.mockup.sendPositionSetpoint( [20., 0., -1.5], 0. )
+        #     sil.mockup.sendPositionSetpoint( [2., 2., -1.5], 0. )
         # if sim.t > 10. and sil is not None:
         #     sil.mockup.sendPositionSetpoint( [-1., 0., -2.], 0. )
         # if sim.t > 10.6 and sil is not None:

@@ -86,7 +86,7 @@ bool orthoSignalGenerate(float t, float* out, int n) {
     }
 
     // Generate the orthogonal signal basis functions
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < 2; i++) {
         v[i] = transformSignal(
             orthoSignal.base_type,
             orthoSignal.base_param,
@@ -114,5 +114,39 @@ bool orthoSignalGenerate(float t, float* out, int n) {
             out[i] = 0.f; // illegal dependency
         }
     }
+
+    float preout[ORTHO_SIGNAL_MAX];
+    for (int i = 0; i < 4; i++) {
+        v[i] = transformSignal(
+            orthoSignal.base_type,
+            orthoSignal.base_param,
+            orthoSignal.transform_types[i],
+            orthoSignal.transform_params[i],
+            t + 0.04f / orthoSignal.tf); // small time offset for 3rd and 4th signals
+
+        // diagonal
+        int diagIdx = ((i+1)*(i+2) >> 1) - 1;
+        b[i] = orthoSignal.mixing_matrix[diagIdx] * v[i];
+
+        for (int j = 0; j < i; j++) {
+            b[i] += orthoSignal.mixing_matrix[diagIdx - (i-j)] * v[j];
+        }
+
+        // apply scaling and offset
+        int ii = orthoSignal.dependency[i];
+        if (ii == -1) {
+            preout[i] = orthoSignal.alpha[i] * b[i] + orthoSignal.beta[i];
+        } else if (ii < i) {
+            // legal, but still check divisor
+            float ioutii = fabsf(out[ii]) > 1e-3f ? 1.f / preout[ii] : 1e3f;
+            preout[i] = orthoSignal.alpha[i] * b[i]*ioutii + orthoSignal.beta[i];
+        } else {
+            preout[i] = 0.f; // illegal dependency
+        }
+    }
+
+    out[2] = preout[2];
+    out[3] = preout[3];
+
     return true;
 }
