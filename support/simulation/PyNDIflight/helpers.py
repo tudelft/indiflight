@@ -142,7 +142,6 @@ def phiTheoryForcesMoments(vB, OB, phi, Phi):
 def elevonForcesMoments(w, d, dd, ddd, d0, cd, cdd, cddd):
     # regressors
     ww = w*w
-    wwDd0 = ww * ( d )          # prop speeds ** 2 * sin ( elevon angles )
     wwDd = ww * ( d - d0 )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
 
     wwDd_diff = wwDd[0] - wwDd[1]
@@ -154,11 +153,11 @@ def elevonForcesMoments(w, d, dd, ddd, d0, cd, cdd, cddd):
 
     # ACTUATION MODEL (elevons only)
     #              deflection              rate                      accel
-    FM_B[0] += cd[0] * np.sum(wwDd0)   +  cdd[0] * np.sum(dd)   +  cddd[0] * np.sum(ddd)
-    FM_B[1] += 0.
-    FM_B[2] += 0.
-    FM_B[3] += 0.
-    FM_B[4] += cd[4] * np.sum(wwDd0)   +  cdd[4] * np.sum(dd)   +  cddd[4] * np.sum(ddd)
-    FM_B[5] += cd[5] * wwDd_diff       +  cdd[5] * dd_diff      +  cddd[5] * ddd_diff
+    FM_B[0] = cd[0] * np.sum(wwDd)   +  cdd[0] * np.sum(dd)   +  cddd[0] * np.sum(ddd)
+    FM_B[1] = 0.
+    FM_B[2] = 0.
+    FM_B[3] = 0.
+    FM_B[4] = cd[4] * np.sum(wwDd)   +  cdd[4] * np.sum(dd)   +  cddd[4] * np.sum(ddd)
+    FM_B[5] = cd[5] * wwDd_diff       +  cdd[5] * dd_diff      +  cddd[5] * ddd_diff
 
     return FM_B
