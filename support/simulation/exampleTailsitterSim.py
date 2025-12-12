@@ -126,10 +126,10 @@ if __name__=="__main__":
         [-1.479e-04,          0, +1.490e-04,          0, +8.688e-04,          0],
         [         0, -4.223e-03,          0, +7.577e-04,          0, +3.282e-03],
     ], dtype=np.float32)
-    cd = np.array([-6.241e-07,          0,          0,          0, -2.601e-08, -7.293e-08], dtype=np.float32)
-    cdd = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
+    cd   = np.array([-6.241e-07,          0,          0,          0, -2.601e-08, -7.293e-08], dtype=np.float32)
+    cdd  = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
     cddd = np.array([         0,          0,          0,          0, -2.961e-05,          0], dtype=np.float32)
-    d0 = np.array([-3.665e-01, -1.602e-01], dtype=np.float32)
+    d0   = np.array([-3.665e-01, -1.602e-01], dtype=np.float32)
 
     tail.setPhiModel(phi, Phi)
     tail.setElevonModel(cd, cdd, cddd, d0)
@@ -146,6 +146,8 @@ if __name__=="__main__":
 
     #%% craft interfaces
     imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
+    # imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.0, gyroStd=0.0)
+    # imu = IMU(tail, r=[0, 0, 0], qBody=[0.707, 0., 0.707, 0.], accStd=0.0, gyroStd=0.0)
 
     mocap = Mocap(tail, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(tail, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -196,13 +198,13 @@ if __name__=="__main__":
 
     #%% run loop
     dt = 0.000125 # 8kHz
-    T = 1000. # seconds
+    T = 10. # seconds
     dt_rt = None if args.no_real_time else 1*dt
     armed = False
     start_trajectory = False
     heading = False
     speedup = False
-    for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
+    for i in tqdm(range(int(T / dt)), target_looptime=0*dt_rt):
         if args.learn and sim.t > 3.0:
             sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE) if sil else None
             sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )

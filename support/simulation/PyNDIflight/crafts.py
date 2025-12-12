@@ -210,6 +210,7 @@ class Craft:
 
         # get ODotB and step rotational dynamics
         self.ODotB[:] = angularRateDerivative(self.OB, self.FM_B[3:], self.I, self.Iinv)
+        # self.ODotB[:] = self.Iinv @ self.FM_B[3:]
         self.OB += dt * self.ODotB
         self.q  += dt * quaternionDerivative(self.q, self.OB)
         self.q[:] /= np.linalg.norm(self.q)

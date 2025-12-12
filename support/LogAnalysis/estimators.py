@@ -292,7 +292,7 @@ class Estimator(object):
                                            color=parAx.lines[-1].get_color(),
                                            alpha=0.3, label=None)
                     if trueParVal is not None:
-                        parAx.plot(self.t_h, np.ones_like(self.t_h)*trueParVal, "k--", label=None)
+                        parAx.plot(self.t_h, np.ones_like(self.t_h)*trueParVal, "--", color=parAx.lines[-1].get_color(), label=None)
                     varAx.plot(self.t_h, P[:, i, i], label=f"var({self.parNames[i]})")
                 if zoomy:
                     diffy = maxy - miny
@@ -338,6 +338,61 @@ class Estimator(object):
     def plotGains(self):
         # k and e
         raise NotImplementedError("todo")
+
+    def diagnose(self, i, output_name=None):
+        if output_name is None:
+            output_name = f"Output {i}"
+
+        X = np.array(self.A_h)[:, i, :]
+        idx_nonzero = np.linalg.norm(X, axis=0) > 1
+        X = X[:, idx_nonzero]  # remove zero columns
+        Y = np.array(self.y_h)[:, i]
+        M = X.shape[1]
+
+        U,s,Vt = np.linalg.svd(X, full_matrices=False)
+        cond = s.max()/s.min()
+        if cond > 1e12:
+            print(f"Warning: regressor matrix ill-conditioned (cond={cond:.2e})")
+
+        eps = np.finfo(float).eps
+        tol = max(X.shape)*eps*s.max()
+        rank = np.sum(s > tol)
+
+        if rank < M:
+            print(f"Warning: regressor matrix rank deficient (rank={rank} < {M})")
+
+        from sklearn.linear_model import LinearRegression
+
+        VIF = np.zeros(M)
+        for j in range(M):
+            Xj = X[:, j]
+            Xothers = np.delete(X, j, axis=1)
+            lr = LinearRegression().fit(Xothers, Xj)
+            R2 = lr.score(Xothers, Xj)
+            VIF[j] = 1.0/(1-R2)
+
+        # pairwise correlations
+        corr_matrix = np.corrcoef(X, rowvar=False)
+
+        # use matplotlib to plot a heatmap of correlation matrix
+        f, ax = plt.subplots(figsize=(8, 6))
+        im = ax.imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+        f.colorbar(im, label='Correlation Coefficient')
+        # add values (rounded to 2 decimals) on the heatmap
+        for m in range(M):
+            for n in range(M):
+                ax.text(n, m, f"{corr_matrix[m, n]:.2f}", ha='center', va='center', color='black', fontsize=8)
+
+        ax.set_title(f'Reg Corr Mtx for {output_name} -- {self.name}')
+        ax.set_xticks(ticks=np.arange(M))
+        ax.set_xticklabels(labels=[f"X{i}" for i in range(M)], rotation=45)
+        ax.set_yticks(ticks=np.arange(M))
+        ax.set_yticklabels(labels=[f"X{i}" for i in range(M)])
+        theta_hat = np.linalg.lstsq(X, Y, rcond=None)[0]
+        res = Y - X.dot(theta_hat)
+        err_corrs = np.array([np.corrcoef(res.squeeze(), X[:,j])[0,1] for j in range(M)])
+
+        return f, VIF, corr_matrix, err_corrs, X, Y, theta_hat
 
 class LS(Estimator):
     def __init__(self, n, d=1, gamma=1e8):

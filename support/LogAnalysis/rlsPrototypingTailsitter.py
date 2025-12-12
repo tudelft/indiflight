@@ -258,20 +258,16 @@ rls_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
 rls_noPhi = deepcopy(rls_phi9)
 rls_noPhi.setTitle("RLS Moments -- Inertias and Actuators only")
 
-rls_act = RLS(18, 3, gamma=1e-11, forgetting=0.9999)
-rls_act.setTitle("RLS Moments -- Actuators")
-rls_act.setParameters([0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0])
-rls_act.setCovariance(1e-12*np.diag([1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3]))
+rls_act_phi3_I = RLS(24, 3, gamma=1e-11, forgetting=0.9999)
+rls_act_phi3_I.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
+rls_act_phi3_I.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
+rls_act_phi3_I.setCovariance(1e-12*np.diag([1e11, 1e11, 1e11,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e11, 1e11, 1e11]))
 
-rls_act_phi3_noI = RLS(21, 3, gamma=1e-11, forgetting=0.9999)
+rls_act_phi3_noI = deepcopy(rls_act_phi3_I)
 rls_act_phi3_noI.setTitle("RLS Moments -- Actuators and 3-param Phi")
-rls_act_phi3_noI.setParameters([0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
-rls_act_phi3_noI.setCovariance(1e-12*np.diag([1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e9, 1e9, 1e9]))
 
-rls_act_phi3 = RLS(24, 3, gamma=1e-11, forgetting=0.9999)
-rls_act_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
-rls_act_phi3.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
-rls_act_phi3.setCovariance(1e-12*np.diag([1e11, 1e11, 1e11,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e11, 1e11, 1e11]))
+rls_act_noPhi_noI = deepcopy(rls_act_phi3_I)
+rls_act_noPhi_noI.setTitle("RLS Moments -- Actuators only")
 
 
 rls_var = EWMV(forgetting=0.99)
@@ -283,12 +279,12 @@ rls_var_welford.setTitle("Welford Moments Variance")
 rls_var_welford.setParameters([0, 0])
 
 
-
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
                      [-x[1], x[0], 0]])
 
+A_act_hist = []
 for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i in tqdm(zip(t, df.y, w2, wdot, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta), total=len(w2a)):
     y = Odoti
     # first try: actuayors only, negelct aerodynamics
@@ -302,13 +298,13 @@ for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi,
     Aphi9[2:3, 8:9] = np.diag(wdot_ti[2:3])
     Aphi9[1:3, 9:11] = 0.*np.diag(ddot_ti[1:3])
     Aphi9[1:2, 11:12] = 0.*np.diag(ddotdot_ti[1:2])
-    Aphi9[0, 12] = eta_i * eta_Bi[1] # C_p_vy
-    Aphi9[1, 13] = eta_i * eta_Bi[0] # C_q_vx
-    Aphi9[1, 14] = eta_i * eta_Bi[2] # C_q_vz
-    Aphi9[2, 15] = eta_i * eta_Bi[1] # C_r_vy
-    Aphi9[:, 16:19] = eta_i * np.diag(eta_Bi[3:]) # C_m_w
-    Aphi9[2, 19] = eta_i * eta_Bi[3] # C_r_wx
-    Aphi9[0, 20] = eta_i * eta_Bi[5] # C_p_wz
+    Aphi9[0, 12]    = -eta_i * eta_Bi[1] # C_p_vy
+    Aphi9[1, 13]    = -eta_i * eta_Bi[0] # C_q_vx
+    Aphi9[1, 14]    = -eta_i * eta_Bi[2] # C_q_vz
+    Aphi9[2, 15]    = -eta_i * eta_Bi[1] # C_r_vy
+    Aphi9[:, 16:19] = -eta_i * np.diag(eta_Bi[3:]) # C_m_w
+    Aphi9[2, 19]    = -eta_i * eta_Bi[3] # C_r_wx
+    Aphi9[0, 20]    = -eta_i * eta_Bi[5] # C_p_wz
     rls_phi9.newSample(Aphi9, y, ti); rls_phi9.update()
 
     A_phi9_noI = Aphi9.copy()
@@ -344,25 +340,25 @@ for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi,
     rls_var.newSample(np.zeros(2), e_sample[0], ti); rls_var.update()
 
     #  |  w1*w1  |  w1*w1*delta1  |  wdot1  |  w2*w2  |  w2*w2*delta2  |  wdot2  |
-    A_actuators = np.zeros((3, 18))
-    A_actuators[0, 0:3]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_actuators[0, 3:6]   = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    A_actuators[1, 6:9]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_actuators[1, 9:12]  = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    A_actuators[2, 12:15] = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_actuators[2, 15:18] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    rls_act.newSample(A_actuators, y, ti); rls_act.update()
+    A_act_phi3_I = np.zeros((3, 24))
+    A_act_phi3_I[:, :3] = inertia_regs
+    A_act_phi3_I[0, 3:6]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_act_phi3_I[0, 6:9]   = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    A_act_phi3_I[1, 9:12]  = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_act_phi3_I[1, 12:15] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    A_act_phi3_I[2, 15:18] = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
+    A_act_phi3_I[2, 18:21] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
+    A_act_phi3_I[:, 21:24] = - eta_i * np.diag(eta_Bi[3:]) # C_m_w
+    A_act_hist.append(A_act_phi3_I)
+    rls_act_phi3_I.newSample(A_act_phi3_I, y, ti); rls_act_phi3_I.update()
 
-    A_act_phi3 = np.zeros((3, 24))
-    A_act_phi3[:, :3] = inertia_regs
-    A_act_phi3[:, 3:21] = A_actuators
-    A_act_phi3[:, 21:24] = eta_i * np.diag(eta_Bi[3:]) # C_m_w
-    rls_act_phi3.newSample(A_act_phi3, y, ti); rls_act_phi3.update()
-
-    A_act_phi3_noI = np.zeros((3, 21))
-    A_act_phi3_noI[:, :18] = A_actuators
-    A_act_phi3_noI[:, 18:21] = eta_i * np.diag(eta_Bi[3:]) # C_m_w
+    A_act_phi3_noI = A_act_phi3_I.copy()
+    A_act_phi3_noI[:, :3] = 0
     rls_act_phi3_noI.newSample(A_act_phi3_noI, y, ti); rls_act_phi3_noI.update()
+
+    A_act_noPhi_noI = A_act_phi3_noI.copy()
+    A_act_noPhi_noI[:, 21:24] = 0
+    rls_act_noPhi_noI.newSample(A_act_noPhi_noI, y, ti); rls_act_noPhi_noI.update()
 
 # remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
 
@@ -396,30 +392,29 @@ rls_phi3.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8], [16,17,18]],
 # rls_noPhi.plotParameters(parGroups=[[0,1,2], [3,4,5], [6,7], [8]],
 #                         parGroupNames=["$\\sigma$", "$C_{\\omega^2}$", "$C_{{\\omega^2} \\delta}$", "$C_\\dot{\\omega}$"],
 #                         sharey=False, zoomy=False)
-# rls_act.plotParameters(parGroups=[[0,3], [1,4], [2,5],   [6,9], [7,10], [8,11],   [12,15], [13,16], [14,17]],
-#                             truePars=[[1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
-#                                       [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
-#                                       [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3]],
-#                              parGroupNames=["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
-#                                             "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
-#                                             "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$"],
-#                              sharey=False, zoomy=False)
-# 
-# rls_act_phi3_noI.plotParameters(parGroups=[[0,3], [1,4], [2,5],   [6,9], [7,10], [8,11],   [12,15], [13,16], [14,17], [18,19,20]],
-#                                 truePars=[[1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
-#                                           [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
-#                                           [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3], [0,0,0]],
-#                                 parGroupNames=["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
-#                                                "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
-#                                                "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
-#                                                "$C_{m\\omega diag}$"],
-#                                 sharey=False, zoomy=False)
 
-rls_act_phi3.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [10,13], [11,14],   [15,18], [16,19], [17,20], [21,22,23]],
+Ixx_true, Iyy_true, Izz_true = 6e-3, 2e-3, 6.5e-3
+k = 1.254e-06
+dy = 1.26e-01
+cd = np.array([-6.241e-07, 0, 0, 0, -2.601e-08, -7.293e-08])
+
+
+d0_true = 0*np.array([-3.665e-1, -1.602e-1])
+
+Cld_true = float(0.0)
+Cmd_true = float(cd[4])
+Cnd_true = float(cd[5])
+
+Clww_true = 1.556e-7 / Ixx_true
+Cmww_true = ( 0.0 - Cmd_true * d0_true ) / Iyy_true
+Cnww_true = ( 2.734e-08 - Cnd_true * d0_true ) / Izz_true
+
+
+rls_act_phi3_I.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [10,13], [11,14],   [15,18], [16,19], [17,20], [21,22,23]],
                            truePars=[[0,0,0], 
-                                     [1.556e-7/6e-3, -1.556e-7/6e-3], [0,0], [0,0],
-                                     [0,0], [-2.41e-8/2e-3, -2.41e-8/2e-3], [0,0],
-                                     [2.73e-8/6.5e-3, -2.73e-8/6.5e-3], [-7.29e-8/6.5e-3,+7.29e-8/6.5e-3], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3],
+                                     [Clww_true, -Clww_true], [0,0], [0,0],
+                                     [Cmww_true[0], Cmww_true[1]], [Cmd_true/Iyy_true, Cmd_true/Iyy_true], [0,0],
+                                     [Cnww_true[0], -Cnww_true[1]], [Cnd_true / Izz_true, -Cnd_true / Izz_true], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3],
                                      [0, 0, 0]],
                            parGroupNames=["$\\sigma$",
                                           "$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
@@ -429,10 +424,121 @@ rls_act_phi3.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [
                            sharey=False, zoomy=False)
 
 
+rls_act_phi3_noI.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [10,13], [11,14],   [15,18], [16,19], [17,20], [21,22,23]],
+                           truePars=[[0,0,0], 
+                                     [Clww_true, -Clww_true], [0,0], [0,0],
+                                     [Cmww_true[0], Cmww_true[1]], [Cmd_true/Iyy_true, Cmd_true/Iyy_true], [0,0],
+                                     [Cnww_true[0], -Cnww_true[1]], [Cnd_true/Izz_true, -Cnd_true/Izz_true], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3],
+                                     [0, 0, 0]],
+                           parGroupNames=["$\\sigma$",
+                                          "$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+                                          "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
+                                          "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+                                          "$C_{m\\omega diag}$"],
+                           sharey=False, zoomy=False)
+
+rls_act_noPhi_noI.plotParameters(parGroups=[[0,1,2], [3,6], [4,7], [5,8],   [9,12], [10,13], [11,14],   [15,18], [16,19], [17,20], [21,22,23]],
+                           truePars=[[0,0,0], 
+                                     [Clww_true, -Clww_true], [0,0], [0,0],
+                                     [Cmww_true[0], Cmww_true[1]], [Cmd_true/Iyy_true, Cmd_true/Iyy_true], [0,0],
+                                     [Cnww_true[0], -Cnww_true[1]], [Cnd_true / Izz_true, -Cnd_true / Izz_true], [-3.34e-6/6.5e-3, 3.34e-6/6.5e-3],
+                                     [0, 0, 0]],
+                           parGroupNames=["$\\sigma$",
+                                          "$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+                                          "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\omega}, q}$",
+                                          "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+                                          "$C_{m\\omega diag}$"],
+                           sharey=False, zoomy=False)
+
+
+def get_d0(rls):
+    minCmd1_d0 = rls.theta[9,0]
+    Cmd1 = rls.theta[10,0]
+    d0_1 = - minCmd1_d0 / Cmd1 if np.abs(Cmd1) > 1e-6 else 0.0
+
+    minCmd2_d0 = rls.theta[12,0]
+    Cmd2 = rls.theta[13,0]
+    d0_2 = - minCmd2_d0 / Cmd2 if np.abs(Cmd2) > 1e-6 else 0.0
+
+    return float(d0_1), float(d0_2)
+
+print("rls_act_noPhi_noI d0 estimates:", get_d0(rls_act_noPhi_noI))
+print("rls_act_phi3_I d0 estimates:", get_d0(rls_act_phi3_I))
+print("rls_act_phi3_noI d0 estimates:", get_d0(rls_act_phi3_noI))
+
+#%% error metrics
+
+rls_acts = [rls_act_noPhi_noI, rls_act_phi3_noI, rls_act_phi3_I]
+
+# 1. prediction error (RMSE) over dataset
+def compute_RMSE(rls, A_data, y_data):
+    y_preds = rls.predictNew(A_data).squeeze()
+    e = y_preds - y_data
+    rmse = np.sqrt(np.mean(np.linalg.norm(e, axis=1)**2))
+    return float(rmse)
+
+# parameters = [Clww, Cmww, Cnww, Cmd, Cnd]  keep d0 separate
+eval_pars = {'Clww1': [3, Clww_true],          'Clww2': [6, -Clww_true],
+             'Cmww1': [9, Cmww_true[0]],       'Cmww2': [12, Cmww_true[1]],
+             'Cnww1': [15, Cnww_true[0]],      'Cnww2': [18, -Cnww_true[1]],
+             'Cmd1':  [10, Cmd_true/Iyy_true], 'Cmd2':  [13, Cmd_true/Iyy_true],
+             'Cnd1':  [16, Cnd_true/Izz_true], 'Cnd2':  [19, -Cnd_true/Izz_true],
+            }
+
+A_data = A_act_hist
+y_data = Of.dot().y
+for rls in rls_acts:
+    #print(f"Parameter errors for {rls.name}:")
+    par_err_rel_squared_sum = 0.0
+    n_correct_signs = 0
+    n_correct_bounds = 0
+    bound_size_rel_sum = 0.0
+    for par_name, (par_idx, par_true) in eval_pars.items():
+
+        # 2. parameter error relative to true values (do only for definitely non-zero values)
+        par_est = rls.theta[par_idx, 0]
+        par_err = par_est - par_true
+        par_err_rel = par_err / par_true if np.abs(par_true) > 1e-6 else 0.0
+        #print(f"  {par_name}: est={par_est:.3e}, true={par_true:.3e}, err={par_err:.3e}, rel err={par_err_rel:.2%}")
+        par_err_rel_squared_sum += par_err_rel**2
+
+        # 3. number of correct signs of relevant parameters
+        if np.sign(par_est) == np.sign(par_true):
+            n_correct_signs += 1
+
+        # 4. number of bounds including the correct sign
+        n_correct_bounds += (rls.theta_bounds[par_idx, 0] < par_true < rls.theta_bounds[par_idx, 1])
+
+        # 5. size of the bounds relative to the parameter value
+        bound_size_rel_sum += (rls.theta_bounds[par_idx, 1] - rls.theta_bounds[par_idx, 0]) / np.abs(par_true) if np.abs(par_true) > 1e-6 else 0.0
+
+        # print(f"    relative bound size: {bound_size_rel:.2%}")
+
+    par_err_rel_rms = np.sqrt(par_err_rel_squared_sum / len(eval_pars))
+    rls.par_err_rel_rms = par_err_rel_rms
+    print(f"{rls.name} - RMS relative parameter error: {par_err_rel_rms:.2%}")
+
+    rls.n_correct_signs = n_correct_signs
+    print(f"{rls.name} - Number of correct parameter signs: {n_correct_signs} out of {len(eval_pars)}")
+
+    rls.n_correct_bounds = n_correct_bounds
+    print(f"{rls.name} - Number of parameter bounds including true value: {n_correct_bounds} out of {len(eval_pars)}")
+
+    rls.bound_size_rel_avg = bound_size_rel_sum / len(eval_pars)
+    print(f"{rls.name} - Average relative parameter bound size: {rls.bound_size_rel_avg:.2%}")
+
+    rmse = compute_RMSE(rls, A_data, y_data)
+    print(f"RMSE for {rls.name}: {rmse:.2f} rad/s^2, {rmse/np.std(Of.dot().y):.2%} of data stddev")
+
+print()
+
+
+
+#%% dress up plots
 
 # rls_var.plotParameters()
 
-all_rls = [rls_phi3, rls_act_phi3]
+all_rls = [rls_phi3, rls_act_phi3_I, rls_act_phi3_noI, rls_act_noPhi_noI]
 
 # all_rls = [rls_phi3, rls_var]
 # all_rls = [rls_noPhi, rls_var]
@@ -451,3 +557,5 @@ plt.show()
 # for rls in all_rls:
 #     rls.f.savefig("output/" + rls.name.replace(" ", "_") + ".eps", format='eps', dpi=300)
 # cursor = BlittedCursor(fplt.all_axes, sharex=True)
+
+# %%
