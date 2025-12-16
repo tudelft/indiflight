@@ -491,29 +491,29 @@ void getMotorCommands(timeUs_t current) {
         for (int motor = 0; motor < 2; motor++) {
             float sindp = sinf(d_eff[motor]);
 
-            indiRun.actG1[0][motor] = ( indiRun.tailsCxw + indiRun.tailsCxd * sindp );
-            indiRun.actG1[1][motor] = ( indiRun.tailsCyw + 0.f                      );
-            indiRun.actG1[2][motor] = ( indiRun.tailsCzw + 0.f                      );
-            indiRun.actG1[3][motor] = ( indiRun.tailsClw + 0.f                      ) * ((motor==0) ? +1.f : -1.f);
-            indiRun.actG1[4][motor] = ( indiRun.tailsCmw + indiRun.tailsCmd * sindp );
-            indiRun.actG1[5][motor] = 0.f * ( indiRun.tailsCnw + indiRun.tailsCnd * sindp ) * ((motor==0) ? +1.f : -1.f);
+            indiRun.actG1[0][motor] = ( indiRun.tailsCxw[motor] + indiRun.tailsCxd[motor] * sindp );
+            indiRun.actG1[1][motor] = ( indiRun.tailsCyw[motor] + 0.f                             );
+            indiRun.actG1[2][motor] = ( indiRun.tailsCzw[motor] + 0.f                             );
+            indiRun.actG1[3][motor] = ( indiRun.tailsClw[motor] + 0.f                             );
+            indiRun.actG1[4][motor] = ( indiRun.tailsCmw[motor] + indiRun.tailsCmd[motor] * sindp );
+            indiRun.actG1[5][motor] = 0.f * ( indiRun.tailsCnw[motor] + indiRun.tailsCnd[motor] * sindp );
             for (int axis = 0; axis < 6; axis++) {
                 indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
             }
 
             indiRun.actG2[0][motor] = 0.f;
             indiRun.actG2[1][motor] = 0.f;
-            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd*((motor==0) ? -1.f : +1.f);
+            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd[motor];
         }
         for (int servo = 0; servo < 2; servo++) {
             float cosdp = cosf(d_eff[servo]);
 
-            indiRun.actG1[0][2+servo] = indiRun.tailsCxd * cosdp;
+            indiRun.actG1[0][2+servo] = indiRun.tailsCxd[servo] * cosdp;
             indiRun.actG1[1][2+servo] = 0.f;
             indiRun.actG1[2][2+servo] = 0.f;
             indiRun.actG1[3][2+servo] = 0.f;
-            indiRun.actG1[4][2+servo] = indiRun.tailsCmd * cosdp;
-            indiRun.actG1[5][2+servo] = indiRun.tailsCnd * cosdp * ((servo==0) ? +1.f : -1.f);
+            indiRun.actG1[4][2+servo] = indiRun.tailsCmd[servo] * cosdp;
+            indiRun.actG1[5][2+servo] = indiRun.tailsCnd[servo] * cosdp;
 
             float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {

@@ -71,7 +71,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    .modeFx    = (uint8_t) (LEARN_DURING_PROBING),
+    .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     .modeAct   = (uint8_t) (LEARN_DURING_PROBING),
     .modeHover = (uint8_t) (LEARN_DURING_PROBING),
     .mixControlAfterMs = 1000,
@@ -685,6 +685,8 @@ void updateLearner(timeUs_t current) {
             // first regressor is rate cross terms for inertia ratios
             A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
 
+// #define LEARNER_IS_TAILSITTER_SYMMETRIC
+
 #ifdef LEARNER_IS_TAILSITTER
             float w20 = learnRun.fxOmega[0] * learnRun.fxOmega[0];
             float w21 = learnRun.fxOmega[1] * learnRun.fxOmega[1];
@@ -699,6 +701,7 @@ void updateLearner(timeUs_t current) {
             float q = learnRun.imuRate.A[1];
             float r = learnRun.imuRate.A[2];
             float eta = sqrtf( (u*u+v*v+w*w) + 1.f * (p*p+q*q+r*r));
+#ifdef LEARNER_IS_TAILSITTER_SYMMETRIC
             switch(ax){
                 case 0: // roll
                     A[1] = 1e-5f * (w20 - w21); // motor 0 is left, motor 1 is right
@@ -719,6 +722,37 @@ void updateLearner(timeUs_t current) {
                     A[4] = 1e-1f * eta * r;
                     break;
             }
+#else
+            switch(ax){
+                case 0: // roll
+                    A[1] = 1e-5f * (w20); // motor 0 is left
+                    A[2] = 1e-5f * (w21);
+                    A[3] = 0.f;
+                    A[4] = 0.f;
+                    A[5] = 0.f;
+                    A[6] = 0.f;
+                    A[7] = 1e-1f * eta * p;
+                    break;
+                case 1: // pitch
+                    A[1] = 1e-5 * (w20); // motor 0 is left
+                    A[2] = 1e-5 * (w21);
+                    A[3] = 1e-5 * (w2d0);
+                    A[4] = 1e-5 * (w2d1);
+                    A[5] = 0.f;
+                    A[6] = 0.f;
+                    A[7] = 1e-1f * eta * q;
+                    break;
+                case 2: // yaw
+                    A[1] = 1e-5 * (w20); // motor 0 is left
+                    A[2] = 1e-5 * (w21);
+                    A[3] = 1e-5 * (w2d0);
+                    A[4] = 1e-5 * (w2d1);
+                    A[5] = 1e-3f * (wdot0);
+                    A[6] = 1e-3f * (wdot1);
+                    A[7] = 1e-1f * eta * r;
+                    break;
+            }
+#endif // LEARNER_IS_TAILSITTER_SYMMETRIC
 #endif
 
             ySpf[ax] = learnRun.fxSpf.A[ax] * 10.f; // scaling likely depends on sample time..
@@ -802,8 +836,8 @@ void updateLearner(timeUs_t current) {
         for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++) {
             learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
         }
-        // learnRun.gains[LEARNER_LOOP_RATE] = 18.f;
-        // learnRun.gains[LEARNER_LOOP_ATTITUDE] = 2.777f;
+        learnRun.gains[LEARNER_LOOP_RATE] = 10.f;
+        learnRun.gains[LEARNER_LOOP_ATTITUDE] = 5.f;
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -907,34 +941,69 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // Tailsitter specific code (see indi_init)
     indi->tails_use_scheduled = true;
     indi->tails_use_sine = false;
-    indi->tails_d0[0] = -1816;
-    indi->tails_d0[1] = -904;
-    indi->tails_cxw  = 405;
-    indi->tails_cyw  = 0;
-    indi->tails_czw  = -2481;
-    indi->tails_clw  = (int16_t) (2597); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cmw  = (int16_t) (0); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnw  = (int16_t) (-702); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnwd = (int16_t) (260); // 1e-3 for omegadot scaling, 1e0 for y-scaling
-    indi->tails_cxd  = -42;
-    indi->tails_cmd  = (int16_t) (-2234); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnd  = (int16_t) (-1200); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_d0[0] = -2100;
+    indi->tails_d0[1] = -912;
+    indi->tails_cxw[0]  = 405;
+    indi->tails_cxw[1]  = 405;
+    indi->tails_cyw[0]  = 0;
+    indi->tails_cyw[1]  = 0;
+    indi->tails_czw[0]  = -2481;
+    indi->tails_czw[1]  = -2481;
+    indi->tails_clw[0]  = +2597;
+    indi->tails_clw[1]  = -2597;
+    indi->tails_cmw[0]  = 0;
+    indi->tails_cmw[1]  = 0;
+    indi->tails_cnw[0]  = -702;
+    indi->tails_cnw[1]  = +702;
+    indi->tails_cnwd[0] = -260;
+    indi->tails_cnwd[1] = +260;
+    indi->tails_cxd[0]  = -125;
+    indi->tails_cxd[1]  = -125;
+    indi->tails_cmd[0]  = -1300;
+    indi->tails_cmd[1]  = -1300;
+    indi->tails_cnd[0]  = -1122;
+    indi->tails_cnd[1]  = +1122;
 
+#if defined(LEARNER_IS_TAILSITTER_SYMMETRIC)
     indi->tails_d0[0] = 0;
     indi->tails_d0[1] = 0;
-    // indi->tails_cxw  = 405;
-    // indi->tails_cyw  = 0;
-    // indi->tails_czw  = -2481;
-    indi->tails_clw  = (int16_t) (1e8f * fxRls[0+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cmw  = (int16_t) (1e8f * fxRls[1+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnw  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnwd = (int16_t) (1e5f * fxRls[2+3].x[3] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
-    // indi->tails_cxd  = -42;
-    indi->tails_cmd  = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnd  = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_clw[0]  = (int16_t) (1e8f * fxRls[0+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_clw[1]  = -indi->tails_clw[0];
+    indi->tails_cmw[0]  = (int16_t) (1e8f * fxRls[1+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmw[1]  = indi->tails_cmw[0];
+    indi->tails_cnw[0]  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnw[1]  = -indi->tails_cnw[0];
+    indi->tails_cnwd[0] = (int16_t) (1e5f * fxRls[2+3].x[3] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    indi->tails_cnwd[1] = -indi->tails_cnwd[0];
+    indi->tails_cmd[0] = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmd[1] = indi->tails_cmd[0];
+    indi->tails_cnd[0] = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnd[1] = -indi->tails_cnd[0];
 
     UNUSED(config);
     UNUSED(actG2rotIMU);
+#else
+    indi->tails_d0[0] = 0;
+    indi->tails_d0[1] = 0;
+
+    indi->tails_clw[0]  = (int16_t) (1e8f * fxRls[0+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_clw[1]  = (int16_t) (1e8f * fxRls[0+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+
+    indi->tails_cmw[0]  = (int16_t) (1e8f * fxRls[1+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmw[1]  = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmd[0]  = (int16_t) (1e8f * fxRls[1+3].x[3] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmd[1]  = (int16_t) (1e8f * fxRls[1+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+
+    indi->tails_cnw[0]  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnw[1]  = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnd[0]  = (int16_t) (1e8f * fxRls[2+3].x[3] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnd[1]  = (int16_t) (1e8f * fxRls[2+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cnwd[0] = (int16_t) (1e5f * fxRls[2+3].x[5] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    indi->tails_cnwd[1] = (int16_t) (1e5f * fxRls[2+3].x[6] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+
+    UNUSED(config);
+    UNUSED(actG2rotIMU);
+#endif // LEARNER_IS_TAILSITTER_SYMMETRIC
 #else
     indi->actNum = indiRun.actNum;
     int m = 0;

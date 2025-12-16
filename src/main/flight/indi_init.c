@@ -99,18 +99,19 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- Tailsitter
     indiProfile->tails_use_scheduled = false;
     indiProfile->tails_use_sine = true;
-    indiProfile->tails_d0[0] = 0;
-    indiProfile->tails_d0[1] = 0;
-    indiProfile->tails_cxw = 0;
-    indiProfile->tails_cyw = 0;
-    indiProfile->tails_czw = 0;
-    indiProfile->tails_clw = 0;
-    indiProfile->tails_cmw = 0;
-    indiProfile->tails_cnw = 0;
-    indiProfile->tails_cnwd = 0;
-    indiProfile->tails_cxd = 0;
-    indiProfile->tails_cmd = 0;
-    indiProfile->tails_cnd = 0;
+    for (int i = 0; i < 2; i++) {
+        indiProfile->tails_d0[i]   = 0;
+        indiProfile->tails_cxw[i]  = 0;
+        indiProfile->tails_cyw[i]  = 0;
+        indiProfile->tails_czw[i]  = 0;
+        indiProfile->tails_clw[i]  = 0;
+        indiProfile->tails_cmw[i]  = 0;
+        indiProfile->tails_cnw[i]  = 0;
+        indiProfile->tails_cnwd[i] = 0;
+        indiProfile->tails_cxd[i]  = 0;
+        indiProfile->tails_cmd[i]  = 0;
+        indiProfile->tails_cnd[i]  = 0;
+    }
 
     // ---- Filtering config
     indiProfile->imuSyncLp2Hz = 15;
@@ -228,18 +229,19 @@ void initIndiRuntimeParameters(void) {
         }
     }
     indiRun.tailsUseSine = (bool) p->tails_use_sine;
-    indiRun.tailsD0[0]= DEGREES_TO_RADIANS( ((float) p->tails_d0[0]) * 1e-2f );
-    indiRun.tailsD0[1]= DEGREES_TO_RADIANS( ((float) p->tails_d0[1]) * 1e-2f );
-    indiRun.tailsCxw  = ((float) p->tails_cxw)  * 1e-9f;
-    indiRun.tailsCyw  = ((float) p->tails_cyw)  * 1e-9f;
-    indiRun.tailsCzw  = ((float) p->tails_czw)  * 1e-9f;
-    indiRun.tailsClw  = ((float) p->tails_clw)  * 1e-8f;
-    indiRun.tailsCmw  = ((float) p->tails_cmw)  * 1e-8f;
-    indiRun.tailsCnw  = ((float) p->tails_cnw)  * 1e-8f;
-    indiRun.tailsCnwd = ((float) p->tails_cnwd) * 1e-5f;
-    indiRun.tailsCxd  = ((float) p->tails_cxd)  * 1e-8f;
-    indiRun.tailsCmd  = ((float) p->tails_cmd)  * 1e-8f;
-    indiRun.tailsCnd  = ((float) p->tails_cnd)  * 1e-8f;
+    for (int i = 0; i < 2; i++) {
+        indiRun.tailsD0[i]= DEGREES_TO_RADIANS( ((float) p->tails_d0[i]) * 1e-2f );
+        indiRun.tailsCxw[i]  = ((float) p->tails_cxw[i])  * 1e-9f;
+        indiRun.tailsCyw[i]  = ((float) p->tails_cyw[i])  * 1e-9f;
+        indiRun.tailsCzw[i]  = ((float) p->tails_czw[i])  * 1e-9f;
+        indiRun.tailsClw[i]  = ((float) p->tails_clw[i])  * 1e-8f;
+        indiRun.tailsCmw[i]  = ((float) p->tails_cmw[i])  * 1e-8f;
+        indiRun.tailsCnw[i]  = ((float) p->tails_cnw[i])  * 1e-8f;
+        indiRun.tailsCnwd[i] = ((float) p->tails_cnwd[i]) * 1e-5f;
+        indiRun.tailsCxd[i]  = ((float) p->tails_cxd[i])  * 1e-8f;
+        indiRun.tailsCmd[i]  = ((float) p->tails_cmd[i])  * 1e-8f;
+        indiRun.tailsCnd[i]  = ((float) p->tails_cnd[i])  * 1e-8f;
+    }
 
     // ---- Filtering config
     indiRun.imuSyncLp2Hz = (float) constrainu(p->imuSyncLp2Hz, 1, 5e5 / gyro.targetLooptime);

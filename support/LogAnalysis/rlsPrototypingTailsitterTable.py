@@ -210,6 +210,10 @@ def runRls(log: IndiflightLog):
     ls_act_all.setTitle("LS Moments -- Inertias, Actuators and 3-param Phi")
     rls_acts.append(ls_act_all)
 
+    ls_act_diff = LS(26, 3)
+    ls_act_diff.setTitle("LS Diff-Moments -- Actuators")
+    rls_acts.append(ls_act_diff)
+
     rls_act_noI = deepcopy(rls_act_all)
     rls_act_noI.setTitle("RLS Moments -- No Inertias")
     rls_acts.append(rls_act_noI)
@@ -228,7 +232,9 @@ def runRls(log: IndiflightLog):
 
     A_act_hist = []
     count = 0
-    for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i, ddot_i, ddotdot_i in tqdm(zip(t, df.y, w2, wdot, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta, df.dot().y, df.dot().dot().y), total=len(w2a)):
+    for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i, ddot_i, ddotdot_i, Odotdiffi, wi, wdiffi, ddiffi, ddotdiffi in \
+        tqdm(zip(t, df.y, w2, wdot, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta, df.dot().y, df.dot().dot().y, Of.dot().diff().y, wf.y, wf.diff().y, df.diff().y, df.dot().diff().y), total=len(w2a)):
+
         y = Odoti
         # first try: actuayors only, negelct aerodynamics
         # T = Cw2 * w2ti  +  Cw2d * w2dti  +  Cwdot * wdotti  +  Cddot * ddti  +  Cddotdot * dddti
@@ -246,12 +252,24 @@ def runRls(log: IndiflightLog):
         A_act_all[:, 23:26] = - eta_i * np.diag(eta_Bi[3:]) # C_m_w
         A_act_hist.append(A_act_all)
 
+        A_act_diff = np.zeros((3, 26))
+        A_act_diff[0, 0:3]   = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
+        A_act_diff[0, 3:6]   = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
+        A_act_diff[1, 6:10]  = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], ddotdiffi[0], 0]
+        A_act_diff[1, 10:14] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], ddotdiffi[1], 0]
+        A_act_diff[2, 14:17] = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
+        A_act_diff[2, 17:20] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
+        A_act_diff[:, 20:23] = 0
+        A_act_diff[:, 23:26] = 0
+        ls_act_diff.newSample(A_act_diff, Odotdiffi, ti)
+
         rls_act_all.newSample(A_act_all, y, ti); rls_act_all.update()
         ls_act_all.newSample(A_act_all, y, ti);
 
         count += 1 
         if count > 150 and count % 10 == 0:
             ls_act_all.update()
+            ls_act_diff.update()
 
         A_act_noI = A_act_all.copy()
         A_act_noI[:, 20:23] = 0

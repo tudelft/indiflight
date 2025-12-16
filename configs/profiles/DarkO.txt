@@ -48,6 +48,7 @@
 ## #define USE_CATAPULT
 #define USE_LEARNER
 #define LEARNER_IS_TAILSITTER
+## #define LEARNER_IS_TAILSITTER_SYMMETRIC
 ## #define USE_NN_CONTROL
 
 
@@ -294,25 +295,24 @@ set indi_tails_use_sine = 0
 ## set indi_tails_cnd = -2041
 
 # no-lift elevon angles in centi-degrees
-set indi_tails_d0 = -1816, -904
-#set indi_tails_d0 = 0, 0
+set indi_tails_d0 = -2100, -918
 
 # motor thrust influenced parameters
 # force * 1e9
-set indi_tails_cxw = 405
-set indi_tails_cyw = 0
-set indi_tails_czw = -2481
+set indi_tails_cxw = 405, 405
+set indi_tails_cyw = 0, 0
+set indi_tails_czw = -2481, -2481
 # moment * 1e8
-set indi_tails_clw = 2597
-set indi_tails_cmw = 0
-set indi_tails_cnw = -702
+set indi_tails_clw = +2597, -2597
+set indi_tails_cmw =     0,     0
+set indi_tails_cnw =  -702,  +702
 # motor rate derivative to yaw moment * 1e5
-set indi_tails_cnwd = 260
+set indi_tails_cnwd = -260, +260
 
 # elevon deflection influenced parameters * 1e8
-set indi_tails_cxd = -42
-set indi_tails_cmd = -2234
-set indi_tails_cnd = -1662
+set indi_tails_cxd = -125, -125
+set indi_tails_cmd = -1300, -1300
+set indi_tails_cnd = -1122, +1122
 
 
 indiprofile 2
@@ -463,7 +463,7 @@ set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
 set learner_apply_indi_profile = 1
-set learner_apply_position_profile = 1
+set learner_apply_position_profile = 0
 set learner_apply_hover_rotation = 0
 
 

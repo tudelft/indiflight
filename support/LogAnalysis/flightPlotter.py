@@ -30,13 +30,15 @@ log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
 
-fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data")
+fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data", Nr=2, Ns=2)
 cursor = BlittedCursor(fplt.all_axes, sharex=True)
 
 craft = Tailsitter() if args.type == "tailsitter" else Quadrotor()
 pplt = IndiflightViewport(craft,
                           log.data,
                           follow=False,
+                          Nr=2,
+                          Ns=2,
                           interpolation="previous",
                           title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)

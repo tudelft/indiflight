@@ -198,30 +198,30 @@ if __name__=="__main__":
 
     #%% run loop
     dt = 0.000125 # 8kHz
-    T = 10. # seconds
+    T = 30. # seconds
     dt_rt = None if args.no_real_time else 1*dt
     armed = False
     start_trajectory = False
     heading = False
     speedup = False
-    for i in tqdm(range(int(T / dt)), target_looptime=0*dt_rt):
+    for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if args.learn and sim.t > 3.0:
             sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE) if sil else None
             sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
 
-        # if not args.throw and sim.t > 2.5 and not armed:
-        #     sil.mockup.arm() if sil else None
-        #     armed = True
+        if not args.throw and sim.t > 2.5 and not armed:
+            sil.mockup.arm() if sil else None
+            armed = True
 
-        # if not start_trajectory and sim.t > 12. and sil is not None:
-        #     # start trajectory tracking at 8*0.5 = 4m/s target speed
-        #     sil.mockup.sendKeyboard('1')
-        #     # sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
-        #     if sim.t > 8.:
-        #         sil.mockup.sendKeyboard('h')
-        #         for _ in range(6):
-        #             sil.mockup.sendKeyboard('3')
-        #         start_trajectory = True
+        if not start_trajectory and sim.t > 12. and sil is not None:
+            # start trajectory tracking at 8*0.5 = 4m/s target speed
+            sil.mockup.sendKeyboard('1')
+            # sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
+            if sim.t > 14.:
+                sil.mockup.sendKeyboard('h')
+                for _ in range(6):
+                    sil.mockup.sendKeyboard('3')
+                start_trajectory = True
 
         # if not heading and sim.t > 17. and sil is not None:
         #     sil.mockup.sendKeyboard('h')

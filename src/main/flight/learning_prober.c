@@ -73,7 +73,7 @@ PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
     // .numServos = 2,
     .preDelayMs = 100,
     .postDelayMs = 0,
-    .steps_stepMs = 70,
+    .steps_stepMs = 100,
     .steps_overlapMs = 0,
     .steps_amp = 35,
     .stepramps_stepMs = 50,
@@ -140,7 +140,19 @@ static void updateSteps(timeUs_t currentTimeUs) {
         float output = 0.01f * config->steps_amp;
 
         if (proberRuntime.sub.steps.currentStepIndex < learnRun.numActuators) {
-            proberRuntime.output[act] = output;
+            if (act==0) {
+                proberRuntime.output[act] = output;
+            } else if (act==1) {
+                proberRuntime.output[act] = output;
+                proberRuntime.output[act+1] = 0.4f;  // trigger servo
+            } else if (act==2) {
+                proberRuntime.output[act] = 0;
+                proberRuntime.output[act-2] = output;
+                proberRuntime.output[act+1] = 0.4f;  // trigger other servo servo
+            } else if (act==3) {
+                proberRuntime.output[act] = 0;
+                proberRuntime.output[act-2] = output;
+            }
         }
 
         if (currentTimeUs >= proberRuntime.sub.steps.nextStepTimeUs) {
