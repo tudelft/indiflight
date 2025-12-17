@@ -228,6 +228,7 @@ typedef struct indiRuntime_s {
     biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t duFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t servo_lagFilter[MAXU];
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
     // ---- housekeeping

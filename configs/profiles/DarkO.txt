@@ -296,6 +296,7 @@ set indi_tails_use_sine = 0
 
 # no-lift elevon angles in centi-degrees
 set indi_tails_d0 = -2100, -918
+# set indi_tails_d0 = -1816, -904
 
 # motor thrust influenced parameters
 # force * 1e9
@@ -310,9 +311,14 @@ set indi_tails_cnw =  -702,  +702
 set indi_tails_cnwd = -260, +260
 
 # elevon deflection influenced parameters * 1e8
-set indi_tails_cxd = -125, -125
-set indi_tails_cmd = -1300, -1300
-set indi_tails_cnd = -1122, +1122
+# set indi_tails_cxd = -125, -125
+# set indi_tails_cmd = -1300, -1300
+# set indi_tails_cnd = -1122, +1122
+
+# elevon deflection influenced parameters * 1e8
+set indi_tails_cxd = -42, -42
+set indi_tails_cmd = -2234, -2234
+set indi_tails_cnd = -1662, +1662
 
 
 indiprofile 2

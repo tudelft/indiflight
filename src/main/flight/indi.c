@@ -484,6 +484,7 @@ void getMotorCommands(timeUs_t current) {
         // N.B. this specific motor/servo assignment is enforced in indi_init for this case
         float d_eff[2];
         for (int i = 0; i < 2; i++) {
+            d_eff[i] = DEGREES_TO_RADIANS(100.f * biquadFilterApply(&indiRun.servo_lagFilter[i+2], indiRun.d[i+2]));
             d_eff[i] = DEGREES_TO_RADIANS(0.01f * ((float)servo_feedback[i]) );
             d_eff[i] -= indiRun.tailsD0[i];
         }

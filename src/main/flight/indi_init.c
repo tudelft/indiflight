@@ -339,6 +339,7 @@ void initIndiRuntime(void) {
         biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.duFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        biquadFilterInitLPF(&indiRun.servo_lagFilter[i], (1.f / (2.f * M_PIf * 0.04)), gyro.targetLooptime); // only support 2nd order butterworth second order section for now
     }
 }
 
