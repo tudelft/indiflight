@@ -217,7 +217,7 @@ bool canUseLaunchControl(void)
         && IS_RC_MODE_ACTIVE(BOXLAUNCHCONTROL)
         && (!featureIsEnabled(FEATURE_MOTOR_STOP) || airmodeIsEnabled())  // can't use when motors are stopped
         && !featureIsEnabled(FEATURE_3D) // pitch control is not 3D aware
-        && (flightModeFlags == 0)) {     // don't want to use unless in acro mode
+        && ( FLIGHT_MODE(POSITION_MODE) || flightModeFlags == 0 )) {     // don't want to use unless in acro mode or POSITION_MODE
         return true;
     }
     return false;
@@ -626,6 +626,7 @@ void tryArm(void)
         if (!flipOverAfterCrashActive && (canUseLaunchControl() || (tryingToArm == ARMING_DELAYED_LAUNCH_CONTROL))) {
             if (launchControlState == LAUNCH_CONTROL_DISABLED) {  // only activate if it hasn't already been triggered
                 launchControlState = LAUNCH_CONTROL_ACTIVE;
+                setLaunchControlStartState(currentTimeUs);
             }
         }
 #endif
@@ -953,11 +954,24 @@ bool processRx(timeUs_t currentTimeUs)
 
 #ifdef USE_LAUNCH_CONTROL
     if (ARMING_FLAG(ARMED)) {
-        if (launchControlActive && (throttlePercent > currentPidProfile->launchControlThrottlePercent)) {
-            // throttle limit trigger reached, launch triggered
-            // reset the iterms as they may be at high values from holding the launch position
-            launchControlState = LAUNCH_CONTROL_TRIGGERED;
-            pidResetIterm();
+
+#ifdef USE_LOCAL_POSITION
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            if (launchControlActive) {
+                resetIterms();
+                if (FLIGHT_MODE(NN_MODE)) { // ALSO ADD OFFACT_MODE here
+                    launchControlState = LAUNCH_CONTROL_TRIGGERED;
+                }
+            }
+        } else
+#endif
+        {
+            if (launchControlActive && (throttlePercent > currentPidProfile->launchControlThrottlePercent)) {
+                // throttle limit trigger reached, launch triggered
+                // reset the iterms as they may be at high values from holding the launch position
+                launchControlState = LAUNCH_CONTROL_TRIGGERED;
+                pidResetIterm();
+            }
         }
     } else {
         if (launchControlState == LAUNCH_CONTROL_TRIGGERED) {
@@ -1108,6 +1122,11 @@ void processRxModes(timeUs_t currentTimeUs)
                     setLocalPosSpHere();
                 }
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
+#ifdef USE_LAUNCH_CONTROL
+                if (isLaunchControlActive()) {
+                    setLaunchControlStartState(currentTimeUs);
+                }
+#endif
             }
         }
     } else {
@@ -1859,3 +1878,18 @@ bool isLaunchControlActive(void)
     return false;
 #endif
 }
+
+float lcStartAngleRad = 0.f;
+float lcTargetAngleRad = 0.f;
+timeUs_t lcStartTime = 0;
+
+#ifdef USE_LAUNCH_CONTROL
+void setLaunchControlStartState(timeUs_t currentTimeUs)
+{
+    fp_euler_t currentAttitude;
+    fp_euler_of_rotationMatrix(&currentAttitude, &rMat);
+    lcStartAngleRad = currentAttitude.angles.pitch;
+    lcTargetAngleRad = lcStartAngleRad;
+    lcStartTime = currentTimeUs;
+}
+#endif

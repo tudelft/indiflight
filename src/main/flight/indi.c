@@ -174,6 +174,38 @@ void getSetpoints(timeUs_t current) {
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;
         indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
+
+        if (ARMING_FLAG(ARMED) && isLaunchControlActive()) {
+            // sigmoid curve from lcStartAngleRad to lcTargetAngleRad over some seconds
+            float lcDuration = 1.f / MAX((float) (currentPidProfile->launchControlGain) * 1e-2f, 0.1f);
+            lcDuration = constrainf(lcDuration, 0.5f, 4.f);
+            float lcFinalAngleRad = DEGREES_TO_RADIANS(currentPidProfile->launchControlAngleLimit);
+            float t = cmpTimeUs(current, lcStartTime) * 1e-6f; // time since start in seconds
+            t = constrainf(t, 0.f, lcDuration + 1.f); // one second extra to get tail end of the sigmoid
+
+            lcTargetAngleRad = lcStartAngleRad + (lcFinalAngleRad - lcStartAngleRad) * (1.f / (1.f + expf(-10.f * (t / lcDuration - 0.5f))));
+            lcTargetAngleRad = constrainf(lcTargetAngleRad, lcStartAngleRad, lcFinalAngleRad);
+
+            indiRun.trackAttitudeYaw = false;
+            indiRun.spfSpBody.V.X = 0.f;
+            indiRun.spfSpBody.V.Y = 0.f;
+            indiRun.spfSpBody.V.Z = 0.f; // thrust
+            indiRun.rateSpBodyCommanded.V.X = 0.f;
+            indiRun.rateSpBodyCommanded.V.Y = 0.f;
+            indiRun.rateSpBodyCommanded.V.Z = 0.f;
+
+            fp_vector_t axis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f, };
+            fp_quaternion_t attSpYaw;
+            quaternion_of_axis_angle(&attSpYaw, &axis, lcTargetAngleRad);
+            float Psi = getYawWithoutSingularity();
+            fp_quaternion_t yawNed = {
+                .w = cos_approx(Psi/2.f),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx(Psi/2.f),
+            };
+            indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        }
     } else
 #endif
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
@@ -228,22 +260,23 @@ void getSetpoints(timeUs_t current) {
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
 
+        indiRun.controlAttitude = false;
+
         // launch control
-        static float launchAngle = 0.f;
         if (isLaunchControlActive()) {
+            indiRun.controlAttitude = true;
+
             if (ARMING_FLAG(ARMED)) {
-                launchAngle += getRcDeflection(PITCH) * 1.f / indiRun.indiFrequency;
-            } else {
-                launchAngle = 0.;
+                lcTargetAngleRad += getRcDeflection(PITCH) * currentPidProfile->launchControlGain * 1e-2 / indiRun.indiFrequency;
+                lcTargetAngleRad = constrainf(lcTargetAngleRad, 0.f, DEGREES_TO_RADIANS(currentPidProfile->launchControlAngleLimit));
             }
 
-            indiRun.controlAttitude = true;
             indiRun.spfSpBody.V.Z = 0.f; // thrust
             indiRun.rateSpBodyCommanded.V.Y = 0.f; // pitch
 
             fp_vector_t axis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f, };
             fp_quaternion_t attSpYaw;
-            quaternion_of_axis_angle(&attSpYaw, &axis, launchAngle);
+            quaternion_of_axis_angle(&attSpYaw, &axis, lcTargetAngleRad);
             float Psi = getYawWithoutSingularity();
             fp_quaternion_t yawNed = {
                 .w = cos_approx(Psi/2.f),
@@ -252,10 +285,6 @@ void getSetpoints(timeUs_t current) {
                 .z = sin_approx(Psi/2.f),
             };
             indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
-        } else {
-            launchAngle = 0.f;
-
-            indiRun.controlAttitude = false;
         }
     }
 }

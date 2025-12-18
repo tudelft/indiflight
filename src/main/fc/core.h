@@ -45,6 +45,10 @@ typedef enum {
     LAUNCH_CONTROL_MODE_COUNT // must be the last element
 } launchControlMode_e;
 
+extern float lcStartAngleRad = 0.f;
+extern float lcTargetAngleRad = 0.f;
+extern timeUs_t lcStartTime = 0;
+
 typedef enum {
     DISARM_REASON_ARMING_DISABLED   = 0,
     DISARM_REASON_FAILSAFE          = 1,

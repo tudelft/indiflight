@@ -1,0 +1,18 @@
+manual mode
+- use launch_angle_limit
+- use launch_control_gain * 1e-2  as stick incrementing speed
+
+position mode
+- copy code to POSITION else if in indi.c
+-- launch angle follows a sigmoid curve from current to launch_angle_limit triggered by ARMED
+-- takes 1 / (launch_control_gain * 1e-2) seconds
+- adapt canUseLaunchControl to also work in POSITION_MODE
+- reset launchControlState and position I terms if in POSITION_MODE and either of
+-- fspz < 20
+-- NN_MODE active
+-- OFFACT_MODE active
+
+Simulation
+- make sure that launchControlState is set to active somehow
+
+
