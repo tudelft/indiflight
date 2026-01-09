@@ -67,7 +67,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 
 PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 4);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
-    .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW | LEARN_PROBING_DURING_FLIGHT),
+    .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
     // .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
@@ -731,7 +731,7 @@ void updateLearner(timeUs_t current) {
                     A[4] = 0.f;
                     A[5] = 0.f;
                     A[6] = 0.f;
-                    A[7] = 1e-1f * eta * p;
+                    A[7] = -1e-1f * eta * p;
                     break;
                 case 1: // pitch
                     A[1] = 1e-5 * (w20); // motor 0 is left
@@ -740,7 +740,7 @@ void updateLearner(timeUs_t current) {
                     A[4] = 1e-5 * (w2d1);
                     A[5] = 0.f;
                     A[6] = 0.f;
-                    A[7] = 1e-1f * eta * q;
+                    A[7] = -1e-1f * eta * q;
                     break;
                 case 2: // yaw
                     A[1] = 1e-5 * (w20); // motor 0 is left
@@ -749,7 +749,7 @@ void updateLearner(timeUs_t current) {
                     A[4] = 1e-5 * (w2d1);
                     A[5] = 1e-3f * (wdot0);
                     A[6] = 1e-3f * (wdot1);
-                    A[7] = 1e-1f * eta * r;
+                    A[7] = -1e-1f * eta * r;
                     break;
             }
 #endif // LEARNER_IS_TAILSITTER_SYMMETRIC
@@ -983,6 +983,16 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     UNUSED(config);
     UNUSED(actG2rotIMU);
 #else
+
+    // indi->tails_cxw[0] = 0;
+    // indi->tails_cxw[1] = 0;
+    // indi->tails_cyw[0] = 0;
+    // indi->tails_cyw[1] = 0;
+    // indi->tails_czw[0] = 0;
+    // indi->tails_czw[1] = 0;
+    // indi->tails_cxd[0] = 0;
+    // indi->tails_cxd[1] = 0;
+
     indi->tails_d0[0] = 0;
     indi->tails_d0[1] = 0;
 

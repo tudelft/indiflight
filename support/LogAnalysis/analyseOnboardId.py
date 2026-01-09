@@ -6,7 +6,7 @@ plt.close('all')
 matplotlib.use('tkagg') 
 
 from pyFlightPlotter import local_rc
-from indiflightPlotter import IndiflightPlotter, IndiflightMotorSysIdPlotter, IndiflightServoSysIdPlotter, IndiflightViewport
+from indiflightPlotter import IndiflightPlotter, IndiflightMotorSysIdPlotter, IndiflightServoSysIdPlotter, IndiflightViewport, IndiflightIndividualSysIdPlotter, IndiflightMoments
 from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor
 
 # set local_rc
@@ -66,16 +66,59 @@ servo_true = {
 # fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
 # splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
 fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data")
-splt = IndiflightMotorSysIdPlotter(log.data, Nr=2, name=f"{args.name} -- Onboard Motor Analysis")
-splt = IndiflightServoSysIdPlotter(log.data, Nr=2, Ns=2, true=servo_true, name=f"{args.name} -- Onboard Servo Analysis")
+#mplt = IndiflightMotorSysIdPlotter(log.data, Nr=2, name=f"{args.name} -- Onboard Motor Analysis")
+# splt = IndiflightServoSysIdPlotter(log.data, Nr=2, Ns=2, true=servo_true, name=f"{args.name} -- Onboard Servo Analysis")
+
+act_true = {
+    'motor_2_rls_x[0]': 1.75,    # max angle in rad
+    'motor_2_rls_x[1]': 0.0,     # neutral angle in rad
+    'motor_2_rls_x[2]': 0.03,    # delay in seconds
+    'motor_2_rls_x[3]': 0.,     # time constant in seconds
+
+    'motor_3_rls_x[0]': 1.75,    # max angle in rad
+    'motor_3_rls_x[1]': 0.0,     # neutral angle in rad
+    'motor_3_rls_x[2]': 0.03,    # delay in seconds
+    'motor_3_rls_x[3]': 0.,     # time constant in seconds
+
+    'fx_p_rls_x[0]': (1e-6 * 0.13) / 6e-3,
+    'fx_p_rls_x[1]': -(1e-6 * 0.13) / 6e-3,
+    'fx_p_rls_x[2]': 0,
+    'fx_p_rls_x[3]': 0,
+
+    'fx_q_rls_x[0]': 0,
+    'fx_q_rls_x[1]': 0,
+    'fx_q_rls_x[2]': -4.47e-8 / 2e-3,
+    'fx_q_rls_x[3]': -4.47e-8 / 2e-3,
+
+    'fx_r_rls_x[0]': -0.005 * 1e-6 / 6.5e-3,
+    'fx_r_rls_x[1]': 0.005 * 1e-6 / 6.5e-3,
+    'fx_r_rls_x[2]': -1.08e-7 / 6.5e-3,
+    'fx_r_rls_x[3]': 1.08e-7 / 6.5e-3,
+
+    'sigma_rls[0]':  0.75,
+    'sigma_rls[1]': -0.25,
+    'sigma_rls[2]': -0.61538,
+}
+#aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, name=f"{args.name} -- Onboard Individual Analysis")
+
+
+moplt = IndiflightMoments(log.data, Nr=2, Ns=2, name=f"{args.name} -- Moments")
 
 # craft = Quadrotor()
 craft = Tailsitter()
 pplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=False, title=f"{args.name} -- Onboard ID Analysis")
+#pfplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=True, title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
-splt.connect_viewport(pplt)
+#mplt.connect_viewport(pplt)
+#splt.connect_viewport(pplt)
+#aplt.connect_viewport(pplt)
+moplt.connect_viewport(pplt)
 
-cursor = BlittedCursor(fplt.all_axes + splt.all_axes, sharex=True)
+#fplt.connect_viewport(pfplt)
+#aplt.connect_viewport(pfplt)
+
+# cursor = BlittedCursor(fplt.all_axes + mplt.all_axes + splt.all_axes + aplt.all_axes, sharex=True)
+cursor = BlittedCursor(fplt.all_axes + moplt.all_axes, sharex=True)
 
 plt.show()
 

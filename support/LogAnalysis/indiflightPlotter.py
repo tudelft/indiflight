@@ -3,6 +3,8 @@ import numpy as np
 from pyFlightPlotter import FlightPlotterBase, Viewport, Craft3D
 from scipy.spatial.transform import Rotation as R
 
+from indiflight_log_tools.signal_tools import Signal
+
 class IndiflightPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for general Indiflight analysis"""
     def __init__(self, data, Nr=0, Ns=0, name="Flight Plotter"):
@@ -508,6 +510,341 @@ class IndiflightServoSysIdPlotter(FlightPlotterBase):
                                   style_labels=[None, "Onboard", None],
                                   title="Principal Inertia Ratios",
                                   ylabel="$\\sigma$ [-]")
+
+class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
+    def __init__(self, data, Nr=0, Ns=0, true=None, name="System Identification Plotter -- Individual"):
+        # extract time and intialize base class
+        self.data = data
+        self.true = true
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
+        self.has_extended_fx_learning = 'fx_r_rls_x[15]' in self.data.columns
+        self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
+
+        # check amount of actuators
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
+
+        self.define_layout(figsize=(12, 8), nrows=6, ncols=3,
+                           width_ratios=[1, 1, 1],
+                           height_ratios=[1, 1, 1, 1, 1, 1])
+
+        self.plot()
+
+    def _populate(self):
+        Nr = self.Nr
+        Ns = self.Ns
+        N = self.N
+
+        dmax = 1e-3*np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(Nr,N)])
+        d0 = 1e-3*np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(Nr,N)])
+        delay = 1e-4*np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(Nr,N)])
+        tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(Nr,N)])
+        # motor_e_var = np.array([self.data[f'motor_{i}_rls_e_var'] for i in range(Nr)])
+        # motor_lambda = np.array([self.data[f'motor_{i}_rls_lambda'] for i in range(Nr)])
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[0, 0]),
+                            light=None,
+                            solid=dmax,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[0]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Scaler",
+                            ylabel="Angle/cmd [rad/1]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
+                            light=None,
+                            solid=d0,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[1]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Neutral Servo Angle",
+                            ylabel="Angle [rad]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
+                            light=None,
+                            solid=delay,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[2]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Delay",
+                            ylabel="Delay [s]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 0]),
+                            light=None,
+                            solid=tau,
+                            dashed=None,
+                            true_values=[self.true[f'motor_{i}_rls_x[3]'] for i in range(Nr,N)] if self.true is not None else None,
+                            series_labels=[f"Servo {i}" for i in range(Ns)],
+                            style_labels=[None, "Onboard", None],
+                            title="Servo Time Constant",
+                            ylabel="Time Constant [s]")
+
+        pqr_range = list(range(8))
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+        fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
+        fx_lambda = np.array([self.data[f'fx_{ax}_rls_lambda'] for ax in AXES])
+
+        # for i, axis in enumerate(['x', 'y', 'z']):
+        #     self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+        #                         light=None,
+        #                         solid=x if axis == 'x' else y if axis == 'y' else z,
+        #                         dashed=None,
+        #                         series_labels=[
+        #                             "Motors", "Elevons", "Motor Derivative", "Body Rates"
+        #                         ],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title=f"Fx {axis.upper()}",
+        #                         ylabel="Fx [N/kg/(rad/s)²]")
+
+
+        # self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+        #                         light=None,
+        #                         solid=fx_e_var[:3],
+        #                         dashed=None,
+        #                         series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title="Fx Error Variance",
+        #                         ylabel="Variance")
+
+        # self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+        #                         light=None,
+        #                         solid=fx_lambda[:3],
+        #                         dashed=None,
+        #                         series_labels=[f"Fx {ax.upper()}" for ax in AXES[:3]],
+        #                         style_labels=[None, "Onboard", None],
+        #                         title="Fx Forgetting Factor",
+        #                         ylabel="Forgetting Factor")
+
+        M = 4
+        for i, axis in enumerate(['p', 'q', 'r']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[i, 1]),
+                                light=None,
+                                solid=p[:4] if axis == 'p' else q[:4] if axis == 'q' else r[:4],
+                                dashed=None,
+                                true_values=[self.true[f'fx_{axis}_rls_x[{i}]'] for i in range(4)] if self.true is not None else None,
+                                series_labels=[
+                                    "Motor 1", "Motor 2", "Elevon 1", "Elevon 2"
+                                ],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Fx {axis.upper()}",
+                                ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
+                            light=None,
+                            solid=p[4:6] if axis == 'p' else q[4:6] if axis == 'q' else r[4:6],
+                            dashed=None,
+                            true_values=[None, None],
+                            series_labels=[
+                                "Motor 1", "Motor 2"
+                            ],
+                            style_labels=[None, "Onboard", None],
+                            title=f"Fx {axis.upper()}",
+                            ylabel="Fx [Nm/(kgm^2)/(rad/s/s)]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+                                light=None,
+                                solid=fx_e_var[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Error Variance",
+                                ylabel="Variance")
+        self._plot_timeseries(self.fig.add_subplot(self.gs[5, 1]),
+                                light=None,
+                                solid=fx_lambda[3:],
+                                dashed=None,
+                                series_labels=[f"Fx {ax.upper()}" for ax in AXES[3:]],
+                                style_labels=[None, "Onboard", None],
+                                title="Fx Forgetting Factor",
+                                ylabel="Forgetting Factor")
+
+        if self.has_inertia_learning:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
+                                  light=None,
+                                  solid=np.array([self.data[f'sigma_rls[{i}]'] for i in range(3)]) / 1000,
+                                  dashed=None,
+                                  true_values=[self.true[f'sigma_rls[{i}]'] for i in range(3)] if self.true is not None else None,
+                                  series_labels=["Sigma X", "Sigma Y", "Sigma Z"],
+                                  style_labels=[None, "Onboard", None],
+                                  title="Principal Inertia Ratios",
+                                  ylabel="$\\sigma$ [-]")
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
+                              light=None,
+                              solid=np.array([self.data[f'fx_{axis}_rls_x[6]'] for axis in ['p', 'q', 'r']]) / 1000,
+                              dashed=None,
+                              true_values=None,
+                              series_labels=["Aero P", "Aero Q", "Aero R"],
+                              style_labels=[None, "Onboard", None],
+                              title="Aero Derivative Coefficients",
+                              ylabel="Coefficient [Nm/(kgm²)/(rad/s)^2]")
+
+class IndiflightMoments(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for Moment analysis"""
+    def __init__(self, data, Nr=0, Ns=0, true=None, name="System Identification Plotter -- Individual"):
+        # extract time and intialize base class
+        self.data = data
+        self.true = true
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
+        self.has_extended_fx_learning = 'fx_r_rls_x[15]' in self.data.columns
+        self.has_inertia_learning = 'sigma_rls[0]' in self.data.columns
+
+        # check amount of actuators
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
+
+        # self.I = np.diag([6.5e-3, 2e-3, 6e-3])
+        self.I = np.diag([5.73e-3, 1.35e-3, 5.43e-3])
+
+        self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
+                           width_ratios=[1, 1, 1],
+                           height_ratios=[1, 1, 1])
+
+        self.plot()
+
+    def _populate(self):
+        gyro = np.array([self.data[f'gyroADCafterRpm[{i}]'].to_numpy() for i in range(3)])
+        gyro_S = Signal(self.t, gyro.T)
+        alpha_raw = gyro_S.dot(order=1).y.T
+
+        # M = I * alpha + omega x (I * omega)
+        M_raw = self.I @ alpha_raw  +  np.cross(gyro, self.I @ gyro, axis=0)
+
+        M_raw_S = Signal(self.t, M_raw.T)
+        M_raw_ff = M_raw_S.filtfilt(type='lowpass', order=2, cutoff_hz=30.0).y.T
+
+        #%% offboard model
+        phi = 3.297e-1
+        Phi = np.array([
+            [+3.106e-01,          0, +4.148e-02,          0, -1.613e-04,          0],
+            [         0, +3.603e-02,          0, +1.355e-03,          0, -3.538e-03],
+            [+4.148e-02,          0, +4.465e-02,          0, +1.951e-04,          0],
+            [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
+            [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
+            [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
+        ], dtype=np.float32)
+
+        cd = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
+        cdd = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)
+        cddd = np.array([         0,          0,          0,          0, -2.201e-05,          0], dtype=np.float32)
+        d0 = np.array([-3.618e-01, -1.540e-01], dtype=np.float32)
+
+        cww = np.array([2.203e-07, 0, -1.396e-06, 1.487e-07, 0, +2.247e-08], dtype=np.float32)
+        cwd = np.zeros_like(cww)
+
+        # get body velocities
+        quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
+        quat[np.linalg.norm(quat, axis=1) < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
+        rot = R.from_quat(quat)
+        irot = rot.inv()
+
+        vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
+        velB = irot.apply(vel)
+
+        # eta as concat of velB and gyro
+        eta_B = np.vstack((velB.T, gyro))
+
+        self.eta = np.sqrt( np.sum(velB**2, axis=1) + phi * np.sum(gyro.T**2, axis=1) )
+        self.FM_aero = - self.eta * (Phi @ eta_B)
+
+        self.FM_act = np.zeros_like(self.FM_aero)
+        omega = np.array([self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(2)])
+        d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)])
+        ww = omega**2
+        wwDd = ww * (d.T - d0).T
+        wwsum = np.sum(ww, axis=0)
+        wwdiff = ww[0] - ww[1]
+        wwdsum = np.sum(wwDd, axis=0)
+        wwddiff = wwDd[0] - wwDd[1]
+        ddsum = np.zeros_like(wwsum)
+        dddsum = np.zeros_like(wwsum)
+        dddiff = np.zeros_like(wwsum)
+        wddiff = np.zeros_like(wwsum)
+
+        self.FM_act[0] = cww[0]*wwsum   +  0              +  cd[0]*wwdsum   +  cdd[0]*ddsum
+        self.FM_act[1] = 0
+        self.FM_act[2] = cww[2]*wwsum
+        self.FM_act[3] = cww[3]*wwdiff
+        self.FM_act[4] = cww[4]*wwsum   +  0              +  cd[4]*wwdsum   +  cdd[4]*ddsum   +  cddd[4]*dddsum
+        self.FM_act[5] = cww[5]*wwdiff  +  cwd[5]*wddiff  +  cd[5]*wwddiff  +  cdd[5]*dddiff
+
+        self.FM = self.FM_aero + self.FM_act
+
+        #%% onboard model
+
+        Nr = self.Nr
+        Ns = self.Ns
+        N = self.Nr + self.Ns
+        pqr_range = list(range(8))
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+
+        AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+
+        # motor and elevon moments
+        Lact_online = np.sum(p[:2]*ww  +  p[2:4]*ww*d, axis=0) * self.I[0,0]
+        Mact_online = np.sum(q[:2]*ww  +  q[2:4]*ww*d, axis=0) * self.I[1,1]
+        Nact_online = np.sum(r[:2]*ww  +  r[2:4]*ww*d, axis=0) * self.I[2,2]
+        act_online = [Lact_online, Mact_online, Nact_online]
+
+        # with final model
+        Lact_final = (p[:2, -1]@ww  +  p[2:4, -1]@(ww*d)) * self.I[0,0]
+        Mact_final = (q[:2, -1]@ww  +  q[2:4, -1]@(ww*d)) * self.I[1,1]
+        Nact_final = (r[:2, -1]@ww  +  r[2:4, -1]@(ww*d)) * self.I[2,2]
+        act_final = [Lact_final, Mact_final, Nact_final]
+
+        #%% make plots
+
+        for i, axis in enumerate(['roll', 'pitch', 'yaw']):
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, i]),
+                                light=None,
+                                solid =[M_raw_ff[i]],
+                                dashed=[self.FM[3+i]],
+                                series_labels=[axis],
+                                style_labels=[None, "Measured", "Phi Model"],
+                                title="Body Moment Estimation vs Measurement",
+                                ylabel="Moment [Nm]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[1, i]),
+                                light=None,
+                                solid=[self.FM_aero[3+i]],
+                                dashed =[self.FM[3+i]],
+                                series_labels=[axis],
+                                style_labels=[None, "Phi Aero", "Phi Total"],
+                                title="Body Moment Modelling",
+                                ylabel="Moment [Nm]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, i]),
+                                light=[act_final[i]],
+                                solid=[act_online[i]],
+                                dashed =[self.FM_act[3+i]],
+                                series_labels=[axis],
+                                style_labels=["o/b final", "o/b online", "Phi Actuators"],
+                                title="Actuator Moment Estimation",
+                                ylabel="Moment [Nm]")
 
 class IndiflightFxSysIdPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""

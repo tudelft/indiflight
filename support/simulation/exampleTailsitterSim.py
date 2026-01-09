@@ -93,7 +93,7 @@ if __name__=="__main__":
     # tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
 
     tail = TailsitterPhi()
-    tail.setInertia(m=0.5, I=np.diag([6e-3, 2e-3, 6.5e-3]))
+    tail.setInertia(m=0.564, I=np.diag([5.73e-3, 1.35e-3, 5.43e-3]))
 
     # with d0 only for yaw
     # tail.setRotor(0, X=[5.831e-03, -1.269e-01, -7.000e-02], ax=[2.661e-02, 0.000e+00, -9.996e-01], k=1.238e-6, cm=-6.639e-3, wmax=3000., tau=0.03, kESC=0.5, I=3.338e-6) # RR
@@ -117,25 +117,26 @@ if __name__=="__main__":
     # cddd = np.array([         0,          0,          0,          0,          0,          0], dtype=np.float32)
 
     # with d0 for all, but cmww=0, seems to be better
-    phi = 3.370e-01
+    phi = 3.297e-1
     Phi = np.array([
-        [+2.748e-01,          0, +3.666e-02,          0, -1.479e-04,          0],
-        [         0, +3.128e-02,          0, +1.425e-03,          0, -4.223e-03],
-        [+3.666e-02,          0, +3.950e-02,          0, +1.490e-04,          0],
-        [         0, +1.425e-03,          0, +8.233e-04,          0, +7.577e-04],
-        [-1.479e-04,          0, +1.490e-04,          0, +8.688e-04,          0],
-        [         0, -4.223e-03,          0, +7.577e-04,          0, +3.282e-03],
+        [+3.106e-01,          0, +4.148e-02,          0, -1.613e-04,          0],
+        [         0, +3.603e-02,          0, +1.355e-03,          0, -3.538e-03],
+        [+4.148e-02,          0, +4.465e-02,          0, +1.951e-04,          0],
+        [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
+        [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
+        [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
     ], dtype=np.float32)
-    cd   = np.array([-6.241e-07,          0,          0,          0, -2.601e-08, -7.293e-08], dtype=np.float32)
-    cdd  = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
-    cddd = np.array([         0,          0,          0,          0, -2.961e-05,          0], dtype=np.float32)
-    d0   = np.array([-3.665e-01, -1.602e-01], dtype=np.float32)
+
+    cd = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
+    cdd = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)
+    cddd = np.array([         0,          0,          0,          0, -2.201e-05,          0], dtype=np.float32)
+    d0 = np.array([-3.618e-01, -1.540e-01], dtype=np.float32)
 
     tail.setPhiModel(phi, Phi)
     tail.setElevonModel(cd, cdd, cddd, d0)
 
-    tail.setRotor(0, X=[1.124e-02, -1.260e-01, -7.000e-02], ax=[1.585e-01, 0.000e+00, -9.874e-01], k=1.254e-06, cm=-1.856e-03, wmax=3000., tau=0.03, kESC=0.5, I=3.336e-6) # RR
-    tail.setRotor(1, X=[1.124e-02, +1.260e-01, -7.000e-02], ax=[1.585e-01, 0.000e+00, -9.874e-01], k=1.254e-06, cm=+1.856e-03, wmax=3000., tau=0.03, kESC=0.5, I=3.336e-6) # FR
+    tail.setRotor(0, X=[1.104e-02, -1.064e-01, -7.000e-02], ax=[1.558e-01, 0.000e+00, -9.878e-01], k=1.413e-06, cm=-6.938e-04, wmax=3000., tau=0.03, kESC=0.5, I=2.842e-6) # RR
+    tail.setRotor(1, X=[1.104e-02, +1.064e-01, -7.000e-02], ax=[1.558e-01, 0.000e+00, -9.878e-01], k=1.413e-06, cm=+6.938e-04, wmax=3000., tau=0.03, kESC=0.5, I=2.842e-6) # FR
 
 
     inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
