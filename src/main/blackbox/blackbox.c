@@ -103,7 +103,7 @@
 #define DEFAULT_BLACKBOX_DEVICE     BLACKBOX_DEVICE_SERIAL
 #endif
 
-#if defined(MOCKUP) && (MAX_SUPPORTED_MOTORS == 8)
+#if defined(MOCKUP) && (MAX_SUPPORTED_MOTORS == 8) && false
 #define BLACKBOX_LEARNER_LOG_8_MOTORS
 #define BLACKBOX_LEARNER_N 8
 #else
@@ -2006,12 +2006,12 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
-        blackboxCurrent->eVarsMotor[motor] = 0.1f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
+        blackboxCurrent->eVarsMotor[motor] = 0.01f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
         blackboxCurrent->lambdasMotor[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * actRls[motor].lambda;
     }
 
     for (int axis = 0; axis < 6; axis++) {
-        blackboxCurrent->eVarsFx[axis] = 0.1f * ((1 << 16) - 1) * fxRls[axis].fortescue.errorMV.variance;
+        blackboxCurrent->eVarsFx[axis] = 0.01f * ((1 << 16) - 1) * fxRls[axis].fortescue.errorMV.variance;
         blackboxCurrent->lambdasFx[axis] = UNIT_FLOAT_TO_UNSIGNED16VB * fxRls[axis].lambda;
     }
 

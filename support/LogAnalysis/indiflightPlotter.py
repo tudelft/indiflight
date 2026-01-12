@@ -588,12 +588,21 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
 
         pqr_range = list(range(8))
 
-        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
-        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
-        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
-        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
-        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
-        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+
+        p[4:6] *= 1e5 * 1e-3
+        q[4:6] *= 1e5 * 1e-3
+        r[4:6] *= 1e5 * 1e-3
+
+        p[6] *= 1e5 * 1e-1
+        q[6] *= 1e5 * 1e-1
+        r[6] *= 1e5 * 1e-1
+
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
         fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
@@ -673,6 +682,10 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
                                 title="Fx Forgetting Factor",
                                 ylabel="Forgetting Factor")
 
+        axis = self._find_axis(self.gs[5,1])
+        if axis is not None:
+            axis.set_ylim(0.95, 1.01)
+
         if self.has_inertia_learning:
             self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                                   light=None,
@@ -714,9 +727,9 @@ class IndiflightMoments(FlightPlotterBase):
         # self.I = np.diag([6.5e-3, 2e-3, 6e-3])
         self.I = np.diag([5.73e-3, 1.35e-3, 5.43e-3])
 
-        self.define_layout(figsize=(12, 8), nrows=3, ncols=3,
+        self.define_layout(figsize=(12, 8), nrows=4, ncols=3,
                            width_ratios=[1, 1, 1],
-                           height_ratios=[1, 1, 1])
+                           height_ratios=[1, 1, 1, 1])
 
         self.plot()
 
@@ -793,16 +806,18 @@ class IndiflightMoments(FlightPlotterBase):
         Nr = self.Nr
         Ns = self.Ns
         N = self.Nr + self.Ns
-        pqr_range = list(range(8))
+        pqr_range = list(range(4))
 
-        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)])
-        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)])
-        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)])
-        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range])
-        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range])
-        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range])
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
+
+        final_idx = np.abs(self.t - 20.0).argmin()
 
         # motor and elevon moments
         Lact_online = np.sum(p[:2]*ww  +  p[2:4]*ww*d, axis=0) * self.I[0,0]
@@ -811,40 +826,64 @@ class IndiflightMoments(FlightPlotterBase):
         act_online = [Lact_online, Mact_online, Nact_online]
 
         # with final model
-        Lact_final = (p[:2, -1]@ww  +  p[2:4, -1]@(ww*d)) * self.I[0,0]
-        Mact_final = (q[:2, -1]@ww  +  q[2:4, -1]@(ww*d)) * self.I[1,1]
-        Nact_final = (r[:2, -1]@ww  +  r[2:4, -1]@(ww*d)) * self.I[2,2]
+        Lact_final = (p[:2, final_idx]@ww  +  p[2:4, final_idx]@(ww*d)) * self.I[0,0]
+        Mact_final = (q[:2, final_idx]@ww  +  q[2:4, final_idx]@(ww*d)) * self.I[1,1]
+        Nact_final = (r[:2, final_idx]@ww  +  r[2:4, final_idx]@(ww*d)) * self.I[2,2]
         act_final = [Lact_final, Mact_final, Nact_final]
+
+        #%% online and final aero moments
+        paero = np.array([self.data[f'fx_p_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        qaero = np.array([self.data[f'fx_q_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        raero = np.array([self.data[f'fx_r_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        Laero_online = -self.eta * gyro[0] * self.I[0,0] * paero
+        Maero_online = -self.eta * gyro[1] * self.I[1,1] * qaero
+        Naero_online = -self.eta * gyro[2] * self.I[2,2] * raero
+        aero_online = [Laero_online, Maero_online, Naero_online]
+
+        Laero_final = -self.eta * gyro[0] * self.I[0,0] * paero[final_idx]
+        Maero_final = -self.eta * gyro[1] * self.I[1,1] * qaero[final_idx]
+        Naero_final = -self.eta * gyro[2] * self.I[2,2] * raero[final_idx]
+        aero_final = [Laero_final, Maero_final, Naero_final]
 
         #%% make plots
 
         for i, axis in enumerate(['roll', 'pitch', 'yaw']):
             self._plot_timeseries(self.fig.add_subplot(self.gs[0, i]),
-                                light=None,
+                                light=[aero_final[i]+act_final[i]],
                                 solid =[M_raw_ff[i]],
                                 dashed=[self.FM[3+i]],
                                 series_labels=[axis],
-                                style_labels=[None, "Measured", "Phi Model"],
-                                title="Body Moment Estimation vs Measurement",
+                                style_labels=["O/B Final", "Measured", "Phi"],
+                                title="Total Moment Estimation",
                                 ylabel="Moment [Nm]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[1, i]),
-                                light=None,
-                                solid=[self.FM_aero[3+i]],
-                                dashed =[self.FM[3+i]],
+                                light=[act_final[i]],
+                                solid=[act_online[i]],
+                                dashed=[self.FM_act[3+i]],
                                 series_labels=[axis],
-                                style_labels=[None, "Phi Aero", "Phi Total"],
-                                title="Body Moment Modelling",
+                                style_labels=["O/B Final", "O/B Online", "Phi"],
+                                title="Actuator Moment Estimation",
                                 ylabel="Moment [Nm]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[2, i]),
-                                light=[act_final[i]],
-                                solid=[act_online[i]],
-                                dashed =[self.FM_act[3+i]],
+                                light=[aero_final[i].T],
+                                solid=[aero_online[i].T],
+                                dashed =[self.FM_aero[3+i]],
                                 series_labels=[axis],
-                                style_labels=["o/b final", "o/b online", "Phi Actuators"],
-                                title="Actuator Moment Estimation",
+                                style_labels=["O/B Final", "O/B Online", "Phi"],
+                                title="Aero Moment Estimation",
                                 ylabel="Moment [Nm]")
+
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, i]),
+                                light=[self.FM_act[3+i]],
+                                solid=[M_raw_ff[i]],
+                                dashed =[self.FM[3+i]],
+                                series_labels=[axis],
+                                style_labels=["Phi Actuators", "Measured", "Phi Total"],
+                                title="Phi Moment Breakdown",
+                                ylabel="Moment [Nm]")
+
 
 class IndiflightFxSysIdPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""

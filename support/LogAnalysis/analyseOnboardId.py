@@ -99,7 +99,7 @@ act_true = {
     'sigma_rls[1]': -0.25,
     'sigma_rls[2]': -0.61538,
 }
-#aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, name=f"{args.name} -- Onboard Individual Analysis")
+aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, name=f"{args.name} -- Onboard Individual Analysis")
 
 
 moplt = IndiflightMoments(log.data, Nr=2, Ns=2, name=f"{args.name} -- Moments")
@@ -111,14 +111,14 @@ pplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=False, title=f"{ar
 fplt.connect_viewport(pplt)
 #mplt.connect_viewport(pplt)
 #splt.connect_viewport(pplt)
-#aplt.connect_viewport(pplt)
+aplt.connect_viewport(pplt)
 moplt.connect_viewport(pplt)
 
 #fplt.connect_viewport(pfplt)
 #aplt.connect_viewport(pfplt)
 
 # cursor = BlittedCursor(fplt.all_axes + mplt.all_axes + splt.all_axes + aplt.all_axes, sharex=True)
-cursor = BlittedCursor(fplt.all_axes + moplt.all_axes, sharex=True)
+cursor = BlittedCursor(fplt.all_axes + moplt.all_axes + aplt.all_axes, sharex=True)
 
 plt.show()
 

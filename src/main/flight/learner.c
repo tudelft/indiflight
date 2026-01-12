@@ -235,7 +235,7 @@ static void initLearnerRls(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     const learnerConfig_t *config = learnerConfig();
 
-    float actionBandwidthHz = 0.001f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 2.0f * ( 1. / (2.f * M_PIf * 0.025f) ); // 5 times slower than assumed fastest actuator
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz, config->useFortescue);
 
     // init filters and other rls
@@ -734,19 +734,19 @@ void updateLearner(timeUs_t current) {
                     A[7] = -1e-1f * eta * p;
                     break;
                 case 1: // pitch
-                    A[1] = 1e-5 * (w20); // motor 0 is left
-                    A[2] = 1e-5 * (w21);
-                    A[3] = 1e-5 * (w2d0);
-                    A[4] = 1e-5 * (w2d1);
+                    A[1] = 1e-5f * (w20); // motor 0 is left
+                    A[2] = 1e-5f * (w21);
+                    A[3] = 1e-5f * (w2d0);
+                    A[4] = 1e-5f * (w2d1);
                     A[5] = 0.f;
                     A[6] = 0.f;
                     A[7] = -1e-1f * eta * q;
                     break;
                 case 2: // yaw
-                    A[1] = 1e-5 * (w20); // motor 0 is left
-                    A[2] = 1e-5 * (w21);
-                    A[3] = 1e-5 * (w2d0);
-                    A[4] = 1e-5 * (w2d1);
+                    A[1] = 1e-5f * (w20); // motor 0 is left
+                    A[2] = 1e-5f * (w21);
+                    A[3] = 1e-5f * (w2d0);
+                    A[4] = 1e-5f * (w2d1);
                     A[5] = 1e-3f * (wdot0);
                     A[6] = 1e-3f * (wdot1);
                     A[7] = -1e-1f * eta * r;
