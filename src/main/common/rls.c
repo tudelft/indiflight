@@ -99,13 +99,14 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
         return RLS_FAIL;
     }
 
-    rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
 
     // initialize fortescue tuner
     rls->useFortescue = useFortescue;
     if (rls->useFortescue) {
+        rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
         fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
     } else {
+        rls->lambdaBase = rls->lambda = 1.f;
         rls->fortescue = (fortescue_tuning_t){0};
     }
 

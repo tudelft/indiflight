@@ -817,7 +817,7 @@ class IndiflightMoments(FlightPlotterBase):
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
 
-        final_idx = np.abs(self.t - 20.0).argmin()
+        final_idx = np.abs(self.t - 250.0).argmin()
 
         # motor and elevon moments
         Lact_online = np.sum(p[:2]*ww  +  p[2:4]*ww*d, axis=0) * self.I[0,0]

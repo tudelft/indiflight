@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 4);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 5);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
@@ -87,6 +87,8 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .zetaAttitude = 80,
     .zetaVelocity = 60,
     .zetaPosition = 80,
+    .zetaVelocityVert = 90,
+    .zetaPositionVert = 100,
     .rollMisalignment = 0,
     .pitchMisalignment = 0,
     .yawMisalignment = 0,
@@ -166,10 +168,12 @@ void initLearnerFilters(void) {
     positionProfileLearned = positionProfilesMutable(POSITION_PROFILE_COUNT-1);
 #endif
 
-    learnRun.zeta[LEARNER_LOOP_RATE]     = constrainf(0.01f * learnerConfig()->zetaRate    , 0.5f, 1.0f);
-    learnRun.zeta[LEARNER_LOOP_ATTITUDE] = constrainf(0.01f * learnerConfig()->zetaAttitude, 0.5f, 1.0f);
-    learnRun.zeta[LEARNER_LOOP_VELOCITY] = constrainf(0.01f * learnerConfig()->zetaVelocity, 0.5f, 1.0f);
-    learnRun.zeta[LEARNER_LOOP_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_HORIZONTAL_RATE]     = constrainf(0.01f * learnerConfig()->zetaRate    , 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_HORIZONTAL_ATTITUDE] = constrainf(0.01f * learnerConfig()->zetaAttitude, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_HORIZONTAL_VELOCITY] = constrainf(0.01f * learnerConfig()->zetaVelocity, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_HORIZONTAL_POSITION] = constrainf(0.01f * learnerConfig()->zetaPosition, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_VERTICAL_VELOCITY]   = constrainf(0.01f * learnerConfig()->zetaVelocityVert, 0.5f, 1.0f);
+    learnRun.zeta[LEARNER_LOOP_VERTICAL_POSITION]   = constrainf(0.01f * learnerConfig()->zetaPositionVert, 0.5f, 1.0f);
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         //rlsParallelInit(&fxRls[axis], learnerConfig()->numAct, 1, 1e0f, 0.997f); // forces
@@ -304,8 +308,8 @@ static void initLearnerRls(void) {
 
 
     if (config->initFromProfileAct) {
-        learnRun.gains[LEARNER_LOOP_RATE] = 0.1f * p->rateGains[0];
-        learnRun.gains[LEARNER_LOOP_ATTITUDE] = ((float) p->attGains[0]) / ((float) p->rateGains[0]);
+        learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 0.1f * p->rateGains[0];
+        learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] = ((float) p->attGains[0]) / ((float) p->rateGains[0]);
     }
 
     learnRun.initialized = true;
@@ -810,6 +814,7 @@ void updateLearner(timeUs_t current) {
     if (gainTuningConditions) {
         // get slowest actuator
         float maxTau = 0.f;
+        float maxTauMotors = 0.f;
         for (int act = 0; act < indiRun.actNum; act++) {
             if (!(config->actMask & (1 << act))) {
                 continue; // skip unselected actuators
@@ -823,21 +828,30 @@ void updateLearner(timeUs_t current) {
                 maxTau = MAX(maxTau, (actRls[act].x[3]+actRls[act].x[2]) * 0.1f);
             } else {
                 maxTau = MAX(maxTau, (actRls[act].x[3]) * 0.1f);
+                maxTauMotors = MAX(maxTauMotors, (actRls[act].x[3]) * 0.1f);
             }
 
         }
 
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
+        maxTauMotors = constrainf(maxTauMotors, 0.01f, 0.2f);
 
-        // calculate gains
-        learnRun.gains[LEARNER_LOOP_RATE] = 
-            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+        // calculate horizontal gains
+        learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 
+            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_HORIZONTAL_RATE]) * maxTau);
 
-        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++) {
+        for (int loop = LEARNER_LOOP_HORIZONTAL_ATTITUDE; loop <= LEARNER_LOOP_HORIZONTAL_POSITION; loop++) {
             learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
         }
-        learnRun.gains[LEARNER_LOOP_RATE] = 10.f;
-        learnRun.gains[LEARNER_LOOP_ATTITUDE] = 5.f;
+        // learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 10.f;
+        // learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] = 5.f;
+
+        // calculate vertical gains
+        learnRun.gains[LEARNER_LOOP_VERTICAL_VELOCITY] =
+            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_VERTICAL_VELOCITY]) * maxTauMotors);
+
+        learnRun.gains[LEARNER_LOOP_VERTICAL_POSITION] =
+            0.25f * learnRun.gains[LEARNER_LOOP_VERTICAL_VELOCITY] / sq(learnRun.zeta[LEARNER_LOOP_VERTICAL_POSITION]);
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -894,31 +908,45 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     const learnerConfig_t* config = learnerConfig(); // fix this line
 
     for (int axis = 0; axis < 3; axis++) {
-        indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
+        indi->rateGains[axis] = (uint16_t)
+            constrainf(10.f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE],
+                1.f, (1 << 16) - 1.f);
         // attGains are expected for parallel PD, but we have cascaded, so
-        indi->attGains[axis]  = (uint16_t) 10.f
-             * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
+        indi->attGains[axis]  = (uint16_t) 
+            constrainf(10.f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] * learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE],
+                1.f, (1 << 16) - 1.f);
     }
 
     // same for position
-    pos->horz_p = (uint8_t) 10.f 
-        * learnRun.gains[LEARNER_LOOP_POSITION] * learnRun.gains[LEARNER_LOOP_VELOCITY];
-    pos->horz_d = (uint8_t) 10.f * learnRun.gains[LEARNER_LOOP_VELOCITY];
+    pos->horz_p = (uint8_t) 
+        constrainf(10.f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_POSITION] * learnRun.gains[LEARNER_LOOP_HORIZONTAL_VELOCITY],
+            1.f, 255.f);
+    pos->horz_d = (uint8_t)
+        constrainf(10.f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_VELOCITY],
+            1.f, 255.f);
     pos->horz_i = pos->horz_d / 10; // fudge factor: by lack of better option at this point
-    pos->vert_p = pos->horz_p;
-    pos->vert_i = pos->horz_i;
-    pos->vert_d = pos->horz_d;
+
+    pos->vert_p = (uint8_t)
+        constrainf(10.f * learnRun.gains[LEARNER_LOOP_VERTICAL_POSITION] * learnRun.gains[LEARNER_LOOP_VERTICAL_VELOCITY],
+            1.f, 255.f);
+    pos->vert_d = (uint8_t)
+        constrainf(10.f * learnRun.gains[LEARNER_LOOP_VERTICAL_VELOCITY],
+            1.f, 255.f);
+    pos->vert_i = pos->vert_d / 10; // fudge factor: by lack of better option at this point
+
     // pos->horz_max_v = 250; // cm/s
     // pos->horz_max_a = 500; // cm/s/s
     // pos->horz_max_iterm = 200; // cm/s
     // pos->max_tilt = 40; // conservative, like the others
     // pos->vert_max_v_up = 100; // cm/s
     // pos->vert_max_v_down = 100; // cm/s
-    // pos->vert_max_a_up = 1000; // cm/s/s
-    // pos->vert_max_a_down = 500; // cm/s/s
+    pos->vert_max_a_up = 2500; // cm/s/s
+    pos->vert_max_a_down = 500; // cm/s/s
     // pos->vert_max_iterm = 100; // cm/s/s
     // fudge factor 0.5f, maybe try to see what happens with lower zeta_attitude
-    pos->yaw_p = (uint8_t) 10.f * .5f * learnRun.gains[LEARNER_LOOP_ATTITUDE]; // deg/s per deg * 10
+    pos->yaw_p = (uint8_t) 
+        constrainf(10.f * .5f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE],
+            1.f, 255.f); // degs per sec * 10
     // pos->weathervane_p = 0;
     // pos->weathervane_min_v = 200; // cm/s/s
     // pos->use_spf_attenuation = 1;

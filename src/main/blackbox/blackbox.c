@@ -622,6 +622,8 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"learner_gains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learner_gains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learner_gains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"hoverAttitude",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"hoverAttitude",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -2683,6 +2685,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_ATTITUDE, "%d",  learnerConfig()->zetaAttitude);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY, "%d",  learnerConfig()->zetaVelocity);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION, "%d",  learnerConfig()->zetaPosition);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT, "%d",  learnerConfig()->zetaVelocityVert);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION_VERT, "%d",  learnerConfig()->zetaPositionVert);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ROLL_MISALIGNMENT     , "%d", learnerConfig()->rollMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_PITCH_MISALIGNMENT    , "%d", learnerConfig()->pitchMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_YAW_MISALIGNMENT      , "%d", learnerConfig()->yawMisalignment);
