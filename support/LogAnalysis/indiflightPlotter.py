@@ -831,6 +831,7 @@ class IndiflightMoments(FlightPlotterBase):
         Nact_final = (r[:2, final_idx]@ww  +  r[2:4, final_idx]@(ww*d)) * self.I[2,2]
         act_final = [Lact_final, Mact_final, Nact_final]
 
+
         #%% online and final aero moments
         paero = np.array([self.data[f'fx_p_rls_x[6]']]).squeeze() / 1000 * 1e-1
         qaero = np.array([self.data[f'fx_q_rls_x[6]']]).squeeze() / 1000 * 1e-1
@@ -845,43 +846,46 @@ class IndiflightMoments(FlightPlotterBase):
         Naero_final = -self.eta * gyro[2] * self.I[2,2] * raero[final_idx]
         aero_final = [Laero_final, Maero_final, Naero_final]
 
+        act_aero_online = [act_online[i] + aero_online[i] for i in range(3)]
+        act_aero_final = [act_final[i] + aero_final[i] for i in range(3)]
+
         #%% make plots
 
         for i, axis in enumerate(['roll', 'pitch', 'yaw']):
             self._plot_timeseries(self.fig.add_subplot(self.gs[0, i]),
-                                light=[aero_final[i]+act_final[i]],
-                                solid =[M_raw_ff[i]],
-                                dashed=[self.FM[3+i]],
-                                series_labels=[axis],
-                                style_labels=["O/B Final", "Measured", "Phi"],
-                                title="Total Moment Estimation",
+                                light=None,
+                                solid=[M_raw_ff[i], act_aero_final[i], self.FM[3+i]],
+                                dashed=[None, act_aero_online[i], None],
+                                series_labels=["Measured", "Onboard", "Phi"],
+                                style_labels=[None, "Posteriori", "Online"],
+                                title=f"Total Moment Estimation -- {axis}",
                                 ylabel="Moment [Nm]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[1, i]),
-                                light=[act_final[i]],
-                                solid=[act_online[i]],
-                                dashed=[self.FM_act[3+i]],
-                                series_labels=[axis],
-                                style_labels=["O/B Final", "O/B Online", "Phi"],
-                                title="Actuator Moment Estimation",
+                                light=[None, act_online[i], None],
+                                solid=[None, act_final[i], self.FM_act[3+i]],
+                                dashed=None,
+                                series_labels=[None, "Onboard", "Phi"],
+                                style_labels=["Online", "Posteriori", None],
+                                title=f"Actuator Moment Estimation -- {axis}",
                                 ylabel="Moment [Nm]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[2, i]),
-                                light=[aero_final[i].T],
-                                solid=[aero_online[i].T],
-                                dashed =[self.FM_aero[3+i]],
-                                series_labels=[axis],
-                                style_labels=["O/B Final", "O/B Online", "Phi"],
-                                title="Aero Moment Estimation",
+                                light=[None, aero_online[i], None],
+                                solid=[None, aero_final[i], self.FM_aero[3+i]],
+                                dashed=None,
+                                series_labels=[None, "Onboard", "Phi"],
+                                style_labels=["Online", "Posteriori", None],
+                                title=f"Aero Moment Estimation -- {axis}",
                                 ylabel="Moment [Nm]")
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[3, i]),
-                                light=[self.FM_act[3+i]],
-                                solid=[M_raw_ff[i]],
-                                dashed =[self.FM[3+i]],
-                                series_labels=[axis],
-                                style_labels=["Phi Actuators", "Measured", "Phi Total"],
-                                title="Phi Moment Breakdown",
+                                light=[None, None, self.FM_aero[3+i]],
+                                solid=[M_raw_ff[i], None, self.FM[3+i]],
+                                dashed =[None, None, self.FM_act[3+i]],
+                                series_labels=["Measured", None, "Phi"],
+                                style_labels=["Aero", "Total", "Actuators"],
+                                title=f"Moment Breakdown -- {axis}",
                                 ylabel="Moment [Nm]")
 
 
@@ -1141,3 +1145,5 @@ if __name__ == "__main__":
 
     plt.show()
 
+
+# %%
