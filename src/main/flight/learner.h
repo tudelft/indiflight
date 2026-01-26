@@ -99,6 +99,7 @@ typedef struct learningRuntime_s {
     float fxOmega[MAXU];
     float fxOmegaDiff[MAXU];
     float fxOmegaDot[MAXU];
+    float fxOmegaDotDot[MAXU];
     fp_vector_t fxRateDot;
     fp_vector_t fxSpf;
     float motorOmega[MAXU];

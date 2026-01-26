@@ -108,6 +108,8 @@ typedef struct indiProfile_s {
     int16_t tails_cxd[2];
     int16_t tails_cmd[2];
     int16_t tails_cnd[2];
+    int16_t tails_cmdd[2];
+    int16_t tails_cndd[2];
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
@@ -194,6 +196,8 @@ typedef struct indiRuntime_s {
     float tailsCxd[2];
     float tailsCmd[2];
     float tailsCnd[2];
+    float tailsCmdd[2];
+    float tailsCndd[2];
     // ---- runtime values -- actauators
     float d[MAXU]; // command issued to the actuators on [-1, 1] scale
     float u[MAXU]; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]

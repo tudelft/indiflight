@@ -21,9 +21,9 @@ class IndiflightPlotter(FlightPlotterBase):
         self.has_pos = 'pos[0]' in self.data.columns
         self.has_servo_feedback = 'servo_feedback[0]' in self.data.columns
 
-        self.define_layout(figsize=(12, 8), nrows=4, ncols=3,
+        self.define_layout(figsize=(12, 8), nrows=5, ncols=3,
                            width_ratios=[1, 1, 1],
-                           height_ratios=[1, 1, 1, 1])
+                           height_ratios=[1, 1, 1, 1, 1])
 
         self.plot()
 
@@ -102,14 +102,29 @@ class IndiflightPlotter(FlightPlotterBase):
                                 ylimits=(-1.05, 1.05))
 
             if self.has_servo_feedback and self.Ns > 0:
+                d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)])
+                dSig = Signal(self.t, d.T)
+                dDot = dSig.dot(order=1).y.T
+                dDotDot = dSig.dot(order=2).y.T
+
                 self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                              light=None,
-                             solid=[self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)],
+                             solid=[d[i] for i in range(self.Ns)],
                              dashed=[self.data[f'u[{i}]'].to_numpy() * 100. * np.pi / 180. for i in range(self.Nr, N)],
                              series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
                              style_labels=[None, "Unfiltered state", "Scaled Command"],
                              title="Servo State",
                              ylabel="Servo State [rad]",
+                )
+
+                self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
+                             light=[dDotDot[i] for i in range(self.Ns)],
+                             solid=[10*dDot[i] for i in range(self.Ns)],
+                             dashed=None,
+                             series_labels=[f"Servo {i}" for i in range(1,self.Ns+1)],
+                             style_labels=["2nd Derivative", "1st Derivative", None],
+                             title="Servo Derivatives",
+                             ylabel="Servo Derivative",
                 )
 
         quat = self.data[[f'quat[{i}]' for i in [1,2,3,0]]].to_numpy()
@@ -595,6 +610,8 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
         q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
         r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
 
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+
         p[4:6] *= 1e5 * 1e-3
         q[4:6] *= 1e5 * 1e-3
         r[4:6] *= 1e5 * 1e-3
@@ -653,16 +670,28 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
                                 title=f"Fx {axis.upper()}",
                                 ylabel="Fx [Nm/(kgm^2)/(rad/s)²]")
 
+        self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
+                                light=None,
+                                solid=qd,
+                                dashed=None,
+                                true_values=[self.true[f'fx_q_rls_x[{i}]'] for i in range(4,6)] if self.true is not None else None,
+                                series_labels=[
+                                    "Elevon 1", "Elevon 2"
+                                ],
+                                style_labels=[None, "Onboard", None],
+                                title=f"Elevon Velocity Q",
+                                ylabel="Qd [(Nm/kgm^2) / (rad/s)]")
+
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
                             light=None,
-                            solid=p[4:6] if axis == 'p' else q[4:6] if axis == 'q' else r[4:6],
+                            solid=r[4:6],
                             dashed=None,
-                            true_values=[None, None],
+                            true_values=[self.true[f'fx_r_rls_x[{i}]'] for i in range(4,6)] if self.true is not None else None,
                             series_labels=[
                                 "Motor 1", "Motor 2"
                             ],
                             style_labels=[None, "Onboard", None],
-                            title=f"Fx {axis.upper()}",
+                            title=f"Fx R Omega_dot",
                             ylabel="Fx [Nm/(kgm^2)/(rad/s/s)]")
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[4, 1]),
@@ -781,14 +810,17 @@ class IndiflightMoments(FlightPlotterBase):
         self.FM_act = np.zeros_like(self.FM_aero)
         omega = np.array([self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(2)])
         d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)])
+        dSig = Signal(self.t, d.T)
+        dDot = dSig.dot(order=1).y.T * 1
+        dDotDot = dSig.dot(order=2).y.T * 0
         ww = omega**2
         wwDd = ww * (d.T - d0).T
         wwsum = np.sum(ww, axis=0)
         wwdiff = ww[0] - ww[1]
         wwdsum = np.sum(wwDd, axis=0)
         wwddiff = wwDd[0] - wwDd[1]
-        ddsum = np.zeros_like(wwsum)
-        dddsum = np.zeros_like(wwsum)
+        ddsum = np.sum(dDot, axis=0)
+        dddsum = np.sum(dDotDot, axis=0)
         dddiff = np.zeros_like(wwsum)
         wddiff = np.zeros_like(wwsum)
 
@@ -815,20 +847,22 @@ class IndiflightMoments(FlightPlotterBase):
         q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
         r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
 
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
 
-        final_idx = np.abs(self.t - 250.0).argmin()
+        final_idx = -500
 
         # motor and elevon moments
-        Lact_online = np.sum(p[:2]*ww  +  p[2:4]*ww*d, axis=0) * self.I[0,0]
-        Mact_online = np.sum(q[:2]*ww  +  q[2:4]*ww*d, axis=0) * self.I[1,1]
-        Nact_online = np.sum(r[:2]*ww  +  r[2:4]*ww*d, axis=0) * self.I[2,2]
+        Lact_online = np.sum(p[:2]*ww + p[2:4]*ww*d, axis=0) * self.I[0,0]
+        Mact_online = np.sum(q[:2]*ww + q[2:4]*ww*d + qd*dDot, axis=0) * self.I[1,1]
+        Nact_online = np.sum(r[:2]*ww + r[2:4]*ww*d, axis=0) * self.I[2,2]
         act_online = [Lact_online, Mact_online, Nact_online]
 
         # with final model
-        Lact_final = (p[:2, final_idx]@ww  +  p[2:4, final_idx]@(ww*d)) * self.I[0,0]
-        Mact_final = (q[:2, final_idx]@ww  +  q[2:4, final_idx]@(ww*d)) * self.I[1,1]
-        Nact_final = (r[:2, final_idx]@ww  +  r[2:4, final_idx]@(ww*d)) * self.I[2,2]
+        Lact_final = (p[:2, final_idx]@ww + p[2:4, final_idx]@(ww*d)) * self.I[0,0]
+        Mact_final = (q[:2, final_idx]@ww + q[2:4, final_idx]@(ww*d) + qd[:, final_idx] @ dDot) * self.I[1,1]
+        Nact_final = (r[:2, final_idx]@ww + r[2:4, final_idx]@(ww*d)) * self.I[2,2]
         act_final = [Lact_final, Mact_final, Nact_final]
 
 
@@ -887,7 +921,6 @@ class IndiflightMoments(FlightPlotterBase):
                                 style_labels=["Aero", "Total", "Actuators"],
                                 title=f"Moment Breakdown -- {axis}",
                                 ylabel="Moment [Nm]")
-
 
 class IndiflightFxSysIdPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for SysId analysis"""
@@ -1144,6 +1177,3 @@ if __name__ == "__main__":
     fplt.connect_viewport(pplt)
 
     plt.show()
-
-
-# %%

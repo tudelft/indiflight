@@ -371,6 +371,7 @@ static void updateLearningFilters(void) {
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
+    static float fxPrevOmegaDot[MAX_SUPPORTED_MOTORS] = {0};
     //static float fxPrevAngle[MAX_SUPPORTED_SERVOS] = {0};
     static float motorPrevOmega[MAX_SUPPORTED_MOTORS] = {0};
 
@@ -405,6 +406,15 @@ static void updateLearningFilters(void) {
             case INDI_ACT_TYPE_SERVO: {
                 float servo_angle_rad = DEGREES_TO_RADIANS(((float)servo_feedback[s])*0.01f);
                 learnRun.fxOmega[act] = biquadFilterApply(&fxOmegaFilter[act], servo_angle_rad);
+
+                learnRun.fxOmegaDiff[act] = learnRun.fxOmega[act] - fxPrevOmega[act];
+                learnRun.fxOmegaDot[act] = indiRun.indiFrequency * learnRun.fxOmegaDiff[act];
+
+                float fxOmegaDotDiff = learnRun.fxOmegaDot[act] - fxPrevOmegaDot[act];
+                learnRun.fxOmegaDotDot[act] = indiRun.indiFrequency * fxOmegaDotDiff;
+
+                fxPrevOmega[act] = learnRun.fxOmega[act];
+                fxPrevOmegaDot[act] = learnRun.fxOmegaDot[act];
 
                 learnRun.motorOmega[act] = biquadFilterApply(&actOmegaFilter[act], servo_angle_rad);
                 learnRun.motorOmegaDot[act] = indiRun.indiFrequency * (servo_angle_rad - motorPrevOmega[act]);
@@ -698,6 +708,10 @@ void updateLearner(timeUs_t current) {
             float w2d1 = w21 * (learnRun.fxOmega[3]);
             float wdot0 = learnRun.fxOmegaDot[0];
             float wdot1 = learnRun.fxOmegaDot[1];
+            float d0Dot = learnRun.fxOmegaDot[2];
+            float d1Dot = learnRun.fxOmegaDot[3];
+            float d0DotDot = learnRun.fxOmegaDotDot[2];
+            float d1DotDot = learnRun.fxOmegaDotDot[3];
             float u = 0.f;
             float v = 0.f;
             float w = 0.f;
@@ -731,20 +745,24 @@ void updateLearner(timeUs_t current) {
                 case 0: // roll
                     A[1] = 1e-5f * (w20); // motor 0 is left
                     A[2] = 1e-5f * (w21);
-                    A[3] = 0.f;
-                    A[4] = 0.f;
-                    A[5] = 0.f;
-                    A[6] = 0.f;
+                    A[3] = 1e-5f * (w2d0);
+                    A[4] = 1e-5f * (w2d1);
+                    A[5] = 1e-0f * (d0Dot);
+                    A[6] = 1e-0f * (d1Dot);
                     A[7] = -1e-1f * eta * p;
+                    A[8] = 1e-2f * (d0DotDot);
+                    A[9] = 1e-2f * (d1DotDot);
                     break;
                 case 1: // pitch
                     A[1] = 1e-5f * (w20); // motor 0 is left
                     A[2] = 1e-5f * (w21);
                     A[3] = 1e-5f * (w2d0);
                     A[4] = 1e-5f * (w2d1);
-                    A[5] = 0.f;
-                    A[6] = 0.f;
+                    A[5] = 1e-0f * (d0Dot);
+                    A[6] = 1e-0f * (d1Dot);
                     A[7] = -1e-1f * eta * q;
+                    A[8] = 1e-2f * (d0DotDot);
+                    A[9] = 1e-2f * (d1DotDot);
                     break;
                 case 2: // yaw
                     A[1] = 1e-5f * (w20); // motor 0 is left
@@ -992,6 +1010,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->tails_cnd[0]  = -1122;
     indi->tails_cnd[1]  = +1122;
 
+    indi->tails_cmdd[0] = 0;
+    indi->tails_cmdd[1] = 0;
+    indi->tails_cndd[0] = 0;
+    indi->tails_cndd[1] = 0;
+
 #if defined(LEARNER_IS_TAILSITTER_SYMMETRIC)
     indi->tails_d0[0] = 0;
     indi->tails_d0[1] = 0;
@@ -1031,6 +1054,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->tails_cmw[1]  = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cmd[0]  = (int16_t) (1e8f * fxRls[1+3].x[3] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cmd[1]  = (int16_t) (1e8f * fxRls[1+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
+    indi->tails_cmdd[0] = (int16_t) (1e5f * fxRls[1+3].x[5] * 1e-0f * 1e0f); // 1e-2 for deltadot scaling, 1e0 for y-scaling
+    indi->tails_cmdd[1] = (int16_t) (1e5f * fxRls[1+3].x[6] * 1e-0f * 1e0f); // 1e-2 for deltadot scaling, 1e0 for y-scaling
 
     indi->tails_cnw[0]  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cnw[1]  = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
@@ -1038,6 +1063,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->tails_cnd[1]  = (int16_t) (1e8f * fxRls[2+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cnwd[0] = (int16_t) (1e5f * fxRls[2+3].x[5] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
     indi->tails_cnwd[1] = (int16_t) (1e5f * fxRls[2+3].x[6] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    indi->tails_cndd[0] = (int16_t) 0;
+    indi->tails_cndd[1] = (int16_t) 0;
 
     UNUSED(config);
     UNUSED(actG2rotIMU);
