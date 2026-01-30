@@ -47,6 +47,7 @@
 #include "flight/pos_ctl.h"
 #include "flight/throw.h"
 #include "ekf_calc.h"   // for dirty override
+#include "gain_schedule.h"
 
 #include "f2c.h"
 #include "clapack.h"
@@ -575,6 +576,32 @@ void updateLearner(timeUs_t current) {
             rlsNewSample(&fxRls[i], A, &ySpf[i]); // spf
             rlsNewSample(&fxRls[i+3], A, &yRateDot[i]); // RateDot
         }
+
+        // test beun for tiny whoop
+        # ifdef LEARNER_PARAM_OVERRIDE
+        const indiProfile_t *p = indiProfiles(0);
+
+        for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
+            float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
+            float isq = 1.f / sq(maxOmega);
+            // float k = 0.01f * p->actNonlinearity[motor];
+            // motorRls[motor].x[0] = 1e-3f * k * maxOmega;
+            // motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
+            // motorRls[motor].x[2] = 0.;
+            // motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
+
+            fxRls[0].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[motor];
+            fxRls[1].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[motor];
+            fxRls[2].x[motor] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[motor];
+
+            // fxRls[3].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_roll[motor];
+            // fxRls[4].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_pitch[motor];
+            // fxRls[5].x[motor] = 1.f * 1e5f * isq * 1e-1f * p->actG1_yaw[motor];
+            // fxRls[5].x[motor+4] = 1.f * 1e3f * 1e-5f * p->actG2_yaw[motor];
+
+            // motorRls[motor].x[0] = 1e-3f * 0.01f * maxOmega;
+        }
+        # endif
     } else {
         was_reset_fx_rls = false;
     }
@@ -582,7 +609,7 @@ void updateLearner(timeUs_t current) {
 
     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
-    if (motorLearningConditions && false) {
+    if (motorLearningConditions) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
@@ -605,12 +632,27 @@ void updateLearner(timeUs_t current) {
             maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
         maxTau = constrainf(maxTau, 0.01f, 0.2f);
 
-        // calculate gains
-        learnRun.gains[LEARNER_LOOP_RATE] = 
-            0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+        if (indiRun.useGainScheduling) {
+            // Still set velocity and position gains 
+            float tempGain = 0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
+            // float tempGain = rateGain;
+            for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++) {
+                tempGain = 0.25f * tempGain / sq(learnRun.zeta[loop]);
+                if (loop > LEARNER_LOOP_ATTITUDE) {
+                    learnRun.gains[loop] = tempGain;
+                }
+            }
+        } else {
+            // calculate gains
+            learnRun.gains[LEARNER_LOOP_RATE] = 
+                0.25f / (sq(learnRun.zeta[LEARNER_LOOP_RATE]) * maxTau);
 
-        for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
-            learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+            for (int loop = LEARNER_LOOP_ATTITUDE; loop < LEARNER_LOOP_COUNT; loop++)
+                learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
+        }
+        indiRun.attSpNedPreFeedforward.w = indiRun.feedforwardFilterCoefs[0];
+        indiRun.attSpNedPreFeedforward.x = indiRun.feedforwardFilterCoefs[1];
+        indiRun.attSpNedPreFeedforward.y = indiRun.feedforwardFilterCoefs[2];
     }
     learnerTimings.gains = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -667,11 +709,109 @@ void updateLearner(timeUs_t current) {
 }
 
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
-    for (int axis = 0; axis < 3; axis++) {
-        indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
-        // attGains are expected for parallel PD, but we have cascaded, so
-        indi->attGains[axis]  = (uint16_t) 10.f
-             * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
+    // TODO: Put this somewhere more logical
+    float kEtaMin = 1.0f;
+    float kOmegaMin = 1.0f;
+
+    // Initialize kFf and pFf
+    float kFf = 0.0f;
+    float pFf = 0.0f;
+    float zFf = 0.0f;
+    // float margin = 0.05f; // Margin for pole zero cancellation (if below, dont use FF filter)
+
+    // TODO: Add minimum for FF?
+    if (indiRun.useGainScheduling) {
+        // get slowest actuator
+        float maxTau = 0.0f;
+        for (int act = 0; act < learnerConfig()->numAct; act++)
+            maxTau = MAX(maxTau, motorRls[act].x[3] * 0.1f);
+            // TODO: What to do if maxTau stays 0
+
+        maxTau = constrainf(maxTau, 0.01f, 0.2f);
+        for (int axis = 0; axis < 3; axis++) {
+            // Find minimal control coefficient for each axis
+            float minC = INFINITY;
+            for (int act = 0; act < learnerConfig()->numAct; act++) {
+                switch (axis) {
+                    case FD_ROLL: minC = MIN(minC, abs(indi->actG1_roll[act])); break;
+                    case FD_PITCH: minC = MIN(minC, abs(indi->actG1_pitch[act])); break;
+                    case FD_YAW: minC = MIN(minC, abs(indi->actG1_yaw[act])); break;
+                }
+            }
+            
+            minC = minC * 0.1f; // Convert C unit
+            switch (indiRun.gainSchedulingType) {
+                case GAIN_SCHEDULE_1D_INTERP:
+                    indi->rateGains[axis] = (uint16_t)(10.0f * interpolate1D(kOmega1D.xAxis, kOmega1D.table, kOmega1D.xSize, maxTau));
+                    indi->attGains[axis] = (uint16_t)(interpolate1D(kEta1D.xAxis, kEta1D.table, kEta1D.xSize, maxTau) * indi->rateGains[axis]);
+                    
+                    if (indiRun.gainScheduleFf) {
+                        kFf = interpolate1D(ffK1D.xAxis, ffK1D.table, ffK1D.xSize, maxTau);
+                        pFf = interpolate1D(ffPole1D.xAxis, ffPole1D.table, ffPole1D.xSize, maxTau);
+                        zFf = pFf / kFf; // Based on 0 dB gain at LF
+                        // 1209727, -8168513, -9881670
+                        indi->feedforwardFilterCoefs[0] = kFf * 1e6f;
+                        indi->feedforwardFilterCoefs[1] = zFf * 1e6f;
+                        indi->feedforwardFilterCoefs[2] = pFf * 1e6f;
+                        indiRun.feedforwardFilterCoefs[0] = kFf;
+                        indiRun.feedforwardFilterCoefs[1] = zFf;
+                        indiRun.feedforwardFilterCoefs[2] = pFf;
+                    }                   
+                    break;
+                case GAIN_SCHEDULE_2D_INTERP:
+                    indi->rateGains[axis] = (uint16_t)(10.0f * interpolate2D(kOmega2D.xAxis, kOmega2D.xSize, kOmega2D.yAxis, kOmega2D.ySize, 
+                                                                            (const float**)kOmega2D.table, maxTau, minC));
+                    indi->attGains[axis] = (uint16_t)(interpolate2D(kEta2D.xAxis, kEta2D.xSize, kEta2D.yAxis, kEta2D.ySize,
+                                                                           (const float**)kEta2D.table, maxTau, minC) * indi->rateGains[axis]);
+                    if (indiRun.gainScheduleFf) {
+                        kFf = interpolate2D(ffK2D.xAxis, ffK2D.xSize, ffK2D.yAxis, ffK2D.ySize,
+                                                 (const float**)ffK2D.table, maxTau, minC);
+                        pFf = -interpolate2D(ffPole2D.xAxis, ffPole2D.xSize, ffPole2D.yAxis, ffPole2D.ySize,
+                                                 (const float**)ffPole2D.table, maxTau, minC);
+                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                    }
+                    break;
+                case GAIN_SCHEDULE_1D_POLY:
+                    indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly1D(&kOmegaPoly1D, maxTau));
+                    indi->attGains[axis] = (uint16_t)(evalPoly1D(&kEtaPoly1D, maxTau) * indi->rateGains[axis]);
+                    if (indiRun.gainScheduleFf) {
+                        kFf = evalPoly1D(&ffKPoly1D, maxTau);
+                        pFf = -evalPoly1D(&ffPolePoly1D, maxTau); // ffPolePoly is defined as the polynomial through -p
+                        // zFf = ffZeroGain1D;
+                        if (indiRun.useFeedforwardFilter) {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
+                        } else {
+                            biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                        }
+                    }
+
+                    break;
+                case GAIN_SCHEDULE_2D_POLY:
+                    indi->rateGains[axis] = (uint16_t)(10.0f * evalPoly2D(&kOmegaPoly2D, maxTau, minC));
+                    indi->attGains[axis] = (uint16_t)(evalPoly2D(&kEtaPoly2D, maxTau, minC) * indi->rateGains[axis]);
+                    if (indiRun.gainScheduleFf) {
+                        kFf = evalPoly2D(&ffKPoly2D, maxTau, minC);
+                        pFf = -evalPoly2D(&ffPolePoly2D, maxTau, minC);
+                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                    }
+                    break;
+                }
+            // Ensure gains are above minimum
+            indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
+            indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(kEtaMin * indi->rateGains[axis]));
+            learnRun.gains[LEARNER_LOOP_RATE] = indi->rateGains[axis] / 10.0f;
+            learnRun.gains[LEARNER_LOOP_ATTITUDE] = (float)indi->attGains[axis] / (float)indi->rateGains[axis];
+            // Override position and velocity gains to log feedforward values
+            // learnRun.gains[LEARNER_LOOP_VELOCITY] = kFf;
+            // learnRun.gains[LEARNER_LOOP_POSITION] = pFf;
+            }
+    } else {
+        for (int axis = 0; axis < 3; axis++) {
+            indi->rateGains[axis] = (uint16_t) 10.f * learnRun.gains[LEARNER_LOOP_RATE];
+            // attGains are expected for parallel PD, but we have cascaded, so
+            indi->attGains[axis]  = (uint16_t) 10.f
+                * learnRun.gains[LEARNER_LOOP_ATTITUDE] * learnRun.gains[LEARNER_LOOP_RATE];
+        }
     }
 
     // same for position
@@ -715,6 +855,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
+        #ifdef LEARNER_PARAM_OVERRIDE
+        maxOmega = 2.f * M_PIf / 60.f  *  indiProfiles(0)->actMaxRpm[act];
+        #endif
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale

@@ -46,6 +46,9 @@
 #error "Blackbox will crash. Fix it to accept more that MAXV > 8"
 #endif
 
+#ifdef INJECT_ATTITUDE_SETPOINTS
+#include "common/signal_generator.h"
+#endif
 typedef struct indiProfile_s {
     // ---- Att/Rate config
     uint16_t attGains[3]; // attitude error to rotational accel gain * 10
@@ -118,6 +121,40 @@ typedef struct indiProfile_s {
     uint16_t wlsCondBound;       // condition number bound / 1e4
     uint16_t wlsTheta;           // objective segragation / 1e-4
     uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
+
+    // -------- Parameters for motor lead-lag filter
+    uint8_t useMotorLeadLag; // bool: use motor lead-lag filter
+    uint8_t actTimeConstTrueMs[MAXU]; // natural (true) motor time constant for actuator lead-lag in ms
+    uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
+
+    // -------- Parameters for feedforward control
+    int32_t feedforwardCoefs[5]; // feedforward coefficients for the feedforward INJECTION control law / 1e-6
+    uint8_t useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    int32_t feedforwardFilterCoefs[3]; // K, z, p, feedforward filter coefficients for the feedforward FILTER control law (need to clear this up or choose one) / 1e-6
+
+    // -------- Parameters for attitude lead lag control
+    uint8_t useAttLeadLag; // bool: use attitude lead-lag filter
+    int32_t rateCoefs[5]; // time constant for attitude lead-lag in ms
+    int32_t attCoefs[5]; // desired time constant for attitude lead-lag in ms
+
+    // -------- Parameters for gain-scheduling
+    uint8_t useGainScheduling; // bool: use gain scheduling
+    uint8_t gainSchedulingType; // What type of gain scheduling is used. 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+    uint8_t gainScheduleFf; // Whether to take feedforward values from gain-scheduling
+
+    // -------- Parameters for attitude injection
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    bool injectAttSp; // whether to inject attitude setpoints
+    int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
+    int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
+    int16_t attSpInjectionDuration;  // duration of injection in ms
+    int16_t attSpInjectionDurationDown; // for doublet, duration of negative pulse in ms
+    
+    // -------- Parameters for input disturbance injection
+    bool injectInputDist; // whether to inject input disturbance
+    int16_t inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
+
 } indiProfile_t;
 
 // linearization
@@ -204,6 +241,7 @@ typedef struct indiRuntime_s {
     // ---- runtime values -- axes
     fp_vector_t attGainsCasc; // attitude gains simulating parallel PD
     fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
+    fp_quaternion_t attSpNedPreFeedforward; // attitude setpoint in NED coordinates before feedforward
     fp_quaternion_t attErrBody; // attitude error in body coordinates
     fp_vector_t rateSpBody; // rate setpoint in body coordinates
     fp_vector_t rateSpBodyCommanded; // rate setpoint before attitude control
@@ -223,6 +261,7 @@ typedef struct indiRuntime_s {
     biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
+
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz
@@ -232,6 +271,48 @@ typedef struct indiRuntime_s {
     bool bypassControl; // no control at all. u and d are unmodified by loop
     bool controlAttitude; // attempt to reach tilt given by attSpNed
     bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
+
+    // ---- actuator time constant modification lead-lag filter
+    bool useMotorLeadLag; // bool: use motor lead-lag filter
+    float actTimeConstTrueS[MAXU];
+    float actTimeConstDesS[MAXU];
+    biquadFilter_t motorLeadLagFilter[MAXU];
+
+    // ---- feedforward control
+    float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
+    bool useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    float feedforwardFilterCoefs[3]; // feedforward coefficients for feedforward control law k, z, p (TODO: Yes its double now)
+    biquadFilter_t feedforwardFilter[3]; 
+    fp_vector_t ffRateSpBody;   
+
+    // ---- leadlag attitude control
+    bool useAttLeadLag; // bool: use attitude lead-lag filter
+    float attCoefs[5];
+    float rateCoefs[5];
+    biquadFilter_t attLlFilter[3];  // attitude control filter
+    biquadFilter_t rateLlFilter[3]; // rate control filter
+
+    // ---- gain scheduling
+    bool useGainScheduling; // whether to use gain scheduling
+    uint8_t gainSchedulingType; // 0: 1D interpolation, 1: 2D interpolation, 2: 1D polynomial, 3: 2D polynomial
+    bool gainScheduleFf; // Whether to take feedforward values from gain-scheduling
+
+    // ---- attitude injection
+    #ifdef INJECT_ATTITUDE_SETPOINTS
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    signal_mode_t attSpInjectionType; // What type of injection is used. 1: None, 2: Impulse, 3: Doublet, 4: Step
+    float attSpInjectionAmplitude; // amplitude of injection in degrees
+    float attSpInjectionDuration;  // duration of injection in s
+    float attSpInjectionDurationDown; // for doublet, duration of negative pulse in s
+    timeUs_t attSpInjectionStartTime; // time when the injection started
+    bool injectAttSp; // whether to inject attitude setpoints
+    #endif
+
+    #ifdef INJECT_INPUT_DISTURBANCE
+    bool injectInputDist; // whether to inject input disturbance
+    float inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
+    #endif
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3

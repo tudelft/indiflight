@@ -120,6 +120,7 @@ COMMON_SRC = \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
+            flight/gain_schedule.c \
             io/serial_4way.c \
             io/serial_4way_avrootloader.c \
             io/serial_4way_stk500v2.c \
