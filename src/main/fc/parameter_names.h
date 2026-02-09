@@ -247,6 +247,8 @@
 #define PARAM_NAME_LEARNER_ZETA_ATTITUDE "learner_zeta_attitude"
 #define PARAM_NAME_LEARNER_ZETA_VELOCITY "learner_zeta_velocity"
 #define PARAM_NAME_LEARNER_ZETA_POSITION "learner_zeta_position"
+#define PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT "learner_zeta_velocity_vert"
+#define PARAM_NAME_LEARNER_ZETA_POSITION_VERT "learner_zeta_position_vert"
 #define PARAM_NAME_LEARNER_ROLL_MISALIGNMENT "learner_roll_misalignment"
 #define PARAM_NAME_LEARNER_PITCH_MISALIGNMENT "learner_pitch_misalignment"
 #define PARAM_NAME_LEARNER_YAW_MISALIGNMENT "learner_yaw_misalignment"

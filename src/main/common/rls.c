@@ -35,6 +35,7 @@ void fortescueTuningInit(fortescue_tuning_t* fortescue, float cutoffFreqHz, uint
     biquadFilterInitLPF( &(fortescue->errorLP), cutoffFreqHz, sampleTimeUs );
     emwvInit( &(fortescue->errorMV), 1.f / ( 2.f * M_PIf * cutoffFreqHz ), sampleTimeUs );
     fortescue->errorMV.variance = 0.01f;
+    // fortescue->errorMV.variance = 1.f;
     fortescue->sampleFreqHz = 1e6f / ((float) sampleTimeUs);
 }
 
@@ -69,7 +70,7 @@ float emwvApply(emwv_t* m, float sample) {
 }
 
 // --- helpers
-rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz, bool useFortescue) {
+rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float fortescueBandwidthHz) {
     if (rls == NULL)
         return RLS_FAIL;
 
@@ -95,17 +96,19 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
 
     // initalize forgetting factor
     float sampleFreqHz = 1e6f / ((float) sampleTimeUs);
-    if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz)) {
+    if ((sampleTimeUs <= 0) || (fortescueBandwidthHz >= 0.45f * sampleFreqHz)) {
         return RLS_FAIL;
     }
 
-    rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
-
     // initialize fortescue tuner
-    rls->useFortescue = useFortescue;
-    if (rls->useFortescue) {
-        fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
+
+    // to implement: during throw, always lambda==1
+    // then either constant lambda<=1, or fortescue with noise observer
+    if (fortescueBandwidthHz > 0.f) {
+        rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * fortescueBandwidthHz) / (sampleFreqHz));
+        fortescueTuningInit( &(rls->fortescue), fortescueBandwidthHz, sampleTimeUs );
     } else {
+        rls->lambdaBase = rls->lambda = 1.f;
         rls->fortescue = (fortescue_tuning_t){0};
     }
 
@@ -147,13 +150,28 @@ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, 
 #ifdef STM32H7
 FAST_CODE
 #endif
-rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
+rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y, float lambda) {
     rls->samples++;
 
+    bool useFortescue;
+    if (lambda > 0.f) {
+        useFortescue = false;
+        rls->lambda = constrainf(lambda, 0.01f, 1.f);
+    } else if (rls->fortescue.sampleFreqHz > 0.f) {
+        // good init of fortescue, use this
+        useFortescue = true;
+    } else {
+        // fallback to vanilla RLS
+        useFortescue = false;
+        rls->lambda = 1.f;
+    }
+
     // re-symmetrize P by copying upper tri to lower tri
-    for (int col = 0; col < rls->n; col++)
-        for (int row = col+1; row < rls->n; row++)
+    for (int col = 0; col < rls->n; col++) {
+        for (int row = col+1; row < rls->n; row++) {
             rls->P[col*rls->n + row] = rls->P[row*rls->n + col];
+        }
+    }
 
     // M = lambda I  +  A P A**T
     // K = P A**T * inv(M)
@@ -164,8 +182,9 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
 
     // M = lambda I  +  A (P A**T)  = lambda I  +  (P A**T)**T AT
     float M[RLS_MAX_D*RLS_MAX_D] = {0};
-    for (int row = 0; row < rls->d; row++)
+    for (int row = 0; row < rls->d; row++) {
         M[row + row*rls->d] = rls->lambda;
+    }
 
     SGEMMt(rls->d, rls->d, rls->n, PAT, AT, M, 1.f, 1.f);
     ///if (M[0] <= 0.f)
@@ -196,7 +215,7 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
         e[row] = y[row] - e[row];
     }
 
-    if ((rls->useFortescue) && (rls->d == 1)) {
+    if ((useFortescue) && (rls->d == 1)) {
         // adaptive forgetting only implemented for MISO systems
         float ATK;
         SGEVV(rls->n, AT, KT, ATK);
@@ -208,10 +227,6 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     float traceP = 0.f;
     for (int row = 0; row < rls->n; row++) {
         traceP += rls->P[row + row*rls->n];
-        if (rls->P[row + row*rls->n] > RLS_COV_MAX) {
-            rls->lambda = 1.f + 0.1f * (1.f - rls->lambdaBase); // attempt return to lower P
-            // break; // still need to compute trace
-        }
     }
 
     // in the subtraction below numerical inaccuracies can creep in.
@@ -233,8 +248,9 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y) {
     // select KAPmult to ensure that traceP - trace(KAP * KAPmult) > 0.1 traceP
     // to maintain numerical accuracy
     float KAPmult = 1.f;
-    if (traceKAP > RLS_COV_MIN)
+    if (traceKAP > RLS_COV_MIN) {
         KAPmult = constrainf((1.f - RLS_MAX_P_ORDER_DECREMENT) * (traceP / traceKAP), 1e-6f, 1.f);
+    }
 
     float ilam = 1.f / rls->lambda;
     float ilamKAPmult = ilam * KAPmult;
@@ -351,7 +367,7 @@ rls_exit_code_t rlsParallelNewSample(rls_parallel_t* rls, float* aT, float* yT) 
 rls_exit_code_t rlsTest(void) {
     rls_t rls;
     float gamma = 1e3f;
-    rlsInit(&rls, 3, 2, gamma, 5000, 1.f / (2.f * M_PIf * 0.011212807f), false);
+    rlsInit(&rls, 3, 2, gamma, 5000, 1.f / (2.f * M_PIf * 0.011212807f));
     rls.x[0] = 1.;
     rls.x[1] = 2.;
     rls.x[2] = 3.;
@@ -371,7 +387,7 @@ rls_exit_code_t rlsTest(void) {
     //     2.72319665, 1.79674801, 0.06989191
     //};
 
-    rlsNewSample(&rls, AT, y);
+    rlsNewSample(&rls, AT, y, 0);
 
     //----
     rls_parallel_t rlsP;

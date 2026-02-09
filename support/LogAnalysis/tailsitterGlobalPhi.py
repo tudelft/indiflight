@@ -30,6 +30,26 @@ def quaternion_rotate(q, v, inverse=False):
     return torch.vstack([rx, ry, rz])
 
 #%% DEFINE model
+
+from scipy.constants import g as GRAVITY
+def inertiaFromPendulumPeriod(P, R, m):
+    # assuming a phyiscal pendulum with centroid R from the rotation point and
+    # mass m. If it oscillates with period P, we can readily calculate the 
+    # inertia I.
+    # However, if R is rather large (m*R*R > I), then accuracy of this
+    # calculation decreases, especially P and R must be known very precisely 
+    # (+-1%) for a reasonable estimate (+- 10%)
+
+    # https://phys.libretexts.org/Bookshelves/University_Physics/Book%3A_University_Physics_(OpenStax)/Book%3A_University_Physics_I_-_Mechanics_Sound_Oscillations_and_Waves_(OpenStax)/15%3A_Oscillations/15.05%3A_Pendulums
+    # T = 2pi * sqrt(I/(mgR)) where R is distance axle to CoG
+    # I = T^2 / (4pi^2) * mgR
+
+    # inertia around rotation point
+    Iaxle = (m*GRAVITY*R*P*P) / (4*np.pi*np.pi)
+
+    # subtract parallel axis term, as Iaxle = I + m*R*R
+    return Iaxle - m*R*R
+
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device("cpu")  # LBGFS is faster on cpu
 
@@ -61,10 +81,17 @@ class Tailsitter(nn.Module):
         for name in coefficients:
             setattr(self, name, nn.Parameter(torch.zeros(1)))
 
-        self.m = 0.5
-        Inp = np.diag([6e-3, 2e-3, 6.5e-3]).astype(np.float32)
-        #self.m = 1.
-        #Inp = np.diag([1., 1., 1.]).astype(np.float32)
+        #%% guessed inertia
+        # self.m = 0.5
+        # Inp = np.diag([6e-3, 2e-3, 6.5e-3]).astype(np.float32)
+
+        #%% measured inertia by osciallation period
+        self.m = 0.564
+        Ixx = inertiaFromPendulumPeriod(P=4.538/5, R=85e-3, m=self.m)  # roll
+        Iyy = inertiaFromPendulumPeriod(P=3.315/5, R=79e-3, m=self.m) # pitch
+        Izz = inertiaFromPendulumPeriod(P=4.534/5, R=131e-3, m=self.m)  # yaw
+        Inp = np.diag([Ixx, Iyy, Izz]).astype(np.float32) # (5.73, 1.35, 5.43) e-3 kg m^2
+
         self.I = torch.tensor( Inp )
         self.Iinv = torch.tensor( np.linalg.inv( Inp ) )
 
@@ -328,13 +355,21 @@ def format_scientific(num):
     else:
         return f"{num:.3e}"
 
-
+print()
+print()
+print(f"m = {model.m:.3e}  # mass in kg")
+print(f"I = np.diag([{model.I[0,0]:.3e}, {model.I[1,1]:.3e}, {model.I[2,2]:.3e}])  # inertia matrix in kg m^2")
+print()
 print(f"phi = {model.sqrtphi.item()**2:.3e}")
 print(f"Phi = np.array([")
 for row in PHI:
     formatted_row = [format_scientific(val) for val in row]
     print("[" + ", ".join(formatted_row) + "],")
 print("], dtype=np.float32)")
+
+print()
+print("Eigenvalues of PHI matrix:", eigenvalues)
+print()
 
 cd = np.array([ model.cxd.item(), 0, 0, 0, model.cmd.item(), model.cnd.item() ])
 cd *= scale[9]**2 * scale[13]
@@ -351,6 +386,7 @@ print(f"cdd = np.array([{', '.join(format_scientific(val) for val in cdd)}], dty
 print(f"cddd = np.array([{', '.join(format_scientific(val) for val in cddd)}], dtype=np.float32)")
 d0 = model.d0.detach().cpu().numpy().squeeze()
 print(f"d0 = np.array([{', '.join(format_scientific(val) for val in d0)}], dtype=np.float32)")
+print()
 
 # motor max thrust and location
 k_tot = np.sqrt(model.czww.item()**2 + model.cxww.item()**2)
@@ -359,7 +395,6 @@ print(f"k = {k_tot:.3e} N/(rad/s)^2")
 
 axis = np.array([ model.cxww.item(), 0, model.czww.item() ])
 axis /= np.linalg.norm(axis)
-print(f"axis = np.array([{axis[0]:.3e}, {axis[1]:.3e}, {axis[2]:.3e}], dtype=np.float32)")
 
 # motor position n := axis
 # 
@@ -384,7 +419,8 @@ dx, dy, cmotor = np.linalg.solve(A, b)
 # L = model.cmww / k
 # dy = model.clww.item()*scale[9]**2 / (k_tot*axis[2]) # meter offset of motor in y
 # dx = (-model.cmww.item()*scale[9]**2 / k_tot + axis[0]*dz) / axis[2]
-print(f"r_motor = np.array([{dx:.3e}, {dy:.3e}, {dz:.3e}], dtype=np.float32)")
+print(f"X_motor = np.array([{dx:.3e}, {dy:.3e}, {dz:.3e}], dtype=np.float32)")
+print(f"axis = np.array([{axis[0]:.3e}, {axis[1]:.3e}, {axis[2]:.3e}], dtype=np.float32)")
 
 # motor moment coefficient
 # cmotor = model.cnww.item() * scale[9]**2 / k_tot
@@ -392,13 +428,12 @@ print(f"cmotor = {cmotor:.3e}  # motor torque coefficient")
 
 Imotor = np.abs(model.cnwd.item() * scale[11])
 print(f"I_motor = {Imotor:.3e}  # motor rotational inertia")
-
+print()
 
 # imu offset
 print(f"r_IMU = np.array([{', '.join(format_scientific(val) for val in model.r.detach().cpu().numpy().flatten())}], dtype=np.float32)")
-
 print()
-print("Eigenvalues of PHI matrix:", eigenvalues)
+print()
 
 
 #%% verification with pyIndiflight simulator

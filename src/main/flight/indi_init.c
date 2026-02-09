@@ -111,6 +111,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->tails_cxd[i]  = 0;
         indiProfile->tails_cmd[i]  = 0;
         indiProfile->tails_cnd[i]  = 0;
+        indiProfile->tails_cmdd[i] = 0;
+        indiProfile->tails_cndd[i] = 0;
     }
 
     // ---- Filtering config
@@ -241,6 +243,8 @@ void initIndiRuntimeParameters(void) {
         indiRun.tailsCxd[i]  = ((float) p->tails_cxd[i])  * 1e-8f;
         indiRun.tailsCmd[i]  = ((float) p->tails_cmd[i])  * 1e-8f;
         indiRun.tailsCnd[i]  = ((float) p->tails_cnd[i])  * 1e-8f;
+        indiRun.tailsCmdd[i] = ((float) p->tails_cmdd[i]) * 1e-5f;
+        indiRun.tailsCndd[i] = ((float) p->tails_cndd[i]) * 1e-5f;
     }
 
     // ---- Filtering config

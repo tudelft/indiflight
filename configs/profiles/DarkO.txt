@@ -134,8 +134,8 @@ set small_angle = 20   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 4       # relative to imu
-set ahrs_process_denom = 4      # relative to imu
+set pid_process_denom = 8       # relative to imu
+set ahrs_process_denom = 8      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
@@ -249,8 +249,8 @@ set indi_act_time_constant_ms = 33, 33, 70, 70       # ms
 set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
 set indi_act_nonlinearity = 40, 40, 0, 0             # %
-set indi_act_min =  0,  0, -40, -40              # %, degree
-set indi_act_max = 80, 80,  40,  40              # %, degree
+set indi_act_min =   0,   0, -40, -40              # %, degree
+set indi_act_max = 100, 100,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 5,5,1,1
 
@@ -355,8 +355,8 @@ set indi_act_time_constant_ms = 33, 33, 70, 70       # ms
 set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
 set indi_act_nonlinearity = 40, 40, 0, 0             # %
-set indi_act_min =  0,  0, -40, -40              # %, degree
-set indi_act_max = 80, 80,  40,  40              # %, degree
+set indi_act_min =   0,   0, -40, -40              # %, degree
+set indi_act_max = 100, 100,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 5,5,1,1
 
@@ -366,20 +366,20 @@ set indi_wls_act_penalties = 5,5,1,1
 positionprofile 0
 
 # gains * 10
-set position_horizontal_p = 30
+set position_horizontal_p = 25
 set position_horizontal_i = 8
-set position_horizontal_d = 20
-set position_vertical_p = 50
+set position_horizontal_d = 22
+set position_vertical_p = 214
 set position_vertical_i = 5
-set position_vertical_d = 40
+set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
 set position_max_horizontal_speed = 700
-set position_max_horizontal_accel = 750
+set position_max_horizontal_accel = 500
 set position_max_upwards_speed = 250
 set position_max_downwards_speed = 150
-set position_max_upwards_accel = 2000
-set position_max_downwards_accel = 700
+set position_max_upwards_accel = 3000
+set position_max_downwards_accel = 600
 
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 45
@@ -458,10 +458,17 @@ set learner_gyro_max = 1150
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
+set learner_use_fortescue = 1
+# set learner_zeta_rate = 60
+# set learner_zeta_attitude = 70
+# set learner_zeta_velocity = 100
+# set learner_zeta_position = 100
 set learner_zeta_rate = 80
 set learner_zeta_attitude = 70
 set learner_zeta_velocity = 70
 set learner_zeta_position = 70
+set learner_zeta_velocity_vert = 90
+set learner_zeta_position_Vert = 100
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0

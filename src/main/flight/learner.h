@@ -50,6 +50,8 @@ typedef struct learnerConfig_s {
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
+    uint8_t zetaVelocityVert;
+    uint8_t zetaPositionVert;
     int16_t rollMisalignment;
     int16_t pitchMisalignment;
     int16_t yawMisalignment;
@@ -62,10 +64,12 @@ typedef struct learnerConfig_s {
 PG_DECLARE(learnerConfig_t, learnerConfig);
 
 typedef enum learner_loops_e {
-    LEARNER_LOOP_RATE = 0,
-    LEARNER_LOOP_ATTITUDE,
-    LEARNER_LOOP_VELOCITY,
-    LEARNER_LOOP_POSITION,
+    LEARNER_LOOP_HORIZONTAL_RATE = 0,
+    LEARNER_LOOP_HORIZONTAL_ATTITUDE,
+    LEARNER_LOOP_HORIZONTAL_VELOCITY,
+    LEARNER_LOOP_HORIZONTAL_POSITION,
+    LEARNER_LOOP_VERTICAL_VELOCITY,
+    LEARNER_LOOP_VERTICAL_POSITION,
     LEARNER_LOOP_COUNT
 } learner_loops_t;
 
@@ -95,6 +99,7 @@ typedef struct learningRuntime_s {
     float fxOmega[MAXU];
     float fxOmegaDiff[MAXU];
     float fxOmegaDot[MAXU];
+    float fxOmegaDotDot[MAXU];
     fp_vector_t fxRateDot;
     fp_vector_t fxSpf;
     float motorOmega[MAXU];

@@ -103,7 +103,7 @@
 #define DEFAULT_BLACKBOX_DEVICE     BLACKBOX_DEVICE_SERIAL
 #endif
 
-#if defined(MOCKUP) && (MAX_SUPPORTED_MOTORS == 8)
+#if MAX_SUPPORTED_MOTORS == 8
 #define BLACKBOX_LEARNER_LOG_8_MOTORS
 #define BLACKBOX_LEARNER_N 8
 #else
@@ -622,6 +622,8 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"learner_gains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learner_gains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"learner_gains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"hoverAttitude",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"hoverAttitude",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -2006,12 +2008,12 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
-        blackboxCurrent->eVarsMotor[motor] = 0.1f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
+        blackboxCurrent->eVarsMotor[motor] = 0.01f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
         blackboxCurrent->lambdasMotor[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * actRls[motor].lambda;
     }
 
     for (int axis = 0; axis < 6; axis++) {
-        blackboxCurrent->eVarsFx[axis] = 0.1f * ((1 << 16) - 1) * fxRls[axis].fortescue.errorMV.variance;
+        blackboxCurrent->eVarsFx[axis] = 0.01f * ((1 << 16) - 1) * fxRls[axis].fortescue.errorMV.variance;
         blackboxCurrent->lambdasFx[axis] = UNIT_FLOAT_TO_UNSIGNED16VB * fxRls[axis].lambda;
     }
 
@@ -2683,6 +2685,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_ATTITUDE, "%d",  learnerConfig()->zetaAttitude);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY, "%d",  learnerConfig()->zetaVelocity);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION, "%d",  learnerConfig()->zetaPosition);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT, "%d",  learnerConfig()->zetaVelocityVert);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION_VERT, "%d",  learnerConfig()->zetaPositionVert);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ROLL_MISALIGNMENT     , "%d", learnerConfig()->rollMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_PITCH_MISALIGNMENT    , "%d", learnerConfig()->pitchMisalignment);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_YAW_MISALIGNMENT      , "%d", learnerConfig()->yawMisalignment);

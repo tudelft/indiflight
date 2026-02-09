@@ -516,11 +516,15 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG1[4][2+servo] = indiRun.tailsCmd[servo] * cosdp;
             indiRun.actG1[5][2+servo] = indiRun.tailsCnd[servo] * cosdp;
 
-            float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
+            float omega_lim = MAX(indiRun.omega[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {
                 indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim - 0e6f * MIN(velEstBody.V.Z, +0.f); // todo: add vz velocity here?
                 indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
             }
+
+            indiRun.actG2[0][2+servo] = 0.f;
+            indiRun.actG2[1][2+servo] = indiRun.tailsCmdd[servo];
+            indiRun.actG2[2][2+servo] = indiRun.tailsCndd[servo];
         }
     }
 
@@ -529,6 +533,9 @@ void getMotorCommands(timeUs_t current) {
         for (int i=0; i < indiRun.actNum; i++) {
             if (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
                 indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
+            }
+            if (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) {
+                // need servo derivative here, fs filtered
             }
         }
     }
@@ -539,8 +546,9 @@ void getMotorCommands(timeUs_t current) {
     for (int i=0; i < indiRun.actNum; i++) {
         for (int j=0; j < MAXV; j++) {
             G1G2[MAXV*i + j] = indiRun.actG1[j][i];
-            if (j > 2)
+            if (j > 2) {
                 G1G2[MAXV*i + j] += indiRun.G2_scaler[i] * omega_inv[i] * indiRun.actG2[j-3][i];
+            }
         }
     }
 
@@ -560,8 +568,9 @@ void getMotorCommands(timeUs_t current) {
 
     // setup problem
     float Wu_as[MAXU];
-    for (int i = 0; i < indiRun.actNum; i++)
+    for (int i = 0; i < indiRun.actNum; i++) {
         Wu_as[i] = indiRun.wlsWu[i]; // because not const in setupWLS_A
+    }
 
     setupWLS_A(G1G2, indiRun.wlsWv, Wu_as, MAXV, indiRun.actNum, indiRun.wlsTheta, indiRun.wlsCondBound, A_as, &gamma_used);
     setupWLS_b(indiRun.dv, du_pref, indiRun.wlsWv, Wu_as, MAXV, indiRun.actNum, gamma_used, b_as);
@@ -569,11 +578,12 @@ void getMotorCommands(timeUs_t current) {
     static activeSetExitCode as_exit_code = AS_SUCCESS;
 
     for (int i=0; i < indiRun.actNum; i++) {
-      du_as[i] = (du_min[i] + du_max[i]) * 0.5f;
-      // Assume warmstart is always desired and reset working set Ws only if 
-      // if NAN errors were encountered
-      if (as_exit_code >= AS_NAN_FOUND_Q)
-        Ws[i] = 0;
+        du_as[i] = (du_min[i] + du_max[i]) * 0.5f;
+        // Assume warmstart is always desired and reset working set Ws only if 
+        // if NAN errors were encountered
+        if (as_exit_code >= AS_NAN_FOUND_Q) {
+            Ws[i] = 0;
+        }
     }
 
     // solve problem
