@@ -6,7 +6,13 @@ plt.close('all')
 matplotlib.use('tkagg') 
 
 from pyFlightPlotter import local_rc
-from indiflightPlotter import IndiflightPlotter, IndiflightMotorSysIdPlotter, IndiflightServoSysIdPlotter, IndiflightViewport, IndiflightIndividualSysIdPlotter, IndiflightMoments
+from indiflightPlotter import IndiflightPlotter, \
+    IndiflightMotorSysIdPlotter, \
+    IndiflightServoSysIdPlotter, \
+    IndiflightViewport, \
+    IndiflightIndividualSysIdPlotter, \
+    IndiflightMoments, \
+    IndiflightEffectiveness
 from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor
 
 # set local_rc
@@ -107,6 +113,15 @@ aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, nam
 
 
 moplt = IndiflightMoments(log.data, Nr=2, Ns=2, name=f"{args.name} -- Moments")
+
+tplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness", scheduled=True)
+tsplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness", scheduled=False)
+fplt.connect_viewport(tplt)
+aplt.connect_viewport(tplt)
+moplt.connect_viewport(tplt)
+fplt.connect_viewport(tsplt)
+aplt.connect_viewport(tsplt)
+moplt.connect_viewport(tsplt)
 
 # craft = Quadrotor()
 craft = Tailsitter()

@@ -18,4 +18,5 @@
         "gyro.h": "c",
         "maths.h": "c"
     },
+    "cmake.sourceDirectory": "/mnt/data/Work/Tools/indiflight/support/groundstation/ext/UnifiedMocapRouter/build/qualisys_cpp_sdk-prefix/src/qualisys_cpp_sdk",
 }

@@ -134,8 +134,8 @@ set small_angle = 20   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 4       # relative to imu
-set ahrs_process_denom = 4      # relative to imu
+set pid_process_denom = 8       # relative to imu
+set ahrs_process_denom = 8      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
@@ -459,14 +459,14 @@ set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
 set learner_use_fortescue = 1
+# set learner_zeta_rate = 60
+# set learner_zeta_attitude = 70
+# set learner_zeta_velocity = 70
+# set learner_zeta_position = 70
 set learner_zeta_rate = 60
 set learner_zeta_attitude = 70
-set learner_zeta_velocity = 70
-set learner_zeta_position = 70
-# set learner_zeta_rate = 70
-# set learner_zeta_attitude = 75
-# set learner_zeta_velocity = 100
-# set learner_zeta_position = 100
+set learner_zeta_velocity = 100
+set learner_zeta_position = 100
 set learner_zeta_velocity_vert = 90
 set learner_zeta_position_Vert = 100
 

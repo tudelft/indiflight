@@ -103,7 +103,7 @@ class IndiflightPlotter(FlightPlotterBase):
 
             if self.has_servo_feedback and self.Ns > 0:
                 d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(self.Ns)])
-                dSig = Signal(self.t, d.T)
+                dSig = Signal(self.t, d.T).filtfilt(type='lowpass', order=2, cutoff_hz=20.0)
                 dDot = dSig.dot(order=1).y.T
                 dDotDot = dSig.dot(order=2).y.T
 
@@ -620,6 +620,89 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
         q[6] *= 1e5 * 1e-1
         r[6] *= 1e5 * 1e-1
 
+        # compute effectiveness matrices (unscaled)
+        vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
+        d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)])
+        dSig = Signal(self.t, d.T).filtfilt(type='lowpass', order=2, cutoff_hz=20.0)
+        dDot = dSig.dot(order=1).y.T * 1
+        dDotDot = dSig.dot(order=2).y.T * 0
+
+        sd = np.sin(d - 0.)
+        cd = np.cos(d - 0.)
+
+        clw = p[:Nr]
+
+        cmw = q[:Nr]
+        cmd = q[Nr:N]
+        cmwd = q[4:6]
+
+        cnw = r[:Nr]
+        cnd = r[Nr:N]
+        cnwd = r[4:6]
+
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+
+        L = len(self.t)
+        eff = np.zeros((6, 4, L))
+        eff[0, :Nr] = 0.
+        eff[1, :Nr] = 0.
+        eff[2, :Nr] = 0.
+        eff[3, :Nr] = clw
+        eff[4, :Nr] = cmw + cmd * sd
+        eff[5, :Nr] = cnw + cnd * sd
+
+        eff[0, Nr:N] = 0.
+        eff[1, Nr:N] = 0.
+        eff[2, Nr:N] = 0.
+        eff[3, Nr:N] = 0.
+        eff[4, Nr:N] = cmd * cd
+        eff[5, Nr:N] = cnd * cd
+
+        eff *= 1e6
+
+        good_signs = np.array([
+            [0,0,0,0],
+            [0,0,0,0],
+            [-1,-1,0,0],
+            [1,-1,0,0],
+            [-1,-1,-1,-1],
+            [1,-1,-1,+1]
+        ])
+
+        # infer time when learning starts
+        for i in range(L):
+            # first time when any eff is nonzero
+            if (eff[:, :, i] != 0).any():
+                istart = i
+                tstart = self.t[i]
+                print(f"Learning starts at t={self.t[i]:.2f}s with inertial velocity x={vel[i,0]:.2f} m/s, y={vel[i,1]:.2f} m/s, z={vel[i,2]:.2f} m/s")
+                tend = tstart + 0.5
+                # find closest index to tend
+                iend = np.argmin(np.abs(self.t - tend))
+                print(f"Learning ends at t={self.t[iend]:.2f}s with inertial velocity x={vel[iend,0]:.2f} m/s, y={vel[iend,1]:.2f} m/s, z={vel[iend,2]:.2f} m/s")
+                break
+
+        # compute first time that roll and pitch signs are correct
+        for i in range(istart+100, L):
+            if (eff[3, 0:2, i]*good_signs[3, 0:2] > 0).all():
+                print(f"Axis roll correct sign from t={self.t[i]-tstart:.2f}s after learning starts")
+                break
+
+        # and also first time when the signs stay correct (excluding last 2? seconds of the log)
+        for i in range(istart+100, L-500):
+            if (eff[3, 0:2, i:L-500]*good_signs[3, 0:2, np.newaxis] > 0).all():
+                print(f"Axis roll correct sign from t={self.t[i]-tstart:.2f}s until end of log")
+                break
+
+        for i in range(istart+100, L):
+            if (eff[4, 2:4, i]*good_signs[4, 2:4] > 0).all():
+                print(f"Axis pitch correct sign from t={self.t[i]-tstart:.2f}s after learning starts")
+                break
+
+        for i in range(istart+100, L-300):
+            if (eff[4, 2:4, i:L-500]*good_signs[4, 2:4, np.newaxis] > 0).all():
+                print(f"Axis pitch correct sign from t={self.t[i]-tstart:.2f}s until end of log")
+                break
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
         fx_e_var  = np.array([self.data[f'fx_{ax}_rls_e_var'] for ax in AXES])
@@ -810,7 +893,7 @@ class IndiflightMoments(FlightPlotterBase):
         self.FM_act = np.zeros_like(self.FM_aero)
         omega = np.array([self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(2)])
         d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)])
-        dSig = Signal(self.t, d.T)
+        dSig = Signal(self.t, d.T).filtfilt(type='lowpass', order=2, cutoff_hz=20.0)
         dDot = dSig.dot(order=1).y.T * 1
         dDotDot = dSig.dot(order=2).y.T * 0
         ww = omega**2
@@ -867,9 +950,9 @@ class IndiflightMoments(FlightPlotterBase):
 
 
         #%% online and final aero moments
-        paero = np.array([self.data[f'fx_p_rls_x[6]']]).squeeze() / 1000 * 1e-1
-        qaero = np.array([self.data[f'fx_q_rls_x[6]']]).squeeze() / 1000 * 1e-1
-        raero = np.array([self.data[f'fx_r_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        paero = -np.array([self.data[f'fx_p_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        qaero = -np.array([self.data[f'fx_q_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        raero = -np.array([self.data[f'fx_r_rls_x[6]']]).squeeze() / 1000 * 1e-1
         Laero_online = -self.eta * gyro[0] * self.I[0,0] * paero
         Maero_online = -self.eta * gyro[1] * self.I[1,1] * qaero
         Naero_online = -self.eta * gyro[2] * self.I[2,2] * raero
@@ -1067,6 +1150,178 @@ class IndiflightFxSysIdPlotter(FlightPlotterBase):
                                   style_labels=[None, "Onboard", None],
                                   title="Principal Inertia Ratios",
                                   ylabel="$\\sigma$ [-]")
+
+class IndiflightEffectiveness(FlightPlotterBase):
+    """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for Effectiveness analysis"""
+    def __init__(self, data, Nr=0, Ns=0, true=None, name="System Identification Plotter -- Effectiveness", scheduled=True):
+        # extract time and intialize base class
+        self.data = data
+        self.true = true
+        t = self.data['timeS'].to_numpy()
+        super().__init__(t, name)
+
+        self.scheduled = scheduled
+
+        # check amount of actuators
+        self.Nr = Nr
+        self.Ns = Ns
+        self.N = self.Nr + self.Ns
+
+        self.define_layout(figsize=(8, 8), nrows=1, ncols=1,
+                           width_ratios=[1],
+                           height_ratios=[1])
+
+        self.plot()
+
+    def _populate(self):
+        ax = self.fig.add_subplot(self.gs[0, 0])
+        testfx = np.array([
+            [0,0,0,0],
+            [0,0,0,0],
+            [-1, -1, -1, -1],
+            [1,1,-1,-1],
+            [1,-1,1,-1],
+            [1,-1,-1,1],
+        ])
+
+        im = ax.imshow(testfx, cmap='viridis', aspect='auto')
+        ax.set_yticks(np.arange(testfx.shape[0]))
+        ax.set_yticklabels(['Fx', 'Fy', 'Fz', 'Roll', 'Pitch', 'Yaw'])
+        ax.set_xticks(np.arange(testfx.shape[1]))
+        ax.set_xticklabels([f'Actuator {i}' for i in range(testfx.shape[1])])
+        # plt.colorbar(im, ax=ax)
+        ax.set_title("Control Effectiveness Matrix Example")
+
+    def showAtTime(self, time):
+        """Show effectiveness values at given time"""
+        idx = np.searchsorted(self.t, time)
+        if idx >= len(self.t):
+            idx = len(self.t) - 1
+
+        ax = self.fig.axes[0]
+        ax.cla()
+
+        Nr = self.Nr
+        Ns = self.Ns
+        N = self.Nr + self.Ns
+
+
+        a = np.array([self.data[f'motor_{i}_rls_x[0]'] for i in range(Nr)])
+        b = np.array([self.data[f'motor_{i}_rls_x[1]'] for i in range(Nr)])
+        widle = np.array([self.data[f'motor_{i}_rls_x[2]'] for i in range(Nr)])
+        tau = np.array([self.data[f'motor_{i}_rls_x[3]'] for i in range(Nr)])
+        wmax = a + b
+        kappa = np.zeros_like(wmax)
+        kappa[a+b > 0] = a[a+b > 0] / (a[a+b > 0] + b[a+b > 0])
+
+
+        pqr_range = list(range(4))
+
+        omega = np.array([self.data[f'omegaUnfiltered[{i}]'].to_numpy() for i in range(2)])
+        d = np.array([self.data[f'servo_feedback[{i}]'].to_numpy() for i in range(2)])
+        dSig = Signal(self.t, d.T).filtfilt(type='lowpass', order=2, cutoff_hz=20.0)
+        dDot = dSig.dot(order=1).y.T * 1
+        dDotDot = dSig.dot(order=2).y.T * 0
+
+        x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        z = np.array([self.data[f'fx_z_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
+        p = np.array([self.data[f'fx_p_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+        r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
+
+        sd = np.sin(d[:, idx] - 0.)
+        cd = np.cos(d[:, idx] - 0.)
+
+        clw = p[:Nr, idx]
+
+        cmw = q[:Nr, idx]
+        cmd = q[Nr:, idx]
+        cmwd = q[4:6, idx]
+
+        cnw = r[:Nr, idx]
+        cnd = r[Nr:, idx]
+        cnwd = r[4:6, idx]
+
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+
+        eff = np.zeros((6, 4))
+        eff[0, :Nr] = 0.
+        eff[1, :Nr] = 0.
+        eff[2, :Nr] = 0.
+        eff[3, :Nr] = clw
+        eff[4, :Nr] = cmw + cmd * sd
+        eff[5, :Nr] = cnw + cnd * sd
+
+        if self.scheduled:
+            eff[:, :Nr] *= wmax[:, idx]**2
+
+        eff[0, Nr:] = 0.
+        eff[1, Nr:] = 0.
+        eff[2, Nr:] = 0.
+        eff[3, Nr:] = 0.
+        eff[4, Nr:] = cmd * cd
+        eff[5, Nr:] = cnd * cd
+
+        if self.scheduled:
+            eff[:, Nr:] *= 100./180. * np.pi * omega[:, idx]**2
+
+        if not self.scheduled:
+            eff *= 1e6
+
+        good_signs = np.array([
+            [0,0,0,0],
+            [0,0,0,0],
+            [-1,-1,0,0],
+            [1,-1,0,0],
+            [-1,-1,-1,-1],
+            [1,-1,-1,+1]
+        ])
+
+        import matplotlib.colors as mcolors
+        from matplotlib.patches import Ellipse
+
+        lim = np.max(np.abs(eff))
+        if lim > 0:
+            norm = mcolors.TwoSlopeNorm(vmin=-lim, vcenter=0, vmax=lim)
+        else:
+            norm = mcolors.TwoSlopeNorm(vmin=-1, vcenter=0, vmax=1)
+
+        im = ax.imshow(eff, cmap='viridis', norm=norm, aspect='auto')
+        ax.set_yticks(np.arange(eff.shape[0]))
+        ax.set_yticklabels(['Fx', 'Fy', 'Fz', 'Roll', 'Pitch', 'Yaw'])
+        ax.set_xticks(np.arange(eff.shape[1]))
+        ax.set_xticklabels(["Motor 1", "Motor 2", "Elevon 1", "Elevon 2"])
+        # ax.set_xticklabels([f'Actuator {i}' for i in range(eff.shape[1])])
+        ax.set_title(f"Control Effectiveness Matrix at t={time:.2f}s -- {'Scheduled' if self.scheduled else 'Unscheduled'}")
+
+        # Loop over data dimensions and create text annotations.
+        for i in range(len(eff)):
+            for j in range(len(eff[0])):
+                text = ax.text(j, i, f"{eff[i, j]:.2f}",
+                               ha="center", va="center", color="w")
+                if (good_signs*eff)[i, j] < 0:
+                    # show ellipse if sign is wrong
+                    ellipse = Ellipse(
+                        (j, i),        # center (same as text)
+                        width=0.9,     # adjust to taste
+                        height=0.5,
+                        fill=False,
+                        edgecolor='red',
+                        linewidth=2,
+                        zorder=2
+                    )
+
+                    ax.add_patch(ellipse)
+
+        # self.fig.canvas.draw_idle()
+        self.fig.canvas.draw()
+
+    def mouseHoverCallback(self, event):
+        """Override to show effectiveness values on hover"""
+        if event.xdata is not None:
+            self.showAtTime(event.xdata)
+
 
 class IndiflightViewport(Viewport):
     """Thin wrapper: extract series from log and intialize base class"""

@@ -516,7 +516,7 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG1[4][2+servo] = indiRun.tailsCmd[servo] * cosdp;
             indiRun.actG1[5][2+servo] = indiRun.tailsCnd[servo] * cosdp;
 
-            float omega_lim = MAX(indiRun.omega_fs[servo], 0.5f*indiRun.actHoverOmega[servo]);
+            float omega_lim = MAX(indiRun.omega[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {
                 indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim - 0e6f * MIN(velEstBody.V.Z, +0.f); // todo: add vz velocity here?
                 indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
