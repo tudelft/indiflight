@@ -47,6 +47,7 @@ float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTi
     // lam = 1 - ( 1 - AT K ) * (e**2) / Sigma0
     float e2 = error * error;
     float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5.f * fortescue->sampleFreqHz * errorVar );
+    // float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 20.f * fortescue->sampleFreqHz * errorVar );
 
     //if (lambda != lambda)
     //    __asm("BKPT #0\n") ; // Break into the debugger
@@ -215,13 +216,15 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y, float lambda) {
         e[row] = y[row] - e[row];
     }
 
-    if ((useFortescue) && (rls->d == 1)) {
+    if ((rls->fortescue.sampleFreqHz > 0.f) && (rls->d == 1)) {
         // adaptive forgetting only implemented for MISO systems
+        // always run fortescue for variance estimation, but only use its lambda if the user didn't specify a lambda to use
         float ATK;
         SGEVV(rls->n, AT, KT, ATK);
         float lamFortescue = fortescueApply( &(rls->fortescue), e[0], ATK );
-        rls->lambda = constrainf(lamFortescue, rls->lambdaBase, 1.);
-        //rls->lambda = rls->lambdaBase;
+        if (useFortescue) {
+            rls->lambda = constrainf(lamFortescue, rls->lambdaBase, 1.);
+        }
     }
 
     float traceP = 0.f;

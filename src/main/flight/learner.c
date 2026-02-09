@@ -780,8 +780,11 @@ void updateLearner(timeUs_t current) {
 
             ySpf[ax] = learnRun.fxSpf.A[ax] * 10.f; // scaling likely depends on sample time..
             yRateDot[ax] = learnRun.fxRateDot.A[ax]; // scaling seems okay at this sample time/filtering
-            rlsNewSample(&fxRls[ax], A+1, &ySpf[ax], 0.f); // spf (skip inertia term)
-            rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax], 0.f); // RateDot (include inertia term)
+
+            // float lambda = 0.f; // fortescue tuning
+            float lambda = (probing) ? 1.f : 0.f; // during probing, no forgetting, after that, use fortescue (0.f)
+            rlsNewSample(&fxRls[ax], A+1, &ySpf[ax], lambda); // spf (skip inertia term)
+            rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax], lambda); // RateDot (include inertia term)
         }
 
         // parallel alternative: perform rls step
