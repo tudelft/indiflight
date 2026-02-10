@@ -599,7 +599,7 @@ class IndiflightLog(object):
             elif (match := re.match(r'^.*_lambda$', col)):
                 data[col] /= self.UNIT_FLOAT_TO_UNSIGNED16VB
             elif (match := re.match(r'^.*_e_var$', col)):
-                data[col] /= 0.01 * ((1 << 16) - 1)
+                data[col] /= 0.001 * ((1 << 16) - 1)
             elif (col == "flightModeFlags") or (col == "stateFlags")\
                     or (col == "failsafePhase") or (col == "rxSignalReceived")\
                     or (col == "rxFlightChannelValid"):

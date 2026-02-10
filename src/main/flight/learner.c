@@ -239,8 +239,12 @@ static void initLearnerRls(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
     const learnerConfig_t *config = learnerConfig();
 
-    float actionBandwidthHz = 0.001f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
-    // float actionBandwidthHz = 2.0f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    // float actionBandwidthHz = 0.001f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 0.1f * ( 1. / (2.f * M_PIf * 0.025f) ); // 5 times slower than assumed fastest actuator
+    if (!config->useFortescue) {
+        actionBandwidthHz = 0; // default to RLS with constant forgetting
+    }
+
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // init filters and other rls
@@ -269,7 +273,7 @@ static void initLearnerRls(void) {
 
         switch(indiRun.actType[act]) {
             case INDI_ACT_TYPE_MOTOR:
-                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, actionBandwidthHz);
+                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, 0);
 
                 // inverse of updateLearnedParameters
                 float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[act];
@@ -299,14 +303,13 @@ static void initLearnerRls(void) {
                 }
                 break;
             case INDI_ACT_TYPE_SERVO:
-                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, actionBandwidthHz);
+                rlsInit(&actRls[act], 4, 1, 1e0f, gyro.targetLooptime, 0);
                 break;
             case INDI_ACT_TYPE_OFF:
             default:
                 break; // skip unsupported actuator types
         }
     }
-
 
     if (config->initFromProfileAct) {
         learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 0.1f * p->rateGains[0];
@@ -659,9 +662,10 @@ void updateLearner(timeUs_t current) {
         };
         float y[3] = { a->X, a->Y, a->Z }; // in the 1 - 10 m/s/s range id say
 
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 9; i++) {
             AT[i] *= 1e-2f; // parameters are in the cm range, so make sure they will be around 1 to avoid numerical issues
             // it if true parameter is 30cm is logged at in 0.3*100*1000 = 30000, which is max for logging. 1mm is logged as 0.001*100*1000 = 100
+        }
 
         // perform rls step
         rlsNewSample(&imuRls, AT, y, 1.f);
@@ -825,7 +829,7 @@ void updateLearner(timeUs_t current) {
                     continue;
             }
 
-            rlsNewSample( &actRls[act], A, &y, 0.f );
+            rlsNewSample( &actRls[act], A, &y, 1.f ); // no forgetting
         }
     }
 
