@@ -782,7 +782,12 @@ void updateLearner(timeUs_t current) {
             yRateDot[ax] = learnRun.fxRateDot.A[ax]; // scaling seems okay at this sample time/filtering
 
             // float lambda = 0.f; // fortescue tuning
+#define FORTESCUE_AFTER_PROBING
+#ifdef FORTESCUE_AFTER_PROBING
             float lambda = (probing) ? 1.f : 0.f; // during probing, no forgetting, after that, use fortescue (0.f)
+#else
+            float lambda = 1.f; // no forgetting at all
+#endif
             rlsNewSample(&fxRls[ax], A+1, &ySpf[ax], lambda); // spf (skip inertia term)
             rlsNewSample(&fxRls[ax+3], A, &yRateDot[ax], lambda); // RateDot (include inertia term)
         }
@@ -940,6 +945,12 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
             constrainf(10.f * learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] * learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE],
                 1.f, (1 << 16) - 1.f);
     }
+
+#define TAILSITTER_ROLL
+#ifdef TAILSITTER_ROLL
+    indi->rateGains[FD_ROLL] = constrainu(indi->rateGains[FD_ROLL] * 3, 1, (1 << 16) - 1);
+    indi->attGains[FD_ROLL] = constrainu(indi->attGains[FD_ROLL] * 3, 1, (1 << 16) - 1);
+#endif
 
     // same for position
     pos->horz_p = (uint8_t) 

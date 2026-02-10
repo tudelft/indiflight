@@ -526,6 +526,14 @@ void getMotorCommands(timeUs_t current) {
             indiRun.actG2[1][2+servo] = indiRun.tailsCmdd[servo];
             indiRun.actG2[2][2+servo] = indiRun.tailsCndd[servo];
         }
+#define TAILSITTER_MINMOTOR
+#ifdef TAILSITTER_MINMOTOR
+        float minMin = 0.1f;
+        float minMax = 0.4f;
+        float motorMin = (rMat.m[2][2] <= minMin/minMax) ? minMax : minMin / rMat.m[2][2];
+        indiRun.actMin[0] = motorMin;
+        indiRun.actMin[1] = motorMin;
+#endif
     }
 
     // add in G2 contributions G2 * omega_dot
