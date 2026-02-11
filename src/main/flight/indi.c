@@ -531,8 +531,14 @@ void getMotorCommands(timeUs_t current) {
         float minMin = 0.1f;
         float minMax = 0.4f;
         float motorMin = (rMat.m[2][2] <= minMin/minMax) ? minMax : minMin / rMat.m[2][2];
-        indiRun.actMin[0] = motorMin;
-        indiRun.actMin[1] = motorMin;
+        // only use if flight mode learner
+        if (FLIGHT_MODE(LEARNER_MODE)) {
+            indiRun.actMin[0] = motorMin;
+            indiRun.actMin[1] = motorMin;
+        } else {
+            indiRun.actMin[0] = 0.f;
+            indiRun.actMin[1] = 0.f;
+        }
 #endif
     }
 
