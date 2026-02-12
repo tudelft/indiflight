@@ -222,6 +222,7 @@ void updatePosCtl(timeUs_t current) {
                     posGetVelSpNedFromPosSp();
                     posSpNed.vel.V.Z = 0.f;
                 } else {
+                    posRuntime.arrest_z_motion_only = false;
                     posSpNed.vel.V.X = 0.f;
                     posSpNed.vel.V.Y = 0.f;
                     posSpNed.vel.V.Z = 0.f;
@@ -233,7 +234,11 @@ void updatePosCtl(timeUs_t current) {
 #define ARREST_MOTION_VEL_THRESHOLD 0.5f
                 if (VEC3_LENGTH(velEstNed) < ARREST_MOTION_VEL_THRESHOLD) {
                     posRuntime.arrest_motion = false;
-                    posSpNed.pos = posEstNed; // reset position setpoint to current position
+                    if (posRuntime.arrest_z_motion_only) {
+                        posSpNed.pos.V.Z = posEstNed.V.Z;
+                    } else {
+                        posSpNed.pos = posEstNed; // reset position setpoint to current position
+                    }
                     posSpNed.valid = true; // simulate new message
                     posSpNed.time_us = current;
                     resetIterms();
