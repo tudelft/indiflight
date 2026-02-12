@@ -178,9 +178,13 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             if (timeSinceRelease > (1e3 * throwConfig()->releaseDelayMs)) {
                 throwState = THROW_STATE_THROWN;
 #ifdef USE_LOCAL_POSITION
-                if (autoMode && isConvergedEkf() && !posSpNed.valid) {
-                    posArrestMotion();
-                }
+                if (autoMode && isConvergedEkf()) {
+                    if (posSpNed.valid) {
+                        posArrestZMotionOnly();
+                    } else {
+                        posArrestMotion();
+                    }
+                } 
 #endif
                 beeper(BEEPER_SILENCE);
             }

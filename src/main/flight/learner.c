@@ -703,6 +703,7 @@ void updateLearner(timeUs_t current) {
         for (int ax = 0; ax < 3; ax++) {
             // first regressor is rate cross terms for inertia ratios
             A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+            // A[0] = 0.f;
 
 // #define LEARNER_IS_TAILSITTER_SYMMETRIC
 
@@ -1056,8 +1057,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // indi->tails_cxw[1] = 0;
     // indi->tails_cyw[0] = 0;
     // indi->tails_cyw[1] = 0;
-    // indi->tails_czw[0] = 0;
-    // indi->tails_czw[1] = 0;
+    indi->tails_czw[0] = (int16_t) (1e9f * fxRls[2].x[0] * 1e-5f * 1e-1f); // 1e-5 for omega^2 scaling, 1e-1 for y-scaling
+    indi->tails_czw[1] = (int16_t) (1e9f * fxRls[2].x[1] * 1e-5f * 1e-1f); // 1e-5 for omega^2 scaling, 1e-1 for y-scaling
     // indi->tails_cxd[0] = 0;
     // indi->tails_cxd[1] = 0;
 

@@ -120,7 +120,7 @@ static void initSteps(void) {
 
 static void updateSteps(timeUs_t currentTimeUs) {
     const proberConfig_t* config = proberConfig();
-    int totalSteps = learnRun.numActuators;
+    int totalSteps = learnRun.numActuators + 1;
 
     setZeroOutputs();
 
@@ -139,19 +139,29 @@ static void updateSteps(timeUs_t currentTimeUs) {
     if (proberRuntime.sub.steps.currentStepIndex < totalSteps) {
         float output = 0.01f * config->steps_amp;
 
-        if (proberRuntime.sub.steps.currentStepIndex < learnRun.numActuators) {
+        if (proberRuntime.sub.steps.currentStepIndex < learnRun.numActuators + 1) {
             if (act==0) {
-                proberRuntime.output[act] = output;
+                proberRuntime.output[2] = 0.4f; // trigger servo
             } else if (act==1) {
-                proberRuntime.output[act] = output;
-                proberRuntime.output[act+1] = 0.4f;  // trigger servo
+                proberRuntime.output[0] = output;
+                proberRuntime.output[2] = -0.4f;
+                proberRuntime.output[1] = 0.f;
+                proberRuntime.output[3] = 0.f;
             } else if (act==2) {
-                proberRuntime.output[act] = 0;
-                proberRuntime.output[act-2] = output;
-                proberRuntime.output[act+1] = 0.4f;  // trigger other servo servo
+                proberRuntime.output[0] = output;
+                proberRuntime.output[2] = 0.f;
+                proberRuntime.output[1] = 0.f;
+                proberRuntime.output[3] = 0.4f;
             } else if (act==3) {
-                proberRuntime.output[act] = 0;
-                proberRuntime.output[act-2] = output;
+                proberRuntime.output[0] = 0.f;
+                proberRuntime.output[2] = 0.f;
+                proberRuntime.output[1] = output;
+                proberRuntime.output[3] = -0.4f;
+            } else if (act==4) {
+                proberRuntime.output[0] = 0.f;
+                proberRuntime.output[2] = 0.f;
+                proberRuntime.output[1] = output;
+                proberRuntime.output[3] = 0.f;
             }
         }
 

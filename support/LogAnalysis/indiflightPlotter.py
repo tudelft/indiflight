@@ -1246,9 +1246,9 @@ class IndiflightEffectiveness(FlightPlotterBase):
         qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
 
         eff = np.zeros((6, 4))
-        eff[0, :Nr] = 0.
-        eff[1, :Nr] = 0.
-        eff[2, :Nr] = 0.
+        eff[0, :Nr] = x[:Nr, idx]
+        eff[1, :Nr] = y[:Nr, idx]
+        eff[2, :Nr] = z[:Nr, idx]
         eff[3, :Nr] = clw
         eff[4, :Nr] = cmw + cmd * sd
         eff[5, :Nr] = cnw + cnd * sd

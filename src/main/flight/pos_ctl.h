@@ -74,6 +74,7 @@ typedef struct positionRuntime_s {
     float weathervane_min_v; // m/s min speed to use weathervaneing
     bool use_spf_attenuation;
     bool arrest_motion; // if true, command zero velocity until it is reached
+    bool arrest_z_motion_only; // if true, only command zero velocity in z direction
 } positionRuntime_t;
 
 #define POSITION_PROFILE_COUNT 3
@@ -95,6 +96,7 @@ extern fp_vector_t rateSpBodyFromPos;
 
 void resetIterms();
 void posArrestMotion();
+void posArrestZMotionOnly();
 void updatePosCtl(timeUs_t current);
 void posGetVelSpNedFromPosSp(void);
 void posGetVelSpNedFromSticks(void);

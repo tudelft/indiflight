@@ -102,6 +102,7 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
     posRuntime.arrest_motion = false;
+    posRuntime.arrest_z_motion_only = false;
 }
 
 void changePositionProfile(uint8_t profileIndex)
@@ -130,6 +131,13 @@ void resetIterms(void) {
 
 void posArrestMotion(void) {
     posRuntime.arrest_motion = true;
+    posSpNed.valid = true;
+    resetIterms();
+}
+
+void posArrestZMotionOnly(void) {
+    posRuntime.arrest_motion = true;
+    posRuntime.arrest_z_motion_only = true;
     posSpNed.valid = true;
     resetIterms();
 }
@@ -210,9 +218,14 @@ void updatePosCtl(timeUs_t current) {
                 rateSpBodyFromPos = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
             } else if (posRuntime.arrest_motion) {
                 // just command zero velocity until it is reached
-                posSpNed.vel.V.X = 0.f;
-                posSpNed.vel.V.Y = 0.f;
-                posSpNed.vel.V.Z = 0.f;
+                if (posRuntime.arrest_z_motion_only && posSpNed.valid) {
+                    posGetVelSpNedFromPosSp();
+                    posSpNed.vel.V.Z = 0.f;
+                } else {
+                    posSpNed.vel.V.X = 0.f;
+                    posSpNed.vel.V.Y = 0.f;
+                    posSpNed.vel.V.Z = 0.f;
+                }
                 posSpNed.trackPsi = false;
                 rateSpBodyFromPos.V.X = 0;
                 rateSpBodyFromPos.V.Y = 0;

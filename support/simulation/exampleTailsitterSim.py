@@ -162,7 +162,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 0., -10.], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.catapult:
@@ -208,7 +208,7 @@ if __name__=="__main__":
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if args.learn and sim.t > 3.0:
             sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE) if sil else None
-            sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
+            # sil.mockup.sendPositionSetpoint( [0., 0., -4.], 0. )
 
         if not args.throw and sim.t > 2.5 and not armed:
             sil.mockup.arm() if sil else None
