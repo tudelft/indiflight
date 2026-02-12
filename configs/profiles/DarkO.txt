@@ -463,10 +463,10 @@ set learner_use_fortescue = 0
 # set learner_zeta_attitude = 70
 # set learner_zeta_velocity = 100
 # set learner_zeta_position = 100
-set learner_zeta_rate = 80
-set learner_zeta_attitude = 70
-set learner_zeta_velocity = 70
-set learner_zeta_position = 70
+set learner_zeta_rate = 50
+set learner_zeta_attitude = 71
+set learner_zeta_velocity = 100
+set learner_zeta_position = 71
 set learner_zeta_velocity_vert = 90
 set learner_zeta_position_Vert = 100
 

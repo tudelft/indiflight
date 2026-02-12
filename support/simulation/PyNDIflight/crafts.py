@@ -346,7 +346,7 @@ class Tailsitter(Craft):
         self.s_dddmax = +250.*np.ones((self.Ns), dtype=np.float32)
         self.s_P  = +45.*np.ones((self.Ns), dtype=np.float32)
         self.s_D  = +80.*np.ones((self.Ns), dtype=np.float32)
-        self.s_delay = 0.03
+        self.s_delay = 0.04
         self.s_u_buffer = collections.deque(maxlen=1000)
 
     def customPhysics(self, dt):

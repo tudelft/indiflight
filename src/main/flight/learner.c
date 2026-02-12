@@ -870,10 +870,6 @@ void updateLearner(timeUs_t current) {
         for (int loop = LEARNER_LOOP_HORIZONTAL_ATTITUDE; loop <= LEARNER_LOOP_HORIZONTAL_POSITION; loop++) {
             learnRun.gains[loop] = 0.25f * learnRun.gains[loop-1] / sq(learnRun.zeta[loop]);
         }
-        learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 10.f;
-        learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] = 5.f;
-        // learnRun.gains[LEARNER_LOOP_HORIZONTAL_RATE] = 10.f;
-        // learnRun.gains[LEARNER_LOOP_HORIZONTAL_ATTITUDE] = 5.f;
 
         // calculate vertical gains
         learnRun.gains[LEARNER_LOOP_VERTICAL_VELOCITY] =
