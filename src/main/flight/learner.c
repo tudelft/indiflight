@@ -942,10 +942,10 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
                 1.f, (1 << 16) - 1.f);
     }
 
-// #define TAILSITTER_ROLL
+#define TAILSITTER_ROLL
 #ifdef TAILSITTER_ROLL
-    indi->rateGains[FD_ROLL] = constrainu(indi->rateGains[FD_ROLL] * 3, 1, (1 << 16) - 1);
-    indi->attGains[FD_ROLL] = constrainu(indi->attGains[FD_ROLL] * 3, 1, (1 << 16) - 1);
+    indi->rateGains[FD_ROLL] = constrainu(indi->rateGains[FD_ROLL] * 2, 1, (1 << 16) - 1);
+    indi->attGains[FD_ROLL] = constrainu(indi->attGains[FD_ROLL] * 2, 1, (1 << 16) - 1);
 #endif
 
     // same for position
