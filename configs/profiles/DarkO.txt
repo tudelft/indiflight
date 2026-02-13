@@ -374,8 +374,8 @@ set position_vertical_i = 5
 set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 700
-set position_max_horizontal_accel = 500
+set position_max_horizontal_speed = 500
+set position_max_horizontal_accel = 1000
 set position_max_upwards_speed = 250
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
@@ -463,12 +463,12 @@ set learner_use_fortescue = 1
 # set learner_zeta_attitude = 70
 # set learner_zeta_velocity = 100
 # set learner_zeta_position = 100
-set learner_zeta_rate = 50
+set learner_zeta_rate = 55
 set learner_zeta_attitude = 70
-set learner_zeta_velocity = 100
+set learner_zeta_velocity = 80
 set learner_zeta_position = 70
-set learner_zeta_velocity_vert = 90
-set learner_zeta_position_Vert = 100
+set learner_zeta_velocity_vert = 100
+set learner_zeta_position_Vert = 90
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0
@@ -476,7 +476,7 @@ set learner_yaw_misalignment = 0
 set learner_randomize_misalignment = 0
 
 set learner_apply_indi_profile = 1
-set learner_apply_position_profile = 0
+set learner_apply_position_profile = 1
 set learner_apply_hover_rotation = 0
 
 

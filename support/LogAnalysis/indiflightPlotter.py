@@ -601,7 +601,7 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
                             title="Servo Time Constant",
                             ylabel="Time Constant [s]")
 
-        pqr_range = list(range(8))
+        pqr_range = list(range(16))
 
         x = np.array([self.data[f'fx_x_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
         y = np.array([self.data[f'fx_y_rls_x[{i}]'] for i in range(Nr)]) * 1e-3 * 1e-1 * 1e-5
@@ -610,15 +610,15 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
         q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
         r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
 
-        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(8,10)]) * 1e-3 * 1e-0 * 1e-0
 
-        p[4:6] *= 1e5 * 1e-3
-        q[4:6] *= 1e5 * 1e-3
-        r[4:6] *= 1e5 * 1e-3
+        p[8:10] *= 1e5 * 1e-3
+        q[8:10] *= 1e5 * 1e-3
+        r[8:10] *= 1e5 * 1e-3
 
-        p[6] *= 1e5 * 1e-1
-        q[6] *= 1e5 * 1e-1
-        r[6] *= 1e5 * 1e-1
+        p[10] *= 1e5 * 1e-1
+        q[10] *= 1e5 * 1e-1
+        r[10] *= 1e5 * 1e-1
 
         # compute effectiveness matrices (unscaled)
         vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
@@ -634,13 +634,11 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
 
         cmw = q[:Nr]
         cmd = q[Nr:N]
-        cmwd = q[4:6]
+        cmwd = q[8:10]
 
         cnw = r[:Nr]
         cnd = r[Nr:N]
-        cnwd = r[4:6]
-
-        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+        cnwd = r[8:10]
 
         L = len(self.t)
         eff = np.zeros((6, 4, L))
@@ -757,7 +755,7 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
                                 light=None,
                                 solid=qd,
                                 dashed=None,
-                                true_values=[self.true[f'fx_q_rls_x[{i}]'] for i in range(4,6)] if self.true is not None else None,
+                                true_values=[self.true[f'fx_q_rls_x[{i}]'] for i in range(8,10)] if self.true is not None else None,
                                 series_labels=[
                                     "Elevon 1", "Elevon 2"
                                 ],
@@ -767,9 +765,9 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),
                             light=None,
-                            solid=r[4:6],
+                            solid=r[8:10],
                             dashed=None,
-                            true_values=[self.true[f'fx_r_rls_x[{i}]'] for i in range(4,6)] if self.true is not None else None,
+                            true_values=[self.true[f'fx_r_rls_x[{i}]'] for i in range(8,10)] if self.true is not None else None,
                             series_labels=[
                                 "Motor 1", "Motor 2"
                             ],
@@ -811,13 +809,25 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[3, 2]),
                               light=None,
-                              solid=np.array([self.data[f'fx_{axis}_rls_x[6]'] for axis in ['p', 'q', 'r']]) / 1000,
+                              solid=np.array([self.data[f'fx_{axis}_rls_x[10]'] for axis in ['p', 'q', 'r']]) / 1000,
                               dashed=None,
                               true_values=None,
                               series_labels=["Aero P", "Aero Q", "Aero R"],
                               style_labels=[None, "Onboard", None],
                               title="Aero Derivative Coefficients",
                               ylabel="Coefficient [Nm/(kgm²)/(rad/s)^2]")
+
+        gains = np.array([self.data[f'learner_gains[{i}]'] for i in range(6)]) * 1e-1
+
+        self._plot_timeseries(self.fig.add_subplot(self.gs[4:6, 2]),
+                                light=None,
+                                solid=gains,
+                                dashed=None,
+                                true_values=None,
+                                series_labels=["R", "A", "Vh", "Ph", "Vv", "Pv"],
+                                style_labels=[None, "Onboard", None],
+                                title="Learner Gains",
+                                ylabel="Gain [-]")
 
 class IndiflightMoments(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for Moment analysis"""
@@ -1322,7 +1332,6 @@ class IndiflightEffectiveness(FlightPlotterBase):
         if event.xdata is not None:
             self.showAtTime(event.xdata)
 
-
 class IndiflightViewport(Viewport):
     """Thin wrapper: extract series from log and intialize base class"""
 
@@ -1411,10 +1420,10 @@ if __name__ == "__main__":
         log.data, _ = log.crop(args.crop[0], args.crop[1])
 
     if args.type == "tailsitter":
-        fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data")
+        fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data -- {log.parameters['Firmware revision']}")
         craft = Tailsitter()
     elif args.type == "multirotor":
-        fplt = IndiflightPlotter(log.data, Nr=4, Ns=0, name=f"{args.name} -- Flight Data")
+        fplt = IndiflightPlotter(log.data, Nr=4, Ns=0, name=f"{args.name} -- Flight Data -- {log.parameters['Firmware revision']}")
         craft = Quadrotor()
     else:
         raise ValueError(f"Unknown craft type: {args.type}")
@@ -1427,7 +1436,7 @@ if __name__ == "__main__":
                               Ns=fplt.Ns,
                               follow=args.follow,
                               interpolation="previous",
-                              title=f"{args.name} -- Onboard ID Analysis")
+                              title=f"{args.name} -- Onboard ID Analysis -- {log.parameters['Firmware revision']}")
 
     fplt.connect_viewport(pplt)
 

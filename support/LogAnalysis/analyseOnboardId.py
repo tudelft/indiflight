@@ -71,7 +71,7 @@ servo_true = {
 
 # fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
 # splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
-fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data")
+fplt = IndiflightPlotter(log.data, Nr=2, Ns=2, name=f"{args.name} -- Flight Data -- {log.parameters['Firmware revision']}")
 #mplt = IndiflightMotorSysIdPlotter(log.data, Nr=2, name=f"{args.name} -- Onboard Motor Analysis")
 # splt = IndiflightServoSysIdPlotter(log.data, Nr=2, Ns=2, true=servo_true, name=f"{args.name} -- Onboard Servo Analysis")
 
@@ -95,27 +95,27 @@ act_true = {
     'fx_q_rls_x[1]': 0,
     'fx_q_rls_x[2]': -1.836e-8 / 1.345e-3,
     'fx_q_rls_x[3]': -1.836e-8 / 1.345e-3,
-    'fx_q_rls_x[4]': -1.411e-3 / 1.345e-3,
-    'fx_q_rls_x[5]': -1.411e-3 / 1.345e-3,
+    'fx_q_rls_x[8]': -1.411e-3 / 1.345e-3,
+    'fx_q_rls_x[9]': -1.411e-3 / 1.345e-3,
 
     'fx_r_rls_x[0]': -1.413e-6 * 6.157e-4 / 5.413e-3,
     'fx_r_rls_x[1]': +1.413e-6 * 6.157e-4 / 5.413e-3,
     'fx_r_rls_x[2]': -6.061e-8 / 5.413e-3,
     'fx_r_rls_x[3]': +6.061e-8 / 5.413e-3,
-    'fx_r_rls_x[4]': -2.840e-6 / 5.413e-3,
-    'fx_r_rls_x[5]': +2.840e-6 / 5.413e-3,
+    'fx_r_rls_x[8]': -2.840e-6 / 5.413e-3,
+    'fx_r_rls_x[9]': +2.840e-6 / 5.413e-3,
 
     'sigma_rls[0]':  0.75,
     'sigma_rls[1]': -0.25,
     'sigma_rls[2]': -0.61538,
 }
-aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, name=f"{args.name} -- Onboard Individual Analysis")
+aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, name=f"{args.name} -- Onboard Individual Analysis -- {log.parameters['Firmware revision']}")
 
 
 moplt = IndiflightMoments(log.data, Nr=2, Ns=2, name=f"{args.name} -- Moments")
 
-tplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness", scheduled=True)
-tsplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness", scheduled=False)
+tplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness -- {log.parameters['Firmware revision']}", scheduled=True)
+tsplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness -- {log.parameters['Firmware revision']}", scheduled=False)
 fplt.connect_viewport(tplt)
 aplt.connect_viewport(tplt)
 moplt.connect_viewport(tplt)
@@ -125,7 +125,7 @@ moplt.connect_viewport(tsplt)
 
 # craft = Quadrotor()
 craft = Tailsitter()
-pplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=False, title=f"{args.name} -- Onboard ID Analysis")
+pplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=False, title=f"{args.name} -- Onboard ID Analysis -- {log.parameters['Firmware revision']}")
 #pfplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=True, title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
 #mplt.connect_viewport(pplt)

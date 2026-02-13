@@ -77,6 +77,8 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
 
 void posCtlInit(void) {
     initPositionRuntime();
+    posRuntime.arrest_motion = false;
+    posRuntime.arrest_z_motion_only = false;
 }
 
 positionRuntime_t posRuntime;
@@ -101,8 +103,6 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_p = p->weathervane_p * 0.1f;
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
-    posRuntime.arrest_motion = false;
-    posRuntime.arrest_z_motion_only = false;
 }
 
 void changePositionProfile(uint8_t profileIndex)
