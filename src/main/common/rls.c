@@ -43,12 +43,12 @@ float fortescueApply(fortescue_tuning_t* fortescue, float error, float regressTi
     float errorLP = biquadFilterApply( &(fortescue->errorLP), error );
     float errorHP = error - errorLP;
     float errorVar = MAX(1e-4f, emwvApply( &(fortescue->errorMV), errorHP ));
-    errorVar = 4.f;
+    errorVar = 1.5f;
 
     // lam = 1 - ( 1 - AT K ) * (e**2) / Sigma0
     float e2 = error * error;
     // float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 5.f * fortescue->sampleFreqHz * errorVar );
-    float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 20.f * fortescue->sampleFreqHz * errorVar );
+    float lambda = 1.f - ( 1.f - regressTimesGains ) * e2 / ( 500.f * fortescue->sampleFreqHz * errorVar );
 
     //if (lambda != lambda)
     //    __asm("BKPT #0\n") ; // Break into the debugger
