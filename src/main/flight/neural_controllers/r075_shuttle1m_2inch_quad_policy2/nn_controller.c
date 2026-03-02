@@ -2,54 +2,55 @@
 #include <math.h>
 #include <stdlib.h>
 
+bool deterministic = false;
+
+const float output_std[4] = {
+    0.07316553592681885,
+    0.06765368580818176,
+    0.07052506506443024,
+    0.06701529771089554,
+};
+
 const float gate_pos[NUM_GATES][3] = {
-    {1.5, -1.5, -1.5},
-    {0.0, 0.0, -1.5},
-    {-1.5, 1.5, -1.5},
-    {0.0, 3.0, -1.5},
-    {1.5, 1.5, -1.5},
-    {0.0, 0.0, -1.5},
-    {-1.5, -1.5, -1.5},
-    {0.0, -3.0, -1.5},
+    {0.0, -0.75, -1.0},
+    {0.0, 0.0, -1.0},
+    {0.0, 0.75, -1.0},
+    {0.0, 0.75, -1.0},
+    {0.0, 0.0, -1.0},
+    {0.0, -0.75, -1.0},
 };
 
 const float gate_yaw[NUM_GATES] = {
     1.5707963705062866,
-    3.1415927410125732,
     1.5707963705062866,
-    0.0,
+    1.5707963705062866,
     -1.5707963705062866,
-    -3.1415927410125732,
     -1.5707963705062866,
-    0.0,
+    -1.5707963705062866,
 };
 
 const float start_pos[3] = {
-    1.5, -2.5, -1.5
+    0.0, -1.75, -1.0
 };
 
 const float start_yaw = 1.5707963705062866;
 
 const float gate_pos_rel[NUM_GATES][3] = {
-    {1.5, 1.5, 0.0},
-    {1.5000001192092896, 1.4999998807907104, 0.0},
-    {1.4999998807907104, -1.5000001192092896, 0.0},
-    {1.4999998807907104, -1.5000001192092896, 0.0},
-    {1.5, -1.5, 0.0},
-    {1.5000001192092896, -1.4999998807907104, 0.0},
-    {1.4999998807907104, 1.5000001192092896, 0.0},
-    {1.4999998807907104, 1.5000001192092896, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.75, -3.278353943869661e-08, 0.0},
+    {0.75, -3.278353943869661e-08, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.75, 3.278353943869661e-08, 0.0},
+    {0.75, 3.278353943869661e-08, 0.0},
 };
 
 const float gate_yaw_rel[NUM_GATES] = {
-    1.5707963705062866,
-    1.5707963705062866,
-    -1.5707963705062866,
-    -1.5707963705062866,
-    -1.5707963705062866,
-    -1.5707963705062866,
-    1.5707963705062866,
-    1.5707963705062866,
+    3.1415927410125732,
+    0.0,
+    0.0,
+    3.1415927410125732,
+    0.0,
+    0.0,
 };
 
 uint8_t target_gate_index = 0;
@@ -71,7 +72,9 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
     // Set the target gate index to the next gate if we passed through the current one
     if (cosf(target_yaw) * (pos[0] - target_pos[0]) + sinf(target_yaw) * (pos[1] - target_pos[1]) > 0) {
         target_gate_index++;
+        // loop back to the first gate if we reach the end
         target_gate_index = target_gate_index % NUM_GATES;
+        // reset the target position and heading
         target_pos[0] = gate_pos[target_gate_index][0];
         target_pos[1] = gate_pos[target_gate_index][1];
         target_pos[2] = gate_pos[target_gate_index][2];
@@ -114,7 +117,7 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
     nn_input[11] = world_state[11];
     // motor rpms scaled to [-1,1]
     float w_min = 0.0;
-    float w_max = 5000.0;
+    float w_max = 3000.0;
     nn_input[12] = (world_state[12] - w_min) * 2 / (w_max - w_min) - 1;
     nn_input[13] = (world_state[13] - w_min) * 2 / (w_max - w_min) - 1;
     nn_input[14] = (world_state[14] - w_min) * 2 / (w_max - w_min) - 1;
@@ -122,18 +125,30 @@ void nn_control(const float world_state[16], float motor_cmds[4]) {
 
     // relative gate positions and headings
     for (int i = 0; i < GATES_AHEAD; i++) {
-        uint8_t index = (target_gate_index + i + 1) % (NUM_GATES);
+        uint8_t index = target_gate_index + i + 1;
+        // loop back to the first gate if we reach the end
+        index = index % NUM_GATES;
         nn_input[16+4*i]   = gate_pos_rel[index][0];
         nn_input[16+4*i+1] = gate_pos_rel[index][1];
         nn_input[16+4*i+2] = gate_pos_rel[index][2];
         nn_input[16+4*i+3] = gate_yaw_rel[index];
     }
-
-    // Get the NEAT network output
+    // Get the neural network output and write to the action array
     float nn_output[4];
     nn_forward(nn_input, nn_output);
 
-    // Clip and map outputs
+    // add gaussian noise to the output
+    if (!deterministic) {
+        for (int i = 0; i < 4; i++) {
+            // generate random gaussian variables using the Box–Muller transform
+            float u1 = (float)rand() / RAND_MAX;
+            float u2 = (float)rand() / RAND_MAX;
+            float rand_std = sqrtf(-2 * logf(u1)) * cosf(2 * M_PI * u2);
+            // add the noise to the output
+            nn_output[i] += output_std[i] * rand_std;
+        }
+    }
+
     for (int i = 0; i < 4; i++) {
         // clip the output to the range [-1, 1.0] (1.0 MOTOR LIMIT)
         if (nn_output[i] > 1.0) nn_output[i] = 1.0;

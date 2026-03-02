@@ -132,8 +132,8 @@
 #endif // STM32F4
 
 #ifdef STM32F7
-#define USE_ITCM_RAM
-#define ITCM_RAM_OPTIMISATION "-O2", "-freorder-blocks-algorithm=simple"
+// #define USE_ITCM_RAM
+// #define ITCM_RAM_OPTIMISATION "-O2", "-freorder-blocks-algorithm=simple"
 #define USE_FAST_DATA
 #define USE_RPM_FILTER
 #define USE_DYN_IDLE
