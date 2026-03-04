@@ -449,20 +449,26 @@ void getMotorCommands(timeUs_t current) {
     // use INDI only when in the air, solve linearized global problem otherwise
     bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
 
+    float spfx = 0.f;
+    float spfy = 0.f;
     float spfz = 0.f;
     if (indiRun.useAccelForSpfz) {
+        spfx = indiRun.spf_fs.V.X;
+        spfy = indiRun.spf_fs.V.Y;
         spfz = indiRun.spf_fs.V.Z;
     } else {
         // define specific force using actuator model and effectiveness
         // this should be equivalent to direct throtte-stick-to-thrust mapping, without feedback control
         for (int i = 0; i < indiRun.actNum; i++) {
+            spfx += indiRun.actG1[0][i] * indiRun.uState_fs[i];
+            spfy += indiRun.actG1[1][i] * indiRun.uState_fs[i];
             spfz += indiRun.actG1[2][i] * indiRun.uState_fs[i];
         }
     }
 
     // compute pseudocontrol
-    indiRun.dv[0] = 0.f;
-    indiRun.dv[1] = 0.f;
+    indiRun.dv[0] = indiRun.spfSpBody.V.X - doIndi * spfx;
+    indiRun.dv[1] = indiRun.spfSpBody.V.Y - doIndi * spfy;
     indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * spfz;
     indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
     indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
