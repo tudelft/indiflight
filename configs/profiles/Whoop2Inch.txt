@@ -138,8 +138,8 @@ set small_angle = 25   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 2       # relative to imu
-#set ahrs_process_denom = 4      # relative to imu
+set pid_process_denom = 4       # relative to imu
+set ahrs_process_denom = 4      # relative to imu
 set nn_rate_denom = 20           # relative to pid
 set blackbox_sample_rate = 1/8  # relative to pid
 
