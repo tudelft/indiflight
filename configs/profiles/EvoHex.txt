@@ -313,7 +313,7 @@ set indi_wls_act_penalties = 1,1,1,1
 #set indi_act_g2_yaw = -8, 8, 8, -8
 
 set indi_sync_lowpass_hz = 15
-set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
+set indi_wls_axes_weights = 20, 20, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
 
