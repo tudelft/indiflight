@@ -37,8 +37,8 @@ craft = Tailsitter() if args.type == "tailsitter" else Quadrotor()
 pplt = IndiflightViewport(craft,
                           log.data,
                           follow=False,
-                          Nr=2,
-                          Ns=2,
+                          Nr=4,
+                          Ns=0,
                           interpolation="previous",
                           title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)

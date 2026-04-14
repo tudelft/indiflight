@@ -258,27 +258,51 @@ class ExcitationGenerator(object):
         self.U[self.D] = self.cstard[:, np.newaxis] * ptilde  +  self.astard[:, np.newaxis]
 
     def plot(self):
-        fig, axs = plt.subplots(3, 1, figsize=(10, 6), sharex=True)
+        fig, axs = plt.subplots(4, 1, figsize=(7, 8.5), sharex=True)
 
-        axs[0].plot(self.t, self.V.T)
-        axs[1].plot(self.t, self.B.T)
-        axs[2].plot(self.t, self.U.T)
+        # ensure that the style is readible without colors
+        LINETYPES = ['-', '--', '-.', ':']
 
-        # plot products for dependent actuators
+        # labels follow the logic: "Motor i" for independent actuators, "Elevon j" for dependent actuators
+        LABELS = [f'Motor {i+1}' if i in self.I else f'Elevon {i+1-self.ni}' for i in range(self.n)]
+
+        for i in range(self.n):
+            axs[0].plot(self.t, self.V[i].T, label=LABELS[i], linewidth=2, linestyle=LINETYPES[i % len(LINETYPES)])
+            axs[1].plot(self.t, self.B[i].T, label=LABELS[i], linewidth=2, linestyle=LINETYPES[i % len(LINETYPES)])
+            axs[2].plot(self.t, self.U[i].T, label=LABELS[i], linewidth=2, linestyle=LINETYPES[i % len(LINETYPES)])
+
+        # plot products for dependent actuators in a 4th plot
         if self.nd:
-            # plot with the same colours as last actuators previously plotted
             for d in self.D:
-                axs[2].plot(self.t, self.U[d].T * self.U[self.actuators[d]['dependent_on']].T,
-                            '--',
-                            color=axs[2].lines[d].get_color())
+                axs[3].plot(self.t, self.U[d].T * self.U[self.actuators[d]['dependent_on']].T,
+                            LINETYPES[d],
+                            linewidth=2,
+                            color=axs[2].lines[d].get_color(),
+                            label=f'$u_{d} * u_{{{self.actuators[d]["dependent_on"]}}}$')
 
-        axs[0].set_title("Basis Functions")
-        axs[1].set_title("Orthogonal Basis Functions")
-        axs[2].set_title("Excitation Signals")
-        axs[-1].set_xlabel("Time")
+        axs[0].set_title("Basis Functions", fontsize=14)
+        axs[1].set_title("Orthogonalized Functions", fontsize=14)
+        axs[2].set_title("Scaled Excitation Signals", fontsize=14)
+        axs[3].set_title("Products of Dependent Actuators", fontsize=14)
+        axs[-1].set_xlabel("Time", fontsize=12)
+
+        # make legend appear above plot, and horizontal
+        axs[0].legend(loc='upper center',ncol=self.n)
+
+        # make legend appear normally for 4th plot
+        if self.nd:
+            axs[3].legend(loc='upper right')
+
+        # set plot/subplot spoacing
+        plt.subplots_adjust(top=0.95, bottom=0.08, left=0.1, right=0.95, hspace=0.25, wspace=0.2)
 
         for ax in axs:
+            ax.set_ylim(-1.1, 1.1)
             ax.grid()
+
+        axs[0].set_ylim(-1.1, 1.8)
+
+        egd.fig_signals = fig
 
     def plot_inner_products(self):
 
@@ -380,24 +404,24 @@ if __name__ == "__main__":
     t = np.linspace(0, 1, 1001)
 
     #%% test with independent actuators
-    vi = lambda t: np.cos(4*np.pi*t)
-    egi = ExcitationGenerator(t)
-    egi.add_library_function(vi)
-    egi.add_library_function(Transformations.scale(vi, 0.85**1))
-    egi.add_library_function(Transformations.scale(vi, 0.85**2))
-    egi.add_library_function(Transformations.scale(vi, 0.85**3))
+    ## vi = lambda t: np.cos(4*np.pi*t)
+    ## egi = ExcitationGenerator(t)
+    ## egi.add_library_function(vi)
+    ## egi.add_library_function(Transformations.scale(vi, 0.85**1))
+    ## egi.add_library_function(Transformations.scale(vi, 0.85**2))
+    ## egi.add_library_function(Transformations.scale(vi, 0.85**3))
 
-    egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
-    egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
-    egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
-    egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
+    ## egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
+    ## egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
+    ## egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
+    ## egi.add_actuator(type='independent', lb=+0.2, ub=+0.8)
 
-    egi.generate()
+    ## egi.generate()
 
-    # print results
-    print("Quadcopter")
-    print("Coefficients for Independent Actuators:")
-    print("Ui  = ", egi.cstari, "* Bi +", egi.astari)
+    ## # print results
+    ## print("Quadcopter")
+    ## print("Coefficients for Independent Actuators:")
+    ## print("Ui  = ", egi.cstari, "* Bi +", egi.astari)
 
     #%% test with dependent actuators
     vd = lambda t: np.cos(4*np.pi*(1-t)*(1-t))
@@ -430,4 +454,5 @@ if __name__ == "__main__":
 
     # plot results
     egd.plot()
-    egd.plot_inner_products()
+    egd.fig_signals.savefig("signals.eps", format='eps')
+    # egd.plot_inner_products()

@@ -678,7 +678,11 @@ class IndiflightIndividualSysIdPlotter(FlightPlotterBase):
                 # find closest index to tend
                 iend = np.argmin(np.abs(self.t - tend))
                 print(f"Learning ends at t={self.t[iend]:.2f}s with inertial velocity x={vel[iend,0]:.2f} m/s, y={vel[iend,1]:.2f} m/s, z={vel[iend,2]:.2f} m/s")
+
+                self.idx_start_learning = istart
+                self.idx_end_learning = iend
                 break
+
 
         # compute first time that roll and pitch signs are correct
         for i in range(istart+100, L):

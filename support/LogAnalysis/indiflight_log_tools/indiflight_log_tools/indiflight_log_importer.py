@@ -169,7 +169,7 @@ class IndiflightLog(object):
 
         # convert to csv
         logger.info("Parsing logfile")
-        argv = [b"blackbox_decode", self.cache_bfl.encode("ascii")]
+        argv = ["--debug", b"blackbox_decode", self.cache_bfl.encode("ascii")]
         argc = 2
         argv_ctypes = (ctypes.c_char_p * argc)(*argv)
         _ = lib.main(argc, argv_ctypes)
@@ -548,7 +548,7 @@ class IndiflightLog(object):
             elif col.startswith('ekf_acc_b'):
                 data[col] /= 1000.
             elif col.startswith('ekf_gyro_b'):
-                data[col] /= self.RADIANS_TO_DEGREES
+                data[col] /= self.RADIANS_TO_DEGREES * 1000.
             # elif (match := re.match(r'^motor_[0-9]+_rls_x\[([0-9]+)\]$', col)):
             #     bbscaler = 1000.
             #     yscaler = 0.001
