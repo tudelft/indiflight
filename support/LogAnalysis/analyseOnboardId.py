@@ -1,6 +1,7 @@
 from indiflight_log_tools import IndiflightLog
 import matplotlib.pyplot as plt
 import matplotlib
+import re
 
 plt.close('all')
 matplotlib.use('tkagg') 
@@ -13,7 +14,7 @@ from indiflightPlotter import IndiflightPlotter, \
     IndiflightIndividualSysIdPlotter, \
     IndiflightMoments, \
     IndiflightEffectiveness
-from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor
+from pyFlightPlotter import Quadrotor, Tailsitter, BlittedCursor, VideoViewport
 
 # set local_rc
 plt.rcParams.update(local_rc)
@@ -28,15 +29,50 @@ parser.add_argument("--resetTime", action="store_true", help="Reset time to star
 parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                     help="Crop the log to the given time range (in seconds).")
 parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
+parser.add_argument("--mp4", required=False, type=str,
+                    help="Optional path to an MP4 file to synchronize with the data timeline.")
+parser.add_argument("--video-offset", required=False, type=float, default=0.0,
+                    help="Time offset [s] applied as video_time = data_time + offset.")
 
 args = parser.parse_args()
 
 if args.name is None:
     args.name = args.logfile.split("/")[-1].split(".")[0]
 
+
+def _sorted_indexed_columns(columns, pattern):
+    indexed = []
+    for col in columns:
+        m = re.match(pattern, col)
+        if m:
+            indexed.append((int(m.group(1)), col))
+    indexed.sort(key=lambda x: x[0])
+    return indexed
+
+
+def _find_first_motor_command_time(data):
+    columns = data.columns
+    motor_cols = _sorted_indexed_columns(columns, r'^motor\[(\d+)\]$')
+
+    # extract second element of each tuple into a list
+    motor_cols = [col for _, col in motor_cols]
+
+    # Prefer command channels u[i] for indices that are known motors.
+    motor_active = (data[motor_cols] > 0).any(axis=1)
+    if not motor_active.any():
+        return None
+
+    return data['timeS'].loc[motor_active[motor_active].index[0]]
+
 log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
 if args.crop:
+    print("cropping")
     log.data, _ = log.crop(args.crop[0], args.crop[1])
+
+auto_crop_start = _find_first_motor_command_time(log.data)
+if auto_crop_start is not None:
+    print("auto cropping to first motor command at time {:.2f} seconds".format(auto_crop_start))
+    log.data, _ = log.crop(auto_crop_start-2, log.data['timeS'].iloc[-1])
 
 servo_true = {
     'motor_2_rls_x[0]': 1.75,    # max angle in rad
@@ -114,11 +150,11 @@ aplt = IndiflightIndividualSysIdPlotter(log.data, Nr=2, Ns=2, true=act_true, nam
 
 moplt = IndiflightMoments(log.data, Nr=2, Ns=2, name=f"{args.name} -- Moments")
 
-tplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness -- {log.parameters['Firmware revision']}", scheduled=True)
+#tplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness -- {log.parameters['Firmware revision']}", scheduled=True)
+#fplt.connect_viewport(tplt)
+#aplt.connect_viewport(tplt)
+#moplt.connect_viewport(tplt)
 tsplt = IndiflightEffectiveness(log.data, Nr=2, Ns=2, name=f"{args.name} -- Effectiveness -- {log.parameters['Firmware revision']}", scheduled=False)
-fplt.connect_viewport(tplt)
-aplt.connect_viewport(tplt)
-moplt.connect_viewport(tplt)
 fplt.connect_viewport(tsplt)
 aplt.connect_viewport(tsplt)
 moplt.connect_viewport(tsplt)
@@ -135,6 +171,17 @@ moplt.connect_viewport(pplt)
 
 #fplt.connect_viewport(pfplt)
 #aplt.connect_viewport(pfplt)
+
+if args.mp4:
+    vplt = VideoViewport(
+        log.data['timeS'].to_numpy(),
+        title=f"{args.name} -- Video",
+        mp4_path=args.mp4,
+        offset_s=args.video_offset,
+    )
+    fplt.connect_viewport(vplt)
+    aplt.connect_viewport(vplt)
+    moplt.connect_viewport(vplt)
 
 # cursor = BlittedCursor(fplt.all_axes + mplt.all_axes + splt.all_axes + aplt.all_axes, sharex=True)
 cursor = BlittedCursor(fplt.all_axes + moplt.all_axes + aplt.all_axes, sharex=True)

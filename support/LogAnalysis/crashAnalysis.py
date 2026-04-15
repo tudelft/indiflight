@@ -85,6 +85,31 @@ class suppress_output:
         os.close(self._stdout_fd)
         os.close(self._stderr_fd)
 
+
+def quaternion_cos_tilt(data, index):
+    keys = [f"ekf_quat[{i}]" for i in range(4)]
+    if all(key in data.columns for key in keys):
+        w = float(data[keys[0]].iloc[index])
+        x = float(data[keys[1]].iloc[index])
+        y = float(data[keys[2]].iloc[index])
+        return float(np.clip(1.0 - 2.0 * (x * x + y * y), -1.0, 1.0))
+
+    return float("nan")
+
+def quaternion_roll_pitch(data, index):
+    keys = [f"ekf_quat[{i}]" for i in range(4)]
+    if all(key in data.columns for key in keys):
+        w = float(data[keys[0]].iloc[index])
+        x = float(data[keys[1]].iloc[index])
+        y = float(data[keys[2]].iloc[index])
+        z = float(data[keys[3]].iloc[index])
+
+        roll = float(np.arctan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)))
+        pitch = float(np.arcsin(np.clip(2.0 * (w * y - z * x), -1.0, 1.0)))
+        return roll, pitch
+
+    return float("nan"), float("nan")
+
 path = "/mnt/data/WorkData/BlackboxLogs/"
 # files = [
 #     "2025-12-17/LOG00250_success.BFL",
@@ -127,9 +152,9 @@ files = [
 import pandas as pd
 df = pd.DataFrame(columns=["Filename", "Firmware Revision", "Success",
                            "p0x", "p0y", "p0z", "v0x", "v0y", "v0z", "omega0x", "omega0y", "omega0z",
-                           "omega0_norm",
+                           "omega0_norm", "cos_tilt0", "roll0", "pitch0",
                            "p1x", "p1y", "p1z", "v1x", "v1y", "v1z", "omega1x", "omega1y", "omega1z",
-                           "omega1_norm",
+                           "omega1_norm", "cos_tilt1", "roll1", "pitch1",
                            "fx_mse_end_learning", "fx_rmse_end_learning", "fx_terms_used", "fx_terms_missing",
                            "fx_sign_correct_count", "fx_sign_terms_checked", "fx_sign_terms_missing"])
 
@@ -198,6 +223,9 @@ for flight in files:
             log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_start_learning],
             log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_start_learning],
         ])),
+        "cos_tilt0": quaternion_cos_tilt(log.data, aplt.idx_start_learning),
+        "roll0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[0],
+        "pitch0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[1],
         "p1x": log.data["pos[0]"].iloc[aplt.idx_end_learning],
         "p1y": log.data["pos[1]"].iloc[aplt.idx_end_learning],
         "p1z": log.data["pos[2]"].iloc[aplt.idx_end_learning],
@@ -212,6 +240,9 @@ for flight in files:
             log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_end_learning],
             log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_end_learning],
         ])),
+        "cos_tilt1": quaternion_cos_tilt(log.data, aplt.idx_end_learning),
+        "roll1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[0],
+        "pitch1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[1],
         "fx_mse_end_learning": fx_mse,
         "fx_rmse_end_learning": fx_rmse,
         "fx_terms_used": len(fx_sq_errors),

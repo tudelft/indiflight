@@ -9,21 +9,21 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal",
-            "args": "${command:pickArgs}"
+            "args": "${command:pickArgs}",
+            "justMyCode": false
         },
         {
             "name": "Tailsitter Sim",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/support/simulation/exampleTailsitterSim.py",
-            "console": "integratedTerminal",
             "args": [
                 "--sil",
                 "obj/main/indiflight_MOCKUP.so",
                 "--sil-profile-txt",
                 "./configs/profiles/DarkO.txt"
             ],
+            "justMyCode": false
         },
         {
             // https://stackoverflow.com/questions/53519668/how-to-attach-to-remote-gdb-with-vscode

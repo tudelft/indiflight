@@ -174,15 +174,27 @@ def replay_simulation(data, craft_type="multirotor", t0=0.0, input_source="u"):
 
 
 def plot_overlay(ref, sim, Nr, title):
-    fig, axs = plt.subplots(2, 2, figsize=(14, 9))
+    fig, axs = plt.subplots(3, 2, figsize=(14, 9))
     t = ref["timeS"].to_numpy()
 
     COLORS = ["C0", "C1", "C2", "C3", "C4", "C5"]
     LINESTYLES = ["-", "--", "-.", ":"]
-    ax_angacc = axs[0, 0]
-    ax_spf = axs[1, 0]
+    ax_angrate = axs[0, 0]
+    ax_angacc = axs[1, 0]
+    ax_spf = axs[2, 0]
     ax_motor = axs[0, 1]
     ax_servo = axs[1, 1]
+
+    # left column top: angular rate
+    for i, lbl in enumerate(["roll", "pitch", "yaw"]):
+        gyro_ref = ref[f"gyroADCafterRpm[{i}]"].to_numpy()
+        gyro_sim = sim[f"gyroADCafterRpm[{i}]"].to_numpy()
+        ax_angrate.plot(t, gyro_ref, alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=lbl)
+        ax_angrate.plot(t, gyro_sim, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=lbl)
+    ax_angrate.set_ylabel("angular rate [rad/s]")
+    ax_angrate.set_title("Angular rate: log (solid) vs simulation (dashed)")
+    ax_angrate.legend(loc="upper right")
+    ax_angrate.grid(True)
 
     # Left column: angular acceleration, specific force
     dt_mean = np.mean(np.diff(t))
@@ -213,8 +225,7 @@ def plot_overlay(ref, sim, Nr, title):
     ax_motor.legend(loc="upper right")
     ax_motor.grid(True)
 
-    servo_cols = [c for c in ref.columns if c.startswith("servo_feedback[")]
-    Ns = len(servo_cols)
+    Ns = 2
     if Ns > 0 and all(f"servo_feedback[{i}]" in sim.columns for i in range(Ns)):
         for i in range(Ns):
             ax_servo.plot(t, ref[f"servo_feedback[{i}]"], alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=f"servo {i + 1}")
