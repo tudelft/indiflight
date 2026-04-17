@@ -149,9 +149,9 @@ class IndiflightPlotter(FlightPlotterBase):
             vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
             velSp = self.data[[f'velSp[{i}]' for i in range(3)]].to_numpy()
 
-            # velMeasB = irot.apply(velMeas) if velMeas is not None else None
-            # velB = irot.apply(vel)
-            # velSpB = irot.apply(velSp)
+            velMeasB = irot.apply(velMeas.copy()) if velMeas is not None else None
+            velB = irot.apply(vel.copy())
+            velSpB = irot.apply(velSp.copy())
 
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[1, 0]),
@@ -163,29 +163,26 @@ class IndiflightPlotter(FlightPlotterBase):
                              title="Velocity Global",
                              ylabel="Velocity [m/s]")
 
-            # self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
-            #                     light=[velMeasB[:, i] for i in range(3)] if velMeas is not None else None,
-            #                     solid=[velB[:, i] for i in range(3)] if vel is not None else None,
-            #                     dashed=[velSpB[:, i] for i in range(3)] if velSp is not None else None,
-            #                     series_labels=["X", "Y", "Z"],
-            #                     style_labels=["Mocap", "Estimated", "Setpoint"],
-            #                     title="Velocity Body",
-            #                     ylabel="Velocity [m/s]")
+            self._plot_timeseries(self.fig.add_subplot(self.gs[0, 1]),
+                                light=[velMeasB[:, i] for i in range(3)] if velMeas is not None else None,
+                                solid=[velB[:, i] for i in range(3)] if vel is not None else None,
+                                dashed=[velSpB[:, i] for i in range(3)] if velSp is not None else None,
+                                series_labels=["X", "Y", "Z"],
+                                style_labels=["Mocap", "Estimated", "Setpoint"],
+                                title="Velocity Body",
+                                ylabel="Velocity [m/s]")
 
 
             # rotate IMU acceleration to global frame
             accB = self.data[[f'accSmooth[{i}]' for i in range(3)]].to_numpy()
-            # accI = rot.apply(accB) + np.array([0, 0, 9.81])
+            accI = rot.apply(accB.copy()) + np.array([0, 0, 9.81])
 
             self._plot_timeseries(self.fig.add_subplot(self.gs[2, 0]),
                              light=None,
-                             # solid=[accI[:, i] for i in range(3)],
-                             # dashed=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],
-                             solid=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],
-                             dashed=None,
+                             solid=[accI[:, i] for i in range(3)],
+                             dashed=[self.data[f'accSp[{i}]'].to_numpy() for i in range(3)],
                              series_labels=["X", "Y", "Z"],
-                             # style_labels=[None, "Estimated", "Setpoint"],
-                             style_labels=[None, "Setpoint", None],
+                             style_labels=[None, "Estimated", "Setpoint"],
                              title="Acceleration Global",
                              ylabel="Acceleration [m/s²]")
 
@@ -905,7 +902,7 @@ class IndiflightMoments(FlightPlotterBase):
         irot = rot.inv()
 
         vel = self.data[[f'vel[{i}]' for i in range(3)]].to_numpy()
-        velB = irot.apply(vel)
+        velB = irot.apply(vel.copy())
 
         # eta as concat of velB and gyro
         eta_B = np.vstack((velB.T, gyro))
@@ -1381,8 +1378,7 @@ class IndiflightViewport(Viewport):
                 print("Warning: found near-zero quaternion norm, replacing with identity to avoid NaNs in rotation")
                 quat[norms < 1e-6] = np.array([0,0,0,1])  # avoid NaNs
             rot = R.from_quat(quat)
-            # accI = rot.apply(accB) + np.array([0, 0, 9.81])
-            accI = None
+            accI = rot.apply(accB.copy()) + np.array([0, 0, 9.81])
 
         super().__init__(
             craft,

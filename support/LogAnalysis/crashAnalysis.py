@@ -86,13 +86,13 @@ class suppress_output:
         os.close(self._stderr_fd)
 
 
-def quaternion_cos_tilt(data, index):
+def quaternion_tilt(data, index):
     keys = [f"ekf_quat[{i}]" for i in range(4)]
     if all(key in data.columns for key in keys):
         w = float(data[keys[0]].iloc[index])
         x = float(data[keys[1]].iloc[index])
         y = float(data[keys[2]].iloc[index])
-        return float(np.clip(1.0 - 2.0 * (x * x + y * y), -1.0, 1.0))
+        return float(np.arccos(np.clip(1.0 - 2.0 * (x * x + y * y), -1.0, 1.0)))
 
     return float("nan")
 
@@ -152,9 +152,9 @@ files = [
 import pandas as pd
 df = pd.DataFrame(columns=["Filename", "Firmware Revision", "Success",
                            "p0x", "p0y", "p0z", "v0x", "v0y", "v0z", "omega0x", "omega0y", "omega0z",
-                           "omega0_norm", "cos_tilt0", "roll0", "pitch0",
+                           "omega0_norm", "tilt0", "roll0", "pitch0",
                            "p1x", "p1y", "p1z", "v1x", "v1y", "v1z", "omega1x", "omega1y", "omega1z",
-                           "omega1_norm", "cos_tilt1", "roll1", "pitch1",
+                           "omega1_norm", "tilt1", "roll1", "pitch1",
                            "fx_mse_end_learning", "fx_rmse_end_learning", "fx_terms_used", "fx_terms_missing",
                            "fx_sign_correct_count", "fx_sign_terms_checked", "fx_sign_terms_missing"])
 
@@ -223,7 +223,7 @@ for flight in files:
             log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_start_learning],
             log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_start_learning],
         ])),
-        "cos_tilt0": quaternion_cos_tilt(log.data, aplt.idx_start_learning),
+        "tilt0": quaternion_tilt(log.data, aplt.idx_start_learning),
         "roll0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[0],
         "pitch0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[1],
         "p1x": log.data["pos[0]"].iloc[aplt.idx_end_learning],
@@ -240,7 +240,7 @@ for flight in files:
             log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_end_learning],
             log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_end_learning],
         ])),
-        "cos_tilt1": quaternion_cos_tilt(log.data, aplt.idx_end_learning),
+        "tilt1": quaternion_tilt(log.data, aplt.idx_end_learning),
         "roll1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[0],
         "pitch1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[1],
         "fx_mse_end_learning": fx_mse,
@@ -262,11 +262,43 @@ for col in df.columns:
     if col not in ["Filename", "Firmware Revision", "Success"]:
         df[col] = df[col].astype(float)
 
+# todo: test statistic to see which features are most correlated with success
+
+
+# change to degrees
+angles = ['tilt0', 'tilt1', 'roll0', 'roll1', 'pitch0', 'pitch1', 'omega0x', 'omega0y', 'omega0z', 'omega1x', 'omega1y', 'omega1z', 'omega0_norm', 'omega1_norm']
+df[angles] = df[angles].apply(lambda x: np.degrees(x))
+
 # output mean and std of each column (excluding "Filename" and "Firmware Revision") grouped by success
 print()
 print("Summary Statistics:")
-summary = df.groupby("Success").agg({col: ["mean", "std"] for col in df.columns if col not in ["Filename", "Firmware Revision"]})
+summary = df.groupby(lambda _: "All").agg({col: ["mean", "std"] for col in df.columns if col not in ["Filename", "Firmware Revision"]})
+summary['N'] = len(df)
+bysuccess = df.groupby("Success").agg({col: ["mean", "std"] for col in df.columns if col not in ["Filename", "Firmware Revision"]})
+bysuccess['N'] = df.groupby("Success").size()
+summary = pd.concat([summary, bysuccess])
 print(summary)
+
+mapping = {
+    "N": "N",
+    "Success": "Success",
+    "fx_sign_correct_count": "N Signs Correct",
+    "omega0_norm": "Start Gyro Norm",
+    "tilt0": "Start Tilt",
+    "omega1_norm": "End Gyro Norm",
+    "tilt1": "End Tilt",
+    "p1z": "End Position Z",
+    "v1z": "End Velocity Z"
+}
+ltx = summary[mapping.keys()].rename(columns=mapping).round(1).to_latex(
+        index=True,
+        float_format="%.1f",
+        bold_rows=True,
+        multicolumn=True,
+        multirow=True
+)
+print()
+print(ltx)
 
 overall_fx_mse = df["fx_mse_end_learning"].mean()
 overall_fx_rmse = np.sqrt(overall_fx_mse)

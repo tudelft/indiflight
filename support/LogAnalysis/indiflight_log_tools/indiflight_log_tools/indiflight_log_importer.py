@@ -169,7 +169,7 @@ class IndiflightLog(object):
 
         # convert to csv
         logger.info("Parsing logfile")
-        argv = ["--debug", b"blackbox_decode", self.cache_bfl.encode("ascii")]
+        argv = [b"blackbox_decode", self.cache_bfl.encode("ascii")]
         argc = 2
         argv_ctypes = (ctypes.c_char_p * argc)(*argv)
         _ = lib.main(argc, argv_ctypes)
