@@ -97,7 +97,6 @@ def load_sigma_config(path):
             "height_rel_sigma": float((cfg.get("throw") or {}).get("height_rel_sigma", 0.03)),
             "wb_rel_sigma": float((cfg.get("throw") or {}).get("wb_rel_sigma", 0.08)),
             "vhorz_rel_sigma": float((cfg.get("throw") or {}).get("vhorz_rel_sigma", 0.08)),
-            "at_time_abs_sigma": float((cfg.get("throw") or {}).get("at_time_abs_sigma", 0.2)),
         },
     }
 
@@ -194,17 +193,17 @@ def create_randomized_craft(base, rng, sigma_cfg):
     base_I_diag = base["I_diag"]
     base_cd = base["cd"]
 
-    m = base_m * rel_scale(rng, sigma_cfg["mass_rel_sigma"], min_scale=0.75, max_scale=1.25)
-    I_diag = base_I_diag * rel_scale(rng, sigma_cfg["inertia_rel_sigma"], min_scale=0.7, max_scale=1.3)
+    m = base_m * rel_scale(rng, sigma_cfg["mass_rel_sigma"], min_scale=0.67, max_scale=1.5)
+    I_diag = base_I_diag * rel_scale(rng, sigma_cfg["inertia_rel_sigma"], min_scale=0.67, max_scale=1.5)
 
     cd_sigma = np.maximum(np.abs(base_cd), 1e-12) * sigma_cfg["elevon_cd_rel_sigma"]
     cd_sign = float(rng.choice([-1.0, 1.0])) if sigma_cfg["randomize_elevon_cd_sign"] else 1.0
     cd_delta = cd_sign * rng.normal(loc=0.0, scale=cd_sigma, size=base_cd.shape).astype(np.float32)
     cd = base_cd + cd_delta
 
-    k_scale = rel_scale(rng, sigma_cfg["rotor_k_rel_sigma"], min_scale=0.7, max_scale=1.3)
-    cm_scale = rel_scale(rng, sigma_cfg["rotor_cm_rel_sigma"], min_scale=0.7, max_scale=1.3)
-    tau_scale = rel_scale(rng, sigma_cfg["rotor_tau_rel_sigma"], min_scale=0.6, max_scale=1.4)
+    k_scale = rel_scale(rng, sigma_cfg["rotor_k_rel_sigma"], min_scale=0.67, max_scale=1.5)
+    cm_scale = rel_scale(rng, sigma_cfg["rotor_cm_rel_sigma"], min_scale=0.67, max_scale=1.5)
+    tau_scale = rel_scale(rng, sigma_cfg["rotor_tau_rel_sigma"], min_scale=0.67, max_scale=1.5)
 
     rotor_y_sign = float(rng.choice([-1.0, 1.0])) if sigma_cfg["randomize_rotor_y_sign"] else 1.0
 
@@ -294,13 +293,11 @@ def sample_throw(base_throw, rng, sigma_cfg):
 
     wB = wB * rel_scale(rng, throw_cfg["wb_rel_sigma"], min_scale=0.6, max_scale=1.4)
     vHorz = vHorz * rel_scale(rng, throw_cfg["vhorz_rel_sigma"], min_scale=0.6, max_scale=1.4)
-    at_time = float(base_throw["at_time"] + rng.normal(0.0, throw_cfg["at_time_abs_sigma"]))
 
     return {
         "height": float(height),
         "wB": wB.tolist(),
         "vHorz": vHorz.tolist(),
-        "at_time": at_time,
     }
 
 
@@ -334,7 +331,7 @@ def run_single_sim(run_idx, args, base, rng, sigma_cfg, sil=None, flightModeFlag
             height=throw_sampled["height"],
             wB=throw_sampled["wB"],
             vHorz=throw_sampled["vHorz"],
-            at_time=throw_sampled["at_time"],
+            at_time=4.5
         )
         sampled["throw"] = throw_sampled
 

@@ -67,3 +67,5 @@ logs-*/
 build*/
 !src/main/build
 output/
+*.pkl
+*.csv
