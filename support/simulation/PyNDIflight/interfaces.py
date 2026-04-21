@@ -63,7 +63,7 @@ def pose():
     pos = list(visData.x.round(4))
     quat = list(visData.q.round(4))
     ctl = list(visData.inputs)
-    arr.append({'id': 0, 'type': 3, 'newCraft': visData.newCraft, 'pos': pos, 'quat': quat, 'ctl': ctl})
+    arr.append({'id': 0, 'type': 2, 'newCraft': visData.newCraft, 'pos': pos, 'quat': quat, 'ctl': ctl})
     return json.dumps(arr)
 
 @visApp.route("/craftdata")
