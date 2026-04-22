@@ -66,62 +66,147 @@ def skew(x):
 import pandas as pd
 table = pd.DataFrame()
 
-Ixx_true, Iyy_true, Izz_true = 6e-3, 2e-3, 6.5e-3
-k = 1.254e-06
-dy = 1.26e-01
-cd = np.array([-6.241e-07, 0, 0, 0, -2.601e-08, -7.293e-08])
-cdd  = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
-cddd = np.array([         0,          0,          0,          0, -2.961e-05,          0], dtype=np.float32)
+class Parameters(object):
+    def __init__(self, theta):
+        # ground truth data from sim
+        Ixx, Iyy, Izz = 6e-3, 2e-3, 6.5e-3
+        k = 1.254e-06
+        dy = 1.26e-01
+        cd = np.array([-6.241e-07, 0, 0, 0, -2.601e-08, -7.293e-08])
+        cdd  = np.array([         0,          0,          0,          0, -1.956e-03,          0], dtype=np.float32)
+        cddd = np.array([         0,          0,          0,          0, -2.961e-05,          0], dtype=np.float32)
 
-Phi = np.array([
-   [+2.748e-01,          0, +3.666e-02,          0, -1.479e-04,          0],
-   [         0, +3.128e-02,          0, +1.425e-03,          0, -4.223e-03],
-   [+3.666e-02,          0, +3.950e-02,          0, +1.490e-04,          0],
-   [         0, +1.425e-03,          0, +8.233e-04,          0, +7.577e-04],
-   [-1.479e-04,          0, +1.490e-04,          0, +8.688e-04,          0],
-   [         0, -4.223e-03,          0, +7.577e-04,          0, +3.282e-03],
-], dtype=np.float32)
+        Phi = np.array([
+           [+2.748e-01,          0, +3.666e-02,          0, -1.479e-04,          0],
+           [         0, +3.128e-02,          0, +1.425e-03,          0, -4.223e-03],
+           [+3.666e-02,          0, +3.950e-02,          0, +1.490e-04,          0],
+           [         0, +1.425e-03,          0, +8.233e-04,          0, +7.577e-04],
+           [-1.479e-04,          0, +1.490e-04,          0, +8.688e-04,          0],
+           [         0, -4.223e-03,          0, +7.577e-04,          0, +3.282e-03],
+        ], dtype=np.float32)
 
-d0_true = np.array([-3.665e-1, -1.602e-1])
+        d0 = np.array([-3.665e-1, -1.602e-1])
 
-Cld_true = float(0.0)   / Ixx_true
-Cmd_true = float(cd[4]) / Iyy_true
-Cnd_true = float(cd[5]) / Izz_true
+        Cld = float(0.0)   / Ixx
+        Cmd = float(cd[4]) / Iyy
+        Cnd = float(cd[5]) / Izz
 
-Cmdd_true = float(cdd[4]) / Iyy_true
-Cmddd_true = float(cddd[4]) / Iyy_true
-Cnwd_true = -3.34e-6 / Izz_true
+        Clwd = float(0.0) / Ixx
+        Cmdd = float(cdd[4]) / Iyy
+        Cmddd = float(cddd[4]) / Iyy
+        Cnwd = -3.34e-6 / Izz
 
-Clww_true = 1.556e-7 / Ixx_true
-Cmww_true = ( 0.0 - Cmd_true * d0_true )
-Cnww_true = ( 2.734e-08 - Cnd_true * d0_true ) / Izz_true
+        Clww = 1.556e-7 / Ixx
+        Cmww = ( 0.0 - Cmd * d0 )
+        Cnww = ( 2.734e-08 / Izz - Cnd * d0 )
 
-Clp_true = Phi[3,3] / Ixx_true
-Cmq_true = Phi[4,4] / Iyy_true
-Cnr_true = Phi[5,5] / Izz_true
+        Clp = Phi[3,3] / Ixx
+        Cmq = Phi[4,4] / Iyy
+        Cnr = Phi[5,5] / Izz
 
-inertia_ratios = np.array([(Izz_true - Iyy_true) / Ixx_true,
-                           (Ixx_true - Izz_true) / Iyy_true,
-                           (Iyy_true - Ixx_true) / Izz_true])
+        inertia_ratios = np.array([(Izz - Iyy) / Ixx,
+                                   (Ixx - Izz) / Iyy,
+                                   (Iyy - Ixx) / Izz])
 
-# parameters = [Clww, Cmww, Cnww, Cmd, Cnd]  keep d0 separate
-eval_pars = {'Clww1': [0, Clww_true],      'Clww2': [3, -Clww_true],
-             'Cmww1': [6, Cmww_true[0]],   'Cmww2': [10, Cmww_true[1]],
-             'Cmd1':  [7, Cmd_true],       'Cmd2':  [11, Cmd_true],
-             'Cmdd1':  [8, Cmdd_true],      'Cmdd2':  [12, Cmdd_true],
-             'Cmddd1':  [9, Cmddd_true],     'Cmddd2':  [13, Cmddd_true],
-             'Cnww1': [14, Cnww_true[0]],  'Cnww2': [17, -Cnww_true[1]],
-             'Cnd1':  [15, Cnd_true],      'Cnd2':  [18, -Cnd_true],
-             'Cnwd1':  [16, Cnwd_true],     'Cnwd2':  [19, -Cnwd_true],
-             'sigmap': [20, inertia_ratios[0]], 'sigmaq': [21, inertia_ratios[1]], 'sigmar': [22, inertia_ratios[2]],
-             'Clp': [23, Clp_true], 'Cmq': [24, Cmq_true], 'Cnr': [25, Cnr_true]
-            }
+        eval_pars = {'Clww1': [0, Clww],      'Clww2': [3, -Clww],
+                     'Cld1':  [1, Cld],       'Cld2':  [4, Cld],
+                     'Clwd1':  [2, Clwd], 'Clwd2':  [5, -Clwd],
+                     'Cmww1': [6, Cmww[0]],   'Cmww2': [10, Cmww[1]],
+                     'Cmd1':  [7, Cmd],       'Cmd2':  [11, Cmd],
+                     'Cmdd1':  [8, Cmdd],      'Cmdd2':  [12, Cmdd],
+                     'Cmddd1':  [9, Cmddd],     'Cmddd2':  [13, Cmddd],
+                     'Cnww1': [14, Cnww[0]],  'Cnww2': [17, -Cnww[1]],
+                     'Cnd1':  [15, Cnd],      'Cnd2':  [18, -Cnd],
+                     'Cnwd1':  [16, Cnwd],     'Cnwd2':  [19, -Cnwd],
+                     'sigmap': [20, inertia_ratios[0]], 'sigmaq': [21, inertia_ratios[1]], 'sigmar': [22, inertia_ratios[2]],
+                     'Clp': [23, Clp], 'Cmq': [24, Cmq], 'Cnr': [25, Cnr]
+                    }
 
+        self.eval_pars = eval_pars
+        self.param_names = [name for name in self.eval_pars.keys()]
+        self.d0 = d0
+
+        # make sure theta has same length as param_names. Use indices in first elements of the lists in eval_pars dict
+        self.theta = np.asarray(theta, dtype=float).reshape(-1)
+        if self.theta.size != len(self.param_names):
+            print(f"Warning: theta has {self.theta.size} elements, but expected {len(self.param_names)}.")
+
+        self.df = pd.DataFrame(columns=self.param_names)
+
+        # add eval_pars as row with name "GT" and theta as row with name "EST"
+        self.df.loc["GT"] = [par_true for _, (_, par_true) in self.eval_pars.items()]
+        self.df.loc["EST"] = [self.theta[idx] for _, (idx, _) in self.eval_pars.items()]
+
+        # generate a row that holds typical scale of each parameter for error normalization
+        self.df.loc["SCALE"] = [1.0 for _, (_, par_true) in self.eval_pars.items()]
+
+        # imrove this! max in group should be per-axis, and typical values of ww and d should be multiplied
+        groups = (
+            (["Clww1", "Clww2", "Cmww1", "Cmww2", "Cnww1", "Cnww2"], "max_in_group"),
+            (["Cmd1", "Cmd2", "Cnd1", "Cnd2"], "max_in_group"),
+            (["Cmdd1", "Cmdd2"], "max_in_group"),
+            (["Cmddd1", "Cmddd2"], "max_in_group"),
+            (["Cnwd1", "Cnwd2"], "max_in_group"),
+            (["sigmap", "sigmaq", "sigmar"], "unity"),
+            (["Clp", "Cmq", "Cnr"], "max_in_group"),
+        )
+        for group in groups:
+            if group[1] == "unity":
+                continue
+            elif group[1] == "max_in_group":
+                max_in_group = np.max(np.abs(self.df.loc["GT", group[0]]))
+                self.df.loc["SCALE", group[0]] = max_in_group
+            else:
+                raise ValueError(f"Unknown scale group type {group[1]}")
+
+        # controller-relevant parameters
+        self.controller = ["Clww1", "Clww2", "Cmd1", "Cmd2", "Cnd1", "Cnd2"]
+
+    def error_metric(self, only_controller=False):
+        if only_controller:
+            par_names = self.controller
+        else:
+            par_names = self.df.columns
+
+        # calculate error as rmse over scale-normalized parameters
+        self.df.loc["SCALED_ERRORS"] = 0.0
+        self.df.loc["SCALED_ERRORS", par_names] = (self.df.loc["EST", par_names] - self.df.loc["GT", par_names]) / self.df.loc["SCALE", par_names]
+        error = np.sqrt(np.mean(self.df.loc["SCALED_ERRORS", par_names] ** 2))
+        return error
+
+    def correct_signs(self, only_controller=False):
+        if only_controller:
+            par_names = self.controller
+        else:
+            par_names = list(self.df.columns)
+
+        gt = self.df.loc["GT", par_names].to_numpy(dtype=float)
+        est = self.df.loc["EST", par_names].to_numpy(dtype=float)
+
+        gt_sign = np.sign(gt)
+        est_sign = np.sign(est)
+
+        # Keep zero-sign handling identical to other tooling: 0 matches only 0.
+        sign_matches = (gt_sign == est_sign)
+        n_correct = int(np.sum(sign_matches))
+        n_total = int(len(par_names))
+        fraction_correct = float(n_correct / n_total) if n_total > 0 else float("nan")
+
+        self.df.loc["SIGN_MATCH", par_names] = sign_matches.astype(float)
+        return {
+            "n_correct": n_correct,
+            "n_total": n_total,
+            "fraction_correct": fraction_correct,
+            "matched_parameters": [name for name, ok in zip(par_names, sign_matches) if ok],
+            "mismatched_parameters": [name for name, ok in zip(par_names, sign_matches) if not ok],
+        }
+
+groundtruth_parameters = Parameters(theta=np.zeros(26))
 row = {'logfile': 'groundtruth', "model": "groundtruth"}
-row['d0_1'] = d0_true[0]
-row['d0_2'] = d0_true[1]
-for par_name, (par_idx, par_true) in eval_pars.items():
-    row[par_name] = par_true
+row['d0_1'] = float(groundtruth_parameters.d0[0])
+row['d0_2'] = float(groundtruth_parameters.d0[1])
+for par_name in groundtruth_parameters.param_names:
+    row[par_name] = float(groundtruth_parameters.df.loc["GT", par_name])
 
 table = pd.concat([table, pd.DataFrame([row])], ignore_index=True)
 
@@ -200,12 +285,6 @@ def runRls(log: IndiflightLog):
 
     rls_acts = []
 
-    rls_act_all = RLS(26, 3, gamma=1e-11, forgetting=0.9999)
-    rls_act_all.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
-    # rls_act_all.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
-    rls_act_all.setCovariance(1e-12*np.diag([1, 1, 1e8,  1, 1, 1e8,    1, 1, 1e8, 1e7,  1, 1, 1e8, 1e7,    1, 1, 1e8,  1, 1, 1e8,    1e9, 1e9, 1e9, 1e8, 1e8, 1e8]))
-    rls_acts.append(rls_act_all)
-
     ls_act_all = LS(26, 3)
     ls_act_all.setTitle("LS Moments -- Inertias, Actuators and 3-param Phi")
     rls_acts.append(ls_act_all)
@@ -214,20 +293,27 @@ def runRls(log: IndiflightLog):
     ls_act_diff.setTitle("LS Diff-Moments -- Actuators")
     rls_acts.append(ls_act_diff)
 
+
+    rls_act_all = RLS(26, 3, gamma=1e-11, forgetting=0.9999)
+    rls_act_all.setTitle("RLS Moments -- All parameters")
+    # rls_act_all.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
+    rls_act_all.setCovariance(1e-12*np.diag([1, 1, 1e8,  1, 1, 1e8,    1, 1, 1e8, 1e7,  1, 1, 1e8, 1e7,    1, 1, 1e8,  1, 1, 1e8,    1e9, 1e9, 1e9, 1e8, 1e8, 1e8]))
+    rls_acts.append(rls_act_all)
+
     rls_act_noI = deepcopy(rls_act_all)
     rls_act_noI.setTitle("RLS Moments -- No Inertias")
     rls_acts.append(rls_act_noI)
 
     rls_act_noI_noPhi = deepcopy(rls_act_all)
-    rls_act_noI_noPhi.setTitle("RLS Moments -- Actuators only")
+    rls_act_noI_noPhi.setTitle("RLS Moments -- No Inertias or Phi")
     rls_acts.append(rls_act_noI_noPhi)
 
     rls_act_noI_noPhi_noDdot = deepcopy(rls_act_all)
-    rls_act_noI_noPhi_noDdot.setTitle("RLS Moments -- No Delta derivatives")
+    rls_act_noI_noPhi_noDdot.setTitle("RLS Moments -- No Inertias, Phi, or Delta Dot")
     rls_acts.append(rls_act_noI_noPhi_noDdot)
 
     rls_act_noI_noPhi_noDdot_noWdot = deepcopy(rls_act_all)
-    rls_act_noI_noPhi_noDdot_noWdot.setTitle("RLS Moments -- No Delta or Omega derivatives")
+    rls_act_noI_noPhi_noDdot_noWdot.setTitle("RLS Moments -- No Inertias, Phi, Delta Dot, or Omega Dot")
     rls_acts.append(rls_act_noI_noPhi_noDdot_noWdot)
 
     A_act_hist = []
@@ -277,7 +363,7 @@ def runRls(log: IndiflightLog):
 
         A_act_noI_noPhi = A_act_noI.copy()
         A_act_noI_noPhi[:, 23:26] = 0
-        rls_act_noI_noPhi.newSample(A_act_noI_noPhi, y, ti);rls_act_noI_noPhi.update()
+        rls_act_noI_noPhi.newSample(A_act_noI_noPhi, y, ti); rls_act_noI_noPhi.update()
 
         A_act_noI_noPhi_noDdot = A_act_noI_noPhi.copy()
         A_act_noI_noPhi_noDdot[:, [8,9,12,13]] = 0
@@ -287,31 +373,26 @@ def runRls(log: IndiflightLog):
         A_act_noI_noPhi_noDdot_noWdot[:, [2,5,16,19]] = 0
         rls_act_noI_noPhi_noDdot_noWdot.newSample(A_act_noI_noPhi_noDdot_noWdot, y, ti); rls_act_noI_noPhi_noDdot_noWdot.update()
 
-    parGroups = [[0,3], [1,4], [2,5],   [6,10], [7,11], [8,12], [9,13],   [14,17], [15,18], [16,19], [20,21,22], [23,24,25]]
-    parGroupNames = ["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
-                     "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\delta}, q}$", "$C_{\\ddot{\\delta}, q}$",
-                     "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
-                     "$C_{m\\sigma}$",
-                     "$C_{m\\omega diag}$"]
-    truePars = [[Clww_true, -Clww_true], [0,0], [0,0],
-                [Cmww_true[0], Cmww_true[1]], [Cmd_true, Cmd_true], [Cmdd_true,Cmdd_true], [Cmddd_true,Cmddd_true],
-                [Cnww_true[0], -Cnww_true[1]], [Cnd_true, -Cnd_true], [Cnwd_true, -Cnwd_true],
-                list(inertia_ratios),
-                [Clp_true, Cmq_true, Cnr_true]]
-
-    for rls in rls_acts:
-        _ = rls.plotParameters(parGroups=parGroups, truePars=truePars, parGroupNames=parGroupNames, sharey=False, zoomy=False)
-        rls.f.savefig(f"{output_path}/{rls.name}_{log.name}_parameters.png", dpi=300)
-        plt.close(rls.f)
-
-        for i, axis in enumerate(["Roll", "Pitch", "Yaw"]):
-            f,V,c,e,X,Y,t = rls.diagnose(i, output_name=axis)
-            f.savefig(f"{output_path}/{rls.name}_diagnose_{axis.lower()}_{log.name}.png", dpi=300)
-            plt.close(f)
-
-            # output V and error-regressor correlation (e) as one single txt
-            np.savetxt(f"{output_path}/{rls.name}_diagnose_V_{axis.lower()}_{log.name}.txt", V)
-            np.savetxt(f"{output_path}/{rls.name}_diagnose_e_{axis.lower()}_{log.name}.txt", e)
+    # Plotting disabled per user request.
+    # parGroups = [[0,3], [1,4], [2,5],   [6,10], [7,11], [8,12], [9,13],   [14,17], [15,18], [16,19], [20,21,22], [23,24,25]]
+    # parGroupNames = ["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+    #                  "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\delta}, q}$", "$C_{\\ddot{\\delta}, q}$",
+    #                  "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+    #                  "$C_{m\\sigma}$",
+    #                  "$C_{m\\omega diag}$"]
+    # truePars = [[...], ...]
+    # for rls in rls_acts:
+    #     _ = rls.plotParameters(parGroups=parGroups, truePars=truePars, parGroupNames=parGroupNames, sharey=False, zoomy=False)
+    #     rls.f.savefig(f"{output_path}/{rls.name}_{log.name}_parameters.png", dpi=300)
+    #     plt.close(rls.f)
+    #
+    #     for i, axis in enumerate(["Roll", "Pitch", "Yaw"]):
+    #         f, V, c, e, X, Y, t = rls.diagnose(i, output_name=axis)
+    #         f.savefig(f"{output_path}/{rls.name}_diagnose_{axis.lower()}_{log.name}.png", dpi=300)
+    #         plt.close(f)
+    #
+    #         np.savetxt(f"{output_path}/{rls.name}_diagnose_V_{axis.lower()}_{log.name}.txt", V)
+    #         np.savetxt(f"{output_path}/{rls.name}_diagnose_e_{axis.lower()}_{log.name}.txt", e)
 
 
 
@@ -340,11 +421,6 @@ def runRls(log: IndiflightLog):
     y_data = Of.dot().y
     for rls in rls_acts:
         row = {'logfile': log.name}
-        #print(f"Parameter errors for {rls.name}:")
-        par_err_rel_squared_sum = 0.0
-        n_correct_signs = 0
-        n_correct_bounds = 0
-        bound_size_rel_sum = 0.0
         row["model"] = rls.name
 
         row["d0_1"], row["d0_2"] = get_d0(rls)
@@ -352,47 +428,24 @@ def runRls(log: IndiflightLog):
         row["RMSE"] = compute_RMSE(rls, A_data, y_data)
         row["RMSE_rel"] = row["RMSE"] / np.std(Of.dot().y)
 
-        for par_name, (par_idx, par_true) in eval_pars.items():
+        parameter_results = Parameters(theta=rls.theta[:, 0])
+        row["param_rmse_all"] = parameter_results.error_metric()
+        row["param_rmse_controller"] = parameter_results.error_metric(only_controller=True)
+        signs_all = parameter_results.correct_signs()
+        signs_controller = parameter_results.correct_signs(only_controller=True)
+        row["n_correct_signs_all"] = signs_all["n_correct"]
+        row["n_signs_all"] = signs_all["n_total"]
+        row["sign_fraction_all"] = signs_all["fraction_correct"]
+        row["n_correct_signs_controller"] = signs_controller["n_correct"]
+        row["n_signs_controller"] = signs_controller["n_total"]
+        row["sign_fraction_controller"] = signs_controller["fraction_correct"]
 
-            row[par_name] = rls.theta[par_idx, 0]
+        for par_name, (par_idx, _) in parameter_results.eval_pars.items():
+
+            row[par_name] = parameter_results.df.loc["EST", par_name]
             if hasattr(rls, 'theta_bounds'):
                 row[f"{par_name}_lb"] = rls.theta_bounds[par_idx, 0]
                 row[f"{par_name}_ub"] = rls.theta_bounds[par_idx, 1]
-
-            # # 2. parameter error relative to true values (do only for definitely non-zero values)
-            # par_est = rls.theta[par_idx, 0]
-            # par_err = par_est - par_true
-            # par_err_rel = par_err / par_true if np.abs(par_true) > 1e-6 else 0.0
-            # #print(f"  {par_name}: est={par_est:.3e}, true={par_true:.3e}, err={par_err:.3e}, rel err={par_err_rel:.2%}")
-            # par_err_rel_squared_sum += par_err_rel**2
-
-            # # 3. number of correct signs of relevant parameters
-            # if np.sign(par_est) == np.sign(par_true):
-            #     n_correct_signs += 1
-
-            # # 4. number of bounds including the correct sign
-            # n_correct_bounds += (rls.theta_bounds[par_idx, 0] < par_true < rls.theta_bounds[par_idx, 1])
-
-            # # 5. size of the bounds relative to the parameter value
-            # bound_size_rel_sum += (rls.theta_bounds[par_idx, 1] - rls.theta_bounds[par_idx, 0]) / np.abs(par_true) if np.abs(par_true) > 1e-6 else 0.0
-
-            # # print(f"    relative bound size: {bound_size_rel:.2%}")
-
-        # par_err_rel_rms = np.sqrt(par_err_rel_squared_sum / len(eval_pars))
-        # rls.par_err_rel_rms = par_err_rel_rms
-        # print(f"{rls.name} - RMS relative parameter error: {par_err_rel_rms:.2%}")
-
-        # rls.n_correct_signs = n_correct_signs
-        # print(f"{rls.name} - Number of correct parameter signs: {n_correct_signs} out of {len(eval_pars)}")
-
-        # rls.n_correct_bounds = n_correct_bounds
-        # print(f"{rls.name} - Number of parameter bounds including true value: {n_correct_bounds} out of {len(eval_pars)}")
-
-        # rls.bound_size_rel_avg = bound_size_rel_sum / len(eval_pars)
-        # print(f"{rls.name} - Average relative parameter bound size: {rls.bound_size_rel_avg:.2%}")
-
-        # rmse = compute_RMSE(rls, A_data, y_data)
-        # print(f"RMSE for {rls.name}: {rmse:.2f} rad/s^2, {rmse/np.std(Of.dot().y):.2%} of data stddev")
 
         global table
         table = pd.concat([table, pd.DataFrame([row])], ignore_index=True)
@@ -409,3 +462,7 @@ for log in logs:
 table.to_csv(f"{output_path}/estimator_comparison_table.csv", index=False)
 
 
+# todo:
+# define the important parameters for control
+# compute RMSE over only the important parameters
+# compute some sort of a-posteri reproduction error of 

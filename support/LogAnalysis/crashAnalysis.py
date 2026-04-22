@@ -22,93 +22,7 @@ plt.rcParams.update(local_rc)
 import os
 import sys
 import numpy as np
-
-act_true = {
-    'motor_2_rls_x[0]': 1.75,    # max angle in rad
-    'motor_2_rls_x[1]': 0.0,     # neutral angle in rad
-    'motor_2_rls_x[2]': 0.03,    # delay in seconds
-    'motor_2_rls_x[3]': 0.,      # time constant in seconds
-
-    'motor_3_rls_x[0]': 1.75,    # max angle in rad
-    'motor_3_rls_x[1]': 0.0,     # neutral angle in rad
-    'motor_3_rls_x[2]': 0.03,    # delay in seconds
-    'motor_3_rls_x[3]': 0.,      # time constant in seconds
-
-    'fx_p_rls_x[0]': (1.413e-6 * 0.106) / 5.735e-3,
-    'fx_p_rls_x[1]': -(1.413e-6 * 0.106) / 5.735e-3,
-    'fx_p_rls_x[2]': 0,
-    'fx_p_rls_x[3]': 0,
-
-    'fx_q_rls_x[0]': 0,
-    'fx_q_rls_x[1]': 0,
-    'fx_q_rls_x[2]': -1.836e-8 / 1.345e-3,
-    'fx_q_rls_x[3]': -1.836e-8 / 1.345e-3,
-    'fx_q_rls_x[8]': -1.411e-3 / 1.345e-3,
-    'fx_q_rls_x[9]': -1.411e-3 / 1.345e-3,
-
-    'fx_r_rls_x[0]': -1.413e-6 * 6.157e-4 / 5.413e-3,
-    'fx_r_rls_x[1]': +1.413e-6 * 6.157e-4 / 5.413e-3,
-    'fx_r_rls_x[2]': -6.061e-8 / 5.413e-3,
-    'fx_r_rls_x[3]': +6.061e-8 / 5.413e-3,
-    'fx_r_rls_x[8]': -2.840e-6 / 5.413e-3,
-    'fx_r_rls_x[9]': +2.840e-6 / 5.413e-3,
-
-    'sigma_rls[0]': 0.75,
-    'sigma_rls[1]': -0.25,
-    'sigma_rls[2]': -0.61538,
-}
-
-fx_true = {k: v for k, v in act_true.items() if k.startswith("fx_") and "_rls_" in k}
-
-# Sign-check subset requested by user.
-sign_eval_keys = [
-    "fx_p_rls_x[0]", "fx_p_rls_x[1]",
-    "fx_q_rls_x[2]", "fx_q_rls_x[3]",
-    "fx_r_rls_x[2]", "fx_r_rls_x[3]"
-]
-
-class suppress_output:
-    def __enter__(self):
-        self._stdout_fd = os.dup(1)
-        self._stderr_fd = os.dup(2)
-
-        self._devnull = os.open(os.devnull, os.O_WRONLY)
-
-        os.dup2(self._devnull, 1)
-        os.dup2(self._devnull, 2)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        os.dup2(self._stdout_fd, 1)
-        os.dup2(self._stderr_fd, 2)
-
-        os.close(self._devnull)
-        os.close(self._stdout_fd)
-        os.close(self._stderr_fd)
-
-
-def quaternion_tilt(data, index):
-    keys = [f"ekf_quat[{i}]" for i in range(4)]
-    if all(key in data.columns for key in keys):
-        w = float(data[keys[0]].iloc[index])
-        x = float(data[keys[1]].iloc[index])
-        y = float(data[keys[2]].iloc[index])
-        return float(np.arccos(np.clip(1.0 - 2.0 * (x * x + y * y), -1.0, 1.0)))
-
-    return float("nan")
-
-def quaternion_roll_pitch(data, index):
-    keys = [f"ekf_quat[{i}]" for i in range(4)]
-    if all(key in data.columns for key in keys):
-        w = float(data[keys[0]].iloc[index])
-        x = float(data[keys[1]].iloc[index])
-        y = float(data[keys[2]].iloc[index])
-        z = float(data[keys[3]].iloc[index])
-
-        roll = float(np.arctan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)))
-        pitch = float(np.arcsin(np.clip(2.0 * (w * y - z * x), -1.0, 1.0)))
-        return roll, pitch
-
-    return float("nan"), float("nan")
+from flight_metrics import ACT_TRUE, suppress_output, compute_fx_fit_metrics, extract_learning_metrics, infer_learning_indices
 
 path = "/mnt/data/WorkData/BlackboxLogs/"
 # files = [
@@ -158,6 +72,8 @@ df = pd.DataFrame(columns=["Filename", "Firmware Revision", "Success",
                            "fx_mse_end_learning", "fx_rmse_end_learning", "fx_terms_used", "fx_terms_missing",
                            "fx_sign_correct_count", "fx_sign_terms_checked", "fx_sign_terms_missing"])
 
+#%% iterate over data files and compute metrics
+
 for flight in files:
     file, is_success = flight
     with suppress_output():
@@ -172,36 +88,21 @@ for flight in files:
 
     plt.close('all')
 
-    idx = aplt.idx_end_learning
-    fx_sq_errors = []
-    fx_missing = []
-    for key, true_val in fx_true.items():
-        if key in log.data.columns:
-            pred_val = float(log.data[key].iloc[idx])
-            fx_sq_errors.append((pred_val - true_val) ** 2)
-        else:
-            fx_missing.append(key)
+    idx_start, idx_end = infer_learning_indices(log.data, nr=2, ns=2, learning_duration_s=0.5)
+    idx = idx_end
+    fit_metrics = compute_fx_fit_metrics(log.data, idx)
 
-    fx_mse = float(np.mean(fx_sq_errors)) if fx_sq_errors else float("nan")
-    fx_rmse = float(np.sqrt(fx_mse)) if fx_sq_errors else float("nan")
-
-    sign_correct_count = 0
-    sign_terms_checked = 0
-    sign_terms_missing = 0
-    for key in sign_eval_keys:
-        if key in log.data.columns and key in act_true:
-            pred_val = float(log.data[key].iloc[idx])
-            true_val = float(act_true[key])
-            sign_correct_count += int(np.sign(pred_val) == np.sign(true_val))
-            sign_terms_checked += 1
-        else:
-            sign_terms_missing += 1
-
-    print(f"    - fx MSE@idx_end_learning: {fx_mse:.6e} (terms used: {len(fx_sq_errors)}, missing: {len(fx_missing)})")
-    print(f"    - fx sign matches: {sign_correct_count}/{sign_terms_checked} (missing: {sign_terms_missing})")
+    print(
+        f"    - fx MSE@idx_end_learning: {fit_metrics['fx_mse_end_learning']:.6e} "
+        f"(terms used: {fit_metrics['fx_terms_used']}, missing: {fit_metrics['fx_terms_missing']})"
+    )
+    print(
+        f"    - fx sign matches: {fit_metrics['fx_sign_correct_count']}/{fit_metrics['fx_sign_terms_checked']} "
+        f"(missing: {fit_metrics['fx_sign_terms_missing']})"
+    )
 
     raw_param_predictions = {}
-    for key in act_true:
+    for key in ACT_TRUE:
         col_name = f"pred_end_{key}"
         raw_param_predictions[col_name] = float(log.data[key].iloc[idx]) if key in log.data.columns else float("nan")
 
@@ -209,49 +110,8 @@ for flight in files:
         "Filename": file,
         "Firmware Revision": log.parameters['Firmware revision'],
         "Success": is_success,
-        "p0x": log.data["pos[0]"].iloc[aplt.idx_start_learning],
-        "p0y": log.data["pos[1]"].iloc[aplt.idx_start_learning],
-        "p0z": log.data["pos[2]"].iloc[aplt.idx_start_learning],
-        "v0x": log.data["vel[0]"].iloc[aplt.idx_start_learning],
-        "v0y": log.data["vel[1]"].iloc[aplt.idx_start_learning],
-        "v0z": log.data["vel[2]"].iloc[aplt.idx_start_learning],
-        "omega0x": log.data["gyroADCafterRpm[0]"].iloc[aplt.idx_start_learning],
-        "omega0y": log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_start_learning],
-        "omega0z": log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_start_learning],
-        "omega0_norm": float(np.linalg.norm([
-            log.data["gyroADCafterRpm[0]"].iloc[aplt.idx_start_learning],
-            log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_start_learning],
-            log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_start_learning],
-        ])),
-        "tilt0": quaternion_tilt(log.data, aplt.idx_start_learning),
-        "roll0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[0],
-        "pitch0": quaternion_roll_pitch(log.data, aplt.idx_start_learning)[1],
-        "p1x": log.data["pos[0]"].iloc[aplt.idx_end_learning],
-        "p1y": log.data["pos[1]"].iloc[aplt.idx_end_learning],
-        "p1z": log.data["pos[2]"].iloc[aplt.idx_end_learning],
-        "v1x": log.data["vel[0]"].iloc[aplt.idx_end_learning],
-        "v1y": log.data["vel[1]"].iloc[aplt.idx_end_learning],
-        "v1z": log.data["vel[2]"].iloc[aplt.idx_end_learning],
-        "omega1x": log.data["gyroADCafterRpm[0]"].iloc[aplt.idx_end_learning],
-        "omega1y": log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_end_learning],
-        "omega1z": log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_end_learning],
-        "omega1_norm": float(np.linalg.norm([
-            log.data["gyroADCafterRpm[0]"].iloc[aplt.idx_end_learning],
-            log.data["gyroADCafterRpm[1]"].iloc[aplt.idx_end_learning],
-            log.data["gyroADCafterRpm[2]"].iloc[aplt.idx_end_learning],
-        ])),
-        "tilt1": quaternion_tilt(log.data, aplt.idx_end_learning),
-        "roll1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[0],
-        "pitch1": quaternion_roll_pitch(log.data, aplt.idx_end_learning)[1],
-        "fx_mse_end_learning": fx_mse,
-        "fx_rmse_end_learning": fx_rmse,
-        "fx_terms_used": len(fx_sq_errors),
-        "fx_terms_missing": len(fx_missing),
-        "fx_sign_correct_count": sign_correct_count,
-        "fx_sign_terms_checked": sign_terms_checked,
-        "fx_sign_terms_missing": sign_terms_missing,
-
     }
+    row.update(extract_learning_metrics(log.data, idx_start, idx_end))
     row.update(raw_param_predictions)
 
     # do not use append because it is deprecated, but it is easier to read than the alternative
@@ -305,6 +165,11 @@ overall_fx_rmse = np.sqrt(overall_fx_mse)
 print()
 print(f"Overall fx MSE@idx_end_learning: {overall_fx_mse:.6e}")
 print(f"Overall fx RMSE@idx_end_learning: {overall_fx_rmse:.6e}")
+
+
+
+#%% plotting 
+
 
 # make a total of 6 3d scatter plots to the pos, vel, and omega at the start and end of learning, colored by success
 plt.close('all')
