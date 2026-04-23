@@ -1,6 +1,7 @@
 from indiflight_log_tools import IndiflightLog
 from indiflight_log_tools.signal_tools import Signal
 from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford, LS
+from flight_metrics import infer_learning_indices
 from pyFlightPlotter import BlittedCursor
 from pyFlightPlotter.crafts import Tailsitter
 from indiflightPlotter import IndiflightPlotter, IndiflightViewport
@@ -23,6 +24,10 @@ parser.add_argument("logpath", type=str, help="Path to the log file.")
 # parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
 parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                     help="Crop the log to the given time range (in seconds).")
+parser.add_argument("--skip-ls", action="store_true",
+                    help="Skip LS estimators (faster; runs only RLS variants).")
+parser.add_argument("--skip-plots", action="store_true",
+                    help="Skip generating/saving diagnostic plots and plot text outputs.")
 # parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
 
 args = parser.parse_args()
@@ -214,20 +219,32 @@ table = pd.concat([table, pd.DataFrame([row])], ignore_index=True)
 
 
 def runRls(log: IndiflightLog):
-    N = log.data.shape[0]
-    iend = log.data.index[-1]
     n = 2
+    ns = 2
+    run_ls = not args.skip_ls
 
-    t_raw = log.data["timeS"]                                    .to_numpy()
-    O_raw = log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]].to_numpy()
-    a_raw = log.data[[f"accADCafterRpm[{i}]"  for i in range(3)]].to_numpy()
-    w_raw = log.data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
-    dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy() + 0.084
-    u_raw = log.data[[f"u[{i}]" for i in range(4)]]              .to_numpy()
-    d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy()
+    # Restrict identification to the inferred learning interval.
+    idx_learning_start, idx_learning_end = infer_learning_indices(log.data, nr=n, ns=ns)
+    data = log.data.iloc[idx_learning_start:idx_learning_end + 1].copy()
+    if data.empty:
+        data = log.data.copy()
+        idx_learning_start = 0
+        idx_learning_end = max(0, data.shape[0] - 1)
+
+    N = data.shape[0]
+    learning_start_s = float(data["timeS"].iloc[0])
+    learning_end_s = float(data["timeS"].iloc[-1])
+
+    t_raw = data["timeS"]                                    .to_numpy()
+    O_raw = data[[f"gyroADCafterRpm[{i}]" for i in range(3)]].to_numpy()
+    a_raw = data[[f"accADCafterRpm[{i}]"  for i in range(3)]].to_numpy()
+    w_raw = data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
+    dm_raw = data[[f"motor[{i}]" for i in range(n)]]         .to_numpy() + 0.084
+    u_raw = data[[f"u[{i}]" for i in range(4)]]              .to_numpy()
+    d_raw = data[[f'servo_feedback[{i}]' for i in range(ns)]] .to_numpy()
     # d_raw = np.roll(d_raw, -15, axis=0)
-    q_raw = log.data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
-    v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
+    q_raw = data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
+    v_raw = data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
 
     t = np.linspace(t_raw[0], t_raw[-1], N)
     dt = np.mean(np.diff(t))
@@ -286,9 +303,11 @@ def runRls(log: IndiflightLog):
 
     rls_acts = []
 
-    ls_act_diff = LS(26, 3)
-    ls_act_diff.setTitle("LS Diff-Moments -- Actuators")
-    rls_acts.append(ls_act_diff)
+    ls_act_diff = None
+    if run_ls:
+        ls_act_diff = LS(26, 3)
+        ls_act_diff.setTitle("LS Diff-Moments -- Actuators")
+        rls_acts.append(ls_act_diff)
 
     base_cov = 1e-12 * np.diag([
         1, 1, 1e8, 1, 1, 1e8,
@@ -299,11 +318,11 @@ def runRls(log: IndiflightLog):
 
     # Comment out groups below to remove them from the ablation sweep.
     active_ablation_groups = [
-        ("I", [20, 21, 22]),
+        #("I", [20, 21, 22]),
         #("Phi", [23, 24, 25]),
-        ("Ddot", [8, 9, 12, 13]),
+        #("Ddot", [8, 9, 12, 13]),
         ("Cld_Clwd", [1, 2, 4, 5]),
-        ("Wdot", [16, 19]),
+        #("Wdot", [16, 19]),
     ]
 
     rls_ablation_models = []
@@ -322,7 +341,7 @@ def runRls(log: IndiflightLog):
         ])
 
         if disabled_group_names:
-            suffix = f"no {'/'.join(disabled_group_names)}"
+            suffix = f"no {' '.join(disabled_group_names)}"
         else:
             suffix = "all groups enabled"
 
@@ -332,10 +351,11 @@ def runRls(log: IndiflightLog):
         rls_ablation_models.append((rls_model, disabled_indices))
         rls_acts.append(rls_model)
 
-        ls_model = LS(26, 3)
-        ls_model.setTitle(f"LS Moments -- {suffix}")
-        ls_ablation_models.append((ls_model, disabled_indices))
-        rls_acts.append(ls_model)
+        if run_ls:
+            ls_model = LS(26, 3)
+            ls_model.setTitle(f"LS Moments -- {suffix}")
+            ls_ablation_models.append((ls_model, disabled_indices))
+            rls_acts.append(ls_model)
 
     A_act_hist = []
     count = 0
@@ -359,16 +379,17 @@ def runRls(log: IndiflightLog):
         A_act_all[:, 23:26] = - eta_i * np.diag(eta_Bi[3:]) # C_m_w
         A_act_hist.append(A_act_all)
 
-        A_act_diff = np.zeros((3, 26))
-        A_act_diff[0, 0:3]   = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
-        A_act_diff[0, 3:6]   = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
-        A_act_diff[1, 6:10]  = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], ddotdiffi[0], 0]
-        A_act_diff[1, 10:14] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], ddotdiffi[1], 0]
-        A_act_diff[2, 14:17] = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
-        A_act_diff[2, 17:20] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
-        A_act_diff[:, 20:23] = 0
-        A_act_diff[:, 23:26] = 0
-        ls_act_diff.newSample(A_act_diff, Odotdiffi, ti)
+        if run_ls:
+            A_act_diff = np.zeros((3, 26))
+            A_act_diff[0, 0:3]   = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
+            A_act_diff[0, 3:6]   = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
+            A_act_diff[1, 6:10]  = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], ddotdiffi[0], 0]
+            A_act_diff[1, 10:14] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], ddotdiffi[1], 0]
+            A_act_diff[2, 14:17] = [2*wi[0]*wdiffi[0], 2*wi[0]*di[0]*wdiffi[0] + w2i[0]*ddiffi[0], 0]
+            A_act_diff[2, 17:20] = [2*wi[1]*wdiffi[1], 2*wi[1]*di[1]*wdiffi[1] + w2i[1]*ddiffi[1], 0]
+            A_act_diff[:, 20:23] = 0
+            A_act_diff[:, 23:26] = 0
+            ls_act_diff.newSample(A_act_diff, Odotdiffi, ti)
 
         for rls_model, disabled_indices in rls_ablation_models:
             A_variant = A_act_all.copy()
@@ -377,40 +398,46 @@ def runRls(log: IndiflightLog):
             rls_model.newSample(A_variant, y, ti)
             rls_model.update()
 
-        for ls_model, disabled_indices in ls_ablation_models:
-            A_variant = A_act_all.copy()
-            if disabled_indices:
-                A_variant[:, disabled_indices] = 0
-            ls_model.newSample(A_variant, y, ti)
+        if run_ls:
+            for ls_model, disabled_indices in ls_ablation_models:
+                A_variant = A_act_all.copy()
+                if disabled_indices:
+                    A_variant[:, disabled_indices] = 0
+                ls_model.newSample(A_variant, y, ti)
 
-        count += 1 
-        if count > 150 and count % 10 == 0:
-            for ls_model, _ in ls_ablation_models:
-                ls_model.update()
-            ls_act_diff.update()
+            count += 1
+            if count > 150 and count % 10 == 0:
+                for ls_model, _ in ls_ablation_models:
+                    ls_model.update()
+                ls_act_diff.update()
 
         # RLS ablations are handled above via rls_ablation_models.
 
-    # Plotting disabled per user request.
-    # parGroups = [[0,3], [1,4], [2,5],   [6,10], [7,11], [8,12], [9,13],   [14,17], [15,18], [16,19], [20,21,22], [23,24,25]]
-    # parGroupNames = ["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
-    #                  "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\delta}, q}$", "$C_{\\ddot{\\delta}, q}$",
-    #                  "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
-    #                  "$C_{m\\sigma}$",
-    #                  "$C_{m\\omega diag}$"]
-    # truePars = [[...], ...]
-    # for rls in rls_acts:
-    #     _ = rls.plotParameters(parGroups=parGroups, truePars=truePars, parGroupNames=parGroupNames, sharey=False, zoomy=False)
-    #     rls.f.savefig(f"{output_path}/{rls.name}_{log.name}_parameters.png", dpi=300)
-    #     plt.close(rls.f)
-    #
-    #     for i, axis in enumerate(["Roll", "Pitch", "Yaw"]):
-    #         f, V, c, e, X, Y, t = rls.diagnose(i, output_name=axis)
-    #         f.savefig(f"{output_path}/{rls.name}_diagnose_{axis.lower()}_{log.name}.png", dpi=300)
-    #         plt.close(f)
-    #
-    #         np.savetxt(f"{output_path}/{rls.name}_diagnose_V_{axis.lower()}_{log.name}.txt", V)
-    #         np.savetxt(f"{output_path}/{rls.name}_diagnose_e_{axis.lower()}_{log.name}.txt", e)
+    if run_ls:
+        for ls_model, _ in ls_ablation_models:
+            ls_model.update()
+        ls_act_diff.update()
+
+    if not args.skip_plots:
+        parGroups = [[0,3], [1,4], [2,5],   [6,10], [7,11], [8,12], [9,13],   [14,17], [15,18], [16,19], [20,21,22], [23,24,25]]
+        parGroupNames = ["$C_{\\omega^2, p}$", "$C_{{\\omega^2} \\delta, p}$", "$C_{\\dot{\\omega}, p}$",
+                         "$C_{\\omega^2, q}$", "$C_{{\\omega^2} \\delta, q}$", "$C_{\\dot{\\delta}, q}$", "$C_{\\ddot{\\delta}, q}$",
+                         "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
+                         "$C_{m\\sigma}$",
+                         "$C_{m\\omega diag}$"]
+        truePars = [[...], ...]
+        for rls in tqdm(rls_acts, desc="Generating plots for models"):
+            _ = rls.plotParameters(parGroups=parGroups, truePars=None, parGroupNames=parGroupNames, sharey=False, zoomy=False)
+            rls.f.savefig(f"{output_path}/{rls.name}_{log.name}_parameters.png", dpi=300)
+            plt.close(rls.f)
+
+            for i, axis in enumerate(["Roll", "Pitch", "Yaw"]):
+                f, V, c, e, X, Y, t = rls.diagnose(i, output_name=axis)
+                f.savefig(f"{output_path}/{rls.name}_diagnose_{axis.lower()}_{log.name}.png", dpi=300)
+                plt.close(f)
+
+                np.savetxt(f"{output_path}/{rls.name}_diagnose_V_{axis.lower()}_{log.name}.txt", V)
+                np.savetxt(f"{output_path}/{rls.name}_diagnose_e_{axis.lower()}_{log.name}.txt", e)
 
 
 
@@ -440,6 +467,10 @@ def runRls(log: IndiflightLog):
     for rls in rls_acts:
         row = {'logfile': log.name}
         row["model"] = rls.name
+        row["learning_idx_start"] = int(idx_learning_start)
+        row["learning_idx_end"] = int(idx_learning_end)
+        row["learning_start_s"] = learning_start_s
+        row["learning_end_s"] = learning_end_s
 
         row["d0_1"], row["d0_2"] = get_d0(rls)
 
@@ -486,6 +517,20 @@ table.to_csv(f"{output_path}/estimator_comparison_table.csv", index=False)
 summary_columns = ['logfile', 'model', 'RMSE', 'RMSE_rel', 'param_rmse_all', 'param_rmse_controller', 'n_correct_signs_all', 'n_signs_all', 'sign_fraction_all', 'n_correct_signs_controller', 'n_signs_controller', 'sign_fraction_controller']
 summary = table[summary_columns]
 summary.to_csv(f"{output_path}/estimator_comparison_summary.csv", index=False)
+
+# group summary table by estimator, and compute mean and std of the error metrics across logs
+grouped_summary = summary.groupby("model").agg({
+    'RMSE': ['mean', 'std'],
+    'RMSE_rel': ['mean', 'std'],
+    'param_rmse_all': ['mean', 'std'],
+    'param_rmse_controller': ['mean', 'std'],
+    'n_correct_signs_all': ['mean', 'std'],
+    'n_signs_all': ['mean', 'std'],
+    'sign_fraction_all': ['mean', 'std'],
+    'n_correct_signs_controller': ['mean', 'std'],
+    'n_signs_controller': ['mean', 'std'],
+})
+grouped_summary.to_csv(f"{output_path}/estimator_comparison_grouped_summary.csv")
 
 
 # todo:
