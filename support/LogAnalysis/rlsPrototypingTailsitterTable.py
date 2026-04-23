@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 plt.close('all')
 
 from copy import deepcopy
+from itertools import product
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
@@ -285,36 +286,56 @@ def runRls(log: IndiflightLog):
 
     rls_acts = []
 
-    ls_act_all = LS(26, 3)
-    ls_act_all.setTitle("LS Moments -- Inertias, Actuators and 3-param Phi")
-    rls_acts.append(ls_act_all)
-
     ls_act_diff = LS(26, 3)
     ls_act_diff.setTitle("LS Diff-Moments -- Actuators")
     rls_acts.append(ls_act_diff)
 
+    base_cov = 1e-12 * np.diag([
+        1, 1, 1e8, 1, 1, 1e8,
+        1, 1, 1e8, 1e7, 1, 1, 1e8, 1e7,
+        1, 1, 1e8, 1, 1, 1e8,
+        1e9, 1e9, 1e9, 1e8, 1e8, 1e8,
+    ])
 
-    rls_act_all = RLS(26, 3, gamma=1e-11, forgetting=0.9999)
-    rls_act_all.setTitle("RLS Moments -- All parameters")
-    # rls_act_all.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
-    rls_act_all.setCovariance(1e-12*np.diag([1, 1, 1e8,  1, 1, 1e8,    1, 1, 1e8, 1e7,  1, 1, 1e8, 1e7,    1, 1, 1e8,  1, 1, 1e8,    1e9, 1e9, 1e9, 1e8, 1e8, 1e8]))
-    rls_acts.append(rls_act_all)
+    # Comment out groups below to remove them from the ablation sweep.
+    active_ablation_groups = [
+        ("I", [20, 21, 22]),
+        #("Phi", [23, 24, 25]),
+        ("Ddot", [8, 9, 12, 13]),
+        ("Cld_Clwd", [1, 2, 4, 5]),
+        ("Wdot", [16, 19]),
+    ]
 
-    rls_act_noI = deepcopy(rls_act_all)
-    rls_act_noI.setTitle("RLS Moments -- No Inertias")
-    rls_acts.append(rls_act_noI)
+    rls_ablation_models = []
+    ls_ablation_models = []
+    for enabled_flags in product([False, True], repeat=len(active_ablation_groups)):
+        disabled_group_names = [
+            group_name
+            for (group_name, _), group_enabled in zip(active_ablation_groups, enabled_flags)
+            if not group_enabled
+        ]
+        disabled_indices = sorted([
+            idx
+            for (_, group_indices), group_enabled in zip(active_ablation_groups, enabled_flags)
+            if not group_enabled
+            for idx in group_indices
+        ])
 
-    rls_act_noI_noPhi = deepcopy(rls_act_all)
-    rls_act_noI_noPhi.setTitle("RLS Moments -- No Inertias or Phi")
-    rls_acts.append(rls_act_noI_noPhi)
+        if disabled_group_names:
+            suffix = f"no {'/'.join(disabled_group_names)}"
+        else:
+            suffix = "all groups enabled"
 
-    rls_act_noI_noPhi_noDdot = deepcopy(rls_act_all)
-    rls_act_noI_noPhi_noDdot.setTitle("RLS Moments -- No Inertias, Phi, or Delta Dot")
-    rls_acts.append(rls_act_noI_noPhi_noDdot)
+        rls_model = RLS(26, 3, gamma=1e-11, forgetting=0.9999)
+        rls_model.setTitle(f"RLS Moments -- {suffix}")
+        rls_model.setCovariance(base_cov.copy())
+        rls_ablation_models.append((rls_model, disabled_indices))
+        rls_acts.append(rls_model)
 
-    rls_act_noI_noPhi_noDdot_noWdot = deepcopy(rls_act_all)
-    rls_act_noI_noPhi_noDdot_noWdot.setTitle("RLS Moments -- No Inertias, Phi, Delta Dot, or Omega Dot")
-    rls_acts.append(rls_act_noI_noPhi_noDdot_noWdot)
+        ls_model = LS(26, 3)
+        ls_model.setTitle(f"LS Moments -- {suffix}")
+        ls_ablation_models.append((ls_model, disabled_indices))
+        rls_acts.append(ls_model)
 
     A_act_hist = []
     count = 0
@@ -349,29 +370,26 @@ def runRls(log: IndiflightLog):
         A_act_diff[:, 23:26] = 0
         ls_act_diff.newSample(A_act_diff, Odotdiffi, ti)
 
-        rls_act_all.newSample(A_act_all, y, ti); rls_act_all.update()
-        ls_act_all.newSample(A_act_all, y, ti);
+        for rls_model, disabled_indices in rls_ablation_models:
+            A_variant = A_act_all.copy()
+            if disabled_indices:
+                A_variant[:, disabled_indices] = 0
+            rls_model.newSample(A_variant, y, ti)
+            rls_model.update()
+
+        for ls_model, disabled_indices in ls_ablation_models:
+            A_variant = A_act_all.copy()
+            if disabled_indices:
+                A_variant[:, disabled_indices] = 0
+            ls_model.newSample(A_variant, y, ti)
 
         count += 1 
         if count > 150 and count % 10 == 0:
-            ls_act_all.update()
+            for ls_model, _ in ls_ablation_models:
+                ls_model.update()
             ls_act_diff.update()
 
-        A_act_noI = A_act_all.copy()
-        A_act_noI[:, 20:23] = 0
-        rls_act_noI.newSample(A_act_noI, y, ti); rls_act_noI.update()
-
-        A_act_noI_noPhi = A_act_noI.copy()
-        A_act_noI_noPhi[:, 23:26] = 0
-        rls_act_noI_noPhi.newSample(A_act_noI_noPhi, y, ti); rls_act_noI_noPhi.update()
-
-        A_act_noI_noPhi_noDdot = A_act_noI_noPhi.copy()
-        A_act_noI_noPhi_noDdot[:, [8,9,12,13]] = 0
-        rls_act_noI_noPhi_noDdot.newSample(A_act_noI_noPhi_noDdot, y, ti); rls_act_noI_noPhi_noDdot.update()
-
-        A_act_noI_noPhi_noDdot_noWdot = A_act_noI_noPhi_noDdot.copy()
-        A_act_noI_noPhi_noDdot_noWdot[:, [2,5,16,19]] = 0
-        rls_act_noI_noPhi_noDdot_noWdot.newSample(A_act_noI_noPhi_noDdot_noWdot, y, ti); rls_act_noI_noPhi_noDdot_noWdot.update()
+        # RLS ablations are handled above via rls_ablation_models.
 
     # Plotting disabled per user request.
     # parGroups = [[0,3], [1,4], [2,5],   [6,10], [7,11], [8,12], [9,13],   [14,17], [15,18], [16,19], [20,21,22], [23,24,25]]
@@ -458,11 +476,19 @@ for log in logs:
     rls_list_list.append(rls_list)
 
 
+# sort table by logfile, then by first letter of the model name. otherwise keep order intact
+table = table.sort_values(by=["logfile", "model"], key=lambda col: col.str[0])
+
 # output table as csv
 table.to_csv(f"{output_path}/estimator_comparison_table.csv", index=False)
+
+# summary table that only contains the global error metrics
+summary_columns = ['logfile', 'model', 'RMSE', 'RMSE_rel', 'param_rmse_all', 'param_rmse_controller', 'n_correct_signs_all', 'n_signs_all', 'sign_fraction_all', 'n_correct_signs_controller', 'n_signs_controller', 'sign_fraction_controller']
+summary = table[summary_columns]
+summary.to_csv(f"{output_path}/estimator_comparison_summary.csv", index=False)
 
 
 # todo:
 # define the important parameters for control
 # compute RMSE over only the important parameters
-# compute some sort of a-posteri reproduction error of 
+# compute some sort of a-posteri reproduction error of the models
