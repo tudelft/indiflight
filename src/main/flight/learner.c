@@ -702,8 +702,8 @@ void updateLearner(timeUs_t current) {
 
         for (int ax = 0; ax < 3; ax++) {
             // first regressor is rate cross terms for inertia ratios
-            A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
-            // A[0] = 0.f;
+            // A[0] = -learnRun.imuRate.A[ (ax+1)%3 ] * learnRun.imuRate.A[ (ax+2)%3 ];
+            A[0] = 0.f;
 
 // #define LEARNER_IS_TAILSITTER_SYMMETRIC
 
@@ -775,8 +775,8 @@ void updateLearner(timeUs_t current) {
                     A[2] = 1e-5f * (w21);
                     A[3] = 1e-5f * (w2d0);
                     A[4] = 1e-5f * (w2d1);
-                    A[5] = 1e-3f * (wdot0);
-                    A[6] = 1e-3f * (wdot1);
+                    A[5] = 0.f * 1e-3f * (wdot0);
+                    A[6] = 0.f * 1e-3f * (wdot1);
                     A[7] = -1e-1f * eta * r;
                     break;
             }
@@ -1049,14 +1049,14 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     UNUSED(actG2rotIMU);
 #else
 
-    // indi->tails_cxw[0] = 0;
-    // indi->tails_cxw[1] = 0;
-    // indi->tails_cyw[0] = 0;
-    // indi->tails_cyw[1] = 0;
+    indi->tails_cxw[0] = 0;
+    indi->tails_cxw[1] = 0;
+    indi->tails_cyw[0] = 0;
+    indi->tails_cyw[1] = 0;
     indi->tails_czw[0] = (int16_t) (1e9f * fxRls[2].x[0] * 1e-5f * 1e-1f); // 1e-5 for omega^2 scaling, 1e-1 for y-scaling
     indi->tails_czw[1] = (int16_t) (1e9f * fxRls[2].x[1] * 1e-5f * 1e-1f); // 1e-5 for omega^2 scaling, 1e-1 for y-scaling
-    // indi->tails_cxd[0] = 0;
-    // indi->tails_cxd[1] = 0;
+    indi->tails_cxd[0] = 0;
+    indi->tails_cxd[1] = 0;
 
     indi->tails_d0[0] = 0;
     indi->tails_d0[1] = 0;
@@ -1068,15 +1068,15 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->tails_cmw[1]  = (int16_t) (1e8f * fxRls[1+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cmd[0]  = (int16_t) (1e8f * fxRls[1+3].x[3] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cmd[1]  = (int16_t) (1e8f * fxRls[1+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cmdd[0] = (int16_t) (1e5f * fxRls[1+3].x[5] * 1e-0f * 1e0f); // 1e-2 for deltadot scaling, 1e0 for y-scaling
-    indi->tails_cmdd[1] = (int16_t) (1e5f * fxRls[1+3].x[6] * 1e-0f * 1e0f); // 1e-2 for deltadot scaling, 1e0 for y-scaling
+    indi->tails_cmdd[0] = (int16_t) 0;
+    indi->tails_cmdd[1] = (int16_t) 0;
 
     indi->tails_cnw[0]  = (int16_t) (1e8f * fxRls[2+3].x[1] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cnw[1]  = (int16_t) (1e8f * fxRls[2+3].x[2] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cnd[0]  = (int16_t) (1e8f * fxRls[2+3].x[3] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
     indi->tails_cnd[1]  = (int16_t) (1e8f * fxRls[2+3].x[4] * 1e-5f * 1e0f); // 1e-5 for omega^2 scaling, 1e0 for y-scaling
-    indi->tails_cnwd[0] = (int16_t) (1e5f * fxRls[2+3].x[5] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
-    indi->tails_cnwd[1] = (int16_t) (1e5f * fxRls[2+3].x[6] * 1e-3f * 1e0f); // 1e-3 for omegadot scaling, 1e0 for y-scaling
+    indi->tails_cnwd[0] = (int16_t) 0;
+    indi->tails_cnwd[1] = (int16_t) 0;
     indi->tails_cndd[0] = (int16_t) 0;
     indi->tails_cndd[1] = (int16_t) 0;
 
