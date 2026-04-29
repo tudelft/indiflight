@@ -427,7 +427,7 @@ class RLS(Estimator):
         self.K = np.empty((self.n, self.d))
         self.K[:] = np.nan
         self.lam = forgetting
-        self.NIS = 100
+        self.NIS = 1.
         self.theta_bounds = np.empty((self.n, 2))
         self.theta_bounds[:] = np.nan
 

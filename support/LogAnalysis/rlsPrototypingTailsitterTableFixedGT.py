@@ -14,6 +14,10 @@ plt.close('all')
 
 from copy import deepcopy
 from itertools import product
+from pathlib import Path
+import importlib
+import pickle
+import sys
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
@@ -28,6 +32,10 @@ parser.add_argument("--skip-ls", action="store_true",
                     help="Skip LS estimators (faster; runs only RLS variants).")
 parser.add_argument("--skip-plots", action="store_true",
                     help="Skip generating/saving diagnostic plots and plot text outputs.")
+parser.add_argument("--params-pkl", required=True, type=str,
+                    help="Parameter pickle produced by tailsitterParameterStudy.py (used for GT model parameters).")
+parser.add_argument("--rls-in-recovery", type=float,
+                    help="Run RLS for this many seconds during recovery maneuver.")
 # parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
 
 args = parser.parse_args()
@@ -64,6 +72,28 @@ os.makedirs(output_path, exist_ok=True)
 
 #%% load data for offline estimator
 
+def ensure_pickle_import_path():
+    simulation_dir = Path(__file__).resolve().parents[1] / "simulation"
+    simulation_dir_str = str(simulation_dir)
+    if simulation_dir_str not in sys.path:
+        sys.path.insert(0, simulation_dir_str)
+
+    # Pre-import package so pickle can resolve class names.
+    importlib.import_module("PyNDIflight.crafts")
+
+
+def load_base_tail_from_pickle(params_pkl):
+    ensure_pickle_import_path()
+    with open(params_pkl, "rb") as f:
+        payload = pickle.load(f)
+
+    if not isinstance(payload, dict) or "base_tail" not in payload:
+        raise KeyError(f"Parameter pickle does not contain 'base_tail': {params_pkl}")
+    return payload["base_tail"]
+
+
+BASE_TAIL = load_base_tail_from_pickle(args.params_pkl)
+
 def skew(x):
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
@@ -73,38 +103,70 @@ import pandas as pd
 table = pd.DataFrame()
 
 class Parameters(object):
-    def __init__(self, theta):
-        # ground truth data from sim
-        Ixx, Iyy, Izz = 5.73e-3, 1.35e-3, 5.43e-3
-        k = 1.413e-06
-        dy = 1.064e-01
-        cd = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
-        cdd = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)
-        cddd = np.array([         0,          0,          0,          0, -2.201e-05,          0], dtype=np.float32)
-
-        Phi = np.array([
-            [+3.106e-01,          0, +4.148e-02,          0, -1.613e-04,          0],
-            [         0, +3.603e-02,          0, +1.355e-03,          0, -3.538e-03],
-            [+4.148e-02,          0, +4.465e-02,          0, +1.951e-04,          0],
-            [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
-            [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
-            [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
-        ], dtype=np.float32)
-
-        d0 = np.array([-3.618e-1, -1.540e-1])
+    def __init__(self, theta, tail):
+        # Ground-truth data taken from the nominal tailsitter stored in params pickle.
+        I_diag = np.diag(np.asarray(tail.I, dtype=np.float64))
+        Ixx, Iyy, Izz = [float(v) for v in I_diag]
+        cd = np.asarray(tail.cd, dtype=np.float64)
+        cdd = np.asarray(tail.cdd, dtype=np.float64)
+        cddd = np.asarray(tail.cddd, dtype=np.float64)
+        d0 = np.asarray(tail.d0, dtype=np.float64)
+        Phi = np.asarray(tail.Phi, dtype=np.float64)
+        r_X = np.asarray(tail.r_X, dtype=np.float64)
+        r_ax = np.asarray(tail.r_ax, dtype=np.float64)
+        r_k = np.asarray(tail.r_k, dtype=np.float64)
+        r_cm = np.asarray(tail.r_cm, dtype=np.float64)
+        r_I = np.asarray(tail.r_I, dtype=np.float64)
 
         Cld = float(0.0)   / Ixx
         Cmd = float(cd[4]) / Iyy
         Cnd = float(cd[5]) / Izz
 
-        Clwd = float(0.0) / Ixx
         Cmdd = float(cdd[4]) / Iyy
         Cmddd = float(cddd[4]) / Iyy
-        Cnwd = -3.34e-6 / Izz
 
-        Clww = 1.556e-7 / Ixx
-        Cmww = ( 0.0 - Cmd * d0 )
-        Cnww = ( 2.734e-08 / Izz - Cnd * d0 )
+        # Rotor-induced moment coefficients for each rotor.
+        clww_thrust = np.array([
+            ((r_X[1, i] * r_ax[2, i]) - (r_X[2, i] * r_ax[1, i])) * r_k[i] / Ixx
+            for i in range(2)
+        ], dtype=np.float64)
+        cmww_thrust = np.array([
+            ((r_X[2, i] * r_ax[0, i]) - (r_X[0, i] * r_ax[2, i])) * r_k[i] / Iyy
+            for i in range(2)
+        ], dtype=np.float64)
+        cnww_thrust = np.array([
+            ((r_X[0, i] * r_ax[1, i]) - (r_X[1, i] * r_ax[0, i])) * r_k[i] / Izz
+            for i in range(2)
+        ], dtype=np.float64)
+
+        clww_drag = np.array([
+            (-r_k[i] * r_cm[i] * r_ax[0, i]) / Ixx
+            for i in range(2)
+        ], dtype=np.float64)
+        cmww_drag = np.array([
+            (-r_k[i] * r_cm[i] * r_ax[1, i]) / Iyy
+            for i in range(2)
+        ], dtype=np.float64)
+        cnww_drag = np.array([
+            (-r_k[i] * r_cm[i] * r_ax[2, i]) / Izz
+            for i in range(2)
+        ], dtype=np.float64)
+
+
+        # Keep existing parameterization where d0-shifted elevon terms contribute to w^2 channels.
+        Clww = clww_thrust + clww_drag
+        Cmww = cmww_thrust + cmww_drag - Cmd * d0
+        Cnww = cnww_thrust + cnww_drag - Cnd * d0
+
+        # Matches the sign conventions used in the identification model for wdot channels.
+        Clwd = np.array([
+            (-np.sign(r_cm[i]) * r_I[i] * r_ax[0, i]) / Ixx
+            for i in range(2)
+        ], dtype=np.float64)
+        Cnwd = np.array([
+            (-np.sign(r_cm[i]) * r_I[i] * r_ax[2, i]) / Izz
+            for i in range(2)
+        ], dtype=np.float64)
 
         Clp = Phi[3,3] / Ixx
         Cmq = Phi[4,4] / Iyy
@@ -114,16 +176,16 @@ class Parameters(object):
                                    (Ixx - Izz) / Iyy,
                                    (Iyy - Ixx) / Izz])
 
-        eval_pars = {'Clww1': [0, Clww],      'Clww2': [3, -Clww],
-                     'Cld1':  [1, Cld],       'Cld2':  [4, Cld],
-                     'Clwd1':  [2, Clwd], 'Clwd2':  [5, -Clwd],
+        eval_pars = {'Clww1': [0, Clww[0]],      'Clww2': [3, Clww[1]],
+                     'Cld1':  [1, Cld],          'Cld2':  [4, Cld],
+                     'Clwd1':  [2, Clwd[0]], 'Clwd2':  [5, Clwd[1]],
                      'Cmww1': [6, Cmww[0]],   'Cmww2': [10, Cmww[1]],
                      'Cmd1':  [7, Cmd],       'Cmd2':  [11, Cmd],
                      'Cmdd1':  [8, Cmdd],      'Cmdd2':  [12, Cmdd],
                      'Cmddd1':  [9, Cmddd],     'Cmddd2':  [13, Cmddd],
-                     'Cnww1': [14, Cnww[0]],  'Cnww2': [17, -Cnww[1]],
+                     'Cnww1': [14, Cnww[0]],  'Cnww2': [17, Cnww[1]],
                      'Cnd1':  [15, Cnd],      'Cnd2':  [18, -Cnd],
-                     'Cnwd1':  [16, Cnwd],     'Cnwd2':  [19, -Cnwd],
+                     'Cnwd1':  [16, Cnwd[0]],     'Cnwd2':  [19, Cnwd[1]],
                      'sigmap': [20, inertia_ratios[0]], 'sigmaq': [21, inertia_ratios[1]], 'sigmar': [22, inertia_ratios[2]],
                      'Clp': [23, Clp], 'Cmq': [24, Cmq], 'Cnr': [25, Cnr]
                     }
@@ -207,7 +269,7 @@ class Parameters(object):
             "mismatched_parameters": [name for name, ok in zip(par_names, sign_matches) if not ok],
         }
 
-groundtruth_parameters = Parameters(theta=np.zeros(26))
+groundtruth_parameters = Parameters(theta=np.zeros(26), tail=BASE_TAIL)
 row = {'logfile': 'groundtruth', "model": "groundtruth"}
 row['d0_1'] = float(groundtruth_parameters.d0[0])
 row['d0_2'] = float(groundtruth_parameters.d0[1])
@@ -225,11 +287,16 @@ def runRls(log: IndiflightLog):
 
     # Restrict identification to the inferred learning interval.
     idx_learning_start, idx_learning_end = infer_learning_indices(log.data, nr=n, ns=ns)
-    data = log.data.iloc[idx_learning_start:idx_learning_end + 1].copy()
+    if args.rls_in_recovery is not None:
+        recovery_time = args.rls_in_recovery
+        recovery_indices = log.data["timeS"] <= (log.data["timeS"].iloc[idx_learning_end] + recovery_time)
+        recovery_indices &= (log.data["timeS"] >= log.data["timeS"].iloc[idx_learning_start])
+        data = log.data.iloc[recovery_indices].copy()
+    else:
+        data = log.data.iloc[idx_learning_start:idx_learning_end + 1].copy()
+
     if data.empty:
-        data = log.data.copy()
-        idx_learning_start = 0
-        idx_learning_end = max(0, data.shape[0] - 1)
+        raise ValueError("No data in the inferred learning interval for log {log.name}.")
 
     N = data.shape[0]
     learning_start_s = float(data["timeS"].iloc[0])
@@ -280,7 +347,7 @@ def runRls(log: IndiflightLog):
 
     eta_B = np.hstack((v_B, Of.y))
     phi = 1.0
-    eta = np.sqrt(0*v_norm**2 + phi * O_norm**2)
+    eta = np.sqrt(v_norm**2 + phi * O_norm**2) # TODODODOD
 
     #%% do moments first
     Oyz = Of.y[:, 1] * Of.y[:, 2]
@@ -318,11 +385,15 @@ def runRls(log: IndiflightLog):
 
     # Comment out groups below to remove them from the ablation sweep.
     active_ablation_groups = [
-        #("I", [20, 21, 22]),
-        #("Phi", [23, 24, 25]),
-        #("Ddot", [8, 9, 12, 13]),
+        ("I", [20, 21, 22]),
+        ("Phi", [23, 24, 25]),
+        ("Ddot", [8, 9, 12, 13]),
         ("Cld_Clwd", [1, 2, 4, 5]),
-        #("Wdot", [16, 19]),
+        ("Wdot", [16, 19]),
+    ]
+
+    force_zero_groups = [
+        # ("Cld_Clwd", [1, 2, 4, 5]),
     ]
 
     rls_ablation_models = []
@@ -403,6 +474,9 @@ def runRls(log: IndiflightLog):
                 A_variant = A_act_all.copy()
                 if disabled_indices:
                     A_variant[:, disabled_indices] = 0
+                for force_zero_group in force_zero_groups:
+                    _, group_indices = force_zero_group
+                    A_variant[:, group_indices] = 0
                 ls_model.newSample(A_variant, y, ti)
 
             count += 1
@@ -425,9 +499,12 @@ def runRls(log: IndiflightLog):
                          "$C_{\\omega^2, r}$", "$C_{{\\omega^2} \\delta, r}$", "$C_{\\dot{\\omega}, r}$",
                          "$C_{m\\sigma}$",
                          "$C_{m\\omega diag}$"]
-        truePars = [[...], ...]
+        theta_true = np.full(26, np.nan, dtype=np.float64)
+        for _, (par_idx, par_true) in groundtruth_parameters.eval_pars.items():
+            theta_true[par_idx] = float(par_true)
+        truePars = [[float(theta_true[idx]) for idx in group] for group in parGroups]
         for rls in tqdm(rls_acts, desc="Generating plots for models"):
-            _ = rls.plotParameters(parGroups=parGroups, truePars=None, parGroupNames=parGroupNames, sharey=False, zoomy=False)
+            _ = rls.plotParameters(parGroups=parGroups, truePars=truePars, parGroupNames=parGroupNames, sharey=False, zoomy=False)
             rls.f.savefig(f"{output_path}/{rls.name}_{log.name}_parameters.png", dpi=300)
             plt.close(rls.f)
 
@@ -438,7 +515,6 @@ def runRls(log: IndiflightLog):
 
                 np.savetxt(f"{output_path}/{rls.name}_diagnose_V_{axis.lower()}_{log.name}.txt", V)
                 np.savetxt(f"{output_path}/{rls.name}_diagnose_e_{axis.lower()}_{log.name}.txt", e)
-
 
 
     def get_d0(rls):
@@ -477,7 +553,7 @@ def runRls(log: IndiflightLog):
         row["RMSE"] = compute_RMSE(rls, A_data, y_data)
         row["RMSE_rel"] = row["RMSE"] / np.std(Of.dot().y)
 
-        parameter_results = Parameters(theta=rls.theta[:, 0])
+        parameter_results = Parameters(theta=rls.theta[:, 0], tail=BASE_TAIL)
         row["param_rmse_all"] = parameter_results.error_metric()
         row["param_rmse_controller"] = parameter_results.error_metric(only_controller=True)
         signs_all = parameter_results.correct_signs()

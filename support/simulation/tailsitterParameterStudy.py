@@ -118,7 +118,8 @@ def get_base_model():
     base["cd"] = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
     base["cdd"] = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)
     base["cddd"] = np.array([         0,          0,          0,          0, -2.201e-05,          0], dtype=np.float32)
-    base["d0"] = np.array([-3.618e-01, -1.540e-01], dtype=np.float32)
+    # base["d0"] = np.array([-3.618e-01, -1.540e-01], dtype=np.float32)
+    base["d0"] = np.array([0, 0], dtype=np.float32)
 
     base["rotors"] = [
         {
