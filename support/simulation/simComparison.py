@@ -176,6 +176,9 @@ def replay_simulation(data, craft_type="multirotor", t0=0.0, input_source="u"):
 def plot_overlay(ref, sim, Nr, title):
     fig, axs = plt.subplots(3, 2, figsize=(14, 9))
     t = ref["timeS"].to_numpy()
+    # shift time so plots start at 0 (subtract first sample time)
+    t0 = float(t[0]) if len(t) > 0 else 0.0
+    t = t - t0
 
     COLORS = ["C0", "C1", "C2", "C3", "C4", "C5"]
     LINESTYLES = ["-", "--", "-.", ":"]
@@ -243,6 +246,41 @@ def plot_overlay(ref, sim, Nr, title):
     ax_servo.set_xlabel("time [s]")
 
     fig.suptitle(title)
+    # Also export the plots at locations [1,0] (angular acceleration)
+    # and [2,0] (specific force) into a separate EPS file.
+    try:
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title).strip().replace(' ', '_')
+        fig_eps, axs_eps = plt.subplots(2, 1, figsize=(10, 8))
+
+        # Angular acceleration (same content as axs[1,0])
+        dt_mean = np.mean(np.diff(t))
+        for i, lbl in enumerate(["roll", "pitch", "yaw"]):
+            gyro_dot_ref = np.gradient(ref[f"gyroADCafterRpm[{i}]"].to_numpy(), dt_mean)
+            gyro_dot_sim = np.gradient(sim[f"gyroADCafterRpm[{i}]"].to_numpy(), dt_mean)
+            axs_eps[0].plot(t, gyro_dot_ref, alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=lbl)
+            axs_eps[0].plot(t, gyro_dot_sim, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=lbl)
+        axs_eps[0].set_ylabel("angular accel [rad/s²]")
+        axs_eps[0].set_title("Angular acceleration: log (solid) vs simulation (dashed)")
+        axs_eps[0].legend(loc="upper right")
+        axs_eps[0].grid(True)
+
+        # Specific force (same content as axs[2,0])
+        for i, lbl in enumerate(["x", "y", "z"]):
+            axs_eps[1].plot(t, ref[f"accADCafterRpm[{i}]"], alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=lbl)
+            axs_eps[1].plot(t, sim[f"accADCafterRpm[{i}]"], lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=lbl)
+        axs_eps[1].set_ylabel("specific force [N/kg]")
+        axs_eps[1].set_title("Specific force: log (solid) vs simulation (dashed)")
+        axs_eps[1].legend(loc="upper right")
+        axs_eps[1].grid(True)
+
+        fig_eps.suptitle(title + " -- AngAcc and SPF")
+        fig_eps.tight_layout(rect=[0, 0, 1, 0.96])
+        eps_filename = f"{safe_title}_angacc_spf.eps"
+        fig_eps.savefig(eps_filename, format="eps", dpi=300)
+    except Exception:
+        # Don't let export errors break plotting
+        pass
+
     return fig, list(axs.flatten())
 
 
