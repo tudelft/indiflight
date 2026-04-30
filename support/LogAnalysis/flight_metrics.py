@@ -154,6 +154,39 @@ def compute_fx_fit_metrics(data, idx_end):
         "fx_sign_terms_missing": sign_terms_missing,
     }
 
+def extract_theta(data, index):
+    # eval_pars = {'Clww1': [0, Clww[0]],      'Clww2': [3, Clww[1]],
+    #              'Cld1':  [1, Cld],          'Cld2':  [4, Cld],
+    #              'Clwd1':  [2, Clwd[0]], 'Clwd2':  [5, Clwd[1]],
+    #              'Cmww1': [6, Cmww[0]],   'Cmww2': [10, Cmww[1]],
+    #              'Cmd1':  [7, Cmd],       'Cmd2':  [11, Cmd],
+    #              'Cmdd1':  [8, Cmdd],      'Cmdd2':  [12, Cmdd],
+    #              'Cmddd1':  [9, Cmddd],     'Cmddd2':  [13, Cmddd],
+    #              'Cnww1': [14, Cnww[0]],  'Cnww2': [17, Cnww[1]],
+    #              'Cnd1':  [15, Cnd],      'Cnd2':  [18, -Cnd],
+    #              'Cnwd1':  [16, Cnwd[0]],     'Cnwd2':  [19, Cnwd[1]],
+    #              'sigmap': [20, inertia_ratios[0]], 'sigmaq': [21, inertia_ratios[1]], 'sigmar': [22, inertia_ratios[2]],
+    #              'Clp': [23, Clp], 'Cmq': [24, Cmq], 'Cnr': [25, Cnr]
+    #             }
+    row = data.iloc[index]
+    pars = {
+        'Clww1': 1e-5 * row['fx_p_rls_x[0]'], 'Clww2': 1e-5 * row['fx_p_rls_x[1]'],
+        'Cld1': 0.0, 'Cld2': 0.0,
+        'Clwd1': 0.0, 'Clwd2': 0.0,
+        'Cmww1': 1e-5 * row['fx_q_rls_x[0]'], 'Cmww2': 1e-5 * row['fx_q_rls_x[1]'],
+        'Cmd1': 1e-5 * row['fx_q_rls_x[2]'], 'Cmd2': 1e-5 * row['fx_q_rls_x[3]'],
+        'Cmdd1': row['fx_q_rls_x[8]'], 'Cmdd2': row['fx_q_rls_x[9]'],
+        'Cmddd1': 1e-2 * row['fx_q_rls_x[11]'], 'Cmddd2': 1e-2 * row['fx_q_rls_x[12]'],
+        'Cnww1': 1e-5 * row['fx_r_rls_x[0]'], 'Cnww2': 1e-5 * row['fx_r_rls_x[1]'],
+        'Cnd1': 1e-5 * row['fx_r_rls_x[2]'], 'Cnd2': 1e-5 * row['fx_r_rls_x[3]'],
+        'Cnwd1': 1e-3 * row['fx_r_rls_x[8]'], 'Cnwd2': 1e-3 * row['fx_r_rls_x[9]'],
+        'sigmap': 1e-1 * row['sigma_rls[0]'], 'sigmaq': 1e-1 * row['sigma_rls[1]'], 'sigmar': 1e-1 * row['sigma_rls[2]'],
+        'Clp': row['fx_p_rls_x[10]'], 'Cmq': row['fx_q_rls_x[10]'], 'Cnr': row['fx_r_rls_x[10]'],
+    }
+    param_names = [name for name in pars.keys()]
+    theta = 1e-3 * np.array([pars[name] for name in param_names])
+    return theta, param_names
+
 
 def extract_learning_metrics(data, idx_start, idx_end):
     row = {

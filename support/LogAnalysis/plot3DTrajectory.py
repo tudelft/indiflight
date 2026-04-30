@@ -94,6 +94,8 @@ if __name__ == "__main__":
                         help="Type of craft for visualization.")
     parser.add_argument("--scale", type=float, default=0.5,
                         help="Scale factor for the craft visualization.")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Path to write the figure as an EPS file.")
     parser.add_argument("--nr", type=int, default=2, help="Number of rotors.")
     parser.add_argument("--ns", type=int, default=2, help="Number of servos.")
     
@@ -116,7 +118,7 @@ if __name__ == "__main__":
         
         time = log.data['timeS'].to_numpy()
         start_time = time[idx_start] - 0.5
-        end_time = time[idx_end] + 1.3
+        end_time = time[idx_end] + 1.5
         
         # Clamp to log bounds
         start_time = max(start_time, time[0])
@@ -216,6 +218,9 @@ if __name__ == "__main__":
     ax.view_init(elev=21, azim=-63)
     
     plt.tight_layout()
+    output_path = args.output if args.output is not None else f"{args.name}.eps"
+    fig.savefig(output_path, format="eps", bbox_inches="tight")
+    print(f"Saved EPS figure to {output_path}")
     plt.show()
 
 

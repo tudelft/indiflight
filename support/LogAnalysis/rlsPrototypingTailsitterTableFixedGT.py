@@ -177,7 +177,7 @@ class Parameters(object):
                                    (Iyy - Ixx) / Izz])
 
         eval_pars = {'Clww1': [0, Clww[0]],      'Clww2': [3, Clww[1]],
-                     'Cld1':  [1, Cld],          'Cld2':  [4, Cld],
+                     'Cld1':  [1, Cld],          'Cld2':  [4, -Cld],
                      'Clwd1':  [2, Clwd[0]], 'Clwd2':  [5, Clwd[1]],
                      'Cmww1': [6, Cmww[0]],   'Cmww2': [10, Cmww[1]],
                      'Cmd1':  [7, Cmd],       'Cmd2':  [11, Cmd],
