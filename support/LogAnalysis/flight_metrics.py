@@ -185,6 +185,8 @@ def extract_theta(data, index):
     }
     param_names = [name for name in pars.keys()]
     theta = 1e-3 * np.array([pars[name] for name in param_names])
+
+    # TODO: check different indices, and verify d0
     return theta, param_names
 
 

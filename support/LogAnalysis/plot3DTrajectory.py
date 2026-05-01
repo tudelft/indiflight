@@ -95,7 +95,7 @@ if __name__ == "__main__":
     parser.add_argument("--scale", type=float, default=0.5,
                         help="Scale factor for the craft visualization.")
     parser.add_argument("--output", type=str, default=None,
-                        help="Path to write the figure as an EPS file.")
+                        help="Path to write the figure as a PDF file.")
     parser.add_argument("--nr", type=int, default=2, help="Number of rotors.")
     parser.add_argument("--ns", type=int, default=2, help="Number of servos.")
     
@@ -218,9 +218,9 @@ if __name__ == "__main__":
     ax.view_init(elev=21, azim=-63)
     
     plt.tight_layout()
-    output_path = args.output if args.output is not None else f"{args.name}.eps"
-    fig.savefig(output_path, format="eps", bbox_inches="tight")
-    print(f"Saved EPS figure to {output_path}")
+    output_path = args.output if args.output is not None else f"{args.name}.pdf"
+    fig.savefig(output_path, format="pdf", bbox_inches="tight")
+    print(f"Saved PDF figure to {output_path}")
     plt.show()
 
 

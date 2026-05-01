@@ -382,7 +382,7 @@ if __name__ == "__main__":
 
     mapping = {
         "N": "N",
-        "Success": "Success",
+        # "Success": "Success",
         "fx_sign_correct_count": "N Signs Correct",
         "omega0_norm": "Start Gyro Norm",
         "tilt0": "Start Tilt",
