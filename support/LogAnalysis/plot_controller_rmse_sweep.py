@@ -113,7 +113,7 @@ def collect_series(csv_paths: list[Path]):
     return series_by_file, ordered_labels
 
 
-def main():
+if __name__ == "__main__":
     args = build_parser().parse_args()
     input_dir = Path(args.directory)
     if not input_dir.is_dir():
@@ -197,7 +197,3 @@ def main():
     output_path = Path(args.output) if args.output else input_dir / "param_rmse_controller_sweep.eps"
     fig.savefig(output_path, dpi=300, format='eps')
     print(f"Saved plot to {output_path}")
-
-
-if __name__ == "__main__":
-    main()
