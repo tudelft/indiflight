@@ -118,7 +118,7 @@ if __name__ == "__main__":
         
         time = log.data['timeS'].to_numpy()
         start_time = time[idx_start] - 0.5
-        end_time = time[idx_end] + 1.5
+        end_time = time[idx_end] + 0.5
         
         # Clamp to log bounds
         start_time = max(start_time, time[0])

@@ -326,7 +326,7 @@ def run_single_sim(run_idx, args, base, rng, sigma_cfg, sil=None, flightModeFlag
             visThread = threading.Thread(target=visApp.run, daemon=True, kwargs={"host": "0.0.0.0"})
             visThread.start()
 
-        throw_base = {"height": 4.0, "wB": [-0.0, -4.0, 0.0], "vHorz": [0.0, 3.0], "at_time": 4.5}
+        throw_base = {"height": 3.6, "wB": [-0.0, -3.0, 0.0], "vHorz": [0.0, 3.0], "at_time": 4.5}
         throw_sampled = sample_throw(throw_base, rng, sigma_cfg)
         tail.throw(
             height=throw_sampled["height"],
