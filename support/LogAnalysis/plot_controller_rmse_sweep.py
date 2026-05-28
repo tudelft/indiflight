@@ -7,6 +7,27 @@ import pandas as pd
 
 
 ACTIVE_GROUPS = ("I", "Phi", "Ddot", "Cld_Clwd", "Wdot")
+GROUP_TICK_LABELS = {
+    "I": r"$\sigma_x$, $\sigma_y$, $\sigma_z$",
+    "Phi": r"$\Phi^{m\omega}$",
+    "Ddot": r"$\dot\delta$, $\ddot\delta$",
+    "Cld_Clwd": "Cld / Clwd",
+    "Wdot": r"$\dot W$",
+}
+SERIES_LABELS = {
+    # Edit these to whatever legend text you want for each CSV series.
+    "estimator_comparison_grouped_summary_0.0": "Start of recovery",
+    "estimator_comparison_grouped_summary_0.5": "500ms into recovery",
+    "estimator_comparison_grouped_summary_1.0": "1000ms into recovery",
+}
+
+
+def display_group_label(group: str) -> str:
+    return GROUP_TICK_LABELS.get(group, group)
+
+
+def display_series_label(series_name: str) -> str:
+    return SERIES_LABELS.get(series_name, series_name)
 
 
 def build_parser():
@@ -66,6 +87,19 @@ def enabled_label_from_model(model_name: str) -> str | None:
         return "actuators only"
     if len(enabled_groups) == len(ACTIVE_GROUPS):
         return "all groups enabled"
+    return "\n".join(display_group_label(group) for group in enabled_groups)
+
+
+def token_label_from_model(model_name: str) -> str | None:
+    disabled_groups = parse_disabled_groups(model_name)
+    if disabled_groups is None:
+        return None
+
+    enabled_groups = [group for group in ACTIVE_GROUPS if group not in disabled_groups]
+    if not enabled_groups:
+        return "actuators only"
+    if len(enabled_groups) == len(ACTIVE_GROUPS):
+        return "all groups enabled"
     return "\n".join(enabled_groups)
 
 
@@ -88,29 +122,33 @@ def label_sort_key(label: str) -> tuple[int, str]:
 
 def collect_series(csv_paths: list[Path]):
     series_by_file = []
-    all_labels = set()
+    all_token_labels = set()
+    display_label_by_token = {}
 
     for csv_path in csv_paths:
         df = load_grouped_summary(csv_path)
         rows = []
 
         for model_name, row in df.iterrows():
-            label = enabled_label_from_model(str(model_name))
-            if label is None or should_skip_model(str(model_name)):
+            token_label = token_label_from_model(str(model_name))
+            display_label = enabled_label_from_model(str(model_name))
+            if token_label is None or display_label is None or should_skip_model(str(model_name)):
                 continue
 
             controller_mean = float(row[("param_rmse_controller", "mean")])
             controller_std = float(row[("param_rmse_controller", "std")])
             reproduction_mean = float(row[("RMSE", "mean")])
             reproduction_std = float(row[("RMSE", "std")])
-            rows.append((label, controller_mean, controller_std, reproduction_mean, reproduction_std))
-            all_labels.add(label)
+            rows.append((token_label, display_label, controller_mean, controller_std, reproduction_mean, reproduction_std))
+            all_token_labels.add(token_label)
+            display_label_by_token[token_label] = display_label
 
         rows.sort(key=lambda item: label_sort_key(item[0]))
         series_by_file.append((csv_path.stem, rows))
 
-    ordered_labels = sorted(all_labels, key=label_sort_key)
-    return series_by_file, ordered_labels
+    ordered_token_labels = sorted(all_token_labels, key=label_sort_key)
+    ordered_display_labels = [display_label_by_token[label] for label in ordered_token_labels]
+    return series_by_file, ordered_token_labels, ordered_display_labels
 
 
 if __name__ == "__main__":
@@ -126,27 +164,29 @@ if __name__ == "__main__":
     if not csv_paths:
         raise FileNotFoundError(f"No CSV files found in {input_dir}")
 
-    series_by_file, ordered_labels = collect_series(csv_paths)
-    x_positions = np.arange(len(ordered_labels))
+    series_by_file, ordered_token_labels, ordered_display_labels = collect_series(csv_paths)
+    x_positions = np.arange(len(ordered_token_labels))
 
-    fig, (ax, ax_rmse) = plt.subplots(1, 2, figsize=(2 * max(8, len(ordered_labels) * 0.2), 6))
+    scaler = 0.8
+    fig, (ax, ax_rmse) = plt.subplots(1, 2, figsize=(scaler*2.25 * max(8, len(ordered_token_labels) * 0.2), scaler*6))
 
     n_series = len(series_by_file)
     series_offset_scale = 0.15 if n_series > 1 else 0.0
     
     for series_idx, (series_name, rows) in enumerate(series_by_file):
         x_offset = (series_idx - (n_series - 1) / 2.0) * series_offset_scale
+        series_label = display_series_label(series_name)
         values_by_label = {
-            label: (controller_mean, controller_std, reproduction_mean, reproduction_std)
-            for label, controller_mean, controller_std, reproduction_mean, reproduction_std in rows
+            token_label: (display_label, controller_mean, controller_std, reproduction_mean, reproduction_std)
+            for token_label, display_label, controller_mean, controller_std, reproduction_mean, reproduction_std in rows
         }
         controller_values = []
         controller_errors = []
         reproduction_values = []
         reproduction_errors = []
-        for label in ordered_labels:
-            if label in values_by_label:
-                controller_mean, controller_std, reproduction_mean, reproduction_std = values_by_label[label]
+        for token_label in ordered_token_labels:
+            if token_label in values_by_label:
+                display_label, controller_mean, controller_std, reproduction_mean, reproduction_std = values_by_label[token_label]
                 controller_values.append(controller_mean)
                 controller_errors.append(controller_std)
                 reproduction_values.append(reproduction_mean)
@@ -164,7 +204,7 @@ if __name__ == "__main__":
             linestyle='none',
             marker="o",
             capsize=3,
-            label=f"{series_name}",
+            label=series_label,
         )
         ax_rmse.errorbar(
             x_positions + x_offset,
@@ -175,22 +215,22 @@ if __name__ == "__main__":
             linewidth=1.6,
             capsize=3,
             color=controller_line[0].get_color(),
-            label=f"{series_name}",
+            label=series_label,
         )
 
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(ordered_labels, rotation=45, ha="right")
-    ax.set_ylabel("param_rmse_controller")
-    ax.set_xlabel("Enabled groups")
+    ax.set_xticklabels(ordered_display_labels, rotation=45, ha="right", fontsize=11)
+    ax.set_ylabel("Parameter RMSE", fontsize=14)
+    ax.set_xlabel("Additionally Enabled Terms", fontsize=14)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.legend(title="Series", loc="best")
+    # ax.legend(title="Series", loc="upper right")
 
     ax_rmse.set_xticks(x_positions)
-    ax_rmse.set_xticklabels(ordered_labels, rotation=45, ha="right")
-    ax_rmse.set_ylabel("RMSE")
-    ax_rmse.set_xlabel("Enabled groups")
+    ax_rmse.set_xticklabels(ordered_display_labels, rotation=45, ha="right", fontsize=11)
+    ax_rmse.set_ylabel("Reproduction RMSE", fontsize=14)
+    ax_rmse.set_xlabel("Additionally Enabled Terms", fontsize=14)
     ax_rmse.grid(True, axis="y", alpha=0.3)
-    ax_rmse.legend(title="Series", loc="best")
+    ax_rmse.legend(title="Series", loc="upper left")
 
     fig.tight_layout()
 

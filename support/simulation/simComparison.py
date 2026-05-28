@@ -250,7 +250,7 @@ def plot_overlay(ref, sim, Nr, title):
     # and [2,0] (specific force) into a separate EPS file.
     try:
         safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in title).strip().replace(' ', '_')
-        fig_eps, axs_eps = plt.subplots(2, 1, figsize=(10, 8))
+        fig_eps, axs_eps = plt.subplots(2, 1, figsize=(7, 5), sharex=True)
 
         # Angular acceleration (same content as axs[1,0])
         dt_mean = np.mean(np.diff(t))
@@ -258,22 +258,24 @@ def plot_overlay(ref, sim, Nr, title):
             gyro_dot_ref = np.gradient(ref[f"gyroADCafterRpm[{i}]"].to_numpy(), dt_mean)
             gyro_dot_sim = np.gradient(sim[f"gyroADCafterRpm[{i}]"].to_numpy(), dt_mean)
             axs_eps[0].plot(t, gyro_dot_ref, alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=lbl)
-            axs_eps[0].plot(t, gyro_dot_sim, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=lbl)
-        axs_eps[0].set_ylabel("angular accel [rad/s²]")
-        axs_eps[0].set_title("Angular acceleration: log (solid) vs simulation (dashed)")
-        axs_eps[0].legend(loc="upper right")
+            axs_eps[0].plot(t, gyro_dot_sim, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=None)
+        axs_eps[0].set_ylabel("angular accel [rad/s²]", fontsize=12)
+        axs_eps[0].set_title("Angular acceleration: flight data (solid) vs simulation (dashed)")
+        # axs_eps[0].set_xlim(right=1.22)
+        axs_eps[0].legend(loc="upper right", fontsize=10)
         axs_eps[0].grid(True)
 
         # Specific force (same content as axs[2,0])
         for i, lbl in enumerate(["x", "y", "z"]):
             axs_eps[1].plot(t, ref[f"accADCafterRpm[{i}]"], alpha=0.35, lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[0], label=lbl)
-            axs_eps[1].plot(t, sim[f"accADCafterRpm[{i}]"], lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=lbl)
-        axs_eps[1].set_ylabel("specific force [N/kg]")
-        axs_eps[1].set_title("Specific force: log (solid) vs simulation (dashed)")
-        axs_eps[1].legend(loc="upper right")
+            axs_eps[1].plot(t, sim[f"accADCafterRpm[{i}]"], lw=1.0, color=COLORS[i % len(COLORS)], linestyle=LINESTYLES[1], label=None)
+        axs_eps[1].set_xlabel("Time [s]", fontsize=12)
+        axs_eps[1].set_ylabel("specific force [N/kg]", fontsize=12)
+        axs_eps[1].set_title("Specific force: flight data (solid) vs simulation (dashed)")
+        axs_eps[1].legend(loc="lower right", fontsize=10)
         axs_eps[1].grid(True)
 
-        fig_eps.suptitle(title + " -- AngAcc and SPF")
+        #fig_eps.suptitle(title + " -- AngAcc and SPF")
         fig_eps.tight_layout(rect=[0, 0, 1, 0.96])
         eps_filename = f"{safe_title}_angacc_spf.eps"
         fig_eps.savefig(eps_filename, format="eps", dpi=300)

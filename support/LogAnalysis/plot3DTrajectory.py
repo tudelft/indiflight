@@ -85,7 +85,9 @@ if __name__ == "__main__":
     parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
                         help="Crop the log to the given time range (in seconds).")
     parser.add_argument("--auto-crop", action="store_true",
-                        help="Automatically detect start/end times using learning detection (subtracts 0.5s from start, adds 1s to end).")
+                        help="Automatically detect start/end times using learning detection (subtracts 0.5s from start, then applies --auto-crop-end-offset to end).")
+    parser.add_argument("--auto-crop-end-offset", type=float, default=1.0,
+                        help="Offset in seconds added to detected auto-crop end time.")
     parser.add_argument("--plot-every", type=float, default=1.0,
                         help="Plot craft position and attitude every N seconds.")
     parser.add_argument("--name", required=False, help="Name for the plot, used in title.")
@@ -118,7 +120,7 @@ if __name__ == "__main__":
         
         time = log.data['timeS'].to_numpy()
         start_time = time[idx_start] - 0.5
-        end_time = time[idx_end] + 0.5
+        end_time = time[idx_end] + args.auto_crop_end_offset
         
         # Clamp to log bounds
         start_time = max(start_time, time[0])
@@ -178,10 +180,10 @@ if __name__ == "__main__":
         plot_craft_3d(ax, craft, position[idx], quaternion[idx], surface_controls=surface_controls, geometry_scale=args.scale, color=color, alpha=0.6)
 
     # Set labels and title
-    ax.set_xlabel('X [m]')
-    ax.set_ylabel('Y [m]')
-    ax.set_zlabel('Z [m]')
-    ax.set_title(f"{args.name} -- 3D Trajectory\n{log.parameters.get('Firmware revision', 'Unknown firmware')}")
+    ax.set_xlabel('X [m]', fontsize=14)
+    ax.set_ylabel('Y [m]', fontsize=14)
+    ax.set_zlabel('Z [m]', fontsize=14)
+    # ax.set_title(f"{args.name} -- 3D Trajectory\n{log.parameters.get('Firmware revision', 'Unknown firmware')}")
     
     # Set equal aspect ratio for better visualization
     # Get the current axis limits
@@ -209,17 +211,54 @@ if __name__ == "__main__":
     ax.plot(x_plane, position[:, 1], position[:, 2], 'k--', linewidth=1.0, alpha=0.35, label='XZ shadow')
     ax.plot(position[:, 0], y_plane, position[:, 2], 'k--', linewidth=1.0, alpha=0.35, label='YZ shadow')
     ax.plot(position[:, 0], position[:, 1], z_plane, 'k--', linewidth=1.0, alpha=0.35, label='XY shadow')
+
+    # Shade the curtain area between trajectory and its XY-plane projection.
+    connector_step = 20
+    curtain_faces = []
+    for i in range(0, len(position) - 1, connector_step):
+        j = min(i + connector_step, len(position) - 1)
+        curtain_faces.append(
+            np.array(
+                [
+                    [position[i, 0], position[i, 1], position[i, 2]],
+                    [position[j, 0], position[j, 1], position[j, 2]],
+                    [position[j, 0], position[j, 1], z_plane[j]],
+                    [position[i, 0], position[i, 1], z_plane[i]],
+                ]
+            )
+        )
+
+    if curtain_faces:
+        ax.add_collection3d(
+            Poly3DCollection(
+                curtain_faces,
+                facecolors='k',
+                edgecolors='none',
+                alpha=0.14,
+            )
+        )
+
+    for i in range(0, len(position), connector_step):
+        ax.plot(
+            [position[i, 0], position[i, 0]],
+            [position[i, 1], position[i, 1]],
+            [position[i, 2], z_plane[i]],
+            color='k',
+            linewidth=0.25,
+            alpha=0.75,
+        )
     ax.invert_zaxis()
     
     ax.grid(True, alpha=0.3)
-    ax.legend()
+    # ax.legend()
 
     # set camera
-    ax.view_init(elev=21, azim=-63)
+    ax.view_init(elev=21, azim=-63)  # 335
+    # ax.view_init(elev=10, azim=-58)  # 326
     
-    plt.tight_layout()
+    fig.tight_layout(pad=2.2)
     output_path = args.output if args.output is not None else f"{args.name}.pdf"
-    fig.savefig(output_path, format="pdf", bbox_inches="tight")
+    fig.savefig(output_path, format="pdf", bbox_inches="tight", pad_inches=0.35)
     print(f"Saved PDF figure to {output_path}")
     plt.show()
 
