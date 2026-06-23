@@ -32,6 +32,7 @@ from .helpers import (
     wingElevonForcesMoments,
     phiTheoryForcesMoments,
     elevonForcesMoments,
+    elevonForcesMomentsFreestream,
     )
 
 class Rotor:
@@ -75,6 +76,8 @@ class Craft:
         self.xI = np.array([0., 0., 0.], dtype=np.float32)
         self.vI = np.array([0., 0., 0.], dtype=np.float32)
         self.vB = np.array([0., 0., 0.], dtype=np.float32)
+        self.windI = np.array([0., 0., 0.], dtype=np.float32)
+        self.vBa = np.array([0., 0., 0.], dtype=np.float32) # airspeed
         self.fspB = np.array([0., 0., 0.], dtype=np.float32)
         self.q = np.array([1., 0., 0., 0.], dtype=np.float32)
         self.qInv = np.array([1., 0., 0., 0.], dtype=np.float32)
@@ -136,6 +139,9 @@ class Craft:
         self.m = m
         self.I = I.astype(np.float32)
         self.Iinv = np.linalg.inv(I).astype(np.float32)
+
+    def setWind(self, wind):
+        self.windI[:] = np.asarray(wind, dtype=np.float32)
 
     def setRotor(self, i, X, ax=[0., 0., -1.], k=2e-7, cm=0.02, wmax=4000., tau=0.02, kESC=0.4, I=1e-7):
         self.r_X[:, i] = np.asarray(X, dtype=np.float32)
@@ -217,6 +223,7 @@ class Craft:
         self.qInv = self.q.copy()
         self.qInv[0] *= -1.
         self.vB = quatRotate(self.qInv, self.vI)
+        self.vBa = quatRotate(self.qInv, self.vI - self.windI)
 
         # step position / velocity
         self.xI += dt * self.vI
@@ -371,7 +378,7 @@ class Tailsitter(Craft):
         self.s_d += dt * self.s_dd
 
         self.FM_B += wingElevonForcesMoments(
-            self.vB, self.OB,
+            self.vBa, self.OB,
             self.r_w, self.s_d, self.s_dd, s_ddd,
             self.d0,
             self.cv, self.cvx, self.cO,
@@ -440,13 +447,86 @@ class TailsitterPhi(Craft):
         self.s_dd += dt * s_ddd
         self.s_d += dt * self.s_dd
 
-        self.FM_B += phiTheoryForcesMoments(self.vB,
+        self.FM_B += phiTheoryForcesMoments(self.vBa,
                                             self.OB,
                                             self.phi,
                                             self.Phi)
         self.FM_B += elevonForcesMoments(self.r_w, self.s_d, self.s_dd, s_ddd,
                                          self.d0,
                                          self.cd, self.cdd, self.cddd)
+
+
+class TailsitterPhiFF(Craft):
+    # tailsitter included guessed forward flight behaviour including wind
+    def __init__(self):
+        super().__init__(Nr=2, Ns=2)
+
+        # phi theory coefficients
+        self.phi = 0.0
+        self.Phi = np.zeros((6,6), dtype=np.float32)
+
+        # elevon contribution
+        self.cd = np.zeros((6,), dtype=np.float32)
+        self.cd_qinf = np.zeros((6,), dtype=np.float32) # freestream dynamic pressure influence on elevon
+        self.cdd = np.zeros((6,), dtype=np.float32)
+        self.cddd = np.zeros((6,), dtype=np.float32)
+        self.d0 = np.zeros((2,), dtype=np.float32)
+
+        # servo data/states
+        self.s_u = np.zeros((self.Ns), dtype=np.float32) # input command: +1 equals +100 deg
+        self.s_d = np.zeros((self.Ns), dtype=np.float32) # servo state in radians
+        self.s_dd = np.zeros((self.Ns), dtype=np.float32)
+        self.s_dmin   = -1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_dmax   = +1.75*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmin  = -11.*np.ones((self.Ns), dtype=np.float32)
+        self.s_ddmax  = +11.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmin = -250.*np.ones((self.Ns), dtype=np.float32)
+        self.s_dddmax = +250.*np.ones((self.Ns), dtype=np.float32)
+        self.s_P  = +45.*np.ones((self.Ns), dtype=np.float32)
+        self.s_D  = +80.*np.ones((self.Ns), dtype=np.float32)
+        self.s_delay = 0.03
+        self.s_u_buffer = collections.deque(maxlen=1000)
+
+    def setPhiModel(self, phi, Phi):
+        self.phi = phi
+        self.Phi[:] = np.asarray(Phi, dtype=np.float32)
+
+    def setElevonModel(self, cd, cdd, cddd, cd_qinf, d0):
+        self.cd[:] = np.asarray(cd, dtype=np.float32)
+        self.cdd[:] = np.asarray(cdd, dtype=np.float32)
+        self.cddd[:] = np.asarray(cddd, dtype=np.float32)
+        self.cd_qinf[:] = np.asarray(cd, dtype=np.float32)
+        self.d0[:] = np.asarray(d0, dtype=np.float32)
+
+    def customPhysics(self, dt):
+        self.s_u_buffer.append((dt, self.s_u.copy()))
+
+        tac = 0.
+        s_u = self.s_u_buffer[0][1]  # oldest element
+        for i in range(len(self.s_u_buffer)-1, -1, -1):
+            tac += self.s_u_buffer[i][0] # time
+            if tac > self.s_delay:
+                s_u = self.s_u_buffer[i][1]
+                break
+
+        s_ddd = servoModel(s_u * 100. * np.pi / 180.,
+                           self.s_d, self.s_dd,
+                           self.s_dmin, self.s_dmax,
+                           self.s_ddmin, self.s_ddmax,
+                           self.s_dddmin, self.s_dddmax,
+                           self.s_P, self.s_D)
+
+        self.s_dd += dt * s_ddd
+        self.s_d += dt * self.s_dd
+
+        self.FM_B += phiTheoryForcesMoments(self.vBa,
+                                            self.OB,
+                                            self.phi,
+                                            self.Phi)
+        qinf = 0 if self.vBa[2] >= 0 else 0.5 * 1.225 * self.vBa[2]**2
+        self.FM_B += elevonForcesMomentsFreestream(self.r_w, qinf, self.s_d, self.s_dd, s_ddd,
+                                         self.d0,
+                                         self.cd, self.cdd, self.cddd, self.cd_qinf)
 
 
 

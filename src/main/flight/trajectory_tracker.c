@@ -59,8 +59,8 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 2.0; //1.5;
-float tt_vel_gain = 3.0; //2.5;
+float tt_pos_gain = 1.5; //1.5;
+float tt_vel_gain = 2.5; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
@@ -165,7 +165,18 @@ void getRefsTrajectoryTracker(float p) {
     // while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
 
     // position refs
-    float R = 0.1f*p;
+#define MAX_SPIRAL_ANGLE (6.f*2.f*M_PIf)
+    while (p > MAX_SPIRAL_ANGLE) {
+        p -= MAX_SPIRAL_ANGLE;
+    }
+
+    float R;
+    if (p > MAX_SPIRAL_ANGLE*0.5f) {
+        R = 0.1f*(MAX_SPIRAL_ANGLE - p);
+    } else {
+        R = 0.1f*p;
+    }
+
     tt_pos_ref[0] = R*tt_R*cosf(p);
     tt_pos_ref[1] = R*tt_R*sinf(p);
     tt_pos_ref[2] = -1.5f;
@@ -183,6 +194,8 @@ void getRefsTrajectoryTracker(float p) {
     // heading
     tt_yaw_ref = p + M_PIf/2.0f;
     tt_yaw_rate_ref = tt_speed_factor;
+    // tt_yaw_ref = M_PIf/2.0f;
+    // tt_yaw_rate_ref = 0.;
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
 

@@ -161,3 +161,30 @@ def elevonForcesMoments(w, d, dd, ddd, d0, cd, cdd, cddd):
     FM_B[5] = cd[5] * wwDd_diff       +  cdd[5] * dd_diff      +  cddd[5] * ddd_diff
 
     return FM_B
+
+#@njit("f4[::1](f4[::1],f4[::1],f4[::1],f4[::1],f4[::1], f4[::1], f4[::1], f4[::1], f4[::1], f4[::1])")
+def elevonForcesMomentsFreestream(w, qinf, d, dd, ddd, d0, cd, cdd, cddd, cd_qinf):
+    # regressors
+    ww = w*w
+    wwDd = ww * ( d - d0 )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
+
+    wwDd_diff = wwDd[0] - wwDd[1]
+    dd_diff = dd[0] - dd[1]
+    ddd_diff = ddd[0] - ddd[1]
+
+    qinfDd = qinf * ( d - d0 )
+    qinfDd_diff = qinfDd[0] - qinfDd[1]
+
+    # elevon contribution
+    FM_B = np.empty((6,), dtype=np.float32)
+
+    # ACTUATION MODEL (elevons only)
+    #              deflection              rate                      accel
+    FM_B[0] = cd_qinf[0] * np.sum(qinfDd) + cd[0] * np.sum(wwDd)   +  cdd[0] * np.sum(dd)   +  cddd[0] * np.sum(ddd)
+    FM_B[1] = 0.
+    FM_B[2] = 0.
+    FM_B[3] = 0.
+    FM_B[4] = cd_qinf[4] * np.sum(qinfDd) + cd[4] * np.sum(wwDd)   +  cdd[4] * np.sum(dd)   +  cddd[4] * np.sum(ddd)
+    FM_B[5] = cd_qinf[5] * qinfDd_diff + cd[5] * wwDd_diff       +  cdd[5] * dd_diff      +  cddd[5] * ddd_diff
+
+    return FM_B
