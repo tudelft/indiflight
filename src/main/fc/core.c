@@ -1102,8 +1102,8 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            // only switch if converged ekf
-            if (isConvergedEkf()) {
+            // only switch if converged ekf and no geofence
+            if (isConvergedEkf() && (geofenceState != GEOFENCE_STATE_ERROR) && (geofenceAction == GEOFENCE_ACTION_NONE) ) {
                 if (ARMING_FLAG(ARMED)) {
                     setLocalPosSpHere();
                 }
@@ -1119,6 +1119,9 @@ void processRxModes(timeUs_t currentTimeUs)
         if (FLIGHT_MODE(POSITION_MODE)) {
             // invalidate previous setpoint when leaving position mode
             posSpNed.valid = false;
+#ifdef USE_GEOFENCE
+            geofenceClearHold();
+#endif
         }
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }

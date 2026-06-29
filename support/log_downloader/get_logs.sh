@@ -17,7 +17,10 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
-if ! [ -f remote.env ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_ENV="$SCRIPT_DIR/../../remote.env"
+
+if ! [ -f "$REMOTE_ENV" ]; then
   echo "Fatal: start.sh expects a remote.env in the root of the repo with the following contents:
 
 # NO SPACES BEFORE AND AFTER THE '='
@@ -29,7 +32,7 @@ REMOTE_PASSWORD=<ssh_password>
     "
 fi
 
-source remote.env
+source "$REMOTE_ENV"
 
 if [ -z $REMOTE_IP ] || [ -z $REMOTE_USER ] || [ -z $REMOTE_PASSWORD ]; then
     echo "Fatal: Not all of REMOTE_IP, REMOTE_USER, REMOTE_PASSWORD set in remote.env"

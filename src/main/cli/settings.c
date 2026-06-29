@@ -1092,8 +1092,12 @@ const clivalue_t valueTable[] = {
 #endif // USE_MAG
 #endif // USE_GPS_RESCUE
 #endif // USE_GPS
+
 #ifdef USE_GEOFENCE
-    { "geofence_max_altitude",       VAR_INT16 | MASTER_VALUE, .config.minmax = { -30000, 30000 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, maxAltMeters) },
+    { PARAM_NAME_GEOFENCE_MAX_ALTITUDE,       VAR_INT16 | MASTER_VALUE, .config.minmax = { -30000, 30000 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, maxAltMeters) },
+    { PARAM_NAME_GEOFENCE_HARD_OFFSET,        VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 50 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, hardFenceOffset) },
+    { PARAM_NAME_GEOFENCE_GRACE_COUNT,        VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 255 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, graceCount) },
+    { PARAM_NAME_GEOFENCE_DESCEND_DELAY,      VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 255 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, descendDelaySeconds) },
 #endif
 
     { PARAM_NAME_DEADBAND,          VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = { 0, 32 }, PG_RC_CONTROLS_CONFIG, offsetof(rcControlsConfig_t, deadband) },

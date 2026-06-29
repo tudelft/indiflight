@@ -134,13 +134,23 @@ make -j $processes # TODO: make the thread count a parameter that can be passed 
 # upload if necessary
 if [ ! -z $deploy ]
 then
+    # resolve remote host (prefer REMOTE_NAME over REMOTE_IP)
+    if [[ -n $REMOTE_NAME ]]; then
+        REMOTE_HOST=$REMOTE_NAME
+    elif [[ -n $REMOTE_IP ]]; then
+        REMOTE_HOST=$REMOTE_IP
+    else
+        echo "REMOTE_IP or REMOTE_NAME must be set for deployment"
+        exit 1
+    fi
+
     echo -n "Deploying build... "
     cd $PROJECT && \
-    echo build-$GNU_HOST $REMOTE_USER@$REMOTE_IP:"$deploy/$CMAKE_PROJECT/"
+    echo build-$GNU_HOST $REMOTE_USER@$REMOTE_HOST:"$deploy/$CMAKE_PROJECT/"
     rsync -rR --delete-after --links --copy-unsafe-links --perms \
         --rsh "/usr/bin/sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no -l $REMOTE_USER" \
         --timeout=3 \
-        build-$GNU_HOST $REMOTE_USER@$REMOTE_IP:"$deploy/$CMAKE_PROJECT/"
+        build-$GNU_HOST $REMOTE_USER@$REMOTE_HOST:"$deploy/$CMAKE_PROJECT/"
     #--rsync-path="sudo rsync" \
     echo "build deployed"
 else

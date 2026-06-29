@@ -179,7 +179,7 @@ static void mahonyUpdate(float dt, fp_vector_t* rate, bool useAcc, fp_vector_t* 
         const float bx = VEC3_XY_LENGTH(m);                 // reference mag field vector heading due North in EF (assuming Z-component is zero)
 
         // magnetometer error is cross product between estimated magnetic north and measured magnetic north (calculated in EF)
-        const float ez_ef = (m.V.Y * bx); // assuming mz = 0
+        const float ez_ef = -(m.V.Y * bx); // assuming mz = 0
 
         // Rotate mag error vector back to BF and accumulate
         VEC3_SCALAR_MULT_ADD(e, ez_ef, zB); // e += ez_ef * zB

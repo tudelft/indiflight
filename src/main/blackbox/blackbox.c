@@ -73,6 +73,7 @@
 #include "flight/trajectory_tracker.h"
 #include "flight/catapult.h"
 #include "flight/throw.h"
+#include "flight/geofence.h"
 
 #include "io/beeper.h"
 #include "io/gps.h"
@@ -103,7 +104,7 @@
 #define DEFAULT_BLACKBOX_DEVICE     BLACKBOX_DEVICE_SERIAL
 #endif
 
-#if MAX_SUPPORTED_MOTORS == 8
+#if (MAX_SUPPORTED_MOTORS == 8)
 #define BLACKBOX_LEARNER_LOG_8_MOTORS
 #define BLACKBOX_LEARNER_N 8
 #else
@@ -1968,12 +1969,12 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_quat[1] = lrintf(ekf_X[7] * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->ekf_quat[2] = lrintf(ekf_X[8] * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->ekf_quat[3] = lrintf(ekf_X[9] * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
-    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[12])); // mdeg/s
-    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
-    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[10] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[11] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[12] * 1000); // mm/s^2
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[15])); // mdeg/s
 #endif
 
 #ifdef USE_LEARNER
@@ -2490,6 +2491,13 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_RESCUE_USE_MAG, "%d",         gpsRescueConfig()->useMag)
 #endif
 #endif
+#endif
+
+#ifdef USE_GEOFENCE
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_MAX_ALTITUDE, "%d", geofenceConfig()->maxAltMeters)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_HARD_OFFSET, "%d", geofenceConfig()->hardFenceOffset)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_GRACE_COUNT, "%d", geofenceConfig()->graceCount)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_DESCEND_DELAY, "%d", geofenceConfig()->descendDelaySeconds)
 #endif
 
 #ifdef USE_INDI

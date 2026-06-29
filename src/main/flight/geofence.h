@@ -5,7 +5,6 @@
 #include "common/time.h"
 
 #define GEOFENCE_MAX_VERTICES 20
-#define GEOFENCE_DESCEND_AFTER_HOLD_DELAY_US 30000000 // 30 sec
 
 typedef struct geofenceConfig_s {
     gpsLocation_t vertices[GEOFENCE_MAX_VERTICES];
@@ -13,6 +12,7 @@ typedef struct geofenceConfig_s {
     int16_t maxAltMeters;
     uint8_t hardFenceOffset;
     uint8_t graceCount;
+    uint8_t descendDelaySeconds;
 } geofenceConfig_t;
 
 PG_DECLARE(geofenceConfig_t, geofenceConfig);
@@ -37,4 +37,5 @@ extern geofence_action_e geofenceAction;
 
 void geofenceAddPoint(gpsLocation_t* vertex);
 void geofenceInit(void);
+void geofenceClearHold(void);
 void geofenceUpdate(gpsLocation_t* llh);

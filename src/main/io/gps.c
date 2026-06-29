@@ -68,7 +68,7 @@
 // GPS
 // **********************
 bool realGPSConfigured = false;
-int32_t GPS_home[2];
+int32_t GPS_home[3]; // lat, lon (deg*1e8), altCm
 uint16_t GPS_distanceToHome;        // distance to home point in meters
 uint32_t GPS_distanceToHomeCm;
 int16_t GPS_directionToHome;        // direction to home or hol point in degrees * 10
@@ -2549,6 +2549,7 @@ void GPS_reset_home_position(void)
             // those checks are always true for tryArm, but may not be true for gyro cal
             GPS_home[GPS_LATITUDE] = gpsSol.llh.lat;
             GPS_home[GPS_LONGITUDE] = gpsSol.llh.lon;
+            GPS_home[GPS_ALTITUDE] = gpsSol.llh.altCm;
             GPS_calc_longitude_scaling(gpsSol.llh.lat);
             ENABLE_STATE(GPS_FIX_HOME);
             // no point beeping success here since:
@@ -2607,12 +2608,19 @@ static bool localPosFromGpsSol(local_pos_ned_t* local) {
     }
     local->source = LOCAL_POS_SOURCE_GPS;
     local->time_us = micros(); // better sync with GPS here?
-    gpsLocation_t home = {GPS_home[GPS_LATITUDE], GPS_home[GPS_LONGITUDE], 0.f};
+    gpsLocation_t home = {GPS_home[GPS_LATITUDE], GPS_home[GPS_LONGITUDE], GPS_home[GPS_ALTITUDE]};
 
     llh_to_local(&(gpsSol.llh), &home, &(local->pos));
 
     local->vel_valid = false;
+    local->vel.V.X = 0.;
+    local->vel.V.Y = 0.;
+    local->vel.V.Z = 0.;
     local->quat_valid = false;
+    local->quat.w = 1.;
+    local->quat.x = 0.;
+    local->quat.y = 0.;
+    local->quat.z = 0.;
 
     return true;
 }

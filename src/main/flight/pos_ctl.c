@@ -162,10 +162,21 @@ void updatePosCtl(timeUs_t current) {
 #endif
     }
 
+    static timeUs_t lastHoldSpTimeUs = 0;
+    if (geofenceAction == GEOFENCE_ACTION_HOLD) {
+        if ((lastHoldSpTimeUs > 0) && (
+                (cmpTimeUs(posSpNed.time_us, lastHoldSpTimeUs) && posSpNed.valid) // new setpoint sent from somewhere
+                || (manual_takeover)                                              // or manual takeover
+            )) 
+        {
+            geofenceClearHold();
+            lastHoldSpTimeUs = 0;
+        }
+    }
+
     if ( latch_descend
             || (!posSpNed.valid && !manual_takeover) || !isConvergedEkf()
-            || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US)
-            || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
+            || (timeInDeadreckoning > DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US) ) {
         // panic and level craft in slight downwards motion
         accSpNedFromPos.V.X = 0.f;
         accSpNedFromPos.V.Y = 0.f;
@@ -178,21 +189,32 @@ void updatePosCtl(timeUs_t current) {
         // latch reactivation until new arming cycle or non-position mode
         latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE);
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
-                || (geofenceAction == GEOFENCE_ACTION_HOLD) ) {
+                || (geofenceAction == GEOFENCE_ACTION_HOLD)
+                || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
         // more than 2 sec but less than 3.5 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
         updateTrajectoryTracker(current);
         if (isActiveTrajectoryTracker() && !isActiveTrajectoryTrackerRecovery()) {
             stopTrajectoryTracker();
         }
-        if (!isActiveTrajectoryTrackerRecovery())
+        if (isActiveTrajectoryTrackerRecovery()) {
+            lastHoldSpTimeUs = current;
+        } else 
 #endif
         {
             posSpNed.pos = posEstNed; // hold position
+            posSpNed.vel.V.X = 0.;
+            posSpNed.vel.V.Y = 0.;
+            posSpNed.vel.V.Z = 0.;
             posSpNed.valid = true; // simulate new message
-            posSpNed.time_us = current;
-
+            posSpNed.time_us = current - 1; // avoid case that messages are in sync (e.g. simulation)
+            lastHoldSpTimeUs = posSpNed.time_us;
             posGetVelSpNedFromPosSp();
+
+            if (geofenceAction == GEOFENCE_ACTION_DESCEND) {
+                posSpNed.vel.V.Z = 1.; // 1 m/s downwards
+            }
+
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
             rateSpBodyFromPos.V.Y = 0;

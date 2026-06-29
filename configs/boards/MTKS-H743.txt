@@ -19,6 +19,8 @@
 #define USE_PINIO
 
 # todo: add baro
+#define USE_BARO
+#define USE_BARO_DPS310
 
 
 ##########################

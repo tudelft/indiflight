@@ -28,15 +28,16 @@ geofence_action_e geofenceAction = GEOFENCE_ACTION_NONE;
 static unsigned softCounter, hardCounter;
 
 
-PG_REGISTER_WITH_RESET_FN(geofenceConfig_t, geofenceConfig, PG_GEOFENCE_CONFIG, 0);
+PG_REGISTER_WITH_RESET_FN(geofenceConfig_t, geofenceConfig, PG_GEOFENCE_CONFIG, 1);
 
 void pgResetFn_geofenceConfig(geofenceConfig_t* g) {
     // reset to zeros
     memset(g->vertices, 0, GEOFENCE_MAX_VERTICES * sizeof(gpsLocation_t));
     g->numActive = 0;
     g->maxAltMeters = 20;
-    g->hardFenceOffset = 6;
+    g->hardFenceOffset = 10;
     g->graceCount = 3;
+    g->descendDelaySeconds = 20;
 }
 
 void geofenceAddPoint(gpsLocation_t* llh) {
@@ -154,6 +155,13 @@ static float geofenceViolation(gpsLocation_t* p) {
     }
 }
 
+static bool geofenceHoldArmed = true;
+void geofenceClearHold(void) {
+    if (geofenceAction == GEOFENCE_ACTION_HOLD) {
+        geofenceAction = GEOFENCE_ACTION_NONE;
+    }
+}
+
 void geofenceUpdate(gpsLocation_t* llh) {
     // calculate violation of geofence
     float violation = geofenceViolation(llh);
@@ -181,21 +189,27 @@ void geofenceUpdate(gpsLocation_t* llh) {
 
     switch(geofenceState) {
         case GEOFENCE_STATE_DISABLED:
+            geofenceHoldArmed = true;
             break;
         case GEOFENCE_STATE_GOOD:
             geofenceAction = GEOFENCE_ACTION_NONE;
+            geofenceHoldArmed = true;
 
             if (softCounter <= 0) { geofenceState = GEOFENCE_STATE_SOFT; }
             if (hardCounter <= 0) { geofenceState = GEOFENCE_STATE_HARD; }
 
             break;
         case GEOFENCE_STATE_SOFT:
-            if (inViolation && cmpTimeUs(micros(), lastViolationAtUs) > GEOFENCE_DESCEND_AFTER_HOLD_DELAY_US) {
-                // after a minute hovering, descend (which is not a nice descent, because it's the same as GPS loss)
-                // todo: implement velocity decend mode
-                geofenceAction = GEOFENCE_ACTION_DESCEND;
-            } else {
+            if (inViolation && cmpTimeUs(micros(), lastViolationAtUs) > 1e6*geofenceConfig()->descendDelaySeconds) {
+                geofenceAction = GEOFENCE_ACTION_DESCEND; // 1m/s descebd hardcoded
+            } else if (geofenceHoldArmed) {
                 geofenceAction = GEOFENCE_ACTION_HOLD;
+                geofenceHoldArmed = false;
+            }
+
+            if (!inViolation && geofenceAction < GEOFENCE_ACTION_HOLD) {
+                // hold cleared, not in DESCEND or KILL
+                geofenceState = GEOFENCE_STATE_GOOD;
             }
 
             if (hardCounter <= 0) { geofenceState = GEOFENCE_STATE_HARD; }

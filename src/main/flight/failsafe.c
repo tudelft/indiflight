@@ -382,6 +382,9 @@ FAST_CODE_NOINLINE void failsafeUpdateState(void)
                 }
                 break;
 #endif
+            default:
+                // something went horribly wrong (memory corruption), we need to failsafe now
+                FALLTHROUGH;
             case FAILSAFE_LANDED:
                 disarm(DISARM_REASON_FAILSAFE);
                 setArmingDisabled(ARMING_DISABLED_FAILSAFE);
@@ -417,9 +420,6 @@ FAST_CODE_NOINLINE void failsafeUpdateState(void)
                 DISABLE_FLIGHT_MODE(FAILSAFE_MODE);
                 unsetArmingDisabled(ARMING_DISABLED_FAILSAFE);
                 reprocessState = true;
-                break;
-
-            default:
                 break;
         }
 

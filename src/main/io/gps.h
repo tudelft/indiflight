@@ -169,7 +169,8 @@ typedef enum {
 
 typedef enum {
     GPS_LATITUDE,
-    GPS_LONGITUDE
+    GPS_LONGITUDE,
+    GPS_ALTITUDE,
 } gpsCoordinateType_e;
 
 typedef enum {
@@ -298,7 +299,7 @@ typedef struct gpsData_s {
 #endif
 } gpsData_t;
 
-extern int32_t GPS_home[2];
+extern int32_t GPS_home[3];
 extern uint16_t GPS_distanceToHome;             // distance to home point in meters
 extern uint32_t GPS_distanceToHomeCm;           // distance to home point in cm
 extern int16_t GPS_directionToHome;             // direction to home or hol point in degrees

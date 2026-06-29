@@ -156,8 +156,7 @@ void initEkf(timeUs_t currentTimeUs) {
     posMeasNed.new = false;
 
 	// set ekf parameters
-	bool use_quat = ekfConfig()->use_quat_measurement;
-    use_quat &= posMeasNed.quat_valid;
+	bool use_quat = ekfConfig()->use_quat_measurement && posMeasNed.quat_valid;
 
 	// process noise covariance
 	float Q[N_STATES] = {
@@ -260,7 +259,7 @@ void updateEkf(timeUs_t currentTimeUs) {
     if (!ekf_initialized) {
 #ifdef USE_GPS
         // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
-        gpsSetFixState(false);
+        //gpsSetFixState(false);
 #endif
         ekf_converged = false;
         initEkf(currentTimeUs);
@@ -275,7 +274,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 #ifdef USE_GPS
     // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
     if (ekf_converged) {
-        gpsSetFixState(true);
+        //gpsSetFixState(true);
     }
 #endif
 
@@ -303,7 +302,7 @@ void updateEkf(timeUs_t currentTimeUs) {
         ekf_converged = false;
 #ifdef USE_GPS
         // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
-        gpsSetFixState(false);
+        //gpsSetFixState(false);
 #endif
         return;
     }
@@ -357,13 +356,19 @@ void updateEkf(timeUs_t currentTimeUs) {
 		    ekf_Z[2] = posMeasNed.pos.V.Z;
         }
 
-        bool use_quat = ekfConfig()->use_quat_measurement;
-        use_quat &= posMeasNed.quat_valid;
+        bool use_quat = ekfConfig()->use_quat_measurement && posMeasNed.quat_valid;
 
-        ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
-        ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
-        ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
-        ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
+        if (use_quat) {
+            ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
+            ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
+            ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
+            ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
+        } else {
+            ekf_Z[3] = 0.f;
+            ekf_Z[4] = 0.f;
+            ekf_Z[5] = 0.f;
+            ekf_Z[6] = 0.f;
+        }
 
 		// old update:
 		ekf_update(ekf_Z);

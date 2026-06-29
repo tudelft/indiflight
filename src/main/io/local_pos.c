@@ -66,7 +66,7 @@ void setLocalPosMeas(local_pos_ned_t* pos) {
 #ifdef USE_GPS
         sensorsSet(SENSOR_GPS);
 #endif
-#if defined(USE_GPS) && false
+#if defined(USE_GPS) && defined(MOCKUP)
         // this is just for debugging geofence
         if (pos->source != LOCAL_POS_SOURCE_GPS) {
             // transform local to global, set and check for geofence
@@ -105,14 +105,14 @@ void setLocalPosSpHere(void) {
 void llh_to_local(const gpsLocation_t* llh, const gpsLocation_t* home, fp_vector_t* ned) {
     ned->V.X = 1e-7f * DEGREES_TO_RADIANS(llh->lat - home->lat) * REARTHf;
     ned->V.Y = 1e-7f * DEGREES_TO_RADIANS(llh->lon - home->lon) * REARTHf
-        * cosf(1e-7f * DEGREES_TO_RADIANS(home->lon));
-    ned->V.Z = -1e-2f * llh->altCm;
+        * cosf(1e-7f * DEGREES_TO_RADIANS(home->lat));
+    ned->V.Z = -1e-2f * (llh->altCm - home->altCm);
 }
 void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation_t* llh) {
     // Reverse the conversion of NED to LLH
     llh->lat = home->lat + 1e7f * RADIANS_TO_DEGREES(ned->V.X / REARTHf);
-    llh->lon = home->lon + 1e7f * RADIANS_TO_DEGREES(ned->V.Y / (REARTHf * cosf(1e-7f * DEGREES_TO_RADIANS(home->lon))) );
-    llh->altCm = -100 * ned->V.Z;  // Convert back from meters to centimeters
+    llh->lon = home->lon + 1e7f * RADIANS_TO_DEGREES(ned->V.Y / (REARTHf * cosf(1e-7f * DEGREES_TO_RADIANS(home->lat))) );
+    llh->altCm = home->altCm - 100 * ned->V.Z;  // Convert back from meters to centimeters
 }
 #endif
 
