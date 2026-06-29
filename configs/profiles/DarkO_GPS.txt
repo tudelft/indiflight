@@ -16,7 +16,7 @@
 
 ## ----- Other features
 #define USE_GPS
-## #define USE_GEOFENCE
+#define USE_GEOFENCE
 #define USE_MAG
 
 ## ----- FPV features: LED and onscreen display
@@ -67,6 +67,12 @@ feature BARO
 #feature LED_STRIP
 #feature OSD
 
+# gps
+set gps_provider = UBLOX
+set gps_auto_baud = ON
+set gps_ublox_use_galileo = ON
+set gps_update_rate_hz = 15
+
 # serial ports
 #serial 0 64 115200 57600 0 115200 # RC
 serial 7 2 115200 115200 0 115200 # GPS
@@ -76,11 +82,6 @@ serial 5 64 115200 57600 0 115200 # RC
 #serial 2 524288 115200 57600 0 115200 # HIL
 serial 1 1048576 115200 57600 0 115200 # actuator teensy board. has to be last somehow
 
-# gps
-set gps_provider = UBLOX
-set gps_auto_baud = ON
-set gps_ublox_use_galileo = ON
-set gps_update_rate_hz = 15
 
 # magneto
 set mag_bustype = I2C
@@ -149,22 +150,36 @@ set blackbox_sample_rate = 1/4  # relative to pid
 # ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
-set ekf_meas_source = 0
+set ekf_meas_source = 2
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 20, 20, 20
 set ekf_proc_noise_gyro_bias = 10, 10, 10
 set ekf_meas_noise_position = 1000, 1000, 1000
-#set ekf_meas_noise_position = 5000, 5000, 40000
+#set ekf_meas_noise_position = 10000, 10000, 40000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
-# geofence
+# geofence (relative to whats hardcoded in local_pos.c:69)
+# this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
 geofence clear
-geofence 519907000 43766000
-geofence 519906000 43766000
-geofence 519906000 43766500
-geofence 519907000 43766500
+geofence 519906550 43766450
+geofence 519906550 43766050
+geofence 519906300 43766050
+geofence 519906300 43766450
+
+# meter over WGS ellipsoid! not over ground TODO
+set geofence_max_altitude 20
+
+# meter if violated geofence by this amount --> hard kill
+set geofence_hard_offset 10
+
+# number of continuous violating GPS samples before triggering soft/hard geofence
+set geofence_grace_count 3
+
+# seconds of soft-violation without further input sticks/setpoint before descend is initiated
+set geofence_descend_delay 20
+
 
 # filter setups
 set gyro_lpf1_static_hz = 100

@@ -163,6 +163,7 @@ void updatePosCtl(timeUs_t current) {
     }
 
     static timeUs_t lastHoldSpTimeUs = 0;
+#ifdef USE_GEOFENCE
     if (geofenceAction == GEOFENCE_ACTION_HOLD) {
         if ((lastHoldSpTimeUs > 0) && (
                 (cmpTimeUs(posSpNed.time_us, lastHoldSpTimeUs) && posSpNed.valid) // new setpoint sent from somewhere
@@ -173,6 +174,9 @@ void updatePosCtl(timeUs_t current) {
             lastHoldSpTimeUs = 0;
         }
     }
+#else
+    UNUSED(lastHoldSpTimeUs);
+#endif
 
     if ( latch_descend
             || (!posSpNed.valid && !manual_takeover) || !isConvergedEkf()
@@ -189,8 +193,11 @@ void updatePosCtl(timeUs_t current) {
         // latch reactivation until new arming cycle or non-position mode
         latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE);
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
+#ifdef USE_GEOFENCE
                 || (geofenceAction == GEOFENCE_ACTION_HOLD)
-                || (geofenceAction == GEOFENCE_ACTION_DESCEND) ) {
+                || (geofenceAction == GEOFENCE_ACTION_DESCEND)
+#endif
+        ) {
         // more than 2 sec but less than 3.5 seconds --> arrest motion
 #ifdef USE_TRAJECTORY_TRACKER
         updateTrajectoryTracker(current);
@@ -211,9 +218,11 @@ void updatePosCtl(timeUs_t current) {
             lastHoldSpTimeUs = posSpNed.time_us;
             posGetVelSpNedFromPosSp();
 
+#ifdef USE_GEOFENCE
             if (geofenceAction == GEOFENCE_ACTION_DESCEND) {
                 posSpNed.vel.V.Z = 1.; // 1 m/s downwards
             }
+#endif
 
             posGetAccSpNed(current);
             rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?

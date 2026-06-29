@@ -16,7 +16,7 @@
 
 ## ----- Other features
 #define USE_GPS
-## #define USE_GEOFENCE
+#define USE_GEOFENCE
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -152,12 +152,26 @@ set ekf_meas_noise_position = 1000, 1000, 1000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
-# geofence
+# geofence (relative to whats hardcoded in local_pos.c:69)
+# this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
 geofence clear
-geofence 519907000 43766000
-geofence 519906000 43766000
-geofence 519906000 43766500
-geofence 519907000 43766500
+geofence 519906550 43766450
+geofence 519906550 43766050
+geofence 519906300 43766050
+geofence 519906300 43766450
+
+# meter over WGS ellipsoid! not over ground TODO
+set geofence_max_altitude 20
+
+# meter if violated geofence by this amount --> hard kill
+set geofence_hard_offset 10
+
+# number of continuous violating GPS samples before triggering soft/hard geofence
+set geofence_grace_count 3
+
+# seconds of soft-violation without further input sticks/setpoint before descend is initiated
+set geofence_descend_delay 20
+
 
 # filter setups
 set gyro_lpf1_static_hz = 100
