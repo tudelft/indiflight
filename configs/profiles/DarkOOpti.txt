@@ -135,7 +135,7 @@ set dshot_edt = OFF
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
 set motor_poles = 14
-set motor_output_reordering = 0,1,2,3,4,5,6,7
+set motor_output_reordering = 1,0,2,3,4,5,6,7
 mixer BI
 
 # failsafes
