@@ -17,7 +17,7 @@
 ## ----- Other features
 #define USE_GPS
 #define USE_GEOFENCE
-#define USE_MAG
+## #define USE_MAG
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -75,12 +75,13 @@ set gps_update_rate_hz = 15
 
 # serial ports
 #serial 0 64 115200 57600 0 115200 # RC
-serial 7 2 115200 115200 0 115200 # GPS
+serial 3 2 115200 115200 0 115200 # GPS
 serial 0 262144 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
 #serial 2 524288 115200 57600 0 115200 # HIL
 serial 1 1048576 115200 57600 0 115200 # actuator teensy board. has to be last somehow
+serial 7 1024 115200 57600 0 115200 # ESC telemetry wire
 
 
 # magneto
@@ -125,9 +126,12 @@ set align_board_pitch = 90
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
 set acc_offset = -30, 0, 0
+set ibata_scale = 50
+set current_meter = ESC
 
 # motor setup
 set dshot_bidir = ON
+set dshot_edt = OFF
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
 set motor_poles = 14
@@ -161,19 +165,12 @@ set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
 # geofence
-# this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
-# geofence clear
-# geofence 519906550 43766450
-# geofence 519906550 43766050
-# geofence 519906300 43766050
-# geofence 519906300 43766450
-
 # around table behind simona
-geofence clear
-geofence 519906000 43761000
-geofence 519906000 43760000
-geofence 519905000 43760000
-geofence 519905000 43761000
+# geofence clear
+# geofence 519906000 43761000
+# geofence 519906000 43760000
+# geofence 519905000 43760000
+# geofence 519905000 43761000
 
 # huge
 # geofence clear
@@ -182,14 +179,21 @@ geofence 519905000 43761000
 # geofence 519850000 43750000
 # geofence 519850000 43770000
 
+# valkenburg
+geofence clear
+geofence 521712776 44187313
+geofence 521689332 44110524
+geofence 521642463 44145616
+geofence 521675977 4421539
+
 # meter over WGS ellipsoid! not over ground TODO
-set geofence_max_altitude = 100
+set geofence_max_altitude = 120
 
 # meter if violated geofence by this amount --> hard kill
 set geofence_hard_offset = 3
 
 # number of continuous violating GPS samples before triggering soft/hard geofence
-set geofence_grace_count = 3
+set geofence_grace_count = 5
 
 # seconds of soft-violation without further input sticks/setpoint before descend is initiated
 set geofence_descend_delay = 10

@@ -46,6 +46,17 @@ cd relay
 docker run -v rootfs:/rootfs --mount type=bind,src=./,dst=/package pi-cross --processes=8 --clean-build --deploy=/home/pi
 ```
 
+New command:
+```
+cd relay
+docker run --env-file ../../../remote.env -v rootfs:/rootfs -v ../../../lib/main/pi-protocol/:/lib/main/pi-protocol --mount type=bind,src=./,dst=/package aarch64-linux-gnu-cross --processes=8 --clean-build --deploy=/home/pi
+```
+
+start on pi:
+```
+sudo ./build-aarch64-linux-gnu/relay /dev/ttyAMA0 921600
+```
+
 ### Unified Optitrack Clients
 
 The program to receive Motion capture data on your laptop and forward it to

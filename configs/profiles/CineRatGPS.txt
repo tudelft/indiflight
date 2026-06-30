@@ -17,12 +17,13 @@
 ## ----- Other features
 #define USE_GPS
 #define USE_GEOFENCE
+## #define USE_MAG
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
-#define USE_OSD
-#define USE_OSD_SD
-#define USE_OSD_HD
+## #define USE_OSD
+## #define USE_OSD_SD
+## #define USE_OSD_HD
 
 ## ----- Outputs and logging
 #define USE_DSHOT
@@ -45,9 +46,9 @@
 
 ## ----- DANGERZONE
 #define USE_THROW_TO_ARM
-#define USE_CATAPULT
+## #define USE_CATAPULT
 #define USE_LEARNER
-#define USE_NN_CONTROL
+## #define USE_NN_CONTROL
 
 
 ################################################
@@ -59,8 +60,10 @@
 # feature
 feature GPS
 feature TELEMETRY
+feature BARO
+#feature MAG
 #feature LED_STRIP
-feature OSD
+#feature OSD
 
 # gps
 set gps_provider = UBLOX
@@ -68,38 +71,15 @@ set gps_auto_baud = ON
 set gps_ublox_use_galileo = ON
 set gps_update_rate_hz = 15
 
-# geofence
-# around table behind simona
-geofence clear
-geofence 519906000 43761000
-geofence 519906000 43760000
-geofence 519905000 43760000
-geofence 519905000 43761000
-
-# huge
-# geofence clear
-# geofence 519950000 43770000
-# geofence 519950000 43750000
-# geofence 519850000 43750000
-# geofence 519850000 43770000
-
-# meter over WGS ellipsoid! not over ground TODO
-set geofence_max_altitude = 100
-
-# meter if violated geofence by this amount --> hard kill
-set geofence_hard_offset = 3
-
-# number of continuous violating GPS samples before triggering soft/hard geofence
-set geofence_grace_count = 3
-
-# seconds of soft-violation without further input sticks/setpoint before descend is initiated
-set geofence_descend_delay = 10
-
 # serial ports
 serial 5 64 115200 57600 0 115200
 serial 1 262144 115200 57600 0 115200
 serial 3 2 115200 115200 0 115200 # GPS
 serial 6 524288 115200 57600 0 115200
+
+# magneto
+set mag_bustype = I2C
+set mag_i2c_device = 1
 
 # rx
 set serialrx_provider = SBUS
@@ -120,6 +100,7 @@ aux 7 56 6 1700 2100 0 0
 aux 8 56 6 1700 2100 0 0 ## reset home
 
 # blackbox config
+set blackbox_mode = NORMAL
 set blackbox_disable_pids = ON
 set blackbox_disable_setpoint = ON
 set blackbox_disable_alt = OFF
@@ -142,6 +123,7 @@ set acc_offset = -10, -12, 8
 
 # motor setup
 set dshot_bidir = ON
+set dshot_edt = OFF
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
 set motor_poles = 12
@@ -160,18 +142,53 @@ set ahrs_process_denom = 4      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
-# ekf (these are the defaults). source 0: pi, 1: uros, 2: gps
+# ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
 set ekf_meas_source = 2
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
-set ekf_proc_noise_acc_bias = 100, 100, 100
+set ekf_proc_noise_acc_bias = 20, 20, 20
 set ekf_proc_noise_gyro_bias = 10, 10, 10
 set ekf_meas_noise_position = 1000, 1000, 1000
-#set ekf_meas_noise_position = 5000, 5000, 40000
+#set ekf_meas_noise_position = 10000, 10000, 40000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
+
+# geofence
+# around table behind simona
+# geofence clear
+# geofence 519906000 43761000
+# geofence 519906000 43760000
+# geofence 519905000 43760000
+# geofence 519905000 43761000
+
+# huge
+# geofence clear
+# geofence 519950000 43770000
+# geofence 519950000 43750000
+# geofence 519850000 43750000
+# geofence 519850000 43770000
+
+# valkenburg
+geofence clear
+geofence 521712776 44187313
+geofence 521689332 44110524
+geofence 521642463 44145616
+geofence 521675977 4421539
+
+# meter over WGS ellipsoid! not over ground TODO
+set geofence_max_altitude = 120
+
+# meter if violated geofence by this amount --> hard kill
+set geofence_hard_offset = 3
+
+# number of continuous violating GPS samples before triggering soft/hard geofence
+set geofence_grace_count = 5
+
+# seconds of soft-violation without further input sticks/setpoint before descend is initiated
+set geofence_descend_delay = 10
+
 
 # filter setups
 set gyro_lpf1_static_hz = 100
