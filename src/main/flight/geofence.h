@@ -38,4 +38,5 @@ extern geofence_action_e geofenceAction;
 void geofenceAddPoint(gpsLocation_t* vertex);
 void geofenceInit(void);
 void geofenceClearHold(void);
+void geofenceUpdateWatchdog(void);
 void geofenceUpdate(gpsLocation_t* llh);

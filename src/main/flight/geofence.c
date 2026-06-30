@@ -8,14 +8,17 @@
 #include "pg/pg_ids.h"
 #include "config/config.h"
 #include "config/config_reset.h"
+#include "drivers/time.h"
 #include "common/maths.h"
+#include "common/time.h"
 #include "fc/core.h"
 #include "fc/runtime_config.h"
 #include "io/local_pos.h"
+#include "io/gps.h"
 
 #include "geofence.h"
 
-geofence_state_e geofenceState = GEOFENCE_STATE_GOOD;
+geofence_state_e geofenceState = GEOFENCE_STATE_ERROR;
 geofence_action_e geofenceAction = GEOFENCE_ACTION_NONE;
 
 
@@ -23,6 +26,10 @@ geofence_action_e geofenceAction = GEOFENCE_ACTION_NONE;
 
 #ifndef USE_LOCAL_POSITION
 #error "USE_GEOFENCE requires USE_LOCAL_POSITION"
+#endif
+
+#ifndef USE_GPS
+#error "USE_GEOFENCE requires USE_GPS"
 #endif
 
 static unsigned softCounter, hardCounter;
@@ -63,7 +70,13 @@ void geofenceInit(void) {
         return;
     } else if (n > 0 && n < 3) {
         geofenceState = GEOFENCE_STATE_ERROR;
+        return;
+    } else {
+        if (!STATE(GPS_FIX)) {
+            geofenceState = GEOFENCE_STATE_ERROR;
+        }
     }
+
     // check for self-intersection!
 }
 
@@ -162,6 +175,17 @@ void geofenceClearHold(void) {
     }
 }
 
+void geofenceUpdateWatchdog(void) {
+    if (geofenceState != GEOFENCE_STATE_DISABLED) {
+        if (!STATE(GPS_FIX)) {
+            if (ARMING_FLAG(ARMED)) {
+                disarm(DISARM_REASON_GEOFENCE);
+            }
+            geofenceAction = GEOFENCE_ACTION_KILL;
+        }
+    }
+}
+
 void geofenceUpdate(gpsLocation_t* llh) {
     // calculate violation of geofence
     float violation = geofenceViolation(llh);
@@ -186,7 +210,6 @@ void geofenceUpdate(gpsLocation_t* llh) {
     }
 
     // manage state, latching any violations
-
     switch(geofenceState) {
         case GEOFENCE_STATE_DISABLED:
             geofenceHoldArmed = true;

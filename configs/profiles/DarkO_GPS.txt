@@ -135,7 +135,7 @@ set motor_output_reordering = 0,1,2,3,4,5,6,7
 mixer BI
 
 # failsafes
-set failsafe_delay = 5
+set failsafe_delay = 30
 set small_angle = 20   # angle at which to deny arming
 
 
@@ -160,25 +160,39 @@ set ekf_meas_noise_position = 1000, 1000, 1000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
-# geofence (relative to whats hardcoded in local_pos.c:69)
+# geofence
 # this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
+# geofence clear
+# geofence 519906550 43766450
+# geofence 519906550 43766050
+# geofence 519906300 43766050
+# geofence 519906300 43766450
+
+# around table behind simona
 geofence clear
-geofence 519906550 43766450
-geofence 519906550 43766050
-geofence 519906300 43766050
-geofence 519906300 43766450
+geofence 519906000 43761000
+geofence 519906000 43760000
+geofence 519905000 43760000
+geofence 519905000 43761000
+
+# huge
+# geofence clear
+# geofence 519950000 43770000
+# geofence 519950000 43750000
+# geofence 519850000 43750000
+# geofence 519850000 43770000
 
 # meter over WGS ellipsoid! not over ground TODO
-set geofence_max_altitude 20
+set geofence_max_altitude = 100
 
 # meter if violated geofence by this amount --> hard kill
-set geofence_hard_offset 10
+set geofence_hard_offset = 3
 
 # number of continuous violating GPS samples before triggering soft/hard geofence
-set geofence_grace_count 3
+set geofence_grace_count = 3
 
 # seconds of soft-violation without further input sticks/setpoint before descend is initiated
-set geofence_descend_delay 20
+set geofence_descend_delay = 10
 
 
 # filter setups

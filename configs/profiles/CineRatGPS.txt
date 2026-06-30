@@ -69,12 +69,31 @@ set gps_ublox_use_galileo = ON
 set gps_update_rate_hz = 15
 
 # geofence
+# around table behind simona
 geofence clear
-# square at the back of DASML
-geofence 519911530 43762340
-geofence 519910970 43762710
-geofence 519911190 43763480
-geofence 519911740 43763120
+geofence 519906000 43761000
+geofence 519906000 43760000
+geofence 519905000 43760000
+geofence 519905000 43761000
+
+# huge
+# geofence clear
+# geofence 519950000 43770000
+# geofence 519950000 43750000
+# geofence 519850000 43750000
+# geofence 519850000 43770000
+
+# meter over WGS ellipsoid! not over ground TODO
+set geofence_max_altitude = 100
+
+# meter if violated geofence by this amount --> hard kill
+set geofence_hard_offset = 3
+
+# number of continuous violating GPS samples before triggering soft/hard geofence
+set geofence_grace_count = 3
+
+# seconds of soft-violation without further input sticks/setpoint before descend is initiated
+set geofence_descend_delay = 10
 
 # serial ports
 serial 5 64 115200 57600 0 115200
@@ -129,7 +148,7 @@ set motor_poles = 12
 set motor_output_reordering = 0,1,2,3,4,5,6,7
 
 # failsafes
-set failsafe_delay = 5
+set failsafe_delay = 30
 set small_angle = 20   # angle at which to deny arming
 
 
