@@ -145,7 +145,7 @@ set blackbox_sample_rate = 1/4  # relative to pid
 # ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
-set ekf_meas_source = 2
+set ekf_meas_source = 0
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 20, 20, 20
@@ -172,10 +172,10 @@ set ekf_meas_delay = 0
 
 # valkenburg
 geofence clear
-geofence 521712776 44187313
-geofence 521689332 44110524
-geofence 521642463 44145616
-geofence 521675977 4421539
+# geofence 521712776 44187313
+# geofence 521689332 44110524
+# geofence 521642463 44145616
+# geofence 521675977 4421539
 
 # meter over WGS ellipsoid! not over ground TODO
 set geofence_max_altitude = 120

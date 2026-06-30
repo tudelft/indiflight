@@ -218,19 +218,19 @@ void initEkf(timeUs_t currentTimeUs) {
         Q[15] = 0.f;
     }
 
-#if defined(USE_BARO) && false  // todo: figure this out properly
+#if defined(USE_BARO)  // todo: figure this out properly
     // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion.
     if (sensors(SENSOR_BARO)) {
         float mean = 0.f;
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && false
         if (isDshotTelemetryActive()) { 
             for (int i=0; i<indiRun.actNum; i++) {
                 mean += indiRun.omega_fs[i] / indiRun.actNum;
             }
         }
 #endif
-        //X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
-        X0[2] = posMeasNed.pos.V.Z; //todo testingggg
+        X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
+        // X0[2] = posMeasNed.pos.V.Z; //todo testingggg
     }
 #endif
 
@@ -335,11 +335,11 @@ void updateEkf(timeUs_t currentTimeUs) {
 
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
-#if defined(USE_BARO) && false // figure this out properly
+#if defined(USE_BARO) // figure this out properly
         if (sensors(SENSOR_BARO)) {
             // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion
             float mean = 0.f;
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY))
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && false
             if (isDshotTelemetryActive()) { 
                 for (int i=0; i<indiRun.actNum; i++) {
                     mean += indiRun.omega_fs[i] / indiRun.actNum;
@@ -347,9 +347,8 @@ void updateEkf(timeUs_t currentTimeUs) {
             }
 #endif
             float baroCalib = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
-            DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
-            ekf_Z[2] = posMeasNed.pos.V.Z; //todo testingggg
-            //ekf_Z[2] = baroCalib; //todo testingggg
+            // DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
+            ekf_Z[2] = baroCalib;
         } else
 #endif
         {// GPS

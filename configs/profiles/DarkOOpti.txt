@@ -27,8 +27,8 @@
 
 ## ----- Outputs and logging
 #define USE_DSHOT
-## #define USE_SERVOS
-## #define USE_ACTUATORS_T4
+#define USE_SERVOS
+#define USE_ACTUATORS_T4
 #define USE_BLACKBOX
 
 ## ----- Developer features
@@ -48,6 +48,8 @@
 #define USE_THROW_TO_ARM
 ## #define USE_CATAPULT
 #define USE_LEARNER
+#define LEARNER_IS_TAILSITTER
+## #define LEARNER_IS_TAILSITTER_SYMMETRIC
 ## #define USE_NN_CONTROL
 
 
@@ -72,32 +74,36 @@ set gps_ublox_use_galileo = ON
 set gps_update_rate_hz = 15
 
 # serial ports
-serial 5 64 115200 57600 0 115200
-serial 1 262144 115200 57600 0 115200
+#serial 0 64 115200 57600 0 115200 # RC
 serial 3 2 115200 115200 0 115200 # GPS
-serial 6 524288 115200 57600 0 115200
+serial 0 262144 115200 57600 0 115200 # PI
+#serial 4 0 115200 57600 0 115200 # ???
+serial 5 64 115200 57600 0 115200 # RC
+#serial 2 524288 115200 57600 0 115200 # HIL
+serial 1 1048576 115200 57600 0 115200 # actuator teensy board. has to be last somehow
+serial 7 1024 115200 57600 0 115200 # ESC telemetry wire
+
 
 # magneto
 set mag_bustype = I2C
 set mag_i2c_device = 1
 
 # rx
-set serialrx_provider = SBUS
+set serialrx_provider = CRSF
 
 # map
-#map TAER1234  # todo: which one is it here?
+map AETR1234
 
 # switch configs
 aux 0 0 1 1700 2100 0 0
 aux 1 1 3 900 2100 0 0
 aux 2 55 0 1700 2100 0 0
-aux 3 57 6 1300 1700 0 0
-aux 4 58 3 1300 1700 0 0
-aux 5 60 3 1700 2100 0 0
+aux 3 58 3 1300 2100 0 0
+#aux 5 60 3 1700 2100 0 0 ## NN
 #aux 5 13 7 1700 2100 0 0 ## beeper instead of NN
-aux 6 36 2 1700 2100 0 0
-aux 7 56 6 1700 2100 0 0
-aux 8 56 6 1700 2100 0 0 ## reset home
+aux 4 61 7 1700 2100 0 0 ## reset home
+aux 5 36 2 1700 2100 0 0
+aux 6 56 6 1700 2100 0 0
 
 # blackbox config
 set blackbox_mode = NORMAL
@@ -116,18 +122,21 @@ set debug_mode = BARO
 
 # sensor calibration / alignment
 set align_board_roll = 0
-set align_board_pitch = 0
+set align_board_pitch = 90
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
-set acc_offset = -10, -12, 8
+set acc_offset = -30, 0, 0
+set ibata_scale = 50
+set current_meter = ESC
 
 # motor setup
 set dshot_bidir = ON
 set dshot_edt = OFF
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
-set motor_poles = 12
+set motor_poles = 14
 set motor_output_reordering = 0,1,2,3,4,5,6,7
+mixer BI
 
 # failsafes
 set failsafe_delay = 30
@@ -137,15 +146,15 @@ set small_angle = 20   # angle at which to deny arming
 ## ----- FLIGHT PERFORMANCE
 
 # scheduling
-set pid_process_denom = 4       # relative to imu
-set ahrs_process_denom = 4      # relative to imu
+set pid_process_denom = 8       # relative to imu
+set ahrs_process_denom = 8      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
 # ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
-set ekf_meas_source = 2
+set ekf_meas_source = 0
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
 set ekf_proc_noise_acc_bias = 20, 20, 20
@@ -172,10 +181,10 @@ set ekf_meas_delay = 0
 
 # valkenburg
 geofence clear
-geofence 521712776 44187313
-geofence 521689332 44110524
-geofence 521642463 44145616
-geofence 521675977 4421539
+# geofence 521712776 44187313
+# geofence 521689332 44110524
+# geofence 521642463 44145616
+# geofence 521675977 4421539
 
 # meter over WGS ellipsoid! not over ground TODO
 set geofence_max_altitude = 120
@@ -200,6 +209,7 @@ set gyro_lpf1_dyn_max_hz = 250
 set acc_lpf_hz = 50
 set simplified_gyro_filter_multiplier = 40
 set rpm_filter_min_hz = 60
+set rpm_filter_harmonics = 0
 
 profile 0
 
@@ -242,92 +252,153 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 3000, 3000, 1000
-set indi_rate_gains     =  230,  230,  150
+set indi_attitude_gains = 800, 500, 200
+set indi_rate_gains     =  130,  100,  60
+# set indi_attitude_gains = 500, 500, 500
+# set indi_rate_gains     =  180,  180,  180
+# set indi_attitude_gains = 200, 200, 200
+# set indi_rate_gains     =  75,  75,  75
+
+# set indi_attitude_gains = 756, 200, 200
+# set indi_rate_gains     =  140,  75,  75
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
 set indi_attitude_max_yaw_rate = 500
 
 # --- manual flight config and limits ---
-set indi_manual_max_upwards_accel = 30  # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 45           # deg
-set indi_manual_use_coordinated_yaw = 1
+set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
+set indi_manual_max_tilt = 45            # deg
+set indi_manual_use_coordinated_yaw = 0  # ?
 
 # --- indi config ---
 set indi_use_increment = 1
 set indi_use_accel_for_thrust = 1
-set indi_use_rpm_dot_feedback = 1
+set indi_use_rpm_dot_feedback = 0  # todo: check if make sense to enable
 set indi_act_num = 4
-set indi_sync_lowpass_hz = 15
+set indi_sync_lowpass_hz = 3       # no higher!
 
 # fx, fy, fz, roll, pitch, yaw
-set indi_wls_axes_weights = 1,1,50,50,50,5
+set indi_wls_axes_weights = 1,1,10,50,50,5
+
+# actuators (1 to 4, could be up to 8)
 
 # --- actuators: fields can have up to 8 elements ---
-set indi_act_is_motor = 1,1,1,1,0,0,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
-set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
-set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
-set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
-set indi_act_nonlinearity = 50, 50, 50, 50           # %
-set indi_act_min = 0, 0, 0, 0                        # % will be forced 0 for motors anyway
-set indi_act_max = 100, 100, 100, 100                # %
+set indi_act_type = 1,1,2,2,0,0,0,0
+set indi_act_time_constant_ms = 33, 33, 70, 70       # ms
+set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
+set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
+set indi_act_nonlinearity = 40, 40, 0, 0             # %
+set indi_act_min =   0,   0, -40, -40              # %, degree
+set indi_act_max = 70, 70,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
-set indi_wls_act_penalties = 1,1,1,1
+set indi_wls_act_penalties = 5,5,1,1
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
-set indi_act_g1_fx = 0,0,0,0
-set indi_act_g1_fy = 0,0,0,0
-set indi_act_g1_fz = -1050, -1050, -1050, -1050
-set indi_act_g1_roll = -4000, -4000, 4000, 4000
-set indi_act_g1_pitch = -2600, 2600, -2600, 2600
-set indi_act_g1_yaw = -510, 510, 510, -510
+# linerized model around hover
+set indi_act_g1_fx    =   306,   306,  -191,  -191
+set indi_act_g1_fy    =     0,     0,     0,     0
+set indi_act_g1_fz    = -1872, -1872,     0,     0
+set indi_act_g1_roll  =  1975, -1975,     0,     0
+set indi_act_g1_pitch =     0,     0,  -810,  -810
+#set indi_act_g1_yaw   =  -421,   421,  -563,   563
+set indi_act_g1_yaw   =     0,     0,  -563,   563
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
-set indi_act_g2_roll = 0,0,0,0
-set indi_act_g2_pitch = 0,0,0,0
-set indi_act_g2_yaw = -100, 100, 100, -100
+set indi_act_g2_roll  =    0,    0,    0,    0
+set indi_act_g2_pitch =    0,    0,    0,    0
+#set indi_act_g2_yaw   =  -30,  +30,    0,    0
+set indi_act_g2_yaw   =    0,    0,    0,    0  
+
+# --- Tailsitter scheduled linear model
+set indi_tails_use_scheduled = 1
+set indi_tails_use_sine = 0
+
+## # no-lift elevon angles in centi-degrees
+## set indi_tails_d0 = 1818, 2729
+## 
+## # motor thrust influenced parameters
+## # force * 1e9
+## set indi_tails_cxw = 0
+## set indi_tails_cyw = 0
+## set indi_tails_czw = -2482
+## # moment * 1e8
+## set indi_tails_clw = 2618
+## set indi_tails_cmw = -1722
+## set indi_tails_cnw = -1755
+## # motor rate derivative to yaw moment * 1e5
+## set indi_tails_cnwd = 29
+## 
+## # elevon deflection influenced parameters * 1e8
+## set indi_tails_cxd = -69
+## set indi_tails_cmd = -2937
+## set indi_tails_cnd = -2041
+
+# no-lift elevon angles in centi-degrees
+set indi_tails_d0 = -2100, -918
+# set indi_tails_d0 = -1816, -904
+
+# motor thrust influenced parameters
+# force * 1e9
+set indi_tails_cxw = 405, 405
+set indi_tails_cyw = 0, 0
+set indi_tails_czw = -2481, -2481
+# moment * 1e8
+set indi_tails_clw = +2597, -2597
+set indi_tails_cmw =     0,     0
+set indi_tails_cnw =  -702,  +702
+# motor rate derivative to yaw moment * 1e5
+set indi_tails_cnwd = -260, +260
+
+# elevon deflection influenced parameters * 1e8
+# set indi_tails_cxd = -125, -125
+# set indi_tails_cmd = -1300, -1300
+# set indi_tails_cnd = -1122, +1122
+
+# elevon deflection influenced parameters * 1e8
+set indi_tails_cxd = -42, -42
+set indi_tails_cmd = -2234, -2234
+set indi_tails_cnd = -1662, +1662
 
 
 indiprofile 2
 
-# indiprofile 2 --> these are the settings for the learned profile
-# commented will be overwritten by the learner, so they dont need to be set
-# as the initial condition is currently always zero. This may be changed in the future.
-# the default values (values not set here) are the same as for all other profiles
+# --- attitude control config and limits ---
+# Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
+set indi_attitude_gains = 800, 500, 200
+set indi_rate_gains     =  130,  100,  60
 
-# these values are slightly more conservative than indiprofile 0
+# attitude controller limits: (deg/s)
+set indi_attitude_max_tilt_rate = 800
+set indi_attitude_max_yaw_rate = 500
 
+# --- manual flight config and limits ---
+set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
+set indi_manual_max_tilt = 45            # deg
+set indi_manual_use_coordinated_yaw = 0  # ?
+
+# --- indi config ---
+set indi_use_increment = 1
+set indi_use_accel_for_thrust = 1
+set indi_use_rpm_dot_feedback = 0  # todo: check if make sense to enable
 set indi_act_num = 4
-# set indi_attitude_gains = 1552,1552,1552
-# set indi_rate_gains = 174,174,174
-set indi_attitude_max_tilt_rate = 500
-set indi_attitude_max_yaw_rate = 300
-set indi_manual_use_coordinated_yaw = 1
-set indi_manual_max_upwards_accel = 20
-set indi_act_is_motor = 1,1,1,1,0,0,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
-# set indi_act_time_constant_ms = 22,21,21,21,25,25,25,25
-# set indi_act_max_rpm = 32757,28254,34458,35347,40000,40000,40000,40000
-# set indi_act_hover_rpm = 16378,14127,17229,17673,20000,20000,20000,20000
-set indi_act_max = 100,100,100,100,100,100,100,100
-set indi_act_min = 0,0,0,0,0,0,0,0
+set indi_sync_lowpass_hz = 3       # no higher!
 
-# -- roll -56, pitch 81, yaw 170
-#set indi_act_g1_fx = -1037, -1037, -1037, -1037
-#set indi_act_g1_fy = -136, -136, -136, -136
-#set indi_act_g1_fz = -91, -91, -91, -91
-#set indi_act_g1_roll = 183, 1049, -41, -1190
-#set indi_act_g1_pitch = -2617, -4609, 4742, 2485
-#set indi_act_g1_yaw = -4016, 816, -727, 3927
-#set indi_act_g2_roll = -98, 98, 98, -98
-#set indi_act_g2_pitch = -12, 12, 12, -12
-#set indi_act_g2_yaw = -8, 8, 8, -8
+# fx, fy, fz, roll, pitch, yaw
+set indi_wls_axes_weights = 1,1,50,50,50,5
 
-set indi_sync_lowpass_hz = 15
-set indi_wls_axes_weights = 1, 1, 50, 50, 50, 5
-set indi_wls_act_penalties = 1,1,1,1
+# actuators (1 to 4, could be up to 8)
+
+# --- actuators: fields can have up to 8 elements ---
+set indi_act_type = 1,1,2,2,0,0,0,0
+set indi_act_time_constant_ms = 33, 33, 70, 70       # ms
+set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
+set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
+set indi_act_nonlinearity = 40, 40, 0, 0             # %
+set indi_act_min =   0,   0, -40, -40              # %, degree
+set indi_act_max = 100, 100,  40,  40              # %, degree
+set indi_wls_act_preferred_state = 0,0,0,0
+set indi_wls_act_penalties = 5,5,1,1
 
 
 ## ----- POSITION CONTROL
@@ -335,23 +406,23 @@ set indi_wls_act_penalties = 1,1,1,1
 positionprofile 0
 
 # gains * 10
-set position_horizontal_p = 30
-set position_horizontal_i = 2
-set position_horizontal_d = 30
-set position_vertical_p = 50
+set position_horizontal_p = 25
+set position_horizontal_i = 8
+set position_horizontal_d = 22
+set position_vertical_p = 214
 set position_vertical_i = 5
-set position_vertical_d = 40
+set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
 set position_max_horizontal_speed = 700
 set position_max_horizontal_accel = 1000
-set position_max_upwards_speed = 500
-set position_max_downwards_speed = 500
-set position_max_upwards_accel = 2000
-set position_max_downwards_accel = 800
+set position_max_upwards_speed = 250
+set position_max_downwards_speed = 150
+set position_max_upwards_accel = 3000
+set position_max_downwards_accel = 600
 
 # max tilt, yaw gain * 10, thrust config
-set position_max_tilt = 180
+set position_max_tilt = 45
 set position_yaw_p = 50
 set position_use_thrust_attenuation = 1
 
@@ -415,7 +486,7 @@ set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 6
+set learner_mode = 6 # inoperable!
 set learner_num_actuators = 4
 set learner_delay_time_ms = 150
 set learner_step_time_ms = 50
@@ -427,10 +498,17 @@ set learner_gyro_max = 1150
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
-set learner_zeta_rate = 90
-set learner_zeta_attitude = 80
-set learner_zeta_velocity = 70
-set learner_zeta_position = 90
+set learner_use_fortescue = 0
+# set learner_zeta_rate = 60
+# set learner_zeta_attitude = 70
+# set learner_zeta_velocity = 100
+# set learner_zeta_position = 100
+set learner_zeta_rate = 55
+set learner_zeta_attitude = 70
+set learner_zeta_velocity = 80
+set learner_zeta_position = 70
+set learner_zeta_velocity_vert = 100
+set learner_zeta_position_Vert = 90
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0

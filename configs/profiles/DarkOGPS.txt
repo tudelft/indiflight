@@ -414,7 +414,7 @@ set position_vertical_i = 5
 set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 500
+set position_max_horizontal_speed = 700
 set position_max_horizontal_accel = 1000
 set position_max_upwards_speed = 250
 set position_max_downwards_speed = 150

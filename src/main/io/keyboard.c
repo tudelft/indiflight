@@ -108,7 +108,7 @@ void processKey(uint8_t key) {
             break;
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
-        case KEY_1: initTrajectoryTracker(); break;
+        case KEY_1: initTrajectoryTracker(true); break;
         case KEY_2: incrementSpeedTrajectoryTracker(-0.5f); break;
         case KEY_3: incrementSpeedTrajectoryTracker(+0.5f); break;
         case KEY_4: stopTrajectoryTracker(); break;

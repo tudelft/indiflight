@@ -30,7 +30,7 @@
 void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
 bool isActiveTrajectoryTrackerRecovery(void);
-void initTrajectoryTracker(void);
+void initTrajectoryTracker(bool here);
 void setSpeedTrajectoryTracker(float speed);
 void incrementSpeedTrajectoryTracker(float inc);
 void stopTrajectoryTracker(void);

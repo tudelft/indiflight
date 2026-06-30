@@ -41,6 +41,10 @@
 // state of trajectory tracker:
 bool tt_active = false;
 
+// origin
+fp_vector_t tt_origin = {0};
+float tt_z = -1.5f;
+
 // acceleration and yaw rate setpoints
 float tt_acc_sp[3] = {0};
 
@@ -64,7 +68,7 @@ float tt_vel_gain = 2.5; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 2.0f;
+float tt_R = 1.0f;
 
 // recovery algorithm
 bool tt_recovery_active = false;
@@ -125,9 +129,9 @@ void getRefsRecoveryTrajectory(float t) {
     while (theta < -M_PIf) theta += (2.0f * M_PIf);
 
     // position refs
-    tt_pos_ref[0] = R*cosf(theta);
-    tt_pos_ref[1] = R*sinf(theta);
-    tt_pos_ref[2] = -1.5f;
+    tt_pos_ref[0] = tt_origin.V.X + R*cosf(theta);
+    tt_pos_ref[1] = tt_origin.V.Y + R*sinf(theta);
+    tt_pos_ref[2] = tt_origin.V.Z;
 
     // velocity refs
     tt_vel_ref[0] = -R*sinf(theta)*omega;
@@ -177,9 +181,9 @@ void getRefsTrajectoryTracker(float p) {
         R = 0.1f*p;
     }
 
-    tt_pos_ref[0] = R*tt_R*cosf(p);
-    tt_pos_ref[1] = R*tt_R*sinf(p);
-    tt_pos_ref[2] = -1.5f;
+    tt_pos_ref[0] = tt_origin.V.X + R*tt_R*cosf(p);
+    tt_pos_ref[1] = tt_origin.V.Y + R*tt_R*sinf(p);
+    tt_pos_ref[2] = tt_origin.V.Z;
 
     // velocity refs
     tt_vel_ref[0] = -R*tt_R*tt_speed_factor*sinf(p);
@@ -199,12 +203,22 @@ void getRefsTrajectoryTracker(float p) {
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
 
-void initTrajectoryTracker(void) {
+void initTrajectoryTracker(bool here) {
     // reset everything
     tt_progress = 0.0f;
     tt_speed_factor = 0.0f;
     tt_yaw_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
+
+    if (here) {
+        tt_origin.V.X = posEstNed.V.X;
+        tt_origin.V.Y = posEstNed.V.Y;
+        tt_origin.V.Z = posEstNed.V.Z;
+    } else {
+        tt_origin.V.X = 0.0f;
+        tt_origin.V.Y = 0.0f;
+        tt_origin.V.Z = tt_z;
+    }
 
     // setpoint = starting point of trajectory
     getRefsTrajectoryTracker(0.0f);
