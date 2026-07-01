@@ -181,10 +181,10 @@ set ekf_meas_delay = 0
 
 # valkenburg
 geofence clear
-geofence 521712776 44187313
-geofence 521689332 44110524
-geofence 521642463 44145616
-geofence 521675977 4421539
+geofence 521713359 44187540
+geofence 521687918 44106114
+geofence 521638078 44126769
+geofence 521671689 44220485
 
 # meter over WGS ellipsoid! not over ground TODO
 set geofence_max_altitude = 120
