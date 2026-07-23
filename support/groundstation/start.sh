@@ -90,7 +90,8 @@ tmux splitw -v -t "$session:0.4"
 
 # start uart comms. UPDATE: now assumed that relay.service is running, check README
 #tmux send-keys -t $session:0.3 "sudo killall relay\;"
-tmux send-keys -t $session:0.3 "relay/build/relay "
+#tmux send-keys -t $session:0.3 "relay/build/relay "
+tmux send-keys -t $session:0.3 "ssh pi@$REMOTE_IP"
 #tmux send-keys -t $session:0.3 "$ON_PI sudo systemctl status relay.service" ENTER
 
 # start natnet2udp.py in udp mode
@@ -107,13 +108,13 @@ tmux send-keys -t $session:0.1 "/usr/bin/env python3 setpointSender.py --host $R
 
 # keyboards
 #tmux send-keys -t $session:0.2 "/usr/bin/env python3 keyInputs.py --host $REMOTE_IP" ENTER
-tmux send-keys -t $session:0.2 "/usr/bin/env python3 configMenu.py --host $REMOTE_IP" ENTER
+#tmux send-keys -t $session:0.2 "/usr/bin/env python3 configMenu.py --host $REMOTE_IP" ENTER
 
 # socat
-tmux send-keys -t $session:0.4 "sudo socat -d -d PTY,link=/dev/ttyDB,raw,echo=0,mode=666 TCP:dronebridge.local:5760" ENTER
+#tmux send-keys -t $session:0.4 "sudo socat -d -d PTY,link=/dev/ttyDB,raw,echo=0,mode=666 TCP:dronebridge.local:5760" ENTER
 
 # ping
-tmux send-keys -t $session:0.5 "ping dronebridge.local" ENTER
+tmux send-keys -t $session:0.5 "ping $REMOTE_IP" ENTER
 
 # periodically get stats by sending USER 1 signal to process
 #$ON_PI "while [[1]]; do; kill -USE2 `pidof connect`; sleep 5; done" &
