@@ -521,7 +521,7 @@ class IndiflightLog(object):
             elif re.match(r'^motor\[[0-9]+\]$', col):
                 data[col] -= self.DSHOT_MIN
                 data[col] /= (self.DSHOT_MAX - self.DSHOT_MIN)
-            elif col.startswith('quat') or col.startswith('extQuat') or col.startswith('ekf_quat'):
+            elif col.startswith('quat') or col.startswith('extQuat') or col.startswith('ekf_quat') or col.startswith('localQuat'):
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('alpha'):
                 data[col] /= self.RADIANS_TO_DECADEGREES
@@ -537,59 +537,61 @@ class IndiflightLog(object):
                 data[col] *= 100
             elif col.startswith('omega'):
                 data[col] /= 1.
-            elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos'):
+            elif col.startswith('servo_feedback'):
+                data[col] /= 100 * self.RADIANS_TO_DEGREES
+            elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos') or col.startswith('localPos'):
                 data[col] /= self.METER_TO_MM
-            elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel'):
+            elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel') or col.startswith('localVel'):
                 data[col] /= self.METER_TO_CM
             elif col.startswith('extAtt') or col.startswith('ekf_att'):
                 data[col] /= 1000.
             elif col.startswith('ekf_acc_b'):
                 data[col] /= 1000.
             elif col.startswith('ekf_gyro_b'):
-                data[col] /= self.RADIANS_TO_DEGREES
-            elif (match := re.match(r'^motor_[0-9]+_rls_x\[([0-9]+)\]$', col)):
-                bbscaler = 1000.
-                yscaler = 0.001
-                if match.group(1) in ['0', '1', '2']:
-                    # a, b, and w0
-                    ascaler = 1.
-                elif match.group(1) in ['3']:
-                    # time constant
-                    ascaler = 0.0001
-                else:
-                    raise NotImplementedError(f"Regressor {match.group(1)} not expected")
+                data[col] /= self.RADIANS_TO_DEGREES * 1000.
+            # elif (match := re.match(r'^motor_[0-9]+_rls_x\[([0-9]+)\]$', col)):
+            #     bbscaler = 1000.
+            #     yscaler = 0.001
+            #     if match.group(1) in ['0', '1', '2']:
+            #         # a, b, and w0
+            #         ascaler = 1.
+            #     elif match.group(1) in ['3']:
+            #         # time constant
+            #         ascaler = 0.0001
+            #     else:
+            #         raise NotImplementedError(f"Regressor {match.group(1)} not expected")
 
-                data[col] /= bbscaler * yscaler / ascaler
-            elif (match := re.match(r'^fx_([xyzpqr])_rls_x\[([0-9]+)\]$', col)):
-                bbscaler = 1000.
-                if match.group(1) in ['x', 'y', 'z']:
-                    # forces. All 4 regressors have scale 1e-5. Output has scaler 10.
-                    yscaler = 10.
-                    ascaler = 1e-5
-                elif match.group(1) in ['p', 'q', 'r']:
-                    # rotations. First 4 regressors have scale 1e-5. Last 4 scale 1e-3 Output has scaler 1.
-                    yscaler = 1.
-                    num_vars = 8 if self.num_learner_vars > 8 else 4
-                    w2vars = [str(i) for i in range(num_vars)]
-                    wdotvars = [str(i) for i in range(num_vars, num_vars*2)]
-                    if match.group(2) in w2vars:
-                        ascaler = 1e-5
-                    elif match.group(2) in wdotvars:
-                        ascaler = 1e-3
-                    else:
-                        raise NotImplementedError(f"Regressor {match.group(2)} not expected")
-                else:
-                    raise NotImplementedError(f"Output {match.group(1)} not expected")
+            #     data[col] /= bbscaler * yscaler / ascaler
+            # elif (match := re.match(r'^fx_([xyzpqr])_rls_x\[([0-9]+)\]$', col)):
+            #     bbscaler = 1000.
+            #     if match.group(1) in ['x', 'y', 'z']:
+            #         # forces. All 4 regressors have scale 1e-5. Output has scaler 10.
+            #         yscaler = 10.
+            #         ascaler = 1e-5
+            #     elif match.group(1) in ['p', 'q', 'r']:
+            #         # rotations. First 4 regressors have scale 1e-5. Last 4 scale 1e-3 Output has scaler 1.
+            #         yscaler = 1.
+            #         num_vars = 8 if self.num_learner_vars > 8 else 4
+            #         w2vars = [str(i) for i in range(num_vars)]
+            #         wdotvars = [str(i) for i in range(num_vars, num_vars*2)]
+            #         if match.group(2) in w2vars:
+            #             ascaler = 1e-5
+            #         elif match.group(2) in wdotvars:
+            #             ascaler = 1e-3
+            #         else:
+            #             raise NotImplementedError(f"Regressor {match.group(2)} not expected")
+            #     else:
+            #         raise NotImplementedError(f"Output {match.group(1)} not expected")
 
-                data[col] /= bbscaler * yscaler / ascaler
-            elif (match := re.match(r'^imu_rls_x\[([0-9]+)\]$', col)):
-                if match.group(1) not in ['0', '1', '2']:
-                    raise NotImplementedError(f"Output {match.group(1)} not expected")
-                    # forces. All 4 regressors have scale 1e-5. Output has scaler 10.
-                bbscaler = 1000.
-                yscaler = 1.
-                ascaler = 1e-2
-                data[col] /= bbscaler * yscaler / ascaler
+            #     data[col] /= bbscaler * yscaler / ascaler
+            # elif (match := re.match(r'^imu_rls_x\[([0-9]+)\]$', col)):
+            #     if match.group(1) not in ['0', '1', '2']:
+            #         raise NotImplementedError(f"Output {match.group(1)} not expected")
+            #         # forces. All 4 regressors have scale 1e-5. Output has scaler 10.
+            #     bbscaler = 1000.
+            #     yscaler = 1.
+            #     ascaler = 1e-2
+            #     data[col] /= bbscaler * yscaler / ascaler
             elif (col.startswith("learnerGains")):
                 data[col] /= 10.
             elif (col.startswith("hoverAttitude")):
@@ -597,7 +599,7 @@ class IndiflightLog(object):
             elif (match := re.match(r'^.*_lambda$', col)):
                 data[col] /= self.UNIT_FLOAT_TO_UNSIGNED16VB
             elif (match := re.match(r'^.*_e_var$', col)):
-                data[col] /= 0.1 * ((1 << 16) - 1)
+                data[col] /= 0.001 * ((1 << 16) - 1)
             elif (col == "flightModeFlags") or (col == "stateFlags")\
                     or (col == "failsafePhase") or (col == "rxSignalReceived")\
                     or (col == "rxFlightChannelValid"):

@@ -16,3 +16,6 @@
 [submodule "support/indiflight-configurator"]
 	path = support/indiflight-configurator
 	url = https://github.com/tudelft/indiflight-configurator.git
+[submodule "support/LogAnalysis/pyFlightPlotter"]
+	path = support/LogAnalysis/pyFlightPlotter
+	url = https://github.com/tudelft/pyFlightPlotter.git

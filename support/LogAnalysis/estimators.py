@@ -1,29 +1,37 @@
 import numpy as np
+import numbers
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-from plotting import local_rc, BlittedCursor
+from pyFlightPlotter import local_rc
 plt.rcParams.update(local_rc)
 
 class Estimator(object):
     def __init__(self, n, d=1):
         self.n = n
         self.d = d
-        self.N = 1
+        self.N = 0
 
         self.theta = np.zeros((n, 1))
         self.theta[:] = np.nan
         self.P = np.zeros((n, n))
         self.P[:] = np.nan
-        self.A = np.zeros((1, n))
+        self.A = np.zeros((d, n))
         self.y = np.zeros((d, 1))
         self.e = np.zeros((d, 1))
+
+        self.t = 0.
 
         self.theta_h = []
         self.P_h = []
         self.A_h = []
         self.y_h = []
         self.e_h = []
+        self.t_h = []
+
+        self.A_acc = []
+        self.y_acc = []
+        self.t_acc = []
 
         self.name = "Estimator"
         self.parNames = ["$\\theta$"] if self.n==1 else [f"$\\theta_{{ {i} }}$" for i in range(self.n)]
@@ -73,7 +81,7 @@ class Estimator(object):
 
         self.P[:] = P
 
-    def newSample(self, A, y):
+    def newSample(self, A, y, t):
         # accept one-dimensional only if either n or d are 1
         A = np.asarray(A)
         if (A.ndim == 1) and (self.d == 1):
@@ -102,18 +110,35 @@ class Estimator(object):
             if (y.shape != (self.d, 1)):
                 raise ValueError(f"If output y is ndim=2, it has to be shape {(self.d, 1)}, got {y.shape}")
 
-        self.A[:] = A
-        self.y[:] = y
+        if not isinstance(t, numbers.Number):
+            raise ValueError(f"Time t must be a number, got {type(t)}")
+
+        self.A_acc.append(A.copy())
+        self.y_acc.append(y.copy())
+        self.t_acc.append(t)
 
     def log(self):
         self.theta_h.append(self.theta.copy())
         self.P_h.append(self.P.copy())
-        self.A_h.append(self.A.copy())
-        self.y_h.append(self.y.copy())
         self.e_h.append(self.e.copy())
 
     def update(self):
-        raise NotImplementedError("update must be implemented in a child class")
+        self.N_batch = len(self.A_acc)
+
+        self.theta_h.extend([self.theta.copy()]*(self.N_batch-1))
+        self.e_h.extend([self.e.copy()]*(self.N_batch-1))
+        self.P_h.extend([self.P.copy()]*(self.N_batch-1))
+        self.A_h.extend(self.A_acc)
+        self.y_h.extend(self.y_acc)
+        self.t_h.extend(self.t_acc)
+
+        self.A[:] = self.A_acc[-1]
+        self.y[:] = self.y_acc[-1]
+
+        # reset accumulators
+        self.A_acc = []
+        self.y_acc = []
+        self.t_acc = []
 
     def predictNew(self, A):
         return A @ self.theta
@@ -121,28 +146,36 @@ class Estimator(object):
     def predictOnline(self):
         return [self.A_h[i] @ self.theta_h[i] for i in range(self.N)]
 
-    def plotParameters(self, parGroups=None, outGroups=None, timeMs=None, sharey=True, zoomy=False, cursor=True, extra_rows=0):
+    def plotParameters(self, parGroups=None, truePars=None, outGroups=None, parGroupNames=None, outGroupsNames=None, sharey=True, zoomy=False, extra_rows=0, figsize=None, uncertainty=False):
         # parameters and variances
         if parGroups is None:
             parGroups = [[i] for i in range(self.n)]
 
+        if truePars is None:
+            truePars = [[None]*len(g) for g in parGroups]
+
+        if parGroupNames is None:
+            parGroupNames = [f"Group {i}" for i in parGroups]
+
         if outGroups is None:
             outGroups = [[i] for i in range(self.d)]
 
-        if timeMs is None:
-            self.timeMs = list(range(self.N))
-            timeLabel = "iterations"
-        else:
-            self.timeMs = np.asarray(timeMs)
-            timeLabel = "Time [ms]"
+        if outGroupsNames is None:
+            outGroupsNames = [f"Group {i}" for i in outGroups]
+
+        if figsize is None:
+            figsize = (16, 9)
+
+        timeLabel = "Time [s]"
+        self.t_h = np.asarray(self.t_h)
 
         with plt.rc_context(rc=local_rc):
-            self.f = plt.figure()
+            self.f = plt.figure(figsize=figsize)
 
             left=0.04
             bottom=0.06
             right=0.975
-            top=0.925
+            top=0.91
             hspace=0.15
             wspace=0.25
             rWidth = (right - left + 0*0.3*wspace) * 1 / (1 + len(parGroups)) + left
@@ -182,6 +215,7 @@ class Estimator(object):
 
             for i in range(len(parGroups)):
                 parAx = self.f.add_subplot(parGs[0, i]); parAxs.append(parAx)
+                parAx.set_title(parGroupNames[i])
 
                 varAx = self.f.add_subplot(parGs[1, i]); varAxs.append(varAx)
                 varAx.set_yscale('log')
@@ -205,6 +239,7 @@ class Estimator(object):
                 regAxsRow = []
                 for j in range(len(parGroups)):
                     regAx = self.f.add_subplot(regGs[i, j]); regAxsRow.append(regAx)
+                    self.all_axes.append(regAxsRow[-1])
                     if j == 0:
                         regAx.set_ylabel("Regressor(s)")
                     if (j > 0) and sharey:
@@ -225,44 +260,72 @@ class Estimator(object):
             A = np.array(self.A_h)
             y = np.array(self.y_h)
 
-            for parIdxs, parAx, varAx in zip(parGroups, parAxs, varAxs):
+            if x.shape[0] == 0:
+                raise RuntimeError("No data to plot, run update() first")
+
+            has_bounds = hasattr(self, 'theta_bounds_h') and (len(self.theta_bounds_h) == x.shape[0])
+            if has_bounds:
+                bounds = np.array(self.theta_bounds_h)
+
+            if hasattr(self, 'NIS_h') and (len(self.NIS_h) == x.shape[0]):
+                NIS = np.array(self.NIS_h)
+                axNIS = self.f.add_subplot(outerGs[0, 0])
+                axNIS.plot(self.t_h, NIS, label="NIS")
+                # axNIS.set_yscale('log')
+                axNIS.set_title("Normalized Innovation Squared")
+                axNIS.set_ylabel("NIS")
+                axNIS.set_xlabel(timeLabel)
+                axNIS.legend()
+                self.all_axes.append(axNIS)
+
+
+            for parIdxs, parAx, varAx, truePar in zip(parGroups, parAxs, varAxs, truePars):
                 maxy = 0.
                 miny = 0.
-                for i in parIdxs:
+                for i, trueParVal in zip(parIdxs, truePar):
                     maxy = max(maxy, x[-1, i])
                     miny = min(miny, x[-1, i])
-                    parAx.plot(self.timeMs, x[:, i], label=self.parNames[i])
-                    varAx.plot(self.timeMs, P[:, i, i], label=f"var({self.parNames[i]})")
+                    parAx.plot(self.t_h, x[:, i], label=self.parNames[i])
+                    if has_bounds:
+                        # area plot of lower and upper bounds using the same color as the line
+                        parAx.fill_between(self.t_h, bounds[:, i, 0], bounds[:, i, 1],
+                                           color=parAx.lines[-1].get_color(),
+                                           alpha=0.3, label=None)
+                    if trueParVal is not None:
+                        parAx.plot(self.t_h, np.ones_like(self.t_h)*trueParVal, "--", color=parAx.lines[-1].get_color(), label=None)
+                    varAx.plot(self.t_h, P[:, i, i], label=f"var({self.parNames[i]})")
                 if zoomy:
                     diffy = maxy - miny
                     maxy += diffy * 1.
                     miny -= diffy * 1.
                     parAx.set_ylim(bottom=miny, top=maxy)
-                parAx.plot(self.timeMs, self.timeMs*0, "g--")
-                parAx.legend()
-                varAx.legend()
+                # parAx.plot(self.t_h, self.t_h*0, "g--")
+                parAx.legend(fontsize=7)
+                # varAx.legend()
 
             yLastTheta = self.predictNew(A)
             yRealTime = np.array(self.predictOnline())
             printLegend = True
             for yIdxs, yAx in zip(outGroups, yAxs):
                 for i in yIdxs:
-                    yAx.plot(self.timeMs, y[:, i], label="Target")
-                    # yAx.plot(timeMs, yLastTheta[:, i], label="A posteriori")
-                    yAx.plot(self.timeMs, yRealTime[:, i], label="Real Time")
+                    yAx.plot(self.t_h, y[:, i], label="Target")
+                    yAx.plot(self.t_h, yRealTime[:, i], label="Real Time")
+                    yAx.plot(self.t_h, yLastTheta[:, i], label="A posteriori")
                 yAx.set_ylabel("Output "+self.outNames[i])
                 if printLegend:
-                    legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
-                    yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
+                    # legend_ypos = 0.38 / yAx.get_position().height #FIXME: this doesnt work
+                    # yAx.legend(loc='upper center', bbox_to_anchor=(0.5, legend_ypos))
+                    # printLegend = False
+                    yAx.legend(loc='upper center')
                     printLegend = False
 
             for yIdxs, regAxRow in zip(outGroups, regAxs):
                 for parIdxs, regAx in zip(parGroups, regAxRow):
                     for i in yIdxs:
                         for j in parIdxs:
-                            regAx.plot(self.timeMs, A[:, i, j], label=self.regNames[i][j])
+                            regAx.plot(self.t_h, A[:, i, j], label=self.regNames[i][j])
                     self.all_axes.append(regAx)
-                    regAx.legend()
+                    # regAx.legend()
 
             self.f.suptitle(f"{self.name} -- Regressors, Parameters and Variance", fontsize=18)
 
@@ -270,49 +333,124 @@ class Estimator(object):
             for regAx in regAxs[-1]:
                 regAx.set_xlabel(timeLabel)
 
-            if cursor:
-                self.curser = BlittedCursor(self.all_axes, self.f.canvas)
-
             return self.f
 
     def plotGains(self):
         # k and e
         raise NotImplementedError("todo")
 
-class RLS(Estimator):
-    def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
+    def diagnose(self, i, output_name=None):
+        if output_name is None:
+            output_name = f"Output {i}"
+
+        X = np.array(self.A_h)[:, i, :]
+        idx_nonzero = np.linalg.norm(X, axis=0) > 1
+        X = X[:, idx_nonzero]  # remove zero columns
+        Y = np.array(self.y_h)[:, i]
+        M = X.shape[1]
+
+        U,s,Vt = np.linalg.svd(X, full_matrices=False)
+        cond = s.max()/s.min()
+        if cond > 1e12:
+            print(f"Warning: regressor matrix ill-conditioned (cond={cond:.2e})")
+
+        eps = np.finfo(float).eps
+        tol = max(X.shape)*eps*s.max()
+        rank = np.sum(s > tol)
+
+        if rank < M:
+            print(f"Warning: regressor matrix rank deficient (rank={rank} < {M})")
+
+        from sklearn.linear_model import LinearRegression
+
+        VIF = np.zeros(M)
+        for j in range(M):
+            Xj = X[:, j]
+            Xothers = np.delete(X, j, axis=1)
+            lr = LinearRegression().fit(Xothers, Xj)
+            R2 = lr.score(Xothers, Xj)
+            VIF[j] = 1.0/(1-R2)
+
+        # pairwise correlations
+        corr_matrix = np.corrcoef(X, rowvar=False)
+
+        # use matplotlib to plot a heatmap of correlation matrix
+        f, ax = plt.subplots(figsize=(8, 6))
+        im = ax.imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+        f.colorbar(im, label='Correlation Coefficient')
+        # add values (rounded to 2 decimals) on the heatmap
+        for m in range(M):
+            for n in range(M):
+                ax.text(n, m, f"{corr_matrix[m, n]:.2f}", ha='center', va='center', color='black', fontsize=8)
+
+        ax.set_title(f'Reg Corr Mtx for {output_name} -- {self.name}')
+        ax.set_xticks(ticks=np.arange(M))
+        ax.set_xticklabels(labels=[f"X{i}" for i in range(M)], rotation=45)
+        ax.set_yticks(ticks=np.arange(M))
+        ax.set_yticklabels(labels=[f"X{i}" for i in range(M)])
+        theta_hat = np.linalg.lstsq(X, Y, rcond=None)[0]
+        res = Y - X.dot(theta_hat)
+        err_corrs = np.array([np.corrcoef(res.squeeze(), X[:,j])[0,1] for j in range(M)])
+
+        return f, VIF, corr_matrix, err_corrs, X, Y, theta_hat
+
+class LS(Estimator):
+    def __init__(self, n, d=1, gamma=1e8):
         super().__init__(n, d)
-
-        self.n = n
-        self.d = d
-
-        self.K = np.empty((self.n, self.d))
-        self.K[:] = np.nan
-        self.lam = forgetting
-        self.e = np.empty((self.d, 1))
-        self.e[:] = np.nan
 
         self.setParameters(np.zeros((self.n, 1)))
         self.setCovariance(gamma * np.eye(n))
 
+        self.setTitle("Least Squares")
+
+    def update(self):
+        super().update()
+
+        # vanilla LS equations
+        y = np.vstack(self.y_h)
+        A = np.vstack(self.A_h)
+
+        self.theta[:], _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+
+        # log result
+        self.N += self.N_batch
+        self.log()
+
+class RLS(Estimator):
+    def __init__(self, n, d=1, gamma=1e8, forgetting=0.995):
+        super().__init__(n, d)
+
+        self.setParameters(np.zeros((self.n, 1)))
+        self.setCovariance(gamma * np.eye(n))
+
+        # additinoal parameters for RLS
+        self.K = np.empty((self.n, self.d))
+        self.K[:] = np.nan
+        self.lam = forgetting
+        self.NIS = 1.
+        self.theta_bounds = np.empty((self.n, 2))
+        self.theta_bounds[:] = np.nan
+
         self.K_h = []
-        self.e_h = []
         self.lam_h = []
+        self.NIS_h = []
+        self.theta_bounds_h = []
 
         self.setTitle("Recursive Least Squares")
 
     def log(self):
         super().log()
-        self.K_h.append(self.K)
-        self.e_h.append(self.e)
+        self.K_h.append(self.K.copy())
         self.lam_h.append(self.lam)
+        self.NIS_h.append(self.NIS)
+        self.theta_bounds_h.append(self.theta_bounds.copy())
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
 
         # shorthands
         theta = self.theta
+        theta_bounds = self.theta_bounds
         P = self.P
         A = self.A
         y = self.y
@@ -326,10 +464,22 @@ class RLS(Estimator):
         e[:] = y - A @ theta
 
         M = lam * np.eye(d) + A @ P @ A.T
-        K[:] = ( P @ A.T ) @ np.linalg.inv(M)
+        Minv = np.linalg.inv(M)
+
+        NISk = (e.T @ Minv @ e)[0, 0]
+        self.NIS = 0.995 * self.NIS + (1. - 0.995) * NISk
+
+        K[:] = ( P @ A.T ) @ Minv
 
         theta[:] += K @ e
         P[:] = ( P - K @ A @ P ) / lam
+
+        # 99% confidence bounds using normal test statistic (assuming N is large)
+        theta_var = self.NIS*np.diag(P)
+        from scipy.stats import norm
+        norm_val = norm.ppf(1 - (1 - 0.997)/2) # icdf just a shittier name
+        theta_bounds[:, 0] = theta[:, 0] - norm_val * np.sqrt(theta_var)
+        theta_bounds[:, 1] = theta[:, 0] + norm_val * np.sqrt(theta_var)
 
         # log result
         self.N += 1
@@ -379,7 +529,7 @@ class LMS(Estimator):
         self.N += 1
         self.log()
 
-class EMWV(Estimator):
+class EWMV(Estimator):
     def __init__(self, forgetting=0.995):
         super().__init__(2, 1)
         self.lam = forgetting
@@ -391,8 +541,9 @@ class EMWV(Estimator):
         super().log()
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
+        # if self.N == 1:
+        #     self.log()  # log initial conditions
 
         mean = self.theta[0, 0]
         var = self.theta[1, 0]
@@ -403,6 +554,38 @@ class EMWV(Estimator):
         self.theta[1, 0] = self.lam * ( var + (1. - self.lam) * diff**2 )
 
         self.N += 1
+        self.log()
+
+class Welford(Estimator):
+    def __init__(self):
+        super().__init__(2, 1)
+
+        self.setTitle("Welford")
+        self.setNames(["mean", "variance"], [["dummy 1", "dummy 2"]], ["sample"])
+
+    def log(self):
+        super().log()
+
+    def update(self):
+        super().update()
+        # if self.N == 1:
+        #     self.log()  # log initial conditions
+
+        mean = self.theta[0, 0]
+        var = self.theta[1, 0]
+        sample = self.y[0, 0]
+
+        self.N += 1
+        diff = sample - mean
+        mean += diff / self.N
+        var += diff * (sample - mean)
+
+        self.theta[0, 0] = mean
+        if self.N > 1:
+            self.theta[1, 0] = var / (self.N - 1)
+        else:
+            self.theta[1, 0] = 0.
+
         self.log()
 
 class RLS_fortescue(Estimator):
@@ -436,8 +619,7 @@ class RLS_fortescue(Estimator):
         self.lam_h.append(self.lam)
 
     def update(self):
-        if self.N == 1:
-            self.log()  # log initial conditions
+        super().update()
 
         # shorthands
         theta = self.theta
@@ -468,4 +650,60 @@ class RLS_fortescue(Estimator):
     def plotParameters(self, **kwargs):
         # Call the parent method to initialize the plot
         super().plotParameters(extra_rows=1, **kwargs)
-        self.extraAxes[0][0].plot(self.timeMs, self.lam_h, label="Forgetting factor")
+        self.extraAxes[0][0].plot(self.t_h, self.lam_h, label="Forgetting factor")
+
+class RLS_linear(Estimator):
+    def __init__(self, n=4, gamma=1e8, forgetting_base=0.995, N0=1):
+        self.n = 3 + n
+        self.d = 3
+        super().__init__(self.n, self.d)
+
+        self.K = np.empty((self.n, self.d))
+        self.K[:] = 0.
+        self.e = np.empty((self.d, 1))
+        self.e[:] = np.nan
+        self.lam = forgetting_base
+        self.lam_base = forgetting_base
+        self.N0 = N0
+
+        self.setParameters(np.zeros((self.n, 1)))
+        self.setCovariance(gamma * np.eye(n))
+
+        self.K_h = []
+        self.e_h = []
+        self.lam_h = []
+
+        self.setTitle("Recursive Least Squares -- with IMU")
+
+    def log(self):
+        super().log()
+        self.K_h.append(self.K.copy())
+        self.e_h.append(self.e)
+        self.lam_h.append(self.lam)
+
+    def update(self):
+        super().update()
+
+        # shorthands
+        theta = self.theta
+        P = self.P
+        A = self.A
+        y = self.y
+        lam = self.lam
+        K = self.K
+        e = self.e
+        n = self.n
+        d = self.d
+
+        # vanilla RLS equations
+        e[:] = y - A @ theta
+
+        M = lam * np.eye(d) + A @ P @ A.T
+        K[:] = ( P @ A.T ) @ np.linalg.inv(M)
+
+        theta[:] += K @ e
+        P[:] = ( P - K @ A @ P ) / lam
+
+        # log result
+        self.N += 1
+        self.log()

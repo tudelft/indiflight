@@ -1,6 +1,6 @@
 import numpy as np
 from indiflight_log_tools import IndiflightLog
-from handy_signal_tools import Signal
+from indiflight_log_tools.signal_tools import Signal
 
 #ranges = [(27850, 28350), (31470, 32000), (41550, 42150)]
 #location = "/mnt/data/WorkData/BlackboxLogs/MIRROR_Meteor_1/005_acc_offset_throws.bbl"

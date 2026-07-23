@@ -16,7 +16,7 @@ python -m build
 
 Install it in your environment
 ```
-pip install dist/indiflight_log_tools-0.1.0-cp310-cp310-linux_x86_64.whl
+pip install dist/indiflight_log_tools-0.2.1-<depends on your platform>.whl
 ```
 
 Test it 
