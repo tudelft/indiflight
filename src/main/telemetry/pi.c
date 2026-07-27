@@ -189,10 +189,34 @@ void piSendEkfInputs(void)
     }
 }
 
+void piSendAux(void)
+{
+    piMsgAuxTx.time_us = micros();
+    piMsgAuxTx.aux_1 = (int16_t) rcData[AUX1 + 0];
+    piMsgAuxTx.aux_2 = (int16_t) rcData[AUX1 + 1];
+    piMsgAuxTx.aux_3 = (int16_t) rcData[AUX1 + 2];
+    piMsgAuxTx.aux_4 = (int16_t) rcData[AUX1 + 3];
+    piMsgAuxTx.aux_5 = (int16_t) rcData[AUX1 + 4];
+    piMsgAuxTx.aux_6 = (int16_t) rcData[AUX1 + 5];
+    piMsgAuxTx.aux_7 = (int16_t) rcData[AUX1 + 6];
+    piMsgAuxTx.aux_8 = (int16_t) rcData[AUX1 + 7];
+    piMsgAuxTx.aux_9 = (int16_t) rcData[AUX1 + 8];
+    piMsgAuxTx.aux_10 = (int16_t) rcData[AUX1 + 9];
+    piMsgAuxTx.aux_11 = (int16_t) rcData[AUX1 + 10];
+    piMsgAuxTx.aux_12 = (int16_t) rcData[AUX1 + 11];
+    piMsgAuxTx.aux_13 = (int16_t) rcData[AUX1 + 12];
+    piMsgAuxTx.aux_14 = (int16_t) rcData[AUX1 + 13];
+
+    if (piPort) {
+        piSendMsg(&piMsgAuxTx, &serialWriter);
+    }
+}
+
 void processPiTelemetry(void)
 {
     // handled event based now, whenever there is stuff to be send, those functions
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
+    piSendAux();
 }
 
 static void processNewMessage(uint8_t msgId) {

@@ -38,3 +38,4 @@ void configurePiTelemetryPort(void);
 
 void piSendEkfInputs(void);
 void piSendIMU(void);
+void piSendAux(void);
