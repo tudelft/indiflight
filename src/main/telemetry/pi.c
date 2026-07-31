@@ -177,11 +177,15 @@ void piSendEkfInputs(void)
     piMsgEkfInputsTx.omega2 = (int16_t) indiRun.omega[1];
     piMsgEkfInputsTx.omega3 = (int16_t) indiRun.omega[2];
     piMsgEkfInputsTx.omega4 = (int16_t) indiRun.omega[3];
+    piMsgEkfInputsTx.omega5 = (int16_t) indiRun.omega[4];
+    piMsgEkfInputsTx.omega6 = (int16_t) indiRun.omega[5];
 #else
     piMsgEkfInputsTx.omega1 = 0;
     piMsgEkfInputsTx.omega2 = 0;
     piMsgEkfInputsTx.omega3 = 0;
     piMsgEkfInputsTx.omega4 = 0;
+    piMsgEkfInputsTx.omega5 = 0;
+    piMsgEkfInputsTx.omega6 = 0;
 #endif
 
     if (piPort) {
@@ -217,6 +221,7 @@ void processPiTelemetry(void)
     // handled event based now, whenever there is stuff to be send, those functions
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
     piSendAux();
+    piSendIMU();
 }
 
 static void processNewMessage(uint8_t msgId) {
