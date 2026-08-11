@@ -262,17 +262,17 @@ set indi_wls_act_preferred_state = 0,0,0,0,0,0
 set indi_wls_act_penalties = 1,1,1,1,1,1
 
 # fx, fy, fz is N/kg / 1 * 100.  Roll, pitch is Nm / (kgm^2) / 1 * 10.  Yaw is Nm / (kgm^2) / 1 * 10
-set indi_act_g1_fx = -325,834,834,-325,-461,-461
-set indi_act_g1_fy = 425,-87,-87,425,-523,-523
-set indi_act_g1_fz = -1125,-921,-921,-1125,-1033,-1033
-set indi_act_g1_roll = -3339,-2036,2036,3339,-3543,3543
-set indi_act_g1_pitch = -3252,4386,-4386,3252,1295,-1295
-set indi_act_g1_yaw = -619,-2120,2120,619,1080,-1080
+set indi_act_g1_fx = -325,834,834,-325,-461,-461,0,0
+set indi_act_g1_fy = 425,-87,-87,425,-523,-523,0,0
+set indi_act_g1_fz = -1125,-921,-921,-1125,-1033,-1033,0,0
+set indi_act_g1_roll = -3339,-2036,2036,3339,-3543,3543,0,0
+set indi_act_g1_pitch = -3252,4386,-4386,3252,1295,-1295,0,0
+set indi_act_g1_yaw = -619,-2120,2120,619,1080,-1080,0,0
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
-set indi_act_g2_roll = -20,53,-53,20,29,-29
-set indi_act_g2_pitch = 26,-5,5,-26,32,-32
-set indi_act_g2_yaw = -51,-42,42,51,47,-47
+set indi_act_g2_roll = -20,53,-53,20,29,-29,0,0
+set indi_act_g2_pitch = 26,-5,5,-26,32,-32,0,0
+set indi_act_g2_yaw = -51,-42,42,51,47,-47,0,0
 
 
 indiprofile 2
@@ -317,29 +317,28 @@ set indi_wls_axes_weights = 20, 20, 50, 50, 50, 5
 set indi_wls_act_penalties = 1,1,1,1
 
 
+
 ## ----- POSITION CONTROL
 
 positionprofile 0
 
 # gains * 10
 set position_horizontal_p = 30
-set position_horizontal_i = 2
-set position_horizontal_d = 40
-set position_vertical_p = 30
-set position_vertical_i = 2
-set position_vertical_d = 30
-
-# max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 250
+set position_horizontal_i = 0
+set position_horizontal_d = 23
+set position_max_horizontal_speed = 100
 set position_max_horizontal_accel = 500
+set position_max_tilt = 30
+set position_vertical_p = 40
+set position_vertical_i = 2
+set position_vertical_d = 35
 set position_max_upwards_speed = 100
 set position_max_downwards_speed = 100
 set position_max_upwards_accel = 500
 set position_max_downwards_accel = 500
-
-# max tilt, yaw gain * 10, thrust config
-set position_max_tilt = 30
 set position_yaw_p = 30
+set position_weathervane_p = 0
+set position_weathervane_min_v = 200
 set position_use_thrust_attenuation = 1
 
 
