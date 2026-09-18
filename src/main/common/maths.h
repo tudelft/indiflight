@@ -53,6 +53,8 @@
 #define CM_S_TO_KM_H(centimetersPerSecond) ((centimetersPerSecond) * 36 / 1000)
 #define CM_S_TO_MPH(centimetersPerSecond) ((centimetersPerSecond) * 10000 / 5080 / 88)
 
+#define C_TO_KELVIN(temp)                   (temp + 273.15f)
+
 #define MIN(a,b) \
   __extension__ ({ __typeof__ (a) _a = (a); \
   __typeof__ (b) _b = (b); \
