@@ -53,6 +53,12 @@
 #define CM_S_TO_KM_H(centimetersPerSecond) ((centimetersPerSecond) * 36 / 1000)
 #define CM_S_TO_MPH(centimetersPerSecond) ((centimetersPerSecond) * 10000 / 5080 / 88)
 
+// Standard Sea Level values
+// Ref:https://en.wikipedia.org/wiki/Standard_sea_level
+#define SSL_AIR_DENSITY		1.225f // kg/m^3
+#define SSL_AIR_PRESSURE	101325.01576f // Pascal
+#define SSL_AIR_TEMPERATURE	288.15f // K
+
 #define C_TO_KELVIN(temp)                   (temp + 273.15f)
 
 #define MIN(a,b) \

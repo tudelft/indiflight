@@ -18,6 +18,9 @@
 #define USE_GPS
 #define USE_GEOFENCE
 ## #define USE_MAG
+#define USE_BARO
+#define USE_PITOT
+#define USE_PITOT_MS4525
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP

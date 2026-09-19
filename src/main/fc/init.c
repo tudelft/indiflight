@@ -86,6 +86,8 @@
 #include "drivers/vtx_common.h"
 #include "drivers/vtx_rtc6705.h"
 #include "drivers/vtx_table.h"
+// #include "drivers/pitotmeter/pitotmeter.h"
+// #include "drivers/pitotmeter/pitotmeter_ms4525.h"
 
 #include "fc/board_info.h"
 #include "fc/dispatch.h"
@@ -180,6 +182,7 @@
 #include "sensors/gyro.h"
 #include "sensors/gyro_init.h"
 #include "sensors/initialisation.h"
+#include "sensors/pitotmeter.h"
 
 #include "telemetry/telemetry.h"
 #include "telemetry/uros.h"
@@ -1072,6 +1075,28 @@ void init(void)
 #ifdef USE_LEARNER
     initProberDebugPin();
 #endif
+
+#ifdef USE_PITOT
+    pitotInit();
+    pitotStartCalibration();
+#endif
+
+/*
+    pitotDev_t pitotTestDev;
+    bool pitot_works = ms4525Detect(&pitotTestDev);
+    bool pitot_started, pitot_read;
+    float pressure, temperature;
+    if (pitot_works) {
+        pitot_started = pitotTestDev.start(&pitotTestDev);
+        while (true) {
+            pitot_read = pitotTestDev.get(&pitotTestDev);
+            pitotTestDev.calculate(&pitotTestDev, &pressure, &temperature);
+        }
+    }
+    UNUSED(pitot_works);
+    UNUSED(pitot_started);
+    UNUSED(pitot_read);
+*/
 
     unusedPinsInit();
 

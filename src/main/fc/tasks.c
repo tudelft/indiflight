@@ -104,6 +104,7 @@
 #include "sensors/gyro.h"
 #include "sensors/sensors.h"
 #include "sensors/rangefinder.h"
+#include "sensors/pitotmeter.h"
 
 #include "telemetry/telemetry.h"
 #include "telemetry/crsf.h"
@@ -281,6 +282,13 @@ static void taskUpdateBaro(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_PITOT
+static void taskUpdatePitot(timeUs_t currentTimeUs)
+{
+    pitotUpdate(currentTimeUs);
+}
+#endif
+
 #ifdef USE_MAG
 static void taskUpdateMag(timeUs_t currentTimeUs)
 {
@@ -436,6 +444,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 
 #if defined(USE_BARO) || defined(USE_GPS)
     [TASK_ALTITUDE] = DEFINE_TASK("ALTITUDE", NULL, NULL, taskCalculateAltitude, TASK_PERIOD_HZ(TASK_ALTITUDE_RATE_HZ), TASK_PRIORITY_LOW),
+#endif
+
+#ifdef USE_PITOT
+    [TASK_PITOT] = DEFINE_TASK("PITOT", NULL, NULL, taskUpdatePitot, TASK_PERIOD_HZ(TASK_PITOT_RATE_HZ), TASK_PRIORITY_LOW),
 #endif
 
 #ifdef USE_DASHBOARD
@@ -594,6 +606,10 @@ void tasksInit(void)
 
 #if defined(USE_BARO) || defined(USE_GPS)
     setTaskEnabled(TASK_ALTITUDE, sensors(SENSOR_BARO) || featureIsEnabled(FEATURE_GPS));
+#endif
+
+#ifdef USE_PITOT
+    setTaskEnabled(TASK_PITOT, true);
 #endif
 
 #ifdef USE_DASHBOARD

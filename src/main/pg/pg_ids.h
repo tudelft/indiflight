@@ -90,6 +90,7 @@
 #define PG_NN_CONFIG 64
 #define PG_GEOFENCE_CONFIG 65
 #define PG_PROBER_CONFIG 66
+#define PG_PITOTMETER_CONFIG 67
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

@@ -130,6 +130,9 @@ typedef enum {
 #if defined(USE_BARO) || defined(USE_GPS)
     TASK_ALTITUDE,
 #endif
+#ifdef USE_PITOT
+    TASK_PITOT,
+#endif
 #ifdef USE_DASHBOARD
     TASK_DASHBOARD,
 #endif

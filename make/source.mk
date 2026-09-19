@@ -79,6 +79,7 @@ COMMON_SRC = \
             sensors/battery.c \
             sensors/current.c \
             sensors/voltage.c \
+			sensors/pitotmeter.c \
             target/config_helper.c \
             fc/init.c \
             fc/controlrate_profile.c \
