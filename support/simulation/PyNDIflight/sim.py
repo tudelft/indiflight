@@ -33,7 +33,7 @@ class Sim():
     def tick(self, dt):
         if not (self.i % 2): # 4kHz
             self.sil.receive() if self.sil else None
-        if not (self.i % 16): # 0.5kHz
+        if not (self.i % 8): # 250Hz
             self.hil.receive() if self.hil else None
 
         if not (self.i % 4):
@@ -44,9 +44,9 @@ class Sim():
             self.sil.sendImuAndMotor()
             self.sil.tick() # ticks the indiflight controller
 
-        if not (self.i % 16): # 500 Hz
+        if not (self.i % 8): # 250 Hz
             self.hil.send() if self.hil else None
-        if not (self.i % 80): # 100 Hz
+        if not (self.i % 40): # 50 Hz
             visData.update()
         if not (self.i % 800): # 10 Hz
             self.mocap.update() if self.mocap else None

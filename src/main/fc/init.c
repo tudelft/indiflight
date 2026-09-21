@@ -1072,31 +1072,14 @@ void init(void)
 
     swdPinsInit();
 
-#ifdef USE_LEARNER
-    initProberDebugPin();
-#endif
-
-#ifdef USE_PITOT
+#if defined(USE_PITOT)
     pitotInit();
     pitotStartCalibration();
 #endif
 
-/*
-    pitotDev_t pitotTestDev;
-    bool pitot_works = ms4525Detect(&pitotTestDev);
-    bool pitot_started, pitot_read;
-    float pressure, temperature;
-    if (pitot_works) {
-        pitot_started = pitotTestDev.start(&pitotTestDev);
-        while (true) {
-            pitot_read = pitotTestDev.get(&pitotTestDev);
-            pitotTestDev.calculate(&pitotTestDev, &pressure, &temperature);
-        }
-    }
-    UNUSED(pitot_works);
-    UNUSED(pitot_started);
-    UNUSED(pitot_read);
-*/
+#ifdef USE_LEARNER
+    initProberDebugPin();
+#endif
 
     unusedPinsInit();
 

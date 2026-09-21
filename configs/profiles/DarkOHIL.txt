@@ -60,6 +60,11 @@
 # CRAFT SETTINGS (formerly known as "profile") #
 ################################################
 
+set gyro_1_sensor_align = DEFAULT
+set gyro_1_align_pitch = 0
+set gyro_2_sensor_align = DEFAULT
+set gyro_2_align_pitch = 0
+
 ## ----- PERIPHERALS
 
 # feature

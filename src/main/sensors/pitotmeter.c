@@ -42,19 +42,15 @@
 
 #include "pitotmeter.h"
 
-#include "sensors/barometer.h"
 #include "sensors/sensors.h"
 
 #include "io/gps.h"
 
 #include "sensors/pitotmeter.h"
-#include "sensors/barometer.h"
 #include "sensors/sensors.h"
 
 #include "io/gps.h"
 
-
-extern baro_t baro;
 
 pitot_t pitot = {.lastMeasurementUs = 0, .lastSeenHealthyMs = 0};
 
@@ -274,6 +270,10 @@ void pitotUpdate(timeUs_t currentTimeUs)
     static float pitotTemperatureTmp;
 
     pitot.lastMeasurementUs = currentTimeUs;
+
+    if (!pitot.dev.start || !pitot.dev.get || !pitot.dev.calculate) {
+        return;
+    }
 
 // SKIP     while(1) {
 // SKIP #ifdef USE_SIMULATOR

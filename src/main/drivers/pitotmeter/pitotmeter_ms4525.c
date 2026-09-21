@@ -34,6 +34,8 @@
 // MS4525, Standard address 0x28
 #define MS4525_ADDR                 0x28
 
+#if defined(USE_PITOT) && defined(USE_PITOT_MS4525)
+
 typedef struct __attribute__ ((__packed__)) ms4525Ctx_s {
     bool     dataValid;
     uint32_t ms4525_ut;
@@ -50,6 +52,10 @@ static bool ms4525_start(pitotDev_t * pitot)
 
 static bool ms4525_read(pitotDev_t * pitot)
 {
+#ifndef USE_I2C
+    UNUSED(pitot);
+    return false;
+#else
     uint8_t rxbuf1[4];
     uint8_t rxbuf2[4];
 
@@ -95,6 +101,7 @@ static bool ms4525_read(pitotDev_t * pitot)
     ctx->ms4525_ut = (dT_raw1 + dT_raw2) / 2;
 
     return true;
+#endif
 }
 
 static void ms4525_calculate(pitotDev_t * pitot, float *pressure, float *temperature)
@@ -123,6 +130,13 @@ static void ms4525_calculate(pitotDev_t * pitot, float *pressure, float *tempera
 
 bool ms4525Detect(pitotDev_t * pitot)
 {
+#ifndef USE_I2C
+    UNUSED(pitot);
+    pitot->start = ms4525_start;
+    pitot->get = ms4525_read;
+    pitot->calculate = ms4525_calculate;
+    return false;
+#else
     uint8_t rxbuf[4];
     bool defaultAddressApplied = false;
     extDevice_t *dev = &pitot->dev;
@@ -165,4 +179,7 @@ bool ms4525Detect(pitotDev_t * pitot)
     pitot->get = ms4525_read;
     pitot->calculate = ms4525_calculate;
     return true;
+#endif
 }
+
+#endif
