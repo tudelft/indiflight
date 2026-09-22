@@ -37,7 +37,7 @@ if args.type == "tailsitter":
     craft = Tailsitter()
     pplt = IndiflightViewport(craft,
                               log.data,
-                              follow=False,
+                              follow=True,
                               Nr=2,
                               Ns=2,
                               interpolation="previous",

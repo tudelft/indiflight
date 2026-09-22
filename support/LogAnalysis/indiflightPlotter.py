@@ -32,6 +32,7 @@ class IndiflightPlotter(FlightPlotterBase):
         # | vel | spf   | drate
         # | acc | actS  | actM
         # | rc  | servo | rpm
+        # | pitot
         self._plot_timeseries(self.fig.add_subplot(self.gs[0, 2]),
                          light=[self.data[f'gyroADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'gyroADC[{i}]'].to_numpy() for i in range(3)],
@@ -79,6 +80,17 @@ class IndiflightPlotter(FlightPlotterBase):
                          title="RC Commands",
                          ylabel="RC Command",
                          ylimits=(-1.1, +1.1))
+
+        if 'pitot_airSpeed' in self.data.columns:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[4, 0]),
+                             light=None,
+                             solid=[self.data[f'pitot_airSpeed'].to_numpy()],
+                             dashed=None,
+                             series_labels=["pitot airspeed"],
+                             style_labels=[None, "Raw", None],
+                             title="Pitot",
+                             ylabel="Airspeed",
+                             ylimits=(None, None))
 
         N = self.Nr + self.Ns
         self._plot_timeseries(self.fig.add_subplot(self.gs[2, 2]),

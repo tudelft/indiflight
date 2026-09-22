@@ -18,6 +18,9 @@
 #define USE_GPS
 #define USE_GEOFENCE
 ## #define USE_MAG
+#define USE_BARO
+#define USE_PITOT
+#define USE_PITOT_MS4525
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -182,10 +185,10 @@ set ekf_meas_delay = 0
 
 # valkenburg
 geofence clear
-geofence 521713359 44187540
-geofence 521687918 44106114
-geofence 521638078 44126769
-geofence 521671689 44220485
+# geofence 521713359 44187540
+# geofence 521687918 44106114
+# geofence 521638078 44126769
+# geofence 521671689 44220485
 
 # meter over WGS ellipsoid! not over ground TODO
 set geofence_max_altitude = 120
@@ -253,7 +256,7 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 800, 500, 200
+set indi_attitude_gains = 800, 500, 100
 set indi_rate_gains     =  130,  100,  60
 # set indi_attitude_gains = 500, 500, 500
 # set indi_rate_gains     =  180,  180,  180
@@ -269,7 +272,7 @@ set indi_attitude_max_yaw_rate = 200
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 45            # deg
+set indi_manual_max_tilt = 80            # deg
 set indi_manual_use_coordinated_yaw = 1  # ?
 
 # --- indi config ---
@@ -416,7 +419,7 @@ set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
 set position_max_horizontal_speed = 1000
-set position_max_horizontal_accel = 800
+set position_max_horizontal_accel = 1200
 set position_max_upwards_speed = 250
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
@@ -425,7 +428,7 @@ set position_max_downwards_accel = 600
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 45
 set position_yaw_p = 50
-set position_use_thrust_attenuation = 1
+set position_use_thrust_attenuation = 0
 
 
 positionprofile 2
