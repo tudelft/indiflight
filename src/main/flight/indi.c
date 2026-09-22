@@ -188,7 +188,18 @@ void getSetpoints(timeUs_t current) {
         float roll = getRcDeflection(ROLL);
         float pitch = getRcDeflection(PITCH);
         float maxTilt = indiRun.manualMaxTilt;
+        fp_quaternion_t attSpYaw;
 
+#ifdef INDI_IS_TAILSITTER
+        // tailsitter special: first bank then pitch
+
+        fp_quaternion_t bank_q, pitch_q;
+        fp_euler_t bank_e = { .angles = { .roll=maxTilt*roll, .pitch=0, .yaw=0 } };
+        fp_euler_t pitch_e = { .angles = { .roll=0, .pitch=maxTilt*pitch, .yaw=0 } };
+        quaternion_of_fp_euler(&bank_q, &bank_e);
+        quaternion_of_fp_euler(&pitch_q, &pitch_e);
+        attSpYaw = chain_quaternion(&bank_q, &pitch_q);
+#else
         fp_vector_t axis = {
             .V.X = maxTilt*roll,
             .V.Y = maxTilt*pitch,
@@ -197,8 +208,8 @@ void getSetpoints(timeUs_t current) {
         VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
         float angle = VEC3_XY_LENGTH(axis);
         VEC3_NORMALIZE(axis);
-        fp_quaternion_t attSpYaw;
         quaternion_of_axis_angle(&attSpYaw, &axis, angle);
+#endif
 
         fp_quaternion_t yawNed = {
             .w = cos_approx(Psi/2.f),
@@ -283,6 +294,29 @@ void getAlphaSpBody(timeUs_t current) {
         if (attEstNed.w * indiRun.attSpNed.w < 0.f)
             QUAT_SCALAR_MULT(indiRun.attSpNed, -1.f);
 
+#ifdef INDI_IS_TAILSITTER
+        indiRun.attErrBody = chain_quaternion(&attEstNedInv, &indiRun.attSpNed);
+        if (indiRun.attErrBody.w < 0.f) {
+            QUAT_SCALAR_MULT(indiRun.attErrBody, -1.f);
+        }
+
+        fp_vector_t errorRotation = { .V = {
+            .X=indiRun.attErrBody.x,
+            .Y=indiRun.attErrBody.y,
+            .Z=indiRun.attErrBody.z
+        } };
+        float tiltAxisNorm = VEC3_LENGTH(errorRotation);
+
+        float errorAngle = 2.f*acos_approx(indiRun.attErrBody.w);
+        if (tiltAxisNorm > 1e-6f) {
+            VEC3_SCALAR_MULT(errorRotation, errorAngle / tiltAxisNorm);
+        } 
+
+        indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * errorRotation.V.X;
+        indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * errorRotation.V.Y;
+        if (indiRun.trackAttitudeYaw || true)
+            indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * errorRotation.V.Z;
+#else
         // we decompose the error quaternion into first tilt, then yaw
         // q_e^B  =  q_yaw^B  *  q_tilt^B
         //
@@ -357,6 +391,7 @@ void getAlphaSpBody(timeUs_t current) {
         if (indiRun.trackAttitudeYaw)
             indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * yawErrorAngle;
         // else: just keep rateSpBody.V.Z that has been set
+#endif
 
         // constrain to be safe
         VEC3_CONSTRAIN_XY_LENGTH(indiRun.rateSpBody, indiRun.attMaxTiltRate);

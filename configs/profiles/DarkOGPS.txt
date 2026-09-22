@@ -52,6 +52,7 @@
 ## #define LEARNER_IS_TAILSITTER_SYMMETRIC
 ## #define USE_NN_CONTROL
 
+#define INDI_IS_TAILSITTER
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
