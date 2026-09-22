@@ -228,7 +228,7 @@ if __name__=="__main__":
 
     #%% run loop
     dt = 0.000125 # 8kHz
-    T = 60. # seconds
+    T = 600. # seconds
     dt_rt = None if args.no_real_time else 1*dt
     armed = False
     start_trajectory = False

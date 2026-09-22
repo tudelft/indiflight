@@ -30,6 +30,7 @@
 #include "flight/ahrs.h"
 #include "flight/ekf.h"
 #include "common/maths.h"
+#include "common/filter.h"
 #include "fc/runtime_config.h"
 #include "fc/rc.h"
 #include "pg/pg_ids.h"
@@ -81,6 +82,9 @@ void posCtlInit(void) {
     posRuntime.arrest_z_motion_only = false;
 }
 
+// filtered stick-based velocity (NED)
+static biquadFilter_t posVelFilter[3];
+
 positionRuntime_t posRuntime;
 void initPositionRuntime(void) {
     const positionProfile_t* p = positionProfiles(systemConfig()->positionProfileIndex);
@@ -103,6 +107,11 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_p = p->weathervane_p * 0.1f;
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
+
+    // init stick velocity filters (2nd order LPF)
+    for (int i = 0; i < 3; i++) {
+        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 2000); // TODO: make dynamic
+    }
 }
 
 void changePositionProfile(uint8_t profileIndex)
@@ -312,14 +321,41 @@ void posGetVelSpNedFromPosSp(void) {
 }
 
 void posGetVelSpNedFromSticks(void) {
+    static fp_vector_t velEstNedFilt = {0};
+    static bool useVelocityBearing = false;
+
+#define POSCTL_VEL_BEARING_THRESH_CMS 300
+
     // get velocity setpoints from sticks in body frame
     float velSpBodyX = -getRcDeflection(PITCH) * posRuntime.horz_max_v;
     float velSpBodyY = getRcDeflection(ROLL) * posRuntime.horz_max_v;
 
-    // use yaw angle to convert to NED frame
-    float Psi = getYawWithoutSingularity();
-    float cPsi = cos_approx(Psi);
-    float sPsi = sin_approx(Psi);
+    // hysteresis: enter velocity-bearing when speed > 3.0 m/s, exit when < 2.5 m/s
+    velEstNedFilt.V.X = biquadFilterApply(&posVelFilter[0], velEstNed.V.X);
+    velEstNedFilt.V.Y = biquadFilterApply(&posVelFilter[1], velEstNed.V.Y);
+    float xy_groundspeed = VEC3_XY_LENGTH(velEstNedFilt);
+    if (useVelocityBearing) {
+        if (xy_groundspeed < (POSCTL_VEL_BEARING_THRESH_CMS*0.01f - 0.5f)) {
+            useVelocityBearing = false;
+        }
+    } else {
+        if (xy_groundspeed > (POSCTL_VEL_BEARING_THRESH_CMS*0.01f)) {
+            useVelocityBearing = true;
+        }
+    }
+
+    // use inferred bearing angle to convert to NED frame
+    float cPsi, sPsi;
+    if (useVelocityBearing && (xy_groundspeed > 1e-6f)) {
+        cPsi = velEstNedFilt.V.X / xy_groundspeed;
+        sPsi = velEstNedFilt.V.Y / xy_groundspeed;
+    } else {
+        float Psi = getYawWithoutSingularity();
+        cPsi = cos_approx(Psi);
+        sPsi = sin_approx(Psi);
+    }
+
+    // convert sticks
     posSpNed.vel.V.X = velSpBodyX * cPsi - velSpBodyY * sPsi;
     posSpNed.vel.V.Y = velSpBodyX * sPsi + velSpBodyY * cPsi;
 

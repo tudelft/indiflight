@@ -264,16 +264,16 @@ set indi_rate_gains     =  130,  100,  60
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
-set indi_attitude_max_yaw_rate = 500
+set indi_attitude_max_yaw_rate = 200
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
 set indi_manual_max_tilt = 45            # deg
-set indi_manual_use_coordinated_yaw = 0  # ?
+set indi_manual_use_coordinated_yaw = 1  # ?
 
 # --- indi config ---
 set indi_use_increment = 1
-set indi_use_accel_for_thrust = 1
+set indi_use_accel_for_thrust = 0
 set indi_use_rpm_dot_feedback = 0  # todo: check if make sense to enable
 set indi_act_num = 4
 set indi_sync_lowpass_hz = 3       # no higher!
@@ -414,8 +414,8 @@ set position_vertical_i = 5
 set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 700
-set position_max_horizontal_accel = 1000
+set position_max_horizontal_speed = 1000
+set position_max_horizontal_accel = 800
 set position_max_upwards_speed = 250
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
