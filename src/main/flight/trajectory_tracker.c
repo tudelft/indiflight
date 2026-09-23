@@ -321,7 +321,7 @@ void updateTrajectoryTracker(timeUs_t current) {
 
         // overwrite rateSpBody 
         if (posSpNed.trackPsi) {
-            rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_ref);
+            rateSpBodyFromPos = extrinsicYaw(tt_yaw_rate_ref);
         } else {
             rateSpBodyFromPos.V.X = 0;
             rateSpBodyFromPos.V.Y = 0;

@@ -257,7 +257,9 @@ float indiLinearization(actLin_t* lin, float in);
 float indiOutputCurve(actLin_t* lin, float in);
 
 float getYawWithoutSingularity(void);
-fp_vector_t coordinatedYaw(float yaw);
+fp_vector_t extrinsicYaw(float yaw);
+fp_vector_t coordinateTurn(void);
+fp_vector_t sideslipStabilization(float gain);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);

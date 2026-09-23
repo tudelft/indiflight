@@ -420,6 +420,11 @@ void updateArmingStatus(void)
             unsetArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
         }
 #endif
+        if (FLIGHT_MODE(HORIZON_MODE)) {
+            setArmingDisabled(ARMING_DISABLED_NN_MODE); // beun TODO
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_NN_MODE);
+        }
 
 #ifdef USE_NN_CONTROL
         if (FLIGHT_MODE(NN_MODE)) {

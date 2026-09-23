@@ -142,6 +142,7 @@ void i16_euler_of_fp_euler(i16_euler_t *ei, const fp_euler_t *ef);
 void fp_euler_of_i16_euler(fp_euler_t *ef, const i16_euler_t *ei);
 void fp_euler_of_rotationMatrix(fp_euler_t *e, const fp_rotationMatrix_t *r);
 void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternionProducts_t *qp);
+void fp_euler_of_quaternionProducts_ZXY(fp_euler_t *e, const fp_quaternionProducts_t *qp);
 
 void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e);
 void rotationMatrix_of_quaternionProducts(fp_rotationMatrix_t *r, const fp_quaternionProducts_t *qP);

@@ -277,7 +277,7 @@ set indi_attitude_max_yaw_rate = 200
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
-set indi_manual_max_tilt = 80            # deg
+set indi_manual_max_tilt = 45            # deg
 set indi_manual_use_coordinated_yaw = 1  # ?
 
 # --- indi config ---

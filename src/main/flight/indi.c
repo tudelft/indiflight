@@ -80,6 +80,74 @@ FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 #define RC_SCALE_THROTTLE 0.001f
 #define RC_OFFSET_THROTTLE 1000.f
 
+#ifndef INDI_PITCH_OFFSET_SETTLING_TIME_US
+#define INDI_PITCH_OFFSET_SETTLING_TIME_US 3000000
+#endif
+#ifndef INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS
+#define INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS 12.f
+#endif
+#ifndef INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT
+#define INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT 0.5f
+#endif
+
+typedef enum {
+    PITCH_OFFSET_MODE_NONE = 0,
+    PITCH_OFFSET_MODE_ANGLE,
+    PITCH_OFFSET_MODE_HORIZON,
+} pitchOffsetMode_e;
+
+static pitchOffsetMode_e pitchOffsetMode;
+static timeUs_t pitchOffsetTransitionStart;
+static timeUs_t pitchOffsetTransitionDuration;
+static float pitchOffsetStart;
+static float pitchOffsetTarget;
+
+static float getPitchOffset(timeUs_t current)
+{
+    if (pitchOffsetTransitionDuration == 0) {
+        return pitchOffsetTarget;
+    }
+
+    const timeDelta_t elapsed = cmpTimeUs(current, pitchOffsetTransitionStart);
+    if (cmpTimeUs(elapsed, pitchOffsetTransitionDuration) >= 0) {
+        return pitchOffsetTarget;
+    }
+
+    const float progress = (float)elapsed / (float)pitchOffsetTransitionDuration;
+    const float logisticAtStart = 1.f / (1.f + exp_approx(INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT));
+    const float logisticAtEnd = 1.f / (1.f + exp_approx(-INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * (1.f - INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT)));
+    const float logistic = 1.f / (1.f + exp_approx(-INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * (progress - INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT)));
+    const float normalized = constrainf((logistic - logisticAtStart) / (logisticAtEnd - logisticAtStart), 0.f, 1.f);
+
+    return pitchOffsetStart + (pitchOffsetTarget - pitchOffsetStart) * normalized;
+}
+
+static fp_euler_t getCurrentEulerZYX(void)
+{
+    fp_quaternion_t attitude;
+    getHoverAttitudeQuaternion(&attitude);
+    fp_euler_t euler;
+    fp_quaternionProducts_t qp;
+    quaternionProducts_of_quaternion(&qp, &attitude);
+    fp_euler_of_quaternionProducts(&euler, &qp);
+
+    return euler;
+}
+
+static fp_euler_t getCurrentEulerZXY(void)
+{
+    fp_quaternion_t attitude;
+    getHoverAttitudeQuaternion(&attitude);
+    fp_euler_t euler;
+    fp_quaternionProducts_t qp;
+    quaternionProducts_of_quaternion(&qp, &attitude);
+    fp_euler_of_quaternionProducts_ZXY(&euler, &qp);
+
+    return euler;
+    // const fp_vector_t bodyXNed = quatRotMatCol(&attitude, 0);
+    // return atan2_approx(-bodyXNed.V.Z, VEC3_XY_LENGTH(bodyXNed));
+}
+
 // refurbish this code somehow
 #if (MAXU > AS_N_U) || (MAXV > AS_N_V)
 #error "Sizes may be too much for ActiveSetCtlAlloc library"
@@ -120,10 +188,6 @@ void indiController(timeUs_t current) {
 FAST_CODE
 #endif
 void getSetpoints(timeUs_t current) {
-#if !defined(USE_CATAPULT) && !defined(USE_LEARNER)
-    UNUSED(current);
-#endif
-
     indiRun.attSpNed.w = 1.f;
     indiRun.attSpNed.x = 0.f;
     indiRun.attSpNed.y = 0.f;
@@ -179,6 +243,31 @@ void getSetpoints(timeUs_t current) {
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
         // get desired attitude setpoints from sticks
 
+        const pitchOffsetMode_e currentPitchOffsetMode = FLIGHT_MODE(HORIZON_MODE)
+            ? PITCH_OFFSET_MODE_HORIZON
+            : PITCH_OFFSET_MODE_ANGLE;
+        if (currentPitchOffsetMode != pitchOffsetMode) {
+            fp_euler_t eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
+            pitchOffsetStart = eulerZXY.angles.pitch;
+            pitchOffsetTarget = currentPitchOffsetMode == PITCH_OFFSET_MODE_HORIZON ? -0.5f * M_PIf : 0.f;
+            const float angularDistance = fabsf(pitchOffsetTarget - pitchOffsetStart);
+            const float durationScale = angularDistance / (0.5f * M_PIf);
+
+            pitchOffsetMode = currentPitchOffsetMode;
+            pitchOffsetTransitionStart = current;
+            pitchOffsetTransitionDuration = INDI_PITCH_OFFSET_SETTLING_TIME_US > 0
+                ? (timeUs_t)(INDI_PITCH_OFFSET_SETTLING_TIME_US * durationScale)
+                : 0;
+            if (pitchOffsetTransitionDuration == 0) {
+                pitchOffsetStart = pitchOffsetTarget;
+            }
+        }
+        if (!ARMING_FLAG(ARMED)) {
+            pitchOffsetTarget = currentPitchOffsetMode == PITCH_OFFSET_MODE_HORIZON ? 0.5f * M_PIf : 0.f;
+            pitchOffsetStart = pitchOffsetTarget;
+            pitchOffsetTransitionDuration = 0;
+        }
+
         // get proper yaw
         float Psi = getYawWithoutSingularity();
 
@@ -196,6 +285,9 @@ void getSetpoints(timeUs_t current) {
         fp_quaternion_t bank_q, pitch_q;
         fp_euler_t bank_e = { .angles = { .roll=maxTilt*roll, .pitch=0, .yaw=0 } };
         fp_euler_t pitch_e = { .angles = { .roll=0, .pitch=maxTilt*pitch, .yaw=0 } };
+        if (currentPitchOffsetMode != PITCH_OFFSET_MODE_NONE || pitchOffsetTransitionDuration > 0) {
+            pitch_e.angles.pitch += getPitchOffset(current);
+        }
         quaternion_of_fp_euler(&bank_q, &bank_e);
         quaternion_of_fp_euler(&pitch_q, &pitch_e);
         attSpYaw = chain_quaternion(&bank_q, &pitch_q);
@@ -222,14 +314,43 @@ void getSetpoints(timeUs_t current) {
         // optimized for .x = 0, .y = 0, unless compiler does that for us?
         indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
 
+        // coordinate turn
+#ifdef INDI_IS_TAILSITTER
+#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(10.f)) // deg/s per m/s/s of ay
+        if (indiRun.manualUseCoordinatedYaw) {
+            indiRun.rateSpBodyCommanded = coordinateTurn();
+            fp_vector_t sideslipCorrection;
+            sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN);
+            VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
+        }
+#endif
+
+        switch (currentPitchOffsetMode) {
+#ifdef INDI_IS_TAILSITTER
+            case PITCH_OFFSET_MODE_HORIZON:
+                indiRun.rateSpBodyCommanded.V.X += DEGREES_TO_RADIANS(getSetpointRate(YAW));
+                break;
+            case PITCH_OFFSET_MODE_ANGLE:
+            case PITCH_OFFSET_MODE_NONE:
+#endif
+            default:
+                if (indiRun.manualUseCoordinatedYaw) {
+                    fp_vector_t extrinsicYawFF = extrinsicYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
+                    indiRun.rateSpBodyCommanded.V.X += extrinsicYawFF.V.X;
+                    indiRun.rateSpBodyCommanded.V.Y += extrinsicYawFF.V.Y;
+                    indiRun.rateSpBodyCommanded.V.Z += extrinsicYawFF.V.Z;
+                } else {
+                    indiRun.rateSpBodyCommanded.V.Z += DEGREES_TO_RADIANS(getSetpointRate(YAW));
+                }
+                break;
+        }
+
         // convert throttle
         indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
         indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
-
-        // get yaw rate
-        indiRun.rateSpBodyCommanded = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
-
     } else {
+        pitchOffsetMode = 0;
+        pitchOffsetTransitionDuration = 0;
         // acro
         indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
         indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
@@ -792,7 +913,7 @@ float getYawWithoutSingularity(void) {
 #ifdef STM32H7
 FAST_CODE
 #endif
-fp_vector_t coordinatedYaw(float yaw) {
+fp_vector_t extrinsicYaw(float yaw) {
     // todo: this local is defined twice.. make static somehow
     fp_quaternion_t attEstNedInv;
     getHoverAttitudeQuaternion(&attEstNedInv);
@@ -803,6 +924,37 @@ fp_vector_t coordinatedYaw(float yaw) {
     VEC3_SCALAR_MULT(yawRateSpBody, yaw);
 
     return yawRateSpBody;
+}
+
+fp_vector_t coordinateTurn(void) {
+    fp_vector_t output = {0};
+#ifdef USE_LOCAL_POSITION
+#define INDI_TURN_COORDINATION_VEL_THRESHOLD (5.f)
+#define INDI_TURN_COORDINATION_PHI_SOFT_LIMIT (DEGREES_TO_RADIANS(70.f))
+#define INDI_TURN_COORDINATION_PHI_HARD_LIMIT (0.5f * M_PIf)
+    float vel = VEC3_LENGTH(velEstNed);
+    fp_euler_t euler;
+    euler = getCurrentEulerZYX(); // roll defined on +-pi
+    float roll;
+    float omega;
+    roll = euler.angles.roll;
+    if (isConvergedEkf()
+            && (vel > INDI_TURN_COORDINATION_VEL_THRESHOLD)
+            && (fabsf(roll) < INDI_TURN_COORDINATION_PHI_HARD_LIMIT)) {
+        roll = constrainf(roll, -INDI_TURN_COORDINATION_PHI_SOFT_LIMIT, INDI_TURN_COORDINATION_PHI_SOFT_LIMIT);
+        omega = GRAVITYf * tan_approx(roll) / vel; // level turn model
+        output = extrinsicYaw(omega);
+    }
+#endif
+    return output;
+}
+
+fp_vector_t sideslipStabilization(float gain) {
+    float ay = indiRun.spf_fs.V.Y;
+    fp_vector_t output = {0};
+    output.V.X = -gain*ay;
+
+    return output;
 }
 
 // init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs

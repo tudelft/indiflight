@@ -140,6 +140,13 @@ FAST_CODE void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternion
     e->angles.yaw   = atan2_approx((2.0f * (qp->wz + qp->xy)), (1.0f - 2.0f * (qp->yy + qp->zz)));
 }
 
+FAST_CODE void fp_euler_of_quaternionProducts_ZXY(fp_euler_t *e, const fp_quaternionProducts_t *qp) {
+    // https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions#Conversion_formulae_between_formalisms
+    // z-x'-y'' rotation order: intrinsic rotations around yaw then roll then pitch
+    e->angles.roll  = asin_approx(2.0f * (qp->wx + qp->yz));
+    e->angles.pitch = atan2_approx((2.0f * (qp->wy - qp->xz)), (1.0f - 2.0f * (qp->xx + qp->yy)));
+    e->angles.yaw   = atan2_approx((2.0f * (qp->wz - qp->xy)), (1.0f - 2.0f * (qp->xx + qp->zz)));
+}
 
 FAST_CODE void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e) {
     float cosx, sinx, cosy, siny, cosz, sinz;
