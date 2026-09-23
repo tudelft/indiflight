@@ -674,8 +674,23 @@ void getMotorCommands(timeUs_t current) {
 
             float omega_lim = MAX(indiRun.omega[servo], 0.5f*indiRun.actHoverOmega[servo]);
             for (int axis = 0; axis < 6; axis++) {
-                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim - 0e6f * MIN(velEstBody.V.Z, +0.f); // todo: add vz velocity here?
-                indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100); // todo: add vz velocity here?
+                float v2;
+                v2 = velEstBody.V.Z*velEstBody.V.Z;
+                // F_hover = mass*9.81 / 2  ~ 3
+                // Vdisk2_hover = 2*F_hover / (1.225 * (5*25.4e-3/2)**2 * np.pi)
+                // w2_hover = F_hover / k
+                // sim: Mz += delta * (cdelta * w_hover**2) * (0.5*1.225*vzb**2) / (0.5*1.225*Vdisk_hover**2)
+
+                // simlifies down to 
+                // M? = delta*O^2*cdelta + q*delta*(cdelta * A/k)
+                // M? = delta*cdelta * ( O^2 + q*A/k )
+                float q, A, k;
+                q = 0.5*SSL_AIR_DENSITY*v2;
+                k = 1.413e-6;
+                A = sq(5*0.0254/2)*M_PIf; // quick maths --> flight at 10m/s with props off is same as hover
+
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim + q*A/k;
+                indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100);
             }
 
             indiRun.actG2[0][2+servo] = 0.f;
@@ -952,7 +967,7 @@ fp_vector_t coordinateTurn(void) {
 fp_vector_t sideslipStabilization(float gain) {
     float ay = indiRun.spf_fs.V.Y;
     fp_vector_t output = {0};
-    output.V.X = -gain*ay;
+    output.V.X = constrainf(-gain*ay, -DEGREES_TO_RADIANS(50.f), DEGREES_TO_RADIANS(50.f));
 
     return output;
 }
