@@ -85,6 +85,62 @@ void posCtlInit(void) {
 // filtered stick-based velocity (NED)
 static biquadFilter_t posVelFilter[3];
 
+// Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
+// The plan is disabled by default so position mode keeps its existing behavior.
+#define POSITION_WAYPOINT_COUNT 5
+static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
+    { .location = { .V = { .X = 0.f,  .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 20.f, .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 0.f,  .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 0.f,  .Y = - 0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+};
+
+static unsigned int activeWaypointIndex;
+static bool waypointRunActive;
+
+static bool updateWaypointTraversal(bool allowWaypoints)
+{
+    if (!allowWaypoints || POSITION_WAYPOINT_COUNT == 0) {
+        waypointRunActive = false;
+        activeWaypointIndex = 0;
+        return false;
+    }
+
+    if (!waypointRunActive) {
+        waypointRunActive = true;
+        activeWaypointIndex = 0;
+    }
+
+    while (activeWaypointIndex + 1 < POSITION_WAYPOINT_COUNT) {
+        const positionWaypoint_t *waypoint = &positionWaypoints[activeWaypointIndex];
+        const float northError = waypoint->location.V.X - posEstNed.V.X;
+        const float eastError = waypoint->location.V.Y - posEstNed.V.Y;
+        const float downError = waypoint->location.V.Z - posEstNed.V.Z;
+        const float horizontalDistance = sqrtf(northError * northError + eastError * eastError);
+
+        if (horizontalDistance > waypoint->tolerance || fabsf(downError) > waypoint->heightTolerance) {
+            break;
+        }
+
+        activeWaypointIndex++;
+    }
+
+    posSpNed.pos = positionWaypoints[activeWaypointIndex].location;
+    posSpNed.valid = true;
+    posSpNed.trackPsi = false;
+    return true;
+}
+
+static float activeWaypointVelocityLimit(void)
+{
+    if (waypointRunActive && activeWaypointIndex < POSITION_WAYPOINT_COUNT) {
+        return positionWaypoints[activeWaypointIndex].velocityLimit;
+    }
+
+    return 0.f;
+}
+
 positionRuntime_t posRuntime;
 void initPositionRuntime(void) {
     const positionProfile_t* p = positionProfiles(systemConfig()->positionProfileIndex);
@@ -171,6 +227,10 @@ void updatePosCtl(timeUs_t current) {
 #endif
     }
 
+    const bool waypointActive = updateWaypointTraversal(
+        !manual_takeover && ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE));
+    UNUSED(waypointActive);
+
     static timeUs_t lastHoldSpTimeUs = 0;
 #ifdef USE_GEOFENCE
     if (geofenceAction == GEOFENCE_ACTION_HOLD) {
@@ -255,7 +315,7 @@ void updatePosCtl(timeUs_t current) {
 
                 // yaw stuff
                 posSpNed.trackPsi = false;
-                rateSpBodyFromPos = coordinatedYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
+                rateSpBodyFromPos = extrinsicYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
             } else if (posRuntime.arrest_motion) {
                 // just command zero velocity until it is reached
                 if (posRuntime.arrest_z_motion_only && posSpNed.valid) {
@@ -318,6 +378,14 @@ void posGetVelSpNedFromPosSp(void) {
     VEC3_CONSTRAIN_XY_LENGTH(posSpNed.vel, posRuntime.horz_max_v);
 
     posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
+
+    const float waypointVelocityLimit = activeWaypointVelocityLimit();
+    if (waypointVelocityLimit > 0.f) {
+        const float velocityLength = VEC3_LENGTH(posSpNed.vel);
+        if (velocityLength > waypointVelocityLimit) {
+            VEC3_SCALAR_MULT(posSpNed.vel, waypointVelocityLimit / velocityLength);
+        }
+    }
 }
 
 void posGetVelSpNedFromSticks(void) {

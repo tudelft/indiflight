@@ -53,6 +53,13 @@ typedef struct positionProfile_s {
     uint16_t horz_max_iterm; // cm/s
 } positionProfile_t;
 
+typedef struct positionWaypoint_s {
+    fp_vector_t location; // local cartesian NED coordinates in m
+    float tolerance; // horizontal acceptance radius in m
+    float heightTolerance; // vertical acceptance distance in m
+    float velocityLimit; // maximum waypoint velocity in m/s
+} positionWaypoint_t;
+
 typedef struct positionRuntime_s {
     float horz_p; // m/s/s per m 
     float horz_i; // m/s/s per m/s * s
