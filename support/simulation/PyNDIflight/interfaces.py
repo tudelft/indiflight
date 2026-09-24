@@ -28,6 +28,7 @@ from copy import deepcopy
 class VisData():
     def __init__(self):
         self.x = np.zeros(3, dtype=np.float64)
+        self.v = np.zeros(3, dtype=np.float64)
         self.q = np.zeros(4, dtype=np.float64)
         self.q[0] = 1.
         self.inputs = np.zeros(4, dtype=np.float64)
@@ -43,6 +44,7 @@ class VisData():
 
     def update(self):
         self.x[:] = self.uav.xI.round(4)
+        self.v[:] = self.uav.vI.round(4)
         self.q[:] = self.uav.q.round(4)
         self.inputs[:self.uav.Nr] = self.uav.r_u.astype(np.float64)
         self.inputs[(self.uav.Nr):(self.uav.Nr+self.uav.Ns)] \
@@ -61,9 +63,10 @@ def hello_world():
 def pose():
     arr = []
     pos = list(visData.x.round(4))
+    vel = list(visData.v.round(4))
     quat = list(visData.q.round(4))
     ctl = list(visData.inputs)
-    arr.append({'id': 0, 'type': 2, 'newCraft': visData.newCraft, 'pos': pos, 'quat': quat, 'ctl': ctl})
+    arr.append({'id': 0, 'type': 2, 'newCraft': visData.newCraft, 'pos': pos, 'vel': vel, 'quat': quat, 'ctl': ctl})
     return json.dumps(arr)
 
 @visApp.route("/craftdata")

@@ -130,6 +130,8 @@ if __name__=="__main__":
         [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
         [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
     ], dtype=np.float32)
+    # Phi[3:] = 0. # for testing, no aerodynamic moments
+    # Phi[:, 3:] = 0. # for testing, no influence of body rotations
 
     cd = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
     cdd = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)

@@ -72,9 +72,40 @@ async function updateVisualization(data) {
         var idx = idList.indexOf(data[i].id);
         craftList[idx].setPose(data[i].pos, data[i].quat);
         craftList[idx].setControls(data[i].ctl);
+        // if (idx === 0) {
+        //     updateFollowCamera(data[i].pos, data[i].vel);
+        // }
     }
 }
 window.updateVisualization = updateVisualization;
+
+const followCamera = {
+    distance: 10,
+    height: -1,
+    heading: 0,
+    hasHeading: true,
+};
+
+function updateFollowCamera(position, velocity = [0, 0, 0]) {
+    const horizontalSpeed = Math.hypot(velocity[0], velocity[1]);
+    if (horizontalSpeed > 0.05) {
+        followCamera.heading = Math.atan2(velocity[1], velocity[0]);
+        followCamera.hasHeading = true;
+    }
+
+    if (!followCamera.hasHeading) {
+        return;
+    }
+
+    const target = new THREE.Vector3(position[0], position[1], position[2]);
+    camera.position.set(
+        target.x - followCamera.distance * Math.cos(followCamera.heading),
+        target.y - followCamera.distance * Math.sin(followCamera.heading),
+        target.z + followCamera.height,
+    );
+    controls.target.copy(target);
+    controls.update();
+}
 
 function fetchPose() {
     fetch('/pose')
@@ -160,7 +191,7 @@ window.onresize = function() {
 };
 
 // ground plane grid in the xy-plane and coordinate system stems
-const gd = new THREE.GridHelper( 10, 10 );
+const gd = new THREE.GridHelper( 200, 200 );
 gd.rotation.x = -0.5*3.1415
 scene.add( gd );
 scene.add( new THREE.AxesHelper ( 0.75 ));

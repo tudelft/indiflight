@@ -105,9 +105,10 @@ map AETR1234
 
 # switch configs
 aux 0 0 1 1700 2100 0 0
-aux 1 1 3 900 2100 0 0
-aux 2 55 0 1700 2100 0 0
-aux 3 58 3 1300 2100 0 0
+aux 1 1 3 900 1300 0 0 ## ANGLE
+aux 2 2 3 1300 1700 0 0 ## HORIZON
+aux 3 55 0 1700 2100 0 0
+#aux 3 58 3 1300 2100 0 0 ## LEARNER
 #aux 5 60 3 1700 2100 0 0 ## NN
 #aux 5 13 7 1700 2100 0 0 ## beeper instead of NN
 aux 4 61 7 1700 2100 0 0 ## reset home
@@ -241,13 +242,13 @@ set thr_expo = 0
 set rates_type = ACTUAL
 set roll_rc_rate = 100
 set pitch_rc_rate = 100
-set yaw_rc_rate = 100
+set yaw_rc_rate = 20
 set roll_expo = 1
 set pitch_expo = 1
 set yaw_expo = 1
 set roll_srate = 70
 set pitch_srate = 70
-set yaw_srate = 70
+set yaw_srate = 20
 set throttle_limit_type = OFF
 set throttle_limit_percent = 100
 set roll_rate_limit = 1998
@@ -261,8 +262,8 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 800, 500, 100
-set indi_rate_gains     =  130,  100,  60
+set indi_attitude_gains = 400, 400, 400
+set indi_rate_gains     =  100,  100,  100
 # set indi_attitude_gains = 500, 500, 500
 # set indi_rate_gains     =  180,  180,  180
 # set indi_attitude_gains = 200, 200, 200

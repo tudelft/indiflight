@@ -81,7 +81,7 @@ FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 #define RC_OFFSET_THROTTLE 1000.f
 
 #ifndef INDI_PITCH_OFFSET_SETTLING_TIME_US
-#define INDI_PITCH_OFFSET_SETTLING_TIME_US 3000000
+#define INDI_PITCH_OFFSET_SETTLING_TIME_US 2000000
 #endif
 #ifndef INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS
 #define INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS 12.f
@@ -122,6 +122,7 @@ static float getPitchOffset(timeUs_t current)
     return pitchOffsetStart + (pitchOffsetTarget - pitchOffsetStart) * normalized;
 }
 
+/*
 static fp_euler_t getCurrentEulerZYX(void)
 {
     fp_quaternion_t attitude;
@@ -133,6 +134,7 @@ static fp_euler_t getCurrentEulerZYX(void)
 
     return euler;
 }
+*/
 
 static fp_euler_t getCurrentEulerZXY(void)
 {
@@ -242,12 +244,12 @@ void getSetpoints(timeUs_t current) {
 #endif
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
         // get desired attitude setpoints from sticks
+        fp_euler_t eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
 
         const pitchOffsetMode_e currentPitchOffsetMode = FLIGHT_MODE(HORIZON_MODE)
             ? PITCH_OFFSET_MODE_HORIZON
             : PITCH_OFFSET_MODE_ANGLE;
         if (currentPitchOffsetMode != pitchOffsetMode) {
-            fp_euler_t eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
             pitchOffsetStart = eulerZXY.angles.pitch;
             pitchOffsetTarget = currentPitchOffsetMode == PITCH_OFFSET_MODE_HORIZON ? -0.5f * M_PIf : 0.f;
             const float angularDistance = fabsf(pitchOffsetTarget - pitchOffsetStart);
@@ -281,9 +283,10 @@ void getSetpoints(timeUs_t current) {
 
 #ifdef INDI_IS_TAILSITTER
         // tailsitter special: first bank then pitch
+        Psi = eulerZXY.angles.yaw;
 
         fp_quaternion_t bank_q, pitch_q;
-        fp_euler_t bank_e = { .angles = { .roll=maxTilt*roll, .pitch=0, .yaw=0 } };
+        fp_euler_t bank_e = { .angles = { .roll=1.333*maxTilt*roll, .pitch=0, .yaw=0 } };
         fp_euler_t pitch_e = { .angles = { .roll=0, .pitch=maxTilt*pitch, .yaw=0 } };
         if (currentPitchOffsetMode != PITCH_OFFSET_MODE_NONE || pitchOffsetTransitionDuration > 0) {
             pitch_e.angles.pitch += getPitchOffset(current);
@@ -314,20 +317,18 @@ void getSetpoints(timeUs_t current) {
         // optimized for .x = 0, .y = 0, unless compiler does that for us?
         indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
 
-        // coordinate turn
-#ifdef INDI_IS_TAILSITTER
-#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(10.f)) // deg/s per m/s/s of ay
-        if (indiRun.manualUseCoordinatedYaw) {
-            indiRun.rateSpBodyCommanded = coordinateTurn();
-            fp_vector_t sideslipCorrection;
-            sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN);
-            VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
-        }
-#endif
-
         switch (currentPitchOffsetMode) {
 #ifdef INDI_IS_TAILSITTER
+#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(5.f)) // deg/s per m/s/s of ay
             case PITCH_OFFSET_MODE_HORIZON:
+                // coordinate turn
+                if (indiRun.manualUseCoordinatedYaw) {
+                    indiRun.rateSpBodyCommanded = coordinateTurn();
+                    fp_vector_t sideslipCorrection;
+                    sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN);
+                    VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
+                }
+                // add in manual yaw
                 indiRun.rateSpBodyCommanded.V.X += DEGREES_TO_RADIANS(getSetpointRate(YAW));
                 break;
             case PITCH_OFFSET_MODE_ANGLE:
@@ -627,12 +628,13 @@ void getMotorCommands(timeUs_t current) {
     if (indiRun.tailsUseScheduled) {
 #ifdef USE_LOCAL_POSITION
         // get airspeed for scheduling. for now assume no wind
-        fp_quaternion_t attEstNed;
-        getHoverAttitudeQuaternion(&attEstNed);
+        fp_quaternion_t attEstNedInv;
+        getHoverAttitudeQuaternion(&attEstNedInv);
+        attEstNedInv.w *= -1.f;
         fp_vector_t velEstBody = velEstNed;
         if (isConvergedEkf()) {
             // rotate inertial ground speed to body frame
-            rotate_vector_with_quaternion(&velEstBody, &attEstNed);
+            rotate_vector_with_quaternion(&velEstBody, &attEstNedInv);
         }
 #else
         fp_vector_t velEstBody = {0};
@@ -941,26 +943,42 @@ fp_vector_t extrinsicYaw(float yaw) {
     return yawRateSpBody;
 }
 
-fp_vector_t coordinateTurn(void) {
-    fp_vector_t output = {0};
-#ifdef USE_LOCAL_POSITION
-#define INDI_TURN_COORDINATION_VEL_THRESHOLD (5.f)
+#include "sensors/pitotmeter.h"
+#define INDI_TURN_COORDINATION_VEL_THRESHOLD (7.f)
 #define INDI_TURN_COORDINATION_PHI_SOFT_LIMIT (DEGREES_TO_RADIANS(70.f))
 #define INDI_TURN_COORDINATION_PHI_HARD_LIMIT (0.5f * M_PIf)
-    float vel = VEC3_LENGTH(velEstNed);
-    fp_euler_t euler;
-    euler = getCurrentEulerZYX(); // roll defined on +-pi
-    float roll;
+
+fp_vector_t coordinateTurn(void) {
+    fp_vector_t output = {0};
+
+#ifdef HIL_BUILD
+#ifndef USE_LOCAL_POSITION
+    return output;
+#endif
+    if (!isConvergedEkf()) {
+        return output;
+    }
+    float vel = VEC3_XY_LENGTH(velEstNed);
+#else
+    float vel = pitot.airSpeed / 100.f; // in m/s
+#endif
+
+    // fp_euler_t eulerZYX;
+    // eulerZYX = getCurrentEulerZYX(); // roll defined on +-pi
+    float roll, pitch;
     float omega;
-    roll = euler.angles.roll;
-    if (isConvergedEkf()
+    fp_euler_t eulerZXY;
+    eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
+    roll = eulerZXY.angles.roll;
+    pitch = eulerZXY.angles.pitch;
+    if ((pitch > DEGREES_TO_RADIANS(-120.f))
+            && (pitch < DEGREES_TO_RADIANS(-60.f))
             && (vel > INDI_TURN_COORDINATION_VEL_THRESHOLD)
             && (fabsf(roll) < INDI_TURN_COORDINATION_PHI_HARD_LIMIT)) {
         roll = constrainf(roll, -INDI_TURN_COORDINATION_PHI_SOFT_LIMIT, INDI_TURN_COORDINATION_PHI_SOFT_LIMIT);
         omega = GRAVITYf * tan_approx(roll) / vel; // level turn model
         output = extrinsicYaw(omega);
     }
-#endif
     return output;
 }
 
