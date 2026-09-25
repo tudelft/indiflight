@@ -1351,7 +1351,7 @@ void gpsUpdate(timeUs_t currentTimeUs)
     gpsData.now = millis();
 
 #ifdef USE_GEOFENCE
-    geofenceUpdateWatchdog();
+    // geofenceUpdateWatchdog();
 #endif
 
     if (gpsPort) {

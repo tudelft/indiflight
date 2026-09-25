@@ -106,7 +106,7 @@ map AETR1234
 # switch configs
 aux 0 0 1 1700 2100 0 0
 aux 1 1 3 900 1300 0 0 ## ANGLE
-aux 2 2 3 1300 1700 0 0 ## HORIZON
+aux 2 2 3 1300 2100 0 0 ## HORIZON
 aux 3 55 0 1700 2100 0 0
 #aux 3 58 3 1300 2100 0 0 ## LEARNER
 #aux 5 60 3 1700 2100 0 0 ## NN
