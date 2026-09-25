@@ -332,7 +332,12 @@ void pitotUpdate(timeUs_t currentTimeUs)
             }
             pitot.lastMeasurementUs = currentTimeUs;
 
-            pitot.airSpeed = pitotmeterConfig()->pitot_scale * sqrtf(2.0f * fabsf(pitot.pressure - pitot.pressureZero) / SSL_AIR_DENSITY) * 100;  // cm/s
+            float dP = pitot.pressureZero - pitot.pressure; 
+            if (dP <= 0.f) {
+                pitot.airSpeed = 0.f;
+            } else {
+                pitot.airSpeed = pitotmeterConfig()->pitot_scale * sqrtf(2.0f * dP / SSL_AIR_DENSITY) * 100;  // cm/s
+            }
             pitot.temperature = pitotTemperatureTmp;   // Kelvin
 
         } else {

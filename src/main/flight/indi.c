@@ -319,7 +319,7 @@ void getSetpoints(timeUs_t current) {
 
         switch (currentPitchOffsetMode) {
 #ifdef INDI_IS_TAILSITTER
-#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(5.f)) // deg/s per m/s/s of ay
+#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(15.f)) // deg/s per m/s/s of ay
             case PITCH_OFFSET_MODE_HORIZON:
                 // coordinate turn
                 if (indiRun.manualUseCoordinatedYaw) {
@@ -944,7 +944,7 @@ fp_vector_t extrinsicYaw(float yaw) {
 }
 
 #include "sensors/pitotmeter.h"
-#define INDI_TURN_COORDINATION_VEL_THRESHOLD (7.f)
+#define INDI_TURN_COORDINATION_VEL_THRESHOLD (10.f)
 #define INDI_TURN_COORDINATION_PHI_SOFT_LIMIT (DEGREES_TO_RADIANS(70.f))
 #define INDI_TURN_COORDINATION_PHI_HARD_LIMIT (0.5f * M_PIf)
 
@@ -960,21 +960,18 @@ fp_vector_t coordinateTurn(void) {
     }
     float vel = VEC3_XY_LENGTH(velEstNed);
 #else
-    float vel = pitot.airSpeed / 100.f; // in m/s
+    float vel = constrainf(pitot.airSpeed / 100.f, INDI_TURN_COORDINATION_VEL_THRESHOLD, 100.f); // in m/s
 #endif
 
     // fp_euler_t eulerZYX;
     // eulerZYX = getCurrentEulerZYX(); // roll defined on +-pi
-    float roll, pitch;
+    float roll;
     float omega;
     fp_euler_t eulerZXY;
     eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
     roll = eulerZXY.angles.roll;
-    pitch = eulerZXY.angles.pitch;
-    if ((pitch > DEGREES_TO_RADIANS(-120.f))
-            && (pitch < DEGREES_TO_RADIANS(-60.f))
-            && (vel > INDI_TURN_COORDINATION_VEL_THRESHOLD)
-            && (fabsf(roll) < INDI_TURN_COORDINATION_PHI_HARD_LIMIT)) {
+    // pitch = eulerZXY.angles.pitch;
+    if ((fabsf(roll) < INDI_TURN_COORDINATION_PHI_HARD_LIMIT)) {
         roll = constrainf(roll, -INDI_TURN_COORDINATION_PHI_SOFT_LIMIT, INDI_TURN_COORDINATION_PHI_SOFT_LIMIT);
         omega = GRAVITYf * tan_approx(roll) / vel; // level turn model
         output = extrinsicYaw(omega);

@@ -42,6 +42,13 @@ if args.type == "tailsitter":
                               Ns=2,
                               interpolation="previous",
                               title=f"{args.name} -- Onboard ID Analysis")
+    pplt2 = IndiflightViewport(craft,
+                              log.data,
+                              follow=False,
+                              Nr=2,
+                              Ns=2,
+                              interpolation="previous",
+                              title=f"{args.name} -- Onboard ID Analysis")
 else:
     craft = Quadrotor()
     pplt = IndiflightViewport(craft,
@@ -52,5 +59,6 @@ else:
                               interpolation="previous",
                               title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
+fplt.connect_viewport(pplt2)
 
 plt.show()
