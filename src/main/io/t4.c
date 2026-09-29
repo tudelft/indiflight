@@ -96,12 +96,12 @@ typedef uint8_t byte;
 #define RX_FRAME_TIMEOUT_US             2000    // 2 ms timeout to clear incomplete/corrupted frames
 #define RX_BUFFER_SIZE                  50
 
-static serialPort_t *t4Port = NULL;
+static serialPort_t *t4Port = NULL; // *t4Port is a pointer to the serial port used for communication with the STS3032 servos. It is initialized to NULL and will be set to the appropriate serial port during configuration.
 static const serialPortConfig_t *portConfig;
 
-// Persistent flight controller state containers
-static struct ActuatorsT4In  actuators_t4_in;
-/* static struct ActuatorsT4Out actuators_t4_out; */
+
+
+
 
 // =============================================================================
 // HELPER FUNCTIONS 
@@ -113,14 +113,14 @@ static void SplitByte(uint8_t* DataL, uint8_t* DataH, uint16_t Data) {
     *DataL = (Data & 0xff);
 }
 
-/* 2 8-digit combinations for 1 16-digit number (Teensy implementation) 
+// 2 8-digit combinations for 1 16-digit number (Teensy implementation) 
 static uint16_t CompactBytes(uint8_t DataL, uint8_t DataH) {
     uint16_t Data;
     Data = DataL;
     Data <<= 8;
     Data |= DataH;
     return Data; 
-}*/
+}
 
 /**
  * 
@@ -171,7 +171,7 @@ void freeActuatorsT4Port(void)
 
 void initActuatorsT4(void)
 {
-    portConfig = findSerialPortConfig(FUNCTION_ACTUATORS_T4);
+    portConfig = findSerialPortConfig(FUNCTION_ACTUATORS_T4); 
 }
 
 void configureActuatorsT4Port(void)
@@ -204,20 +204,22 @@ void sendActuatorsT4(void)
     if (!t4Port) {
         return;
     }
-
+    static struct ActuatorsT4In  in; 
     static uint32_t lastDispatchTimeUs = 0;
     uint32_t currentTimeUs = micros();
 
     // Throttle transmission to 1 ms intervals to avoid saturating UART TX buffer
-    if (currentTimeUs - lastDispatchTimeUs < COMM_DISPATCH_INTERVAL_US) {
+    if (currentTimeUs - lastDispatchTimeUs < COMM_DISPATCH_INTERVAL_US) // If the time since the last dispatch is less than the defined interval, we return early to avoid sending data too frequently
+    {
         return;
     }
     lastDispatchTimeUs = currentTimeUs;
 
     // 1. Pack the ActuatorsT4In struct from normalized flight mixer outputs
-    actuators_t4_in.servo_arm = 0xFFFF; // Arm all servos
-    actuators_t4_in.servo_1_cmd = (int16_t)(servo_normalized[0] * DEFAULT_MULTIPLIER_DEGREES * DEFAULT_MULTIPLIER_DEGREES);
-    actuators_t4_in.servo_2_cmd = (int16_t)(servo_normalized[1] * DEFAULT_MULTIPLIER_DEGREES * DEFAULT_MULTIPLIER_DEGREES);
+    in.esc_arm = 0x00; // disarm all escs
+    in.servo_arm = 0xFFFF; // Arm all servos
+    in.servo_1_cmd = (int16_t)(servo_normalized[0] * DEFAULT_MULTIPLIER_DEGREES * DEFAULT_MULTIPLIER_DEGREES);
+    in.servo_2_cmd = (int16_t)(servo_normalized[1] * DEFAULT_MULTIPLIER_DEGREES * DEFAULT_MULTIPLIER_DEGREES);
 
     static uint8_t step = 0;
     byte u8_Data_1[7] = { 0 };
@@ -229,7 +231,7 @@ void sendActuatorsT4(void)
             /* --- SERVO 1 WRITE --- */
             
             int Target_position_servo_1 = (int)(constrain(
-                (DEFAULT_STEPS_FOR_FULL_ROTATION / FULLROTATION) * (actuators_t4_in.servo_1_cmd / DEFAULT_MULTIPLIER_DEGREES) + (SERVO_MAX_COMD_DEFAULT / 2.0f),
+                (DEFAULT_STEPS_FOR_FULL_ROTATION / FULLROTATION) * (in.servo_1_cmd / DEFAULT_MULTIPLIER_DEGREES) + (SERVO_MAX_COMD_DEFAULT / 2.0f),
                 0,
                 SERVO_MAX_COMD_DEFAULT
             ));
@@ -260,7 +262,7 @@ void sendActuatorsT4(void)
             /* --- SERVO 2 WRITE --- */
            
             int Target_position_servo_2 = (int)(constrain(
-                (DEFAULT_STEPS_FOR_FULL_ROTATION / FULLROTATION) * (actuators_t4_in.servo_2_cmd / DEFAULT_MULTIPLIER_DEGREES) + (SERVO_MAX_COMD_DEFAULT / 2.0f),
+                (DEFAULT_STEPS_FOR_FULL_ROTATION / FULLROTATION) * (in.servo_2_cmd / DEFAULT_MULTIPLIER_DEGREES) + (SERVO_MAX_COMD_DEFAULT / 2.0f),
                 0,
                 SERVO_MAX_COMD_DEFAULT
             ));
@@ -292,69 +294,87 @@ void sendActuatorsT4(void)
     }
 }
 
+struct ActuatorsT4Out t4_out ={0}; 
+
 void handleActuatorsT4(void)
 {
-    /*
+    
     if (!t4Port) {
         return;
     }
+    
 
     static byte buffer_servo[RX_BUFFER_SIZE];
     static int buffer_servo_idx = 0;
     static uint32_t lastByteTimeUs = 0;
 
-    uint32_t currentTimeUs = micros();
+    uint32_t currentTimeUs = micros(); // micros() returns the number of microseconds since the program started running (absolute time). This is used to track the time since the last byte was received.
 
     // Reset buffer index if incoming frame stalls
     if (buffer_servo_idx > 0 && (currentTimeUs - lastByteTimeUs > RX_FRAME_TIMEOUT_US)) {
         buffer_servo_idx = 0;
     }
 
-    while (serialRxBytesWaiting(t4Port)) {
-        byte byte_in = serialRead(t4Port);
-        lastByteTimeUs = micros();
+    while (serialRxBytesWaiting(t4Port)) // While there are bytes waiting in the serial RX buffer
+     {
+        byte byte_in = serialRead(t4Port); // Read only one byte from the serial port and when the next while loop iteration occurs, the next byte will be read. This is done to avoid reading all bytes at once and potentially missing some bytes if the buffer is not large enough.
+        lastByteTimeUs = micros(); // Updates the last byte received time
 
-        // 1. Detect 0xFF 0xFF synchronization preamble[cite: 1]
+        // 1. Detect 0xFF 0xFF synchronization preamble
         if (buffer_servo_idx == 0) {
             if (byte_in == 0xFF) {
-                buffer_servo[buffer_servo_idx++] = byte_in;
+                buffer_servo[buffer_servo_idx++] = byte_in;// Writes first byte into buffer_servo[0] 
             }
-            continue;
-        } else if (buffer_servo_idx == 1) {
+            continue; // If the first byte is not 0xFF, ignore it and start while loop again to wait for the next byte
+        } 
+        else if (buffer_servo_idx == 1) 
+        {
             if (byte_in == 0xFF) {
-                buffer_servo[buffer_servo_idx++] = byte_in;
+                buffer_servo[buffer_servo_idx++] = byte_in; //  Writes second byte into buffer_servo[1]
             } else {
                 buffer_servo_idx = 0;
             }
-            continue;
+            continue; //
+        }
+        else if (buffer_servo_idx == 2 && byte_in == 0xFF)
+         {
+            continue; // Ignore any additional 0xFF bytes after the first two, as they are not part of the protocol
         }
 
         // 2. Buffer incoming bytes
-        if (buffer_servo_idx < RX_BUFFER_SIZE) {
+        if (buffer_servo_idx < RX_BUFFER_SIZE) // Prevent buffer overflow
+         {
             buffer_servo[buffer_servo_idx++] = byte_in;
         } else {
             buffer_servo_idx = 0;
-            continue;
+            continue; // Reset buffer if overflow occurs
         }
 
-        // 3. Dynamic Length Validation
-        // buffer_servo[3] = Length field[cite: 1]
-        if (buffer_servo_idx >= 4) {
-            int total_expected_bytes = buffer_servo[3] + 4; // Headers(2) + ID(1) + Length(1) + LengthField[cite: 1]
+        // 3. Dynamic Length Validation 
+            // buffer_Servo[2]  is the ID field in the protocol, which indicates which servo is responding.
+            // buffer_servo[3] is the Length field in the protocol, which indicates how many bytes of parameters follow. The total expected bytes for a complete frame is 4 (headers + ID + Length) + Length field value. If the buffer index has reached or exceeded this total, we can validate the frame.
 
-            if (buffer_servo_idx >= total_expected_bytes) {
-                // Compute checksum: bitwise NOT of sum from ID through parameter payload[cite: 1, 3]
+        if (buffer_servo_idx >= 4) 
+        {
+            int total_expected_bytes = buffer_servo[3] + 4; // Headers(2) + ID(1) + Length(1) + LengthField
+
+            if (buffer_servo_idx >= total_expected_bytes) // If we have received enough bytes for a complete frame, we can validate the checksum and process the data
+            {
+                // Compute checksum: bitwise NOT of sum from ID through parameter payload
                 uint8_t bitsum_servo = 0;
-                for (int i = 2; i < total_expected_bytes - 1; i++) {
-                    bitsum_servo += buffer_servo[i];[cite: 1, 3]
+                for (int i = 2; i < total_expected_bytes - 1; i++) // Sum from ID through parameter payload and ignore checksum byte
+                {
+                    bitsum_servo += buffer_servo[i]; 
                 }
 
-                uint8_t expected_checksum = (uint8_t)(~bitsum_servo);[cite: 1, 3]
-                if (expected_checksum == (uint8_t)buffer_servo[total_expected_bytes - 1]) {
-                    byte servo_id = buffer_servo[2];[cite: 1]
+                uint8_t expected_checksum = (uint8_t)(~bitsum_servo);
+                if (expected_checksum == (uint8_t)buffer_servo[total_expected_bytes - 1]) // If the computed checksum matches the received checksum, we can process the data
+                {
+                    byte servo_id = buffer_servo[2];
 
-                    // 14-byte telemetry response packet (buffer_servo[3] == 10)[cite: 1]
-                    if (buffer_servo[3] == 10) {
+                    // 14-byte telemetry response packet (buffer_servo[3] == 10)
+                    if  (buffer_servo[3] >= 4) //
+                    {
                         // Reconstruct raw angle into centidegrees
                         int16_t servo_angle = (int16_t)(
                             ((float)CompactBytes(buffer_servo[6], buffer_servo[5]) - (SERVO_MAX_COMD_DEFAULT / 2.0f)) *
@@ -364,12 +384,20 @@ void handleActuatorsT4(void)
 
                         // Store in the ActuatorsT4Out struct, then assign to Indiflight array
                         if (servo_id == Servo_1_ID) {
-                            actuators_t4_out.servo_1_angle = servo_angle;
-                            servo_feedback[0] = actuators_t4_out.servo_1_angle;
+                            t4_out.servo_1_angle = servo_angle;
+                            servo_feedback[0] = t4_out.servo_1_angle;
                         } else if (servo_id == Servo_2_ID) {
-                            actuators_t4_out.servo_2_angle = servo_angle;
-                            servo_feedback[1] = actuators_t4_out.servo_2_angle;
+                            t4_out.servo_2_angle = servo_angle;
+                            servo_feedback[1] = t4_out.servo_2_angle;
                         }
+
+  #ifdef USE_CLI_DEBUG_PRINT
+                        static unsigned printCounter = 1;
+                        if (printCounter++ % 100 == 0) {
+                            printCounter = 1;
+                            cliDebugPrintLinef("Servo position %d cdeg %d cdeg", servo_feedback[0], servo_feedback[1]);
+                        }
+#endif                      
                     }
                 }
 
@@ -377,6 +405,6 @@ void handleActuatorsT4(void)
                 buffer_servo_idx = 0;
             }
         }
-    }*/
+    }
 }
 #endif
