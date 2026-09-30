@@ -6,10 +6,10 @@
 //   (img_feat from the companion, obs, hidden) -> action
 // The CNN that produces img_feat runs off-board (see ../onboard/).
 
-#define NN_OBS_DIM      18
+#define NN_OBS_DIM      16
 #define NN_FEATURE_DIM  64   // width of the cut: what crosses from the companion
 #define NN_HIDDEN_DIM   64
-#define NN_ACT_DIM      6
+#define NN_ACT_DIM      4
 #define NN_LEAKY_SLOPE  0.05f
 
 // Zero the GRU hidden state. Call whenever the network is (re)activated,

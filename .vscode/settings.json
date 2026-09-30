@@ -18,4 +18,5 @@
         "gyro.h": "c",
         "maths.h": "c"
     },
+    "cmake.sourceDirectory": "/home/elijah/Documents/Codes/indiflight/support/groundstation/relay",
 }

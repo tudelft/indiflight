@@ -46,8 +46,28 @@ using std::chrono::system_clock;
 #define OPTITRACK_PORT 5005
 #define SETPOINT_PORT 5006
 #define KEYBOARD_PORT 5007
+#define NN_FEATURE_PORT 5010
 #define MAX_BUFFER_SIZE 1024
 #define PI_MSG_PAYLOAD_OFFSET (PI_MSG_ID_BYTES + PI_MSG_PAYLOAD_LEN_BYTES)
+
+// NN_INPUT_CHUNK carries a 64-float vector split into 2 chunks of 32 (see
+// lib/main/pi-protocol/msgs/NN_INPUT_CHUNK.yaml: a single message can't fit
+// all 64 floats under the 255 byte payload cap). Port 5010 carries depth_hitl's
+// "DPTH" datagram (DiffSim/hitl/src/netout.hpp): a 76-byte header — magic,
+// version, seq, a uint16 payload type at offset 12, a uint32 payload length at
+// offset 20, pose metadata — followed by the payload, all native little-endian
+// (both this host and the ground station are LE, so no byte-swap is applied).
+// Only the CNN-feature payload (type 2, 64 float32) is forwarded; relay splits
+// it into the 2 wire messages here.
+#define NN_FEATURE_DIM 64
+#define NN_FEATURE_CHUNK_SIZE 32
+#define DEPTH_HEADER_BYTES 76
+#define DEPTH_MAGIC "DPTH"
+#define DEPTH_PAYLOAD_FEATURES_F32 2
+static_assert(NN_FEATURE_DIM % NN_FEATURE_CHUNK_SIZE == 0,
+    "NN_FEATURE_DIM must be an exact multiple of NN_FEATURE_CHUNK_SIZE");
+static_assert(PI_MSG_NN_INPUT_CHUNK_PAYLOAD_LEN == 1 + NN_FEATURE_CHUNK_SIZE * sizeof(float),
+    "NN_FEATURE_CHUNK_SIZE doesn't match the field count in msgs/NN_INPUT_CHUNK.yaml");
 
 // hypersimple on-demand status updates similar to dd
 // https://en.wikipedia.org/wiki/C_signal_handling
@@ -227,6 +247,12 @@ int main(int argc, char** argv) {
     printf("Server listening on port %d for Keystrokes...\n", KEYBOARD_PORT);
     uint8_t keyboardBuffer[PI_MSG_KEYBOARD_PAYLOAD_LEN];
 
+    int nnFeatureFd = openUdpPort(NN_FEATURE_PORT);
+    printf("Server listening on port %d for NN input features...\n", NN_FEATURE_PORT);
+    static constexpr size_t NN_FEATURE_PAYLOAD_SIZE = NN_FEATURE_DIM * sizeof(float);
+    static constexpr size_t NN_FEATURE_BUFFER_SIZE = DEPTH_HEADER_BYTES + NN_FEATURE_PAYLOAD_SIZE;
+    uint8_t nnFeatureBuffer[NN_FEATURE_BUFFER_SIZE];
+
     while (true) {
         // Q1: doesnt this add a lot of delay? Because the buffer is only filled once
         // PI_MAX_PACKET_LENGTH is read?
@@ -323,12 +349,59 @@ int main(int argc, char** argv) {
             printf("relayed KEYBOARD \n");
 
         }
+
+        // ---- nn input features ----
+        int nnFeatureBytes = recvfrom(nnFeatureFd, (uint8_t *)(nnFeatureBuffer), NN_FEATURE_BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+
+        if (nnFeatureBytes == (int) NN_FEATURE_BUFFER_SIZE &&
+            memcmp(nnFeatureBuffer, DEPTH_MAGIC, 4) == 0) {
+            uint16_t payloadType;
+            uint32_t payloadBytes;
+            memcpy(&payloadType, nnFeatureBuffer + 12, sizeof(payloadType));
+            memcpy(&payloadBytes, nnFeatureBuffer + 20, sizeof(payloadBytes));
+
+            if (payloadType != DEPTH_PAYLOAD_FEATURES_F32 || payloadBytes != NN_FEATURE_PAYLOAD_SIZE) {
+                printf("NN_INPUT_CHUNK: DPTH header says type %u / %u bytes, expected type %d / %zu bytes, dropping\n",
+                       payloadType, payloadBytes, DEPTH_PAYLOAD_FEATURES_F32, NN_FEATURE_PAYLOAD_SIZE);
+            } else {
+                float vals[NN_FEATURE_DIM];
+                // Native little-endian on both ends (see the comment above) —
+                // no byte-swap, unlike the network-byte-order streams below.
+                memcpy(vals, nnFeatureBuffer + DEPTH_HEADER_BYTES, sizeof(vals));
+
+                for (size_t chunk = 0; chunk < NN_FEATURE_DIM / NN_FEATURE_CHUNK_SIZE; chunk++) {
+                    const float* c = vals + chunk * NN_FEATURE_CHUNK_SIZE;
+                    piMsgNnInputChunkTx.chunk_index = (uint8_t) chunk;
+                    piMsgNnInputChunkTx.f0  = c[0];  piMsgNnInputChunkTx.f1  = c[1];
+                    piMsgNnInputChunkTx.f2  = c[2];  piMsgNnInputChunkTx.f3  = c[3];
+                    piMsgNnInputChunkTx.f4  = c[4];  piMsgNnInputChunkTx.f5  = c[5];
+                    piMsgNnInputChunkTx.f6  = c[6];  piMsgNnInputChunkTx.f7  = c[7];
+                    piMsgNnInputChunkTx.f8  = c[8];  piMsgNnInputChunkTx.f9  = c[9];
+                    piMsgNnInputChunkTx.f10 = c[10]; piMsgNnInputChunkTx.f11 = c[11];
+                    piMsgNnInputChunkTx.f12 = c[12]; piMsgNnInputChunkTx.f13 = c[13];
+                    piMsgNnInputChunkTx.f14 = c[14]; piMsgNnInputChunkTx.f15 = c[15];
+                    piMsgNnInputChunkTx.f16 = c[16]; piMsgNnInputChunkTx.f17 = c[17];
+                    piMsgNnInputChunkTx.f18 = c[18]; piMsgNnInputChunkTx.f19 = c[19];
+                    piMsgNnInputChunkTx.f20 = c[20]; piMsgNnInputChunkTx.f21 = c[21];
+                    piMsgNnInputChunkTx.f22 = c[22]; piMsgNnInputChunkTx.f23 = c[23];
+                    piMsgNnInputChunkTx.f24 = c[24]; piMsgNnInputChunkTx.f25 = c[25];
+                    piMsgNnInputChunkTx.f26 = c[26]; piMsgNnInputChunkTx.f27 = c[27];
+                    piMsgNnInputChunkTx.f28 = c[28]; piMsgNnInputChunkTx.f29 = c[29];
+                    piMsgNnInputChunkTx.f30 = c[30]; piMsgNnInputChunkTx.f31 = c[31];
+                    piSendMsg(&piMsgNnInputChunkTx, &serialWriter);
+                }
+                printf("relayed NN_INPUT_CHUNK (2 chunks) \n");
+            }
+        } else if (nnFeatureBytes > 0) {
+            printf("NN_INPUT_CHUNK: got %d bytes, expected %zu, dropping\n", nnFeatureBytes, NN_FEATURE_BUFFER_SIZE);
+        }
     }
 
     close(serialPortFd);
     close(optitrackFd);
     close(setpointFd);
     close(keyboardFd);
+    close(nnFeatureFd);
 
     return 0;
 }

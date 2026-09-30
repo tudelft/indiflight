@@ -50,6 +50,6 @@ uint32_t nn_features_age(void);
 // One control step, at the training rate (100 Hz). Returns
 // NN_STATUS_*: the motor commands are always written, the status says how
 // fresh the depth information behind them is.
-int nn_control(const float world_state[NN_OBS_DIM], float motor_cmds[NN_ACT_DIM]);
+int nn_control(const float world_state[16], float motor_cmds[4]);
 
 #endif

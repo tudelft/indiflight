@@ -41,6 +41,15 @@
 
 #define SERIAL_PORT_COUNT       (UNIFIED_SERIAL_PORT_COUNT + 6)
 
+// The default 128-byte UART RX ring buffer (serial_uart_impl.h) is smaller
+// than a single NN_INPUT_CHUNK pi-protocol message (129-byte payload + 3
+// bytes framing = 132 bytes), and telemetry_pi's uplink is only drained at
+// 50 Hz (taskTelemetry). At 921600 baud that's ~1.8 KB able to arrive between
+// drains, so the depth-feature companion link overflows this every time.
+// Smaller messages (EXTERNAL_POSE, EKF_INPUTS, ...) stay under 128 bytes and
+// are unaffected either way.
+#define UART_RX_BUFFER_SIZE 512
+
 #define USE_INVERTER
 
 #define USE_SPI_DEVICE_1

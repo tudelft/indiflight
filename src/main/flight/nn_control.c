@@ -33,8 +33,10 @@
 #include "pg/pg_ids.h"              // for config
 #include "fc/runtime_config.h"  // for ENABLE_FLIGHT_MODE
 #include "fc/core.h"            // for resetInnerLoopCounter
+#include "common/maths.h"       // for quaternion -> euler conversion
 
 #include "flight/neural_controllers/nn_controller.h"
+#include "flight/neural_controllers/nn_debug.h"
 
 #ifdef USE_NN_CONTROL
 
@@ -59,6 +61,7 @@ bool nn_active = false;
 void nn_init(void) {
 	// initialize the neural network controller
 	nn_reset();
+	nn_debug_on_reset();
 	// set starting point
 	posSpNed.pos.V.X = start_pos[0];
 	posSpNed.pos.V.Y = start_pos[1];
@@ -80,6 +83,7 @@ void nn_activate(void) {
 
 		// initialize the neural network controller
 		nn_reset();
+		nn_debug_on_reset();
 
         // enable flight mode:
         // --> this will cause taskMainInnerLoop to run nn_compute_motor_cmds()
@@ -119,10 +123,18 @@ void nn_compute_motor_cmds(void) {
 	world_state[3] = ekf_state[3];
 	world_state[4] = ekf_state[4];
 	world_state[5] = ekf_state[5];
-	// att
-	world_state[6] = ekf_state[6];
-	world_state[7] = ekf_state[7];
-	world_state[8] = ekf_state[8];
+	// att: ekf_state[6..9] is a quaternion (w,x,y,z) -- convert to euler,
+	// since the NN was trained on roll/pitch/yaw
+	fp_quaternion_t nn_att_q = {
+		.w = ekf_state[6], .x = ekf_state[7], .y = ekf_state[8], .z = ekf_state[9]
+	};
+	fp_quaternionProducts_t nn_att_qP;
+	quaternionProducts_of_quaternion(&nn_att_qP, &nn_att_q);
+	fp_euler_t nn_att_euler;
+	fp_euler_of_quaternionProducts(&nn_att_euler, &nn_att_qP);
+	world_state[6] = nn_att_euler.angles.roll;
+	world_state[7] = nn_att_euler.angles.pitch;
+	world_state[8] = nn_att_euler.angles.yaw;
 	// rate (in FRD)
 	world_state[9]  = DEGREES_TO_RADIANS(gyro.gyroADCf[0]); // TODO: figure out if we need gyroADCf or gyroADC
 	world_state[10] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
@@ -134,7 +146,13 @@ void nn_compute_motor_cmds(void) {
 	world_state[15] = (float) indiRun.omega[3];
 
 	// call the neural network controller (output is in range [0,1])
+#ifdef NN_FEATURE_DIM
+	// vision-conditioned controllers return an NN_STATUS_* on feature freshness
+	nn_debug_update(nn_control(world_state, nn_motor_cmds));
+#else
 	nn_control(world_state, nn_motor_cmds);
+	nn_debug_update(0);
+#endif
 
     if (cmpTimeUs(micros(), posMeasNed.time_us) > NN_DEADRECKONING_TIMEOUT_US) {
         // deadreckoning for too long --> abort

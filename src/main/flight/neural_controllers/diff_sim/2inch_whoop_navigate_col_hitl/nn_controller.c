@@ -8,10 +8,10 @@
 //   world_state[3:6]   velocity      NED, m/s, world frame
 //   world_state[6:9]   roll, pitch, yaw   rad
 //   world_state[9:12]  body rates    rad/s
-//   world_state[12:18] motor speeds  rad/s (see MOTOR_OMEGA_SCALE)
+//   world_state[12:16] motor speeds  rad/s (see MOTOR_OMEGA_SCALE)
 // ---------------------------------------------------------------------------
 
-#define W_MAX_N     4000.0f   // motor speed mapping to obs = +1 (rad/s)
+#define W_MAX_N     5000.0f   // motor speed mapping to obs = +1 (rad/s)
 // Set to (2*M_PI/60) if world_state[12:16] arrives in RPM instead of rad/s.
 #define MOTOR_OMEGA_SCALE 1.0f
 #define MOTOR_CMD_MAX 1.0f   // 1.0 motor limit, in [-1, 1] units
@@ -22,27 +22,27 @@
 // motor_order[i] is the indiflight motor carrying training motor i.
 // The identified coefficients are per-motor and asymmetric, so a wrong
 // order flies badly rather than obviously. Check against the mixer.
-static const uint8_t motor_order[6] = {0, 1, 2, 3, 4, 5};
+static const uint8_t motor_order[4] = {0, 1, 2, 3};
 
 float target_pos[NUM_TARGETS][3] = {
-    {3.25f, 0.0f, -1.0f},
+    {3.25f, 0.0f, -1.5f},
 };
 
 // Expected arming pose in the training world frame. Not used by
 // nn_control(); exported for the indiflight side to position/check against.
 const float start_pos[3] = {
-    -3.25f, 0.0f, -1.0f
+    -3.25f, 0.0f, -1.5f
 };
 
 const float start_yaw = 0.0f;
 
 const float features_freespace[] = {
-    -0.145947874f, 0.540325999f, -0.307154745f, -0.680087566f, -0.0119008999f, 0.122020222f, -0.404148757f, -0.370422304f, 0.0945681781f, -0.355282366f, -0.0905494615f, 0.2092731f,
-    0.173121095f, 0.119331293f, -0.189711079f, -0.207872406f, 0.79685992f, 0.296602577f, 0.479117125f, 0.0454734825f, 0.148873225f, 0.764538705f, 0.189659506f, 0.546174109f,
-    -0.370996296f, -0.373209357f, 0.710771322f, 0.621634662f, -0.621029615f, 0.881854355f, -0.290433109f, 0.145432368f, 0.306297213f, -1.1954354f, 0.804680049f, -0.0456464402f,
-    0.445437551f, 0.69818908f, -0.535972297f, -0.186873168f, -0.178250253f, 0.257198066f, 0.542786658f, -0.326333523f, -0.459024161f, 0.268875986f, -0.568891048f, -0.130068764f,
-    -0.626365364f, -0.255895764f, 0.333914459f, 0.184003338f, 0.102049261f, 0.421885818f, 0.523681641f, -0.69059515f, 0.30737868f, -0.802259088f, -0.639752388f, -0.594847202f,
-    -0.663417637f, 0.365930885f, -0.583878398f, -0.391922414f
+    0.0175005272f, 0.0478047132f, 0.00672540581f, 0.237295076f, -0.0728593171f, 0.0706075728f, 0.120356783f, 0.108478248f, 0.0618014075f, 0.0582631677f, -0.314257443f, -0.0568703003f,
+    0.195502639f, 0.169817954f, 0.16236797f, -0.150299996f, 0.0197667386f, 0.113546163f, 0.157202423f, 0.0674428567f, -0.0400116369f, 0.259605408f, 0.0539770201f, -0.155025244f,
+    -0.282133579f, 0.130015776f, 0.149681985f, 0.243139714f, 0.20431219f, -0.0662603378f, 0.131780744f, 0.058141131f, 0.0209637247f, 0.148086235f, 0.16175209f, -0.0224985331f,
+    -0.0168158151f, 0.129890144f, -0.172775835f, -0.0509835407f, -0.354858458f, 0.0176778845f, 0.0495567769f, -0.00330369174f, -0.0880537182f, 0.0339796655f, 0.0567282923f, 0.0204647798f,
+    0.0139971301f, 0.162325531f, -0.0991871506f, 0.0282207206f, -0.0422151163f, 0.0804027691f, 0.220306918f, 0.0648642331f, -0.082276836f, -0.0878130496f, -0.0210902765f, 0.0380737633f,
+    -0.0115376087f, 0.0954386443f, -0.151918992f, -0.197130054f
 };
 
 static float    nn_hidden[NN_HIDDEN_DIM];
@@ -83,7 +83,7 @@ void nn_set_features(const float feat[NN_FEATURE_DIM])
 
 uint32_t nn_features_age(void) { return nn_feature_age; }
 
-int nn_control(const float world_state[NN_OBS_DIM], float motor_cmds[NN_ACT_DIM])
+int nn_control(const float world_state[16], float motor_cmds[NN_ACT_DIM])
 {
     // Advance the waypoint once we are inside the capture radius.
     float dx = world_state[0] - target_pos[target_index][0];

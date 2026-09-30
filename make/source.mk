@@ -121,6 +121,7 @@ COMMON_SRC = \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
+            flight/neural_controllers/nn_debug.c \
             io/serial_4way.c \
             io/serial_4way_avrootloader.c \
             io/serial_4way_stk500v2.c \
@@ -304,6 +305,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
+            flight/neural_controllers/nn_debug.c \
 			io/local_pos.c \
             io/keyboard.c \
 			io/t4.c \

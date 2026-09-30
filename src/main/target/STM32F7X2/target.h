@@ -37,6 +37,15 @@
 
 #define SERIAL_PORT_COUNT       (UNIFIED_SERIAL_PORT_COUNT + 6)
 
+// The default 128-byte UART RX ring buffer (serial_uart_impl.h) is smaller
+// than a single NN_INPUT_CHUNK pi-protocol message (129-byte payload + 3
+// bytes framing = 132 bytes), and the relay sends both chunks of a feature
+// vector back-to-back (264 bytes). telemetry_pi's uplink is only drained at
+// 50 Hz (taskTelemetry), so at any usable baud rate that burst overflows the
+// default buffer regardless of how slow the link is. Smaller messages
+// (EXTERNAL_POSE, EKF_INPUTS, ...) stay under 128 bytes and are unaffected.
+#define UART_RX_BUFFER_SIZE 512
+
 #define USE_SPI_DEVICE_1
 #define USE_SPI_DEVICE_2
 #define USE_SPI_DEVICE_3

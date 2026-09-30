@@ -63,6 +63,9 @@
 
 #include "rx/rx.h"
 
+#include "flight/neural_controllers/nn_controller.h"
+#include "flight/neural_controllers/nn_debug.h"
+
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
 #include "sensors/gyro.h"
@@ -195,8 +198,48 @@ void processPiTelemetry(void)
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
 }
 
+// Only the vision-conditioned controllers define NN_FEATURE_DIM (in their
+// neural_network.h); the hover controller takes no companion features, so the
+// NN_INPUT_CHUNK reassembly compiles out entirely.
+#ifdef NN_FEATURE_DIM
+// NN_INPUT_CHUNK carries NN_FEATURE_DIM floats split across 2 chunks of 32
+// (see lib/main/pi-protocol/msgs/NN_INPUT_CHUNK.yaml for why: a single
+// message can't fit all 64 floats under the 255 byte payload cap).
+_Static_assert(NN_FEATURE_DIM == 64,
+    "NN_INPUT_CHUNK reassembly assumes NN_FEATURE_DIM == 64 (2 chunks of 32 floats)");
+static float nnInputChunkVec[NN_FEATURE_DIM];
+static uint8_t nnInputChunkMask = 0;
+#endif
+
 static void processNewMessage(uint8_t msgId) {
     switch (msgId) {
+#ifdef NN_FEATURE_DIM
+        case PI_MSG_NN_INPUT_CHUNK_ID: {
+            const pi_NN_INPUT_CHUNK_t *m = piMsgNnInputChunkRx;
+            if (m->chunk_index < 2) {
+                // copy by value: taking &m->f0 would be a misaligned packed-member
+                // address (f0 sits at a non-4-byte-aligned offset), which the
+                // firmware build's -Werror -Wextra rejects.
+                float *dst = &nnInputChunkVec[m->chunk_index * 32];
+                dst[0]  = m->f0;  dst[1]  = m->f1;  dst[2]  = m->f2;  dst[3]  = m->f3;
+                dst[4]  = m->f4;  dst[5]  = m->f5;  dst[6]  = m->f6;  dst[7]  = m->f7;
+                dst[8]  = m->f8;  dst[9]  = m->f9;  dst[10] = m->f10; dst[11] = m->f11;
+                dst[12] = m->f12; dst[13] = m->f13; dst[14] = m->f14; dst[15] = m->f15;
+                dst[16] = m->f16; dst[17] = m->f17; dst[18] = m->f18; dst[19] = m->f19;
+                dst[20] = m->f20; dst[21] = m->f21; dst[22] = m->f22; dst[23] = m->f23;
+                dst[24] = m->f24; dst[25] = m->f25; dst[26] = m->f26; dst[27] = m->f27;
+                dst[28] = m->f28; dst[29] = m->f29; dst[30] = m->f30; dst[31] = m->f31;
+
+                nnInputChunkMask = (uint8_t)(nnInputChunkMask | (1u << m->chunk_index));
+                if (nnInputChunkMask == 0x3) {
+                    nn_set_features(nnInputChunkVec);
+                    nn_debug_on_features(nnInputChunkVec);
+                    nnInputChunkMask = 0;
+                }
+            }
+            break;
+        }
+#endif
 #ifdef USE_LOCAL_POSITION
         case PI_MSG_EXTERNAL_POSE_ID: {
             local_pos_ned_t pos;
