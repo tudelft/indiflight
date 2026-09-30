@@ -1,6 +1,6 @@
 /*
  * Feetech STS3032 Serial Bus Servo Driver for Flight Controller (Indiflight)
- * Full-duplex UART testing (1,000,000 baud).
+ * Half duplex mode - supports 2 servos on a single serial bus
  */
 
 #include <stdbool.h>
@@ -100,6 +100,9 @@ typedef uint8_t byte;
 #define RX_FRAME_TIMEOUT_US             2000    // 2 ms timeout to clear incomplete/corrupted frames
 #define RX_BUFFER_SIZE                  50
 
+#define INST_READ 0x02
+#define INST_WRITE 0x03
+
 static serialPort_t *t4Port = NULL; // *t4Port is a pointer to the serial port used for communication with the STS3032 servos. It is initialized to NULL and will be set to the appropriate serial port during configuration.
 static const serialPortConfig_t *portConfig;
 
@@ -148,35 +151,10 @@ static void SendInstruction(byte u8_ServoID, byte u8_Instruction, byte* u8_Param
     }
 
     buffer_tx[buffer_tx_idx++] = ~u8_Checksum;
-
-    // flush the RX buffer to avoid echoed bytes from previous transmissions. 
-
-    while (serialRxBytesWaiting(t4Port) > 0) {
-        serialRead(t4Port);
-    }
-
-    for (int i = 0; i < buffer_tx_idx; i++) // Send out to FC UART TX buffer. This loop sends each byte in the buffer_tx array to the serial port using the serialWrite function to avoid saturating the TX buffer. It ensures that all bytes are sent out to the servo.
-    {
+    
+    for (int i = 0; i < buffer_tx_idx; i++) {
         serialWrite(t4Port, buffer_tx[i]);
     }
-
-   // echo sync  
-    uint32_t startWaitUs = micros();
-    while (serialRxBytesWaiting(t4Port) < (uint32_t)buffer_tx_idx) // Wait for the TX buffer to be ready. This loop checks if the number of bytes waiting in the RX buffer is less than the number of bytes we just sent. If it is, we wait until all bytes have been transmitted.
-    {
-        if (micros() - startWaitUs > 200) // Timeout failsafe for waiting for the TX buffer to be ready. If it takes longer than 200 microseconds, we break out of the loop to avoid getting stuck.
-        {
-            break;
-        }
-    }
-
-    
-    for (int i = 0; i < buffer_tx_idx && serialRxBytesWaiting(t4Port) > 0; i++) // Clear the RX buffer to avoid echoed bytes from previous transmissions. This loop reads and discards any bytes that may have been received in the RX buffer during the transmission in half-duplex mode.
-     {
-        serialRead(t4Port);
-    }
-
-
 }
 
 // Duing actual integration, we need to check the code line 1279 to 1287  in teensy code
@@ -389,7 +367,7 @@ void handleActuatorsT4(void)
                 }
 
                 uint8_t expected_checksum = (uint8_t)(~bitsum_servo);
-                if (expected_checksum == (uint8_t)buffer_servo[total_expected_bytes - 1]) // If the computed checksum matches the received checksum, we can process the data
+                if (expected_checksum == (uint8_t)buffer_servo[total_expected_bytes - 1] && buffer_servo[4] != INST_READ && buffer_servo[4] != INST_WRITE) // If the computed checksum matches the received checksum. The check for buffer_servo[4] != INST_READ && buffer_servo[4] != INST_WRITE is to ignore write and read requests through echo.
                 {
                     byte servo_id = buffer_servo[2];
 
