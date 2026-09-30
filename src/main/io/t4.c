@@ -92,20 +92,14 @@ typedef uint8_t byte;
 #define Servo_2_ID                      2
 
 // Timing guards
-#define COMM_DISPATCH_INTERVAL_US       1000    // 1 ms time-slice (250 Hz cycle per servo)
+#define COMM_DISPATCH_INTERVAL_US       1000    // 1 ms time-slice (250 Hz cycle per servo). This  is the minimum time interval between consecutive actuator command dispatches to avoid saturating the UART TX buffer. It ensures that commands are sent at a controlled rate, allowing the servos to process the commands without overwhelming the communication channel.
 #define RX_FRAME_TIMEOUT_US             2000    // 2 ms timeout to clear incomplete/corrupted frames
 #define RX_BUFFER_SIZE                  50
 
 static serialPort_t *t4Port = NULL; // *t4Port is a pointer to the serial port used for communication with the STS3032 servos. It is initialized to NULL and will be set to the appropriate serial port during configuration.
 static const serialPortConfig_t *portConfig;
 
-
-
-
-
-// =============================================================================
-// HELPER FUNCTIONS 
-// =============================================================================
+// Helper functions for splitting and compacting bytes for 16-bit data transmission over the serial bus. 
 
 /* 1 16-bit split into 2 8 digits (Teensy implementation) */
 static void SplitByte(uint8_t* DataL, uint8_t* DataH, uint16_t Data) {
@@ -151,17 +145,39 @@ static void SendInstruction(byte u8_ServoID, byte u8_Instruction, byte* u8_Param
 
     buffer_tx[buffer_tx_idx++] = ~u8_Checksum;
 
-    /* Send out to FC UART TX buffer */
-    for (int i = 0; i < buffer_tx_idx; i++) {
+    // flush the RX buffer to avoid echoed bytes from previous transmissions. 
+
+    while (serialRxBytesWaiting(t4Port) > 0) {
+        serialRead(t4Port);
+    }
+
+    for (int i = 0; i < buffer_tx_idx; i++) // Send out to FC UART TX buffer. This loop sends each byte in the buffer_tx array to the serial port using the serialWrite function to avoid saturating the TX buffer. It ensures that all bytes are sent out to the servo.
+    {
         serialWrite(t4Port, buffer_tx[i]);
     }
+
+   // echo sync  
+    uint32_t startWaitUs = micros();
+    while (serialRxBytesWaiting(t4Port) < (uint32_t)buffer_tx_idx) // Wait for the TX buffer to be ready. This loop checks if the number of bytes waiting in the RX buffer is less than the number of bytes we just sent. If it is, we wait until all bytes have been transmitted.
+    {
+        if (micros() - startWaitUs > 200) // Timeout failsafe for waiting for the TX buffer to be ready. If it takes longer than 200 microseconds, we break out of the loop to avoid getting stuck.
+        {
+            break;
+        }
+    }
+
+    
+    for (int i = 0; i < buffer_tx_idx && serialRxBytesWaiting(t4Port) > 0; i++) // Clear the RX buffer to avoid echoed bytes from previous transmissions. This loop reads and discards any bytes that may have been received in the RX buffer during the transmission in half-duplex mode.
+     {
+        serialRead(t4Port);
+    }
+
+
 }
 
 // Duing actual integration, we need to check the code line 1279 to 1287  in teensy code
 
-// =============================================================================
-// HARDWARE PORT 
-// =============================================================================
+
 
 void freeActuatorsT4Port(void)
 {
@@ -187,7 +203,7 @@ void configureActuatorsT4Port(void)
         NULL,
         BAUDRATE_SERVO,
         MODE_RXTX,
-        SERIAL_NOT_INVERTED
+        SERIAL_BIDIR // this option is used to configure the serial port for half-duplex communication with the STS3032 servos. 
     );
 
     if (!t4Port) {
@@ -195,9 +211,10 @@ void configureActuatorsT4Port(void)
     }
 }
 
-// =============================================================================
-// TX 
-// =============================================================================
+/*  The below function is responsible for sending actuator commands to the STS3032 servos over the configured serial port. 
+It uses a state machine approach to send commands and read telemetry data from the servos in a non-blocking manner. 
+The function is called periodically, and it ensures that commands are sent at a controlled rate to avoid saturating the UART TX buffer. */
+
 
 void sendActuatorsT4(void)
 {
