@@ -29,6 +29,10 @@
 #include "io/t4_protocol.h"
 //#include "Definitions_SxS.h"
 
+#ifdef USE_CLI_DEBUG_PRINT
+#include "cli/cli_debug_print.h"
+#endif
+
 // Instruction set
 #define INST_PING 0x01
 #define INST_READ 0x02
@@ -203,7 +207,7 @@ void configureActuatorsT4Port(void)
         NULL,
         BAUDRATE_SERVO,
         MODE_RXTX,
-        SERIAL_BIDIR // this option is used to configure the serial port for half-duplex communication with the STS3032 servos. 
+        SERIAL_BIDIR | SERIAL_BIDIR_PP | SERIAL_BIDIR_NOPULL // this option is used to configure the serial port for half-duplex communication with the STS3032 servos. 
     );
 
     if (!t4Port) {
