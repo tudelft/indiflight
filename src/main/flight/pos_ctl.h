@@ -109,3 +109,5 @@ void posGetVelSpNedFromPosSp(void);
 void posGetVelSpNedFromSticks(void);
 void posGetAccSpNed(timeUs_t current);
 void posGetAttSpNedAndSpfSpBody(timeUs_t current);
+void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current);
+void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current);

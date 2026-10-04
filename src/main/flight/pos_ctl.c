@@ -85,16 +85,24 @@ void posCtlInit(void) {
 
 // filtered stick-based velocity (NED)
 static biquadFilter_t posVelFilter[3];
+static biquadFilter_t attitudeQuaternionFilter[4];
+static biquadFilter_t spfBodyFilter[4];
+static biquadFilter_t dfAccelerationFilter[3];
+static biquadFilter_t dfModelSpfFilter[3];
+static fp_quaternion_t filteredAttitudeQuaternion;
+static fp_vector_t filteredSpfBody;
+static bool attitudeQuaternionFilterPrimed;
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
 // The plan is disabled by default so position mode keeps its existing behavior.
-#define POSITION_WAYPOINT_COUNT 5
-static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
+#define POSITION_WAYPOINT_COUNT 2
+static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
+    { .location = { .V = { .X = 0.f,  .Y =  0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
     { .location = { .V = { .X = 0.f,  .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 20.f, .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 0.f,  .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 0.f,  .Y = - 0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    //{ .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    //{ .location = { .V = { .X = 20.f, .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    //{ .location = { .V = { .X = 0.f,  .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    //{ .location = { .V = { .X = 0.f,  .Y = - 0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
 };
 
 static unsigned int activeWaypointIndex;
@@ -167,8 +175,19 @@ void initPositionRuntime(void) {
 
     // init stick velocity filters (2nd order LPF)
     for (int i = 0; i < 3; i++) {
-        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 2000); // TODO: make dynamic
+        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 500); // TODO: make dynamic
+        biquadFilterInitLPF(&spfBodyFilter[i], 5.0f, 500);
+        // biquadFilterInit(&dfAccelerationFilter[i], sqrtf(0.5f * 5.0f), 500,
+        //     sqrtf(0.5f * 5.0f) / (5.0f - 0.5f), FILTER_BPF, 1.0f);
+        biquadFilterInitLPF(&dfAccelerationFilter[i], 10.0f, 500);
+        biquadFilterInitLPF(&dfModelSpfFilter[i], 10.0f, 500);
     }
+    for (int i = 0; i < 4; i++) {
+        biquadFilterInitLPF(&attitudeQuaternionFilter[i], 5.0f, 500);
+    }
+    filteredAttitudeQuaternion = (fp_quaternion_t) { .w = 1.f };
+    filteredSpfBody = (fp_vector_t) { 0 };
+    attitudeQuaternionFilterPrimed = false;
 }
 
 void changePositionProfile(uint8_t profileIndex)
@@ -358,7 +377,9 @@ void updatePosCtl(timeUs_t current) {
     }
 
     // always use NDI function to map acc setpoints
-    posGetAttSpNedAndSpfSpBody(current);
+    // posGetAttSpNedAndSpfSpBody(current);
+    // posGetAttSpNedAndSpfSpBody_INDI(current);
+    posGetAttSpNedAndSpfSpBody_DF(current);
 }
 
 void posGetVelSpNedFromPosSp(void) {
@@ -436,9 +457,15 @@ void posGetVelSpNedFromSticks(void) {
 }
 
 void posGetAccSpNed(timeUs_t current) {
+    // if (cmpTimeUs(current, 6000000) > 0) {
+    //     posSpNed.vel.V.X = 0.f;
+    //     posSpNed.vel.V.Y = 10.f;
+    //     posSpNed.vel.V.Z = 0.f;
+    // }
+
     // vel error = vel setpoint - vel estimate
     fp_vector_t velError = posSpNed.vel;
-    //VEC3_SCALAR_MULT_ADD(velError, -1.0f, posMeasNed.vel);
+
     VEC3_SCALAR_MULT_ADD(velError, -1.0f, velEstNed);
 
     // use quaternion attitude to decompose velocity error to body frame
@@ -489,7 +516,209 @@ void posGetAccSpNed(timeUs_t current) {
     accSpNedFromPos.V.Z = constrainf(accSpNedFromPos.V.Z, -posRuntime.vert_max_a_up, posRuntime.vert_max_a_down);
 }
 
-void getAttitudeThrustJacobian(
+
+static void getSpfInertialPhi(
+    fp_vector_t* f_I,
+    const float** PHI,
+    const fp_vector_t* AX,
+    const float* K,
+    const float* omega,
+    const int n,
+    const fp_quaternion_t* q,
+    const fp_vector_t* v_I
+)
+{
+    // equation: 
+    // f_I = R @ (        f_w_B           +          f_T_B          )
+    // f_I = R @ ( -V * PHI @ R.T @ v_I   +   ax_B * K.T * omega**2 )
+
+    // term f_w_B
+    fp_quaternion_t qinv = *q;
+    qinv.w *= -1.f;
+    fp_vector_t v_B = *v_I; // R.T @ v_I
+    rotate_vector_with_quaternion(&v_B, &qinv);
+
+    fp_vector_t f_w_B = { 0 }; // PHI @ R.T @ v_I
+    for (int row=0; row < 3; row++) {
+        for (int col=0; col < 3; col++) {
+            f_w_B.A[row] += PHI[row][col] * v_B.A[col];
+        }
+    }
+
+    float V = sqrtf(sq(v_I->V.X) + sq(v_I->V.Y) + sq(v_I->V.Z));
+    VEC3_SCALAR_MULT(f_w_B, -V); // -V * PHI @ R.T @ v_I
+
+    // term f_T_B
+    fp_vector_t f_T_B = *AX;
+    float T = 0;
+    for (int i=0; i < n; i++) {
+        T += K[i]*sq(omega[i]);
+    }
+    VEC3_SCALAR_MULT(f_T_B, T);
+
+    // add terms
+    *f_I = f_w_B;
+    VEC3_SCALAR_MULT_ADD((*f_I), 1.f, f_T_B);
+
+    // rotate into inertial frame
+    rotate_vector_with_quaternion(f_I, q);
+}
+
+static bool spfDFT(
+    fp_quaternion_t *q_r,
+    float *T_r,
+    const float Psi_r,
+    const fp_vector_t* f_I_r,
+    const float** PHI,
+    const fp_vector_t* AX,
+    const fp_vector_t* v_I
+)
+{
+    // Tal (2022)
+    // bank angle phi_r
+    float sPsi = sin_approx(Psi_r);
+    float cPsi = cos_approx(Psi_r);
+    float num = f_I_r->V.X * sPsi - f_I_r->V.Y * cPsi;
+    float den = f_I_r->V.Z;
+
+    if ((fabsf(num) < 1e-6) && (fabsf(den) < 1e-6)) {
+        return false;
+    }
+
+    float phi_r = atan2_approx(num, den);
+
+    // check modulo pi
+    if (phi_r > 0.5f*M_PIf) {
+        phi_r -= M_PIf;
+    } else if (phi_r < -0.5f*M_PIf) {
+        phi_r += M_PIf;
+    }
+
+
+    // pitch angle
+    // theta_cos_terms * cos(theta_r) + theta_sin_terms * sin(theta_r) == 0
+    //     theta_cos_terms / theta_sin_terms  +  sin(theta_r) / cos(theta_r) == 0
+    //     tan(theta_r) = - theta_cos_terms / theta_sin_terms
+    float theta_r, theta_cos_terms, theta_sin_terms;
+
+    fp_euler_t e_phi = { .angles = { .yaw = Psi_r, .roll = phi_r, .pitch = 0.f } };
+    fp_quaternion_t q_phi_inv;
+    quaternion_of_fp_euler(&q_phi_inv, &e_phi);
+    q_phi_inv.w *= -1.f;
+
+    fp_vector_t f_phi_r = *f_I_r;
+    rotate_vector_with_quaternion(&f_phi_r, &q_phi_inv);
+    fp_vector_t v_phi = *v_I;
+    rotate_vector_with_quaternion(&v_phi, &q_phi_inv);
+
+    float V = sqrtf(sq(v_I->V.X) + sq(v_I->V.Y) + sq(v_I->V.Z));
+    theta_cos_terms  = - V * PHI[0][0] * AX->V.Z * v_phi.V.X;
+    theta_cos_terms +=   V * PHI[2][2] * AX->V.X * v_phi.V.Z;
+    theta_cos_terms +=   AX->V.X * f_phi_r.V.Z;
+    theta_cos_terms += - AX->V.Z * f_phi_r.V.X;
+
+    theta_sin_terms  =   V * PHI[0][0] * AX->V.Z * v_phi.V.Z;
+    theta_sin_terms +=   V * PHI[2][2] * AX->V.X * v_phi.V.X;
+    theta_sin_terms +=   AX->V.X * f_phi_r.V.X;
+    theta_sin_terms +=   AX->V.Z * f_phi_r.V.Z;
+
+    if ((fabsf(theta_cos_terms) < 1e-6) && (fabsf(theta_sin_terms) < 1e-6)) {
+        return false;
+    }
+
+    theta_r = atan2_approx(-theta_cos_terms, theta_sin_terms);
+
+    fp_euler_t e_Psi_phi_r = {.angles={.yaw=Psi_r, .pitch=0.f, .roll=phi_r}};
+    fp_quaternion_t q_Psi_phi_r;
+    quaternion_of_fp_euler(&q_Psi_phi_r, &e_Psi_phi_r);
+
+    fp_euler_t e_theta_r = {.angles={.yaw=0.f, .pitch=theta_r, .roll=0.f}};
+    fp_quaternion_t q_theta_r;
+    quaternion_of_fp_euler(&q_theta_r, &e_theta_r);
+
+    *q_r = chain_quaternion(&q_Psi_phi_r, &q_theta_r);
+
+    float sTheta_r, cTheta_r;
+    sTheta_r = sin_approx(theta_r);
+    cTheta_r = cos_approx(theta_r);
+    *T_r  =   V * PHI[2][2] * v_phi.V.X * sTheta_r;
+    *T_r +=   V * PHI[2][2] * v_phi.V.Z * cTheta_r;
+    *T_r +=   f_phi_r.V.Z / AX->V.Z     * sTheta_r;
+    *T_r +=   f_phi_r.V.Z / AX->V.Z     * cTheta_r;
+
+    return true;
+}
+
+void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
+    UNUSED(current);
+    // state
+    fp_quaternion_t q;
+    getHoverAttitudeQuaternion(&q);
+
+    fp_vector_t a_I;
+    fp_vector_t gravity_I = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -GRAVITYf };
+    a_I = indiRun.spfIMU;
+    rotate_vector_with_quaternion(&a_I, &q);
+    VEC3_SCALAR_MULT_ADD(a_I, -1.f, gravity_I);
+
+    fp_vector_t v_I = velEstNed;
+
+    // craft parameters
+    float PHI[3][3] = {
+        { 0.000f, 0.000f, 0.000f },
+        { 0.000f, 0.000f, 0.000f },
+        { 0.000f, 0.000f, 0.000f },
+    };
+    const float *PHIRows[3] = { PHI[0], PHI[1], PHI[2] };
+    const fp_vector_t AX = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
+    // const float K[2] = { 1.413e-6f/0.7f, 1.413e-6f/0.7f }; // propeller constant divided by mass
+    // const float* omega = indiRun.omega; // just use indiRun.omega
+    const float K[4] = { 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f }; // propeller constant divided by mass
+    const float* omega = indiRun.omega; // just use indiRun.omega
+
+    // step 1: calculate INDI update on specfic force level
+    //
+    //     f_I_r = (a_I_r - a_I_bpf) + f_I_lpf
+    //
+    //     where:
+    //         a_I_r = accSpNedFromPos; // acceleration setpoint
+    //         a_I_bpf: band-pass filtered (lpf _and_ hpf) version of the a_I
+    //         f_I_lpf: low-pass filtered version of the current estimated f_I from getSpfInertiaPhi()
+    //
+    // step 2: calculate required attitude and thrust using the inversion spfDFT()
+
+    // Preserve current yaw unless the position setpoint explicitly tracks yaw.
+    float Psi_r = posSpNed.trackPsi ? posSpNed.psi : getYawWithoutSingularity();
+
+    fp_vector_t a_I_bpf;
+    fp_vector_t f_I_model;
+    fp_vector_t f_I_lpf;
+    getSpfInertialPhi(&f_I_model, PHIRows, &AX, K, omega, 4, &q, &v_I);
+    for (int axis = 0; axis < 3; axis++) {
+        a_I_bpf.A[axis] = biquadFilterApply(&dfAccelerationFilter[axis], a_I.A[axis]);
+        f_I_lpf.A[axis] = biquadFilterApply(&dfModelSpfFilter[axis], f_I_model.A[axis]);
+    }
+
+    fp_vector_t f_I_r = accSpNedFromPos;
+    VEC3_SCALAR_MULT_ADD(f_I_r, -1.f, a_I_bpf);
+    VEC3_SCALAR_MULT_ADD(f_I_r, 1.f, f_I_lpf);
+
+    fp_quaternion_t q_r;
+    float T_r;
+    if (spfDFT(&q_r, &T_r, Psi_r, &f_I_r, PHIRows, &AX, &v_I)) {
+        attSpNedFromPos = q_r;
+        spfSpBodyFromPos.V.X = 0.f;
+        spfSpBodyFromPos.V.Y = 0.f;
+        spfSpBodyFromPos.V.Z = -MAX(0.f, T_r);
+    } else {
+        attSpNedFromPos = q;
+        spfSpBodyFromPos.V.X = 0.f;
+        spfSpBodyFromPos.V.Y = 0.f;
+        spfSpBodyFromPos.V.Z = AX.V.Z * (K[0] * sq(omega[0]) + K[1] * sq(omega[1]));
+    }
+}
+
+static void getAttitudeThrustJacobian(
     float** J,
     const float** A_B,
     const fp_vector_t* ax_B,
@@ -503,7 +732,7 @@ void getAttitudeThrustJacobian(
            and ||f|| is the thrust
            and dfI is inertial specific forces
        inputs:
-        A_B: 3x3 phi matrix mapping body air velocity to body aerodynamic forces
+        A_B: 3x3 phi_r matrix mapping body air velocity to body aerodynamic forces
         ax_B: thrust axis in body-frame (unit vector)
         q_0: attitude quaterion
         f_B_0: current specific forces in body frame
@@ -518,27 +747,47 @@ void getAttitudeThrustJacobian(
     float x = q_0->x;
     float y = q_0->y;
     float z = q_0->z;
-    float fBz = f_B_0->V.Z;
+    float fBz = -f_B_0->V.Z;
     float vIx = v_I->V.X;
     float vIy = v_I->V.Y;
     float vIz = v_I->V.Z;
     float V = sqrtf(sq(vIx) + sq(vIy) + sq(vIz));
 
-    J[0][0] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
-    J[0][1] = -V*a11*x*vIy + V*a22*w*vIz - axx*fBz*y + axy*fBz*x - axz*fBz*w;
-    J[0][2] = -V*a11*w*vIy - V*a22*x*vIz - axx*fBz*z + axy*fBz*w + axz*fBz*x;
-    J[0][3] = axx*pow(w, 2) + axx*pow(x, 2) - axx*pow(y, 2) - axx*pow(z, 2) + 2*axy*w*z + 2*axy*x*y - 2*axz*w*y + 2*axz*x*z;
-    J[1][0] = V*a11*x*vIy - V*a22*w*vIz + axx*fBz*y - axy*fBz*x + axz*fBz*w;
-    J[1][1] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
-    J[1][2] = V*a11*z*vIy - V*a22*y*vIz - axx*fBz*w - axy*fBz*z + axz*fBz*y;
-    J[1][3] = -2*axx*w*z + 2*axx*x*y + axy*pow(w, 2) - axy*pow(x, 2) + axy*pow(y, 2) - axy*pow(z, 2) + 2*axz*w*x + 2*axz*y*z;
-    J[2][0] = V*a11*w*vIy + V*a22*x*vIz + axx*fBz*z - axy*fBz*w - axz*fBz*x;
-    J[2][1] = -V*a11*z*vIy + V*a22*y*vIz + axx*fBz*w + axy*fBz*z - axz*fBz*y;
-    J[2][2] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
-    J[2][3] = 2*axx*w*y + 2*axx*x*z - 2*axy*w*x + 2*axy*y*z + axz*pow(w, 2) - axz*pow(x, 2) - axz*pow(y, 2) + axz*pow(z, 2);
+    UNUSED(V);
+    UNUSED(axx);
+    UNUSED(axy);
+    UNUSED(axz);
+    UNUSED(a11);
+    UNUSED(a22);
+
+    // J[0][0] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
+    // J[0][1] = -V*a11*x*vIy + V*a22*w*vIz - axx*fBz*y + axy*fBz*x - axz*fBz*w;
+    // J[0][2] = -V*a11*w*vIy - V*a22*x*vIz - axx*fBz*z + axy*fBz*w + axz*fBz*x;
+    // J[0][3] = axx*pow(w, 2) + axx*pow(x, 2) - axx*pow(y, 2) - axx*pow(z, 2) + 2*axy*w*z + 2*axy*x*y - 2*axz*w*y + 2*axz*x*z;
+    // J[1][0] = V*a11*x*vIy - V*a22*w*vIz + axx*fBz*y - axy*fBz*x + axz*fBz*w;
+    // J[1][1] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
+    // J[1][2] = V*a11*z*vIy - V*a22*y*vIz - axx*fBz*w - axy*fBz*z + axz*fBz*y;
+    // J[1][3] = -2*axx*w*z + 2*axx*x*y + axy*pow(w, 2) - axy*pow(x, 2) + axy*pow(y, 2) - axy*pow(z, 2) + 2*axz*w*x + 2*axz*y*z;
+    // J[2][0] = V*a11*w*vIy + V*a22*x*vIz + axx*fBz*z - axy*fBz*w - axz*fBz*x;
+    // J[2][1] = -V*a11*z*vIy + V*a22*y*vIz + axx*fBz*w + axy*fBz*z - axz*fBz*y;
+    // J[2][2] = -V*a11*y*vIy - V*a22*z*vIz + axx*fBz*x + axy*fBz*y + axz*fBz*z;
+    // J[2][3] = 2*axx*w*y + 2*axx*x*z - 2*axy*w*x + 2*axy*y*z + axz*pow(w, 2) - axz*pow(x, 2) - axz*pow(y, 2) + axz*pow(z, 2);
+
+    J[0][0] = -V*a11*y*vIy - V*a22*z*vIz - fBz*z;
+    J[0][1] = -V*a11*x*vIy + V*a22*w*vIz - fBz*w;
+    J[0][2] = -V*a11*w*vIy - V*a22*x*vIz - fBz*x;
+    J[0][3] = -2*w*y - 2*x*z;
+    J[1][0] = V*a11*x*vIy - V*a22*w*vIz + fBz*w;
+    J[1][1] = -V*a11*y*vIy - V*a22*z*vIz - fBz*z;
+    J[1][2] = V*a11*z*vIy - V*a22*y*vIz - fBz*y;
+    J[1][3] = 2*w*x - 2*y*z;
+    J[2][0] = V*a11*w*vIy + V*a22*x*vIz + fBz*x;
+    J[2][1] = -V*a11*z*vIy + V*a22*y*vIz + fBz*y;
+    J[2][2] = -V*a11*y*vIy - V*a22*z*vIz - fBz*z;
+    J[2][3] = -pow(w, 2) + pow(x, 2) + pow(y, 2) - pow(z, 2);
 }
 
-void getYawConstraintRowZXY(
+static void getYawConstraintRowZXY(
     float* c,
     const fp_quaternion_t* q
 ) {
@@ -592,13 +841,42 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
     float *JRows[4] = { J[0], J[1], J[2], J[3] };
     float c[4] = { 0 };
     fp_quaternion_t q_0;
-    getHoverAttitudeQuaternion(&q_0); // TODO: filter this with LP at 5Hz
+    getHoverAttitudeQuaternion(&q_0);
+    if (attitudeQuaternionFilterPrimed) {
+        const float quaternionDot = q_0.w * filteredAttitudeQuaternion.w
+            + q_0.x * filteredAttitudeQuaternion.x
+            + q_0.y * filteredAttitudeQuaternion.y
+            + q_0.z * filteredAttitudeQuaternion.z;
+        if (quaternionDot < 0.f) {
+            QUAT_SCALAR_MULT(q_0, -1.f);
+        }
+    }
+    q_0.w = biquadFilterApply(&attitudeQuaternionFilter[0], q_0.w);
+    q_0.x = biquadFilterApply(&attitudeQuaternionFilter[1], q_0.x);
+    q_0.y = biquadFilterApply(&attitudeQuaternionFilter[2], q_0.y);
+    q_0.z = biquadFilterApply(&attitudeQuaternionFilter[3], q_0.z);
+    const float quaternionNorm = sqrtf(sq(q_0.w) + sq(q_0.x) + sq(q_0.y) + sq(q_0.z));
+    if (quaternionNorm > 1e-6f) {
+        const float inverseQuaternionNorm = 1.f / quaternionNorm;
+        q_0.w *= inverseQuaternionNorm;
+        q_0.x *= inverseQuaternionNorm;
+        q_0.y *= inverseQuaternionNorm;
+        q_0.z *= inverseQuaternionNorm;
+        filteredAttitudeQuaternion = q_0;
+        attitudeQuaternionFilterPrimed = true;
+    } else if (attitudeQuaternionFilterPrimed) {
+        q_0 = filteredAttitudeQuaternion;
+    }
 
     fp_vector_t aI_r = accSpNedFromPos; 
+    // fp_vector_t aI_r = { .V.X=0, .V.Y=5.f, .V.Z=-0.5f };
     fp_vector_t gI = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -GRAVITYf };
 
-    fp_vector_t fB_0 = indiRun.spf_fs; // TODO: filter this with LP at 5Hz
-    fp_vector_t fI_0 = fB_0;
+    fp_vector_t fB_0 = indiRun.spfIMU; // TODO: filter this with LP at 5Hz
+    filteredSpfBody.V.X = biquadFilterApply(&spfBodyFilter[0], fB_0.V.X);
+    filteredSpfBody.V.Y = biquadFilterApply(&spfBodyFilter[1], fB_0.V.Y);
+    filteredSpfBody.V.Z = biquadFilterApply(&spfBodyFilter[2], fB_0.V.Z);
+    fp_vector_t fI_0 = filteredSpfBody;
     rotate_vector_with_quaternion(&fI_0, &q_0);
 
     float LHS[4]; // left hand side of equation
@@ -609,19 +887,26 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
 
     float PHI[3][3] = {
         { 0.000f, 0.000f, 0.000f },
-        { 0.000f, 0.001f, 0.000f },
-        { 0.000f, 0.000f, 6.350f },
+        { 0.000f, 0.000f, 0.000f },
+        { 0.000f, 0.000f, 0.000f },
     };
     const float *PHIRows[3] = { PHI[0], PHI[1], PHI[2] };
 
     fp_vector_t axB = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
-    fp_vector_t vI = velEstNed; // EKF vel is used for now, will update it once airspeed is available
+    static fp_vector_t velEstNedFilt = { 0 };
+    velEstNedFilt.V.X = biquadFilterApply(&posVelFilter[0], velEstNed.V.X);
+    velEstNedFilt.V.Y = biquadFilterApply(&posVelFilter[1], velEstNed.V.Y);
+    velEstNedFilt.V.Z = biquadFilterApply(&posVelFilter[2], velEstNed.V.Z);
+    fp_vector_t vI = velEstNedFilt; // EKF vel is used for now, will update it once airspeed is available
 
-    getAttitudeThrustJacobian(JRows, PHIRows, &axB, &q_0, &fB_0, &vI);
+    getAttitudeThrustJacobian(JRows, PHIRows, &axB, &q_0, &filteredSpfBody, &vI);
     getYawConstraintRowZXY(c, &q_0);
 
     float B[MAXV * MAXU] = { 0.f };
     float desired[MAXV] = { LHS[0], LHS[1], LHS[2], 0.f };
+    for (int i = 0; i < 3; i++) {
+        desired[i] = constrainf(desired[i], -10.f, +10.f);
+    }
     float Wv[MAXV] = { 0.f };
     float Wu[MAXU] = { 0.f };
     for (int i = 0; i < 4; i++) {
@@ -634,6 +919,7 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
         }
         B[3 + i * N_INDI_OUTPUTS] = i < 3 ? c[i] : 0.f;
     }
+    Wu[3] = 0.01f;
 
     float gamma_used;
     float A_as[(MAXU + MAXV) * MAXU];
@@ -642,12 +928,12 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
     float delta_min[MAXU] = { 0.f };
     float delta_max[MAXU] = { 0.f };
     for (int i = 0; i < 3; i++) {
-        delta_min[i] = -DEGREES_TO_RADIANS(20.f);
-        delta_max[i] = DEGREES_TO_RADIANS(20.f);
+        delta_min[i] = -DEGREES_TO_RADIANS(180.f);
+        delta_max[i] = DEGREES_TO_RADIANS(180.f);
     }
     const float currentThrust = MAX(0.f, -fB_0.V.Z);
-    delta_min[3] = -currentThrust;
-    delta_max[3] = currentThrust;
+    delta_min[3] = 5.f - currentThrust;
+    delta_max[3] = 10.f;
 
     setupWLS_A(B, Wv, Wu, N_INDI_OUTPUTS, N_INDI_VARIABLES,
         indiRun.wlsTheta, indiRun.wlsCondBound, A_as, &gamma_used);
@@ -665,7 +951,7 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
     int freeVariables;
     solverResult = solveActiveSet(indiRun.wlsAlgo)(
         A_as, b_as, delta_min, delta_max, delta, workingSet,
-        indiRun.wlsMaxIter, N_INDI_VARIABLES, N_INDI_OUTPUTS,
+        10, N_INDI_VARIABLES, N_INDI_OUTPUTS,
         &iterations, &freeVariables, allocationCosts);
 
     if (solverResult < AS_NAN_FOUND_Q) {
@@ -676,10 +962,10 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
             VEC3_SCALAR_MULT(deltaRotation, 1.f / rotationIncrement);
             quaternion_of_axis_angle(&deltaAttitude, &deltaRotation, rotationIncrement);
         }
-        attSpNedFromPos = chain_quaternion(&q_0, &deltaAttitude);
+        attSpNedFromPos = chain_quaternion(&filteredAttitudeQuaternion, &deltaAttitude);
         spfSpBodyFromPos.V.X = 0.f;
         spfSpBodyFromPos.V.Y = 0.f;
-        spfSpBodyFromPos.V.Z = fB_0.V.Z + delta[3];
+        spfSpBodyFromPos.V.Z = filteredSpfBody.V.Z - delta[3];
     } else {
         attSpNedFromPos = q_0;
         spfSpBodyFromPos.V.X = 0.f;

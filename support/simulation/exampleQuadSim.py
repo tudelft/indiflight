@@ -116,12 +116,12 @@ if __name__=="__main__":
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[0., 0., 0., 1.], accStd=0.8, gyroStd=0.08)
 
-    imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
+    #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
     #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0.8, gyroStd=0.08)
 
     #imu = IMU(mc, r=[0.02, 0.0, 0.0], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
     #imu = IMU(mc, r=[-0.01, -0.012, 0.008], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
-    #imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
+    imu = IMU(mc, r=[0., 0., 0.], qBody=[1., 0., 0., 0.], accStd=0., gyroStd=0.)
 
     mocap = Mocap(mc, args.mocap_host, args.mocap_port) if args.mocap else None
     hil = IndiflightHIL(mc, imu, device=args.hil, baud=args.hil_baud) if args.hil else None
@@ -135,7 +135,7 @@ if __name__=="__main__":
         sil.mockup.initUros()
 
         sil.sendMocap()
-        #sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
+        sil.mockup.sendPositionSetpoint( [0., 0., -5.0], 0. )
         sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE)
 
         if args.learn:
@@ -179,21 +179,24 @@ if __name__=="__main__":
         if not args.throw and sim.t > 2.5:
             sil.mockup.arm() if sil else None
 
-        if not start_trajectory and sim.t > 9. and sil is not None:
+        if not start_trajectory and sim.t > 6. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
-            sil.mockup.sendKeyboard('1')
-            if sim.t > 10.:
-                for _ in range(8):
-                    sil.mockup.sendKeyboard('3')
-                start_trajectory = True
+            # sil.mockup.sendKeyboard('1')
+            # if sim.t > 10.:
+            #     for _ in range(6):
+            #         sil.mockup.sendKeyboard('3')
+            #     start_trajectory = True
+
+            sil.mockup.sendPositionSetpoint( [0., 20., -1.0], 0. )
+            start_trajectory = True
 
         # if sim.t > 11.:
         #     sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE)
 
-        if not heading and sim.t > 15. and sil is not None:
-            sil.mockup.sendKeyboard('h')
-            heading = True
-            # test recovery mode
-            # sil.sendMocap = lambda *args: None
+        # if not heading and sim.t > 15. and sil is not None:
+        #     sil.mockup.sendKeyboard('h')
+        #     heading = True
+        #     # test recovery mode
+        #     # sil.sendMocap = lambda *args: None
 
         sim.tick(dt)

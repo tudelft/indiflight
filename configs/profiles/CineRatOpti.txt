@@ -336,10 +336,10 @@ positionprofile 0
 
 # gains * 10
 set position_horizontal_p = 30
-set position_horizontal_i = 2
+set position_horizontal_i = 0
 set position_horizontal_d = 30
 set position_vertical_p = 50
-set position_vertical_i = 5
+set position_vertical_i = 0
 set position_vertical_d = 40
 
 # max velocities in cm/s and cm/s^2
@@ -353,7 +353,7 @@ set position_max_downwards_accel = 800
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 180
 set position_yaw_p = 50
-set position_use_thrust_attenuation = 1
+set position_use_thrust_attenuation = 0
 
 
 positionprofile 2

@@ -102,6 +102,7 @@ static timeUs_t pitchOffsetTransitionDuration;
 static float pitchOffsetStart;
 static float pitchOffsetTarget;
 
+#ifdef INDI_IS_TAILSITTER
 static float getPitchOffset(timeUs_t current)
 {
     if (pitchOffsetTransitionDuration == 0) {
@@ -121,6 +122,7 @@ static float getPitchOffset(timeUs_t current)
 
     return pitchOffsetStart + (pitchOffsetTarget - pitchOffsetStart) * normalized;
 }
+#endif
 
 /*
 static fp_euler_t getCurrentEulerZYX(void)
@@ -948,6 +950,7 @@ fp_vector_t extrinsicYaw(float yaw) {
 #define INDI_TURN_COORDINATION_PHI_SOFT_LIMIT (DEGREES_TO_RADIANS(70.f))
 #define INDI_TURN_COORDINATION_PHI_HARD_LIMIT (0.5f * M_PIf)
 
+#ifdef INDI_IS_TAILSITTER
 fp_vector_t coordinateTurn(void) {
     fp_vector_t output = {0};
 
@@ -978,6 +981,7 @@ fp_vector_t coordinateTurn(void) {
     }
     return output;
 }
+#endif
 
 fp_vector_t sideslipStabilization(float gain) {
     float ay = indiRun.spf_fs.V.Y;

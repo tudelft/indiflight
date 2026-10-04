@@ -174,19 +174,20 @@ if __name__ == '__main__':
     #    f_phi = (R_psi@R_phi).T @ f_I
     #    v_phi = (R_psi@R_phi).T @ v_I
     fpx, fpy, fpz = sp.symbols('fpx fpy fpz', real=True)
-    f_phi = sp.Matrix([fpz, fpy, fpz])
+    f_phi = sp.Matrix([fpx, fpy, fpz])
     f_body = R_theta.T @ f_phi
     vpx, vpy, vpz = sp.symbols('vpx vpy vpz', real=True)
     v_phi = sp.Matrix([vpx, vpy, vpz])
 
     # body forces
-    expr_body  = sp.simplify( -V * PHI @ R_theta.T @ v_phi  +  ax_B * T )
+    expr_body  = -V * PHI @ R_theta.T @ v_phi  +  ax_B * T
 
     # to solve:  expr_body == f_body
     # we're only interested in x and z components.
     # solve manually by eliminating T, then atan2 should show up naturally because division of sin/cos
-    x_for_T = sp.solve(expr_body[0], T)[0]
-    eq_theta = expr_body[2].subs(T, x_for_T)
+    x_for_T = sp.solve(expr_body[2] - f_body[2], T)[0]
+    x_for_T = x_for_T.subs(sp.sin(theta + sp.pi/4), sp.sqrt(2)/2 * (sp.cos(theta) + sp.sin(theta)) )
+    eq_theta = (expr_body[0] - f_body[0]).subs(T, x_for_T) * axz
     sin_cos_terms = sp.collect(sp.expand_trig(eq_theta).expand(), [sp.cos(theta), sp.sin(theta)], evaluate=False)
 
 
