@@ -62,6 +62,8 @@ typedef struct indiProfile_s {
     uint8_t manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     uint8_t manualMaxUpwardsSpf; // maximum upwards specific force in manual flight in N/kg. 255 means max of the platform
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
+    int8_t hoverRoll;  // constant roll hover-attitude reference in deg (right +). 0 = level
+    int8_t hoverPitch; // constant pitch hover-attitude reference in deg (nose up +). 0 = level
     // ---- general INDI config
     uint8_t useIncrement;          // bool: use incremental law. NDI (or more precisely linDI) otherwise
     uint8_t useAccelForSpfz;       // bool: if false, estimate current thrust using actuator model and effectiveness matrix, not accelero
@@ -145,6 +147,7 @@ typedef struct indiRuntime_s {
     bool manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     float manualMaxUpwardsSpf; // 255 means sum(G1[2, :])
     float manualMaxTilt; // rad
+    fp_quaternion_t hoverOffset; // constant hover-attitude offset built from hoverRoll/hoverPitch
     // ---- general INDI config
     bool useIncrement;
     bool useAccelForSpfz;

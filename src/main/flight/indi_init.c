@@ -61,6 +61,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->manualUseCoordinatedYaw = true;
     indiProfile->manualMaxUpwardsSpf = 30;
     indiProfile->manualMaxTilt = 45; // degrees
+    indiProfile->hoverRoll = 0; // degrees (0 = level hover; set per-craft for canted frames)
+    indiProfile->hoverPitch = 0; // degrees (0 = level hover; nose up +)
     // ---- general INDI config
     indiProfile->useIncrement = true;
     indiProfile->useAccelForSpfz = true;
@@ -152,6 +154,14 @@ void initIndiRuntimeParameters(void) {
     indiRun.attRateDenom = p->attRateDenom;
     indiRun.manualUseCoordinatedYaw = (bool) p->manualUseCoordinatedYaw;
     indiRun.manualMaxTilt = DEGREES_TO_RADIANS(p->manualMaxTilt);
+    { // precompute constant hover-attitude offset quaternion from roll/pitch (deg)
+        fp_vector_t rollAxis  = { .V.X = 1.f, .V.Y = 0.f, .V.Z = 0.f };
+        fp_vector_t pitchAxis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f };
+        fp_quaternion_t qRoll, qPitch;
+        quaternion_of_axis_angle(&qRoll,  &rollAxis,  DEGREES_TO_RADIANS((float) p->hoverRoll));
+        quaternion_of_axis_angle(&qPitch, &pitchAxis, DEGREES_TO_RADIANS((float) p->hoverPitch));
+        indiRun.hoverOffset = chain_quaternion(&qPitch, &qRoll); // identity when both are 0
+    }
     // ---- general INDI config
     indiRun.useIncrement = (bool) p->useIncrement;
     indiRun.useAccelForSpfz = (bool) p->useAccelForSpfz;

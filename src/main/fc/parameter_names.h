@@ -133,6 +133,8 @@
 #define PARAM_NAME_INDI_MANUAL_USE_COORDINATED_YAW "indi_manual_use_coordinated_yaw"
 #define PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL "indi_manual_max_upwards_accel"
 #define PARAM_NAME_INDI_MANUAL_MAX_TILT "indi_manual_max_tilt"
+#define PARAM_NAME_INDI_HOVER_ROLL "indi_hover_roll"
+#define PARAM_NAME_INDI_HOVER_PITCH "indi_hover_pitch"
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ "indi_use_accel_for_thrust"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"

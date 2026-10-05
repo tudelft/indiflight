@@ -73,7 +73,7 @@
 #endif
 
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 1);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 2);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -209,6 +209,9 @@ void getSetpoints(timeUs_t current) {
 
         // this is probaby the most expensive operation... can be half the cost if
         // optimized for .x = 0, .y = 0, unless compiler does that for us?
+        // apply constant hover-attitude reference (level unless set per-craft, e.g. canted frames)
+        attSpYaw = chain_quaternion(&indiRun.hoverOffset, &attSpYaw);
+
         indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
 
         // convert throttle
