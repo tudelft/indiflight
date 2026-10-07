@@ -95,10 +95,14 @@ static bool attitudeQuaternionFilterPrimed;
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
 // The plan is disabled by default so position mode keeps its existing behavior.
-#define POSITION_WAYPOINT_COUNT 2
+#define POSITION_WAYPOINT_COUNT 6
 static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
-    { .location = { .V = { .X = 0.f,  .Y =  0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 0.f,  .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 1.f, .velocityLimit = 10.f },
+    { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
+    { .location = { .V = { .X = 60.f, .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
+    { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
+    { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
+    { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 20.f, .velocityLimit = 10.f },
     //{ .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
     //{ .location = { .V = { .X = 20.f, .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
     //{ .location = { .V = { .X = 0.f,  .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
@@ -175,15 +179,15 @@ void initPositionRuntime(void) {
 
     // init stick velocity filters (2nd order LPF)
     for (int i = 0; i < 3; i++) {
-        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 500); // TODO: make dynamic
-        biquadFilterInitLPF(&spfBodyFilter[i], 5.0f, 500);
+        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 1000); // TODO: make dynamic
+        biquadFilterInitLPF(&spfBodyFilter[i], 5.0f, 1000);
         // biquadFilterInit(&dfAccelerationFilter[i], sqrtf(0.5f * 5.0f), 500,
         //     sqrtf(0.5f * 5.0f) / (5.0f - 0.5f), FILTER_BPF, 1.0f);
-        biquadFilterInitLPF(&dfAccelerationFilter[i], 10.0f, 500);
-        biquadFilterInitLPF(&dfModelSpfFilter[i], 10.0f, 500);
+        biquadFilterInitLPF(&dfAccelerationFilter[i], 10.0f, 1000);
+        biquadFilterInitLPF(&dfModelSpfFilter[i], 10.0f, 1000);
     }
     for (int i = 0; i < 4; i++) {
-        biquadFilterInitLPF(&attitudeQuaternionFilter[i], 5.0f, 500);
+        biquadFilterInitLPF(&attitudeQuaternionFilter[i], 5.0f, 1000);
     }
     filteredAttitudeQuaternion = (fp_quaternion_t) { .w = 1.f };
     filteredSpfBody = (fp_vector_t) { 0 };
@@ -641,10 +645,11 @@ static bool spfDFT(
     float sTheta_r, cTheta_r;
     sTheta_r = sin_approx(theta_r);
     cTheta_r = cos_approx(theta_r);
-    *T_r  =   V * PHI[2][2] * v_phi.V.X * sTheta_r;
-    *T_r +=   V * PHI[2][2] * v_phi.V.Z * cTheta_r;
-    *T_r +=   f_phi_r.V.Z / AX->V.Z     * sTheta_r;
-    *T_r +=   f_phi_r.V.Z / AX->V.Z     * cTheta_r;
+    *T_r  =   V * PHI[2][2] * v_phi.V.X   * sTheta_r;
+    *T_r +=   V * PHI[2][2] * v_phi.V.Z   * cTheta_r;
+    *T_r +=                   f_phi_r.V.X * sTheta_r;
+    *T_r +=                   f_phi_r.V.Z * cTheta_r;
+    *T_r /= AX->V.Z;
 
     return true;
 }
@@ -665,16 +670,18 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
 
     // craft parameters
     float PHI[3][3] = {
+        { 0.31f/0.7f, 0.000f, 0.000f },
         { 0.000f, 0.000f, 0.000f },
-        { 0.000f, 0.000f, 0.000f },
-        { 0.000f, 0.000f, 0.000f },
+        { 0.000f, 0.000f, 0.0465f/0.7f },
     };
     const float *PHIRows[3] = { PHI[0], PHI[1], PHI[2] };
     const fp_vector_t AX = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
-    // const float K[2] = { 1.413e-6f/0.7f, 1.413e-6f/0.7f }; // propeller constant divided by mass
-    // const float* omega = indiRun.omega; // just use indiRun.omega
-    const float K[4] = { 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f }; // propeller constant divided by mass
+    const float K[2] = { 1.413e-6f/0.7f, 1.413e-6f/0.7f }; // propeller constant divided by mass
     const float* omega = indiRun.omega; // just use indiRun.omega
+    const int n = 2;
+    // const float K[4] = { 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f, 1.88e-7f/0.41f }; // propeller constant divided by mass
+    // const float* omega = indiRun.omega; // just use indiRun.omega
+    // const int n = 4;
 
     // step 1: calculate INDI update on specfic force level
     //
@@ -688,12 +695,18 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
     // step 2: calculate required attitude and thrust using the inversion spfDFT()
 
     // Preserve current yaw unless the position setpoint explicitly tracks yaw.
-    float Psi_r = posSpNed.trackPsi ? posSpNed.psi : getYawWithoutSingularity();
+    fp_euler_t e_current;
+    fp_quaternionProducts_t qp_current;
+    quaternionProducts_of_quaternion(&qp_current, &q);
+    fp_euler_of_quaternionProducts_ZXY(&e_current, &qp_current);
+
+    // float Psi_r = posSpNed.trackPsi ? posSpNed.psi : getYawWithoutSingularity();
+    float Psi_r = posSpNed.trackPsi ? posSpNed.psi : e_current.angles.yaw;
 
     fp_vector_t a_I_bpf;
     fp_vector_t f_I_model;
     fp_vector_t f_I_lpf;
-    getSpfInertialPhi(&f_I_model, PHIRows, &AX, K, omega, 4, &q, &v_I);
+    getSpfInertialPhi(&f_I_model, PHIRows, &AX, K, omega, n, &q, &v_I);
     for (int axis = 0; axis < 3; axis++) {
         a_I_bpf.A[axis] = biquadFilterApply(&dfAccelerationFilter[axis], a_I.A[axis]);
         f_I_lpf.A[axis] = biquadFilterApply(&dfModelSpfFilter[axis], f_I_model.A[axis]);
@@ -706,10 +719,36 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
     fp_quaternion_t q_r;
     float T_r;
     if (spfDFT(&q_r, &T_r, Psi_r, &f_I_r, PHIRows, &AX, &v_I)) {
+        // sanity check, run getSpfInertialPhi again on inversion
+        // fp_vector_t f_I_model_r;
+        // getSpfInertialPhi(&f_I_model_r, PHIRows, &AX, K, omega, n, &q_r, &v_I);
+        // UNUSED(f_I_model_r);
+
         attSpNedFromPos = q_r;
+        fp_quaternion_t qi_r = q_r;
+        qi_r.w *= -1.f;
+        fp_vector_t a_B_r = accSpNedFromPos;
+        a_B_r.V.Z -= GRAVITYf;
+        rotate_vector_with_quaternion(&a_B_r, &qi_r);
+
         spfSpBodyFromPos.V.X = 0.f;
         spfSpBodyFromPos.V.Y = 0.f;
-        spfSpBodyFromPos.V.Z = -MAX(0.f, T_r);
+        spfSpBodyFromPos.V.Z = a_B_r.V.Z;
+        // we can calculate body rates to maintain V_B as good as possible using 
+        //   omega_B = (v_B x a_B) / (v_B^T v_B)
+
+        // fp_quaternion_t qinv = q;
+        // qinv.w *= -1.f;
+        // fp_vector_t v_B = v_I; // R.T @ v_I
+        // rotate_vector_with_quaternion(&v_B, &qinv);
+
+        // //   omega_B = (v_B x A_B) / (v_B^T v_B)
+        // float ivel2 = sq(v_I.V.X) + sq(v_I.V.Y) + sq(v_I.V.Z);
+        // if (ivel2 > sq(10.f)) {
+        //     VEC3_CROSS(rateSpBodyFromPos, v_I, accSpNedFromPos)
+        //     ivel2 = 1.f / ivel2;
+        //     VEC3_SCALAR_MULT(rateSpBodyFromPos, ivel2);
+        // }
     } else {
         attSpNedFromPos = q;
         spfSpBodyFromPos.V.X = 0.f;

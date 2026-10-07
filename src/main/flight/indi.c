@@ -242,6 +242,14 @@ void getSetpoints(timeUs_t current) {
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;
         indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
+#ifdef INDI_IS_TAILSITTER
+#define INDI_SIDESLIP_GAIN_POS (DEGREES_TO_RADIANS(15.f)) // deg/s per m/s/s of ay
+        // coordinate turn
+        //indiRun.rateSpBodyCommanded = coordinateTurn();
+        fp_vector_t sideslipCorrection;
+        sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN_POS);
+        VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
+#endif
     } else
 #endif
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
@@ -954,7 +962,7 @@ fp_vector_t extrinsicYaw(float yaw) {
 fp_vector_t coordinateTurn(void) {
     fp_vector_t output = {0};
 
-#ifdef HIL_BUILD
+#if defined(HIL_BUILD) || defined(MOCKUP)
 #ifndef USE_LOCAL_POSITION
     return output;
 #endif
@@ -962,6 +970,7 @@ fp_vector_t coordinateTurn(void) {
         return output;
     }
     float vel = VEC3_XY_LENGTH(velEstNed);
+    vel = constrainf(vel, INDI_TURN_COORDINATION_VEL_THRESHOLD, 100.f);
 #else
     float vel = constrainf(pitot.airSpeed / 100.f, INDI_TURN_COORDINATION_VEL_THRESHOLD, 100.f); // in m/s
 #endif

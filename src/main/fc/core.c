@@ -1353,6 +1353,7 @@ bool isTouchingGround(void) {
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
         throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow &= ( sq(velEstNed.V.X) + sq(velEstNed.V.Y) + sq(velEstNed.V.Z) ) < sq(3.f);
     } else
 #endif
 #ifdef USE_GPS_RESCUE

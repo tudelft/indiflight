@@ -185,9 +185,9 @@ if __name__ == '__main__':
     # to solve:  expr_body == f_body
     # we're only interested in x and z components.
     # solve manually by eliminating T, then atan2 should show up naturally because division of sin/cos
-    x_for_T = sp.solve(expr_body[2] - f_body[2], T)[0]
-    x_for_T = x_for_T.subs(sp.sin(theta + sp.pi/4), sp.sqrt(2)/2 * (sp.cos(theta) + sp.sin(theta)) )
-    eq_theta = (expr_body[0] - f_body[0]).subs(T, x_for_T) * axz
+    z_for_T = sp.solve(expr_body[2] - f_body[2], T)[0]
+    z_for_T = z_for_T.subs(sp.sin(theta + sp.pi/4), sp.sqrt(2)/2 * (sp.cos(theta) + sp.sin(theta)) )
+    eq_theta = (expr_body[0] - f_body[0]).subs(T, z_for_T) * axz
     sin_cos_terms = sp.collect(sp.expand_trig(eq_theta).expand(), [sp.cos(theta), sp.sin(theta)], evaluate=False)
 
 

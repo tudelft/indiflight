@@ -31,7 +31,7 @@ class Sim():
         visData.spawn(self.uav)
 
     def tick(self, dt):
-        if not (self.i % 2): # 4kHz
+        if not (self.i % 4): # 2kHz
             self.sil.receive() if self.sil else None
         if not (self.i % 8): # 250Hz
             self.hil.receive() if self.hil else None
