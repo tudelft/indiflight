@@ -256,8 +256,8 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 400, 400, 400
-set indi_rate_gains     =  100,  100,  100
+set indi_attitude_gains = 400, 300, 400
+set indi_rate_gains     =  100, 100, 100
 # set indi_attitude_gains = 500, 500, 500
 # set indi_rate_gains     =  180,  180,  180
 # set indi_attitude_gains = 200, 200, 200
@@ -413,13 +413,13 @@ positionprofile 0
 set position_horizontal_p = 25
 set position_horizontal_i = 0
 set position_horizontal_d = 22
-set position_vertical_p = 12
+set position_vertical_p = 8
 set position_vertical_i = 0
-set position_vertical_d = 22
+set position_vertical_d = 15
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 2000
-set position_max_horizontal_accel = 1500
+set position_max_horizontal_speed = 3500
+set position_max_horizontal_accel = 2000
 set position_max_upwards_speed = 500
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000

@@ -89,6 +89,7 @@ static biquadFilter_t attitudeQuaternionFilter[4];
 static biquadFilter_t spfBodyFilter[4];
 static biquadFilter_t dfAccelerationFilter[3];
 static biquadFilter_t dfModelSpfFilter[3];
+// static biquadFilter_t rateSpBodyFilter[3];
 static fp_quaternion_t filteredAttitudeQuaternion;
 static fp_vector_t filteredSpfBody;
 static bool attitudeQuaternionFilterPrimed;
@@ -100,7 +101,7 @@ static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
     { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 1.f, .velocityLimit = 10.f },
     { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
     { .location = { .V = { .X = 60.f, .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
-    { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
+    { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 30.f },
     { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
     { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 20.f, .velocityLimit = 10.f },
     //{ .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
@@ -183,8 +184,9 @@ void initPositionRuntime(void) {
         biquadFilterInitLPF(&spfBodyFilter[i], 5.0f, 1000);
         // biquadFilterInit(&dfAccelerationFilter[i], sqrtf(0.5f * 5.0f), 500,
         //     sqrtf(0.5f * 5.0f) / (5.0f - 0.5f), FILTER_BPF, 1.0f);
-        biquadFilterInitLPF(&dfAccelerationFilter[i], 10.0f, 1000);
-        biquadFilterInitLPF(&dfModelSpfFilter[i], 10.0f, 1000);
+        biquadFilterInitLPF(&dfAccelerationFilter[i], 3.0f, 1000);
+        biquadFilterInitLPF(&dfModelSpfFilter[i], 3.0f, 1000);
+//         biquadFilterInitLPF(&rateSpBodyFilter[i], 1.5f, 1000);
     }
     for (int i = 0; i < 4; i++) {
         biquadFilterInitLPF(&attitudeQuaternionFilter[i], 5.0f, 1000);
@@ -734,21 +736,22 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
         spfSpBodyFromPos.V.X = 0.f;
         spfSpBodyFromPos.V.Y = 0.f;
         spfSpBodyFromPos.V.Z = a_B_r.V.Z;
+
         // we can calculate body rates to maintain V_B as good as possible using 
-        //   omega_B = (v_B x a_B) / (v_B^T v_B)
-
-        // fp_quaternion_t qinv = q;
-        // qinv.w *= -1.f;
-        // fp_vector_t v_B = v_I; // R.T @ v_I
-        // rotate_vector_with_quaternion(&v_B, &qinv);
-
-        // //   omega_B = (v_B x A_B) / (v_B^T v_B)
-        // float ivel2 = sq(v_I.V.X) + sq(v_I.V.Y) + sq(v_I.V.Z);
-        // if (ivel2 > sq(10.f)) {
-        //     VEC3_CROSS(rateSpBodyFromPos, v_I, accSpNedFromPos)
-        //     ivel2 = 1.f / ivel2;
-        //     VEC3_SCALAR_MULT(rateSpBodyFromPos, ivel2);
-        // }
+        //   omega_B = R_B^I  (v_I x A_I) / (v_I^T v_I)
+        fp_quaternion_t qinv = q;
+        qinv.w *= -1.f;
+        float vel2 = sq(v_I.V.X) + sq(v_I.V.Y) + sq(v_I.V.Z);
+        if (vel2 > sq(8.f)) {
+            fp_vector_t filteredRateSpBody;
+            VEC3_CROSS(filteredRateSpBody, v_I, accSpNedFromPos)
+            VEC3_SCALAR_MULT(filteredRateSpBody, (1.f / vel2));
+            // for (int axis = 0; axis < 3; axis++) {
+            //     filteredRateSpBody.A[axis] = biquadFilterApply(&rateSpBodyFilter[axis], filteredRateSpBody.A[axis]);
+            // }
+            rateSpBodyFromPos = filteredRateSpBody;
+            rotate_vector_with_quaternion(&rateSpBodyFromPos, &qinv);
+        }
     } else {
         attSpNedFromPos = q;
         spfSpBodyFromPos.V.X = 0.f;

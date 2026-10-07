@@ -122,35 +122,33 @@ if __name__=="__main__":
 
     # with d0 for all, but cmww=0, seems to be better
     phi = 3.297e-1
-    # Phi = np.array([
-    #     [+3.106e-01,          0, +4.148e-02,          0, -1.613e-04,          0],
-    #     [         0, +3.603e-02,          0, +1.355e-03,          0, -3.538e-03],
-    #     [+4.148e-02,          0, +4.465e-02,          0, +1.951e-04,          0],
-    #     [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
-    #     [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
-    #     [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
-    # ], dtype=np.float32)
-    phi = 0
     Phi = np.array([
-        [+3.106e-01,          0,          0,          0,          0,          0],
-        [         0, +3.603e-02,          0,          0,          0,          0],
-        [         0,          0, +4.465e-02,          0,          0,          0],
+        [+3.106e-01,          0, +4.148e-02,          0, -1.613e-04,          0],
+        [         0, +3.603e-02,          0, +1.355e-03,          0, -3.538e-03],
+        [+4.148e-02,          0, +4.465e-02,          0, +1.951e-04,          0],
         [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
         [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
         [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
     ], dtype=np.float32)
+    # phi = 0
+    # Phi = np.array([
+    #     [+3.106e-01,          0,          0,          0,          0,          0],
+    #     [         0, +3.603e-02,          0,          0,          0,          0],
+    #     [         0,          0, +4.465e-02,          0,          0,          0],
+    #     [         0, +1.355e-03,          0, +8.290e-04,          0, +7.494e-04],
+    #     [-1.613e-04,          0, +1.951e-04,          0, +4.093e-04,          0],
+    #     [         0, -3.538e-03,          0, +7.494e-04,          0, +2.790e-03],
+    # ], dtype=np.float32)
     # Phi[3:] = 0. # for testing, no aerodynamic moments
     # Phi[:, 3:] = 0. # for testing, no influence of body rotations
 
-    # cd   = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
-    cd   = np.array([0*-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
+    cd   = np.array([-7.032e-07,          0,          0,          0, -1.835e-08, -6.047e-08], dtype=np.float32)
     cdd  = np.array([         0,          0,          0,          0, -1.412e-03,          0], dtype=np.float32)
     cddd = np.array([         0,          0,          0,          0, -2.201e-05,          0], dtype=np.float32)
     d0   = np.array([-3.618e-01, -1.540e-01], dtype=np.float32)
 
     k = 1.413e-6
-    # kESC = 0.5
-    kESC = 0.0
+    kESC = 0.5
     tail.setRotor(0, X=[1.104e-02, -1.064e-01, -7.000e-02], ax=[1.558e-01, 0.000e+00, -9.878e-01], k=k, cm=-6.938e-04, wmax=3000., tau=0.03, kESC=kESC, I=2.842e-6) # RR
     tail.setRotor(1, X=[1.104e-02, +1.064e-01, -7.000e-02], ax=[1.558e-01, 0.000e+00, -9.878e-01], k=k, cm=+6.938e-04, wmax=3000., tau=0.03, kESC=kESC, I=2.842e-6) # FR
 
@@ -176,8 +174,8 @@ if __name__=="__main__":
     cd_qinf = cd * w2_hover / (0.5 * 1.225 * Vdisk2_hover)
 
     tail.setPhiModel(phi, Phi)
-    tail.setElevonModel(cd, 0*cdd, 0*cddd, cd_qinf, 0*d0)
-    tail.s_delay = 0*0.03
+    tail.setElevonModel(cd, 0*cdd, cddd, cd_qinf, d0)
+    tail.s_delay = 0.03
 
     inertia_ratios = np.array([(tail.I[2,2] - tail.I[1,1]) / tail.I[0,0],
                                (tail.I[0,0] - tail.I[2,2]) / tail.I[1,1],
@@ -186,8 +184,8 @@ if __name__=="__main__":
 
 
     #%% craft interfaces
-    # imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
-    imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.0, gyroStd=0.0)
+    imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.08, gyroStd=0.08)
+    # imu = IMU(tail, r=[-3.580e-02, -3.827e-03, +5.630e-03], qBody=[0.707, 0., 0.707, 0.], accStd=0.0, gyroStd=0.0)
     # imu = IMU(tail, r=[0, 0, 0], qBody=[0.707, 0., 0.707, 0.], accStd=0.0, gyroStd=0.0)
 
     mocap = Mocap(tail, args.mocap_host, args.mocap_port) if args.mocap else None
