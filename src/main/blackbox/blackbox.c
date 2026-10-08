@@ -285,6 +285,20 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"servo_feedback", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
 #endif
 
+
+#ifdef USE_ACTUATORS_SERVO
+    {"servo_feedback", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+#endif
+
+
+
+
+
+
+
     /* INDI stuff*/
 #ifdef USE_INDI
     {"quat",        0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -702,9 +716,10 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
-#ifdef USE_ACTUATORS_T4
+#if defined(USE_ACTUATORS_T4) || defined(USE_ACTUATORS_SERVO)
     int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
 #endif
+
 #ifdef USE_INDI
     int16_t quat[4];
     int16_t alpha[XYZ_AXIS_COUNT];
@@ -1130,6 +1145,10 @@ static void writeIntraframe(void)
     blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
 #endif
 
+#ifdef USE_ACTUATORS_SERVO
+    blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
+#endif
+
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(INDI))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->quat, 4);
@@ -1346,6 +1365,11 @@ static void writeInterframe(void)
         }
     }
 #ifdef USE_ACTUATORS_T4
+    arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
+    blackboxWriteSigned16VBArray(deltas16, 4);
+#endif
+
+#ifdef USE_ACTUATORS_SERVO
     arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
     blackboxWriteSigned16VBArray(deltas16, 4);
 #endif
@@ -1881,6 +1905,12 @@ static void loadMainState(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_ACTUATORS_T4
+    for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
+        blackboxCurrent->servo_feedback[i] = servo_feedback[i];
+    }
+#endif
+
+#ifdef USE_ACTUATORS_SERVO
     for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
         blackboxCurrent->servo_feedback[i] = servo_feedback[i];
     }

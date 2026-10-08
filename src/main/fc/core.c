@@ -95,6 +95,7 @@
 #include "io/vtx_rtc6705.h"
 #include "io/hil.h"
 #include "io/t4.h"
+#include "io/servo.h"
 
 #include "msp/msp_serial.h"
 
@@ -1576,18 +1577,33 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
         writeServos();
     }
 #endif
+
+
 #ifdef USE_ACTUATORS_T4
-    static unsigned servoCounter = 0;
-    if (++servoCounter % 4 == 0) {
+    static unsigned servoCounter_t4 = 0;
+    if (++servoCounter_t4 % 4 == 0) {
         sendActuatorsT4();
-        servoCounter = 0;
+        servoCounter_t4 = 0;
     }
     handleActuatorsT4(); // is this the best place?
+#endif
+
+
+
+#ifdef USE_ACTUATORS_SERVO
+    static unsigned servoCounter_servo = 0;
+    if (++servoCounter_servo % 4 == 0) {
+        sendActuatorsServo();
+        servoCounter_servo = 0;
+    }
+    handleActuatorsServo(); // is this the best place?
 #endif
 
     writeMotors();
 
 #endif
+
+
 
 #ifdef USE_DSHOT_TELEMETRY_STATS
     if (debugMode == DEBUG_DSHOT_RPM_ERRORS && useDshotTelemetry) {

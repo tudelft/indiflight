@@ -27,10 +27,10 @@
 
 #include "platform.h"
 
-#if defined(USE_ACTUATORS_T4)
+#if defined(USE_ACTUATORS_SERVO)
 
 #ifndef USE_SERVOS
-#error "USE_ACTUATORS_T4 requires USE_SERVOS"
+#error "USE_ACTUATORS_SERVO requires USE_SERVOS"
 #endif
 
 #include "common/maths.h"
@@ -76,30 +76,30 @@
 
 #include "telemetry/telemetry.h"
 
-#include "t4.h"
-#include "io/t4_protocol.h"
+#include "servo.h"
+#include "io/servo_protocol.h"
 
 #ifdef USE_CLI_DEBUG_PRINT
 #include "cli/cli_debug_print.h"
 #endif
 
-static serialPort_t *t4Port = NULL;
+static serialPort_t *ServoPort = NULL;
 static const serialPortConfig_t *portConfig;
 
-void freeActuatorsT4Port(void)
+void freeActuatorsServoPort(void)
 {
-    closeSerialPort(t4Port);
-    t4Port = NULL;
+    closeSerialPort(ServoPort);
+    ServoPort = NULL;
 }
 
-void initActuatorsT4(void)
+void initActuatorsServo(void)
 {
-    portConfig = findSerialPortConfig(FUNCTION_ACTUATORS_T4);
+    portConfig = findSerialPortConfig(FUNCTION_ACTUATORS_SERVO);
 }
 
 #define BLINK_ONCE delay(500); LED1_ON; delay(100); LED1_OFF; delay(100)
 
-void configureActuatorsT4Port(void)
+void configureActuatorsServoPort(void)
 {
     if (!portConfig) {
         return;
@@ -110,87 +110,87 @@ void configureActuatorsT4Port(void)
         baudRateIndex = BAUD_921600;
     }
 
-    t4Port = openSerialPort(portConfig->identifier, FUNCTION_ACTUATORS_T4, NULL, NULL, baudRates[baudRateIndex], MODE_RXTX, SERIAL_NOT_INVERTED);
+    ServoPort = openSerialPort(portConfig->identifier, FUNCTION_ACTUATORS_SERVO, NULL, NULL, baudRates[baudRateIndex], MODE_RXTX, SERIAL_NOT_INVERTED);
 
-    if (!t4Port) {
+    if (!ServoPort) {
         return;
     }
 }
 
-void sendActuatorsT4(void)
+void sendActuatorsServo(void)
 {
-    if (!t4Port) {
+    if (!ServoPort) {
         return;
     }
 
-    struct ActuatorsT4In in = { 0 }; 
+    struct ActuatorsServoIn in = { 0 }; 
     in.esc_arm = 0x00; // disarm all escs
     in.servo_arm = 0xFFFF; // arm all servos
 
     // todo: fix this hardcoding
     in.servo_1_cmd = (int16_t) (servo_normalized[0] * 100.f * 100.f);
-    in.servo_2_cmd = (int16_t) (servo_normalized[1] * 100.f * 100.f); // now flipped in t4 firmware
+    in.servo_2_cmd = (int16_t) (-servo_normalized[1] * 100.f * 100.f);
     in.servo_3_cmd = (int16_t) (servo_normalized[2] * 100.f * 100.f);
     in.servo_4_cmd = (int16_t) (servo_normalized[3] * 100.f * 100.f);
 
     // write to serial port with checksum
-    serialWrite(t4Port, START_BYTE_ACTUATORS_T4);
+    serialWrite(ServoPort, START_BYTE_ACTUATORS_SERVO);
     uint8_t* stream = (uint8_t *) &in; // movable pointer into the packged struct
     in.checksum_in = 0;
-    while ((uint8_t *) &in + sizeof(struct ActuatorsT4In) - 1 - stream) {
+    while ((uint8_t *) &in + sizeof(struct ActuatorsServoIn) - 1 - stream) {
         in.checksum_in += *stream;
-        serialWrite(t4Port, *stream);
+        serialWrite(ServoPort, *stream);
         stream++;
     }
-    serialWrite(t4Port, in.checksum_in);
+    serialWrite(ServoPort, in.checksum_in);
 }
 
 // extern
-struct ActuatorsT4Out t4_out = { 0 };
+struct ActuatorsServoOut Servo_out = { 0 };
 
-static struct ActuatorsT4Out t4_out_buf = { 0 };
-static uint8_t* t4_out_buf_u8view;
+static struct ActuatorsServoOut Servo_out_buf = { 0 };
+static uint8_t* Servo_out_buf_u8view;
 
-void handleActuatorsT4(void)
+void handleActuatorsServo(void)
 {
-    if (!t4Port) {
+    if (!ServoPort) {
         return;
     }
 
     static uint8_t checksum;
-    static t4_parse_state_t parser = T4_IDLE;
-    while (serialRxBytesWaiting(t4Port)) {
+    static Servo_parse_state_t parser = SERVO_IDLE;
+    while (serialRxBytesWaiting(ServoPort)) {
         // read next byte
-        uint8_t byte = serialRead(t4Port);
+        uint8_t byte = serialRead(ServoPort);
         switch (parser) {
-            case T4_IDLE:
-                if (byte == START_BYTE_ACTUATORS_T4) {
+            case SERVO_IDLE:
+                if (byte == START_BYTE_ACTUATORS_SERVO) {
                     // likely start of frame, reset checksum and buffer pointer
                     checksum = 0;
-                    t4_out_buf_u8view = (uint8_t*) &t4_out_buf;
+                    Servo_out_buf_u8view = (uint8_t*) &Servo_out_buf;
                     // put parser in next state
-                    parser = T4_STX_FOUND;
+                    parser = SERVO_STX_FOUND;
                 }
                 break;
-            case T4_STX_FOUND:
-                *(t4_out_buf_u8view++) = byte; // insert byte into the buffer
+            case SERVO_STX_FOUND:
+                *(Servo_out_buf_u8view++) = byte; // insert byte into the buffer
                 checksum += byte;
-                if ((uint8_t *) &t4_out_buf + sizeof(struct ActuatorsT4Out) - 1 - t4_out_buf_u8view == 0) {
+                if ((uint8_t *) &Servo_out_buf + sizeof(struct ActuatorsServoOut) - 1 - Servo_out_buf_u8view == 0) {
                     // next byte is checksum
-                    parser = T4_WAITING_FOR_CHECKSUM;
+                    parser = SERVO_WAITING_FOR_CHECKSUM;
                 }
                 break;
-            case T4_WAITING_FOR_CHECKSUM:
-                *t4_out_buf_u8view = byte;
+            case SERVO_WAITING_FOR_CHECKSUM:
+                *Servo_out_buf_u8view = byte;
                 if (byte == checksum) {
                     // success
-                    memcpy(&t4_out, &t4_out_buf, sizeof(struct ActuatorsT4Out));
+                    memcpy(&Servo_out, &Servo_out_buf, sizeof(struct ActuatorsServoOut));
 
                     // todo: hardcode for now
-                    servo_feedback[0] = t4_out.servo_1_angle; // centidegree
-                    servo_feedback[1] = t4_out.servo_2_angle; // flipped in t4 firmware now
-                    servo_feedback[2] = t4_out.servo_3_angle;
-                    servo_feedback[3] = t4_out.servo_4_angle;
+                    servo_feedback[0] = Servo_out.servo_1_angle; // centidegree
+                    servo_feedback[1] = -Servo_out.servo_2_angle; // flipped in tailsitter
+                    servo_feedback[2] = Servo_out.servo_3_angle;
+                    servo_feedback[3] = Servo_out.servo_4_angle;
 #ifdef USE_CLI_DEBUG_PRINT
                     static unsigned printCounter = 1;
                     if (printCounter++ % 100 == 0) {
@@ -199,7 +199,7 @@ void handleActuatorsT4(void)
                     }
 #endif
                 }
-                parser = T4_IDLE;
+                parser = SERVO_IDLE;
                 break;
         }
     }

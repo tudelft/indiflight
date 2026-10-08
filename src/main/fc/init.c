@@ -135,6 +135,7 @@
 #include "io/vtx_tramp.h"
 #include "io/hil.h"
 #include "io/t4.h"
+#include "io/servo.h"
 
 #include "msc/emfat_file.h"
 #ifdef USE_PERSISTENT_MSC_RTC
@@ -770,9 +771,15 @@ void init(void)
     servosFilterInit();
 #endif
 
+
 #ifdef USE_ACTUATORS_T4
     initActuatorsT4();
     configureActuatorsT4Port();
+#endif
+
+#ifdef USE_ACTUATORS_SERVO
+    initActuatorsServo();
+    configureActuatorsServoPort();
 #endif
 
 #ifdef USE_PINIO

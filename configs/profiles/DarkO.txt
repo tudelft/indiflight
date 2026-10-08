@@ -28,6 +28,7 @@
 #define USE_DSHOT
 #define USE_SERVOS
 #define USE_ACTUATORS_T4
+#define USE_ACTUATORS_SERVO
 #define USE_BLACKBOX
 
 ## ----- Developer features
