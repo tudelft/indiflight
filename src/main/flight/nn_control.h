@@ -48,7 +48,7 @@ void nn_activate(void);                         // activates the controller
 void nn_deactivate(void);                       // deactivates the controller
 bool nn_is_active(void);                        // returns true if the controller is active
 
-void nn_compute_motor_cmds(void);               // computes motor commands based on the world_state[16] (pos, vel, att, rate, motorspeeds)
+void nn_compute_motor_cmds(void);               // computes motor commands based on world_state[NN_OBS_DIM] (pos, vel, att, rate, motorspeeds)
 float* nn_get_motor_cmds(void);                 // returns the computed motor commands
 
 #endif // NN_CONTROL_H

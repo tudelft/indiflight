@@ -25,13 +25,13 @@
 static const uint8_t motor_order[6] = {0, 1, 2, 3, 4, 5};
 
 float target_pos[NUM_TARGETS][3] = {
-    {3.5f, 0.0f, -1.0f},
+    {3.25f, 0.0f, -1.0f},
 };
 
 // Expected arming pose in the training world frame. Not used by
 // nn_control(); exported for the indiflight side to position/check against.
 const float start_pos[3] = {
-    -3.5f, 0.0f, -1.0f
+    -3.25f, 0.0f, -1.0f
 };
 
 const float start_yaw = 0.0f;

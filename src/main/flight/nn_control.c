@@ -55,7 +55,7 @@ PG_RESET_TEMPLATE(nnConfig_t, nnConfig,
     .rate_denom = 20,
 ); 
 
-float nn_motor_cmds[4] = {0.};
+float nn_motor_cmds[NN_ACT_DIM] = {0.};
 bool nn_active = false;
 
 void nn_init(void) {
@@ -111,9 +111,9 @@ bool nn_is_active(void) {
 }
 
 void nn_compute_motor_cmds(void) {
-	// compute motor commands based on the world_state[16] (pos, vel, att, rate, motorspeeds)
+	// compute motor commands based on world_state[NN_OBS_DIM] (pos, vel, att, rate, motorspeeds)
     // todo: use system state and not hardcoded EKF
-	float world_state[16] = {0.};
+	float world_state[NN_OBS_DIM] = {0.};
 	float* ekf_state = ekf_get_X();
 	// pos NED
 	world_state[0] = ekf_state[0];
@@ -139,11 +139,11 @@ void nn_compute_motor_cmds(void) {
 	world_state[9]  = DEGREES_TO_RADIANS(gyro.gyroADCf[0]); // TODO: figure out if we need gyroADCf or gyroADC
 	world_state[10] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
 	world_state[11] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
-	// unfiltered motorspeeds
-	world_state[12] = (float) indiRun.omega[0];
-	world_state[13] = (float) indiRun.omega[1];
-	world_state[14] = (float) indiRun.omega[2];
-	world_state[15] = (float) indiRun.omega[3];
+	// unfiltered motorspeeds (rad/s), in indiflight motor order. nn_control()
+	// remaps to training motor order internally via motor_order[].
+	for (int i = 0; i < NN_ACT_DIM; i++) {
+		world_state[12 + i] = (float) indiRun.omega[i];
+	}
 
 	// call the neural network controller (output is in range [0,1])
 #ifdef NN_FEATURE_DIM

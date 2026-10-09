@@ -170,7 +170,11 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LOCAL_POSITION
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
-        indiRun.attSpNed = attSpNedFromPos;
+        // apply the constant hover-attitude reference (nose-up for canted frames)
+        // on top of the position controller's attitude. hoverOffset is an
+        // intrinsic (body-frame) tilt, so post-multiply it; identity when
+        // indi_hover_pitch/indi_hover_roll are 0, same offset as angle mode uses.
+        indiRun.attSpNed = chain_quaternion(&attSpNedFromPos, &indiRun.hoverOffset);
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;
         indiRun.rateSpBodyCommanded = rateSpBodyFromPos;

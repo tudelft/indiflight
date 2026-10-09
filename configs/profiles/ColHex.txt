@@ -47,7 +47,7 @@
 ##define USE_THROW_TO_ARM
 ##define USE_CATAPULT
 ##define USE_LEARNER
-##define USE_NN_CONTROL
+#define USE_NN_CONTROL
 
 
 ################################################
@@ -236,7 +236,7 @@ set indi_manual_use_coordinated_yaw = 1
 
 # constant hover-attitude reference (canted-frame trim). 0 = level hover.
 set indi_hover_roll = 0                  # deg (right +)
-set indi_hover_pitch = 0                 # deg (nose up +) -- cancels forward cant drift; tune to null forward slide
+set indi_hover_pitch = 8                 # deg (nose up +) -- cancels forward cant drift; tune to null forward slide
 
 # --- indi config ---
 set indi_use_increment = 1
