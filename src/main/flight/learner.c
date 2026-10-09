@@ -288,13 +288,13 @@ static void updateLearningFilters(void) {
     fxSpfCorrected[2] = az - ( rx * (wx*wz - dwy)    + ry * (wy*wz + dwx)    + rz * (-sq(wx)-sq(wy)) );
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        float fxRateDot = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
-        learnRun.fxRateDotDiff.A[axis] = fxRateDot - fxPrevRateDot.A[axis];
-        fxPrevRateDot.A[axis] = fxRateDot;
+        learnRun.fxRateDot.A[axis] = biquadFilterApply(&fxRateFilter[axis], indiRun.rateDotIMU.A[axis]);
+        learnRun.fxRateDotDiff.A[axis] = learnRun.fxRateDot.A[axis] - fxPrevRateDot.A[axis];
+        fxPrevRateDot.A[axis] = learnRun.fxRateDot.A[axis];
 
-        float fxSpf = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
-        learnRun.fxSpfDiff.A[axis] = fxSpf - fxPrevSpf.A[axis];
-        fxPrevSpf.A[axis] = fxSpf;
+        learnRun.fxSpf.A[axis] = biquadFilterApply(&fxSpfFilter[axis], fxSpfCorrected[axis]);
+        learnRun.fxSpfDiff.A[axis] = learnRun.fxSpf.A[axis] - fxPrevSpf.A[axis];
+        fxPrevSpf.A[axis] = learnRun.fxSpf.A[axis];
     }
 
     static float fxPrevOmega[MAX_SUPPORTED_MOTORS] = {0};

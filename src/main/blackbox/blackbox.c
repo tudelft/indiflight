@@ -506,6 +506,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"imu_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"imu_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
+    {"spf_corrected",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"spf_corrected",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"spf_corrected",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
 #ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
     {"fx_x_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_x_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -753,6 +757,7 @@ typedef struct blackboxMainState_s {
 #ifdef USE_LEARNER
     int16_t motor_rls_x[BLACKBOX_LEARNER_N][BLACKBOX_LEARNER_MOTOR_RLS_N];
     int16_t imu_rls_x[XYZ_AXIS_COUNT];
+    int16_t spf_corrected[XYZ_AXIS_COUNT];
     int16_t fx_x_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_y_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_z_rls_x[BLACKBOX_LEARNER_N];
@@ -1190,6 +1195,7 @@ static void writeIntraframe(void)
             blackboxWriteUnsignedVB(blackboxCurrent->lambdasMotor[i]);
         }
         blackboxWriteSigned16VBArray(blackboxCurrent->imu_rls_x, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->spf_corrected, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_x_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_y_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_z_rls_x, BLACKBOX_LEARNER_N);
@@ -1515,6 +1521,9 @@ static void writeInterframe(void)
         }
 
         arraySubInt16(deltas16, blackboxCurrent->imu_rls_x, blackboxLast->imu_rls_x, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, 3);
+
+        arraySubInt16(deltas16, blackboxCurrent->spf_corrected, blackboxLast->spf_corrected, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, 3);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_x_rls_x, blackboxLast->fx_x_rls_x, BLACKBOX_LEARNER_N);
@@ -2004,6 +2013,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
     for (int i = 0; i < 3; i++) {
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
+        blackboxCurrent->spf_corrected[i] = lrintf(100.f*learnRun.fxSpf.A[i]);
     }
     for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[0].n); i++) {
         // specific force setpoints (fxRls 0, 1, 2)

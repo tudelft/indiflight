@@ -52,5 +52,5 @@ remote_flash_dfu : check_dirty check_remote
 # flash and restart ser2net
 	$(SSHPASS) -p $(REMOTE_PASSWORD) \
 		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
-			'dfu-util -a 0 -D /home/${REMOTE_USER}/indiflight/$(TARGET_DFU) -s :leave; \
+			'sudo dfu-util -a 0 -D /home/${REMOTE_USER}/indiflight/$(TARGET_DFU) -s :leave; \
 				sudo systemctl start ser2net.service'
