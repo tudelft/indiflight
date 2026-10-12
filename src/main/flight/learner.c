@@ -156,7 +156,8 @@ void initLearner(void) {
 #endif
     initLearnerRuntime();
 
-    float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    // float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+    float actionBandwidthHz = 680.f / ((float) gyro.targetLooptime); // make sure lambdaBase is 0.995
     rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // init filters and other rls

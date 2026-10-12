@@ -79,14 +79,15 @@ flight = ~ground_contact & (t > arm_time)
 
 n_flight = np.sum(flight)
 
-# get indices where we are learning
-LEARNER_MODE = 11
-LEARNER_TIMEOUT = 2.
 learning = flight.copy()
-if len(log.flags) > 1 and LEARNER_MODE in log.flags.iloc[0].enable:
-    learning &= (t*1e6 > log.flags.iloc[0].timeUs)
-    learning &= (t*1e6 < log.flags.iloc[1].timeUs)
-    learning &= (t < arm_time + LEARNER_TIMEOUT)
+if not args.crop:
+    # get indices where we are learning
+    LEARNER_MODE = 11
+    LEARNER_TIMEOUT = 2.
+    if len(log.flags) > 1 and LEARNER_MODE in log.flags.iloc[0].enable:
+        learning &= (t*1e6 > log.flags.iloc[0].timeUs)
+        learning &= (t*1e6 < log.flags.iloc[1].timeUs)
+        learning &= (t < arm_time + LEARNER_TIMEOUT)
 
 n_learn = np.sum(learning)
 
@@ -190,19 +191,19 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     Atg[0, :, 0*n:1*n] = w2[np.newaxis]
     Atg[1, :, 1*n:2*n] = w2[np.newaxis]
     Atg[2, :, 2*n:3*n] = w2[np.newaxis]
-    Atg[:, :, 3*n:]    = np.transpose(Odx_OxOx, (1, 0, 2))
+    Atg[:, :, 3*n:]    = 0*np.transpose(Odx_OxOx, (1, 0, 2))
 
     # rotational regressors: motors, derivatives, and gyro cross terms
     Arg = np.zeros((3, n_samples, nrg))
     Arg[0, :, 0*n:1*n] = w2[np.newaxis]
     Arg[1, :, 2*n:3*n] = w2[np.newaxis]
     Arg[2, :, 4*n:5*n] = w2[np.newaxis]
-    Arg[0, :, 1*n:2*n] = wd[np.newaxis]
-    Arg[1, :, 3*n:4*n] = wd[np.newaxis]
+    Arg[0, :, 1*n:2*n] = 0*wd[np.newaxis]
+    Arg[1, :, 3*n:4*n] = 0*wd[np.newaxis]
     Arg[2, :, 5*n:6*n] = wd[np.newaxis]
-    Arg[0, :, 6*n+0]   = -O[:, 1] * O[:, 2]
-    Arg[1, :, 6*n+1]   = -O[:, 0] * O[:, 2]
-    Arg[2, :, 6*n+2]   = -O[:, 0] * O[:, 1]
+    Arg[0, :, 6*n+0]   = -0*O[:, 1] * O[:, 2]
+    Arg[1, :, 6*n+1]   = -0*O[:, 0] * O[:, 2]
+    Arg[2, :, 6*n+2]   = -0*O[:, 0] * O[:, 1]
 
     # combined regressors
     Ag = np.zeros((6, n_samples, ng))
@@ -226,8 +227,8 @@ for name, select, estimators in zip(["full", "throw"], [flight, learning], [esti
     Ari[0, :, 0*n:1*n] = w2diff[np.newaxis]
     Ari[1, :, 2*n:3*n] = w2diff[np.newaxis]
     Ari[2, :, 4*n:5*n] = w2diff[np.newaxis]
-    Ari[0, :, 1*n:2*n] = wddiff[np.newaxis]
-    Ari[1, :, 3*n:4*n] = wddiff[np.newaxis]
+    Ari[0, :, 1*n:2*n] = 0*wddiff[np.newaxis]
+    Ari[1, :, 3*n:4*n] = 0*wddiff[np.newaxis]
     Ari[2, :, 5*n:6*n] = wddiff[np.newaxis]
 
     # combined regressors
@@ -309,7 +310,7 @@ if len(axes) > 0:
 
 #%% output effectiveness matrices for each estimator in omega domain and indiflight format
 
-wmax = 4200 # rad/s
+wmax = 3900 # rad/s
 for est_name, estimators in zip(["full", "throw"], [estimators_flight, estimators_learning]):
     print()
     print(f"----- Effectiveness Matrices for {est_name} data -----")

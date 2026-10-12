@@ -35,7 +35,7 @@ fplt = IndiflightPlotter(log.data, name=f"{args.name} -- Flight Data", Nr=6, Ns=
 cursor = BlittedCursor(fplt.all_axes, sharex=True)
 
 class Hexarotor(Craft3D):
-    def __init__(self, l=0.2, R=0.1):
+    def __init__(self, l=0.4, R=0.1):
         body = np.array([
             [    l,   -l/4,     0.],
             [    l,   +l/4,     0.],
@@ -76,6 +76,22 @@ else:
                               Ns=0,
                               interpolation="previous",
                               title=f"{args.name} -- Onboard ID Analysis")
+    pplt2 = IndiflightViewport(craft,
+                              log.data,
+                              follow=True,
+                              Nr=6,
+                              Ns=0,
+                              interpolation="previous",
+                              title=f"{args.name} -- Onboard ID Analysis")
 fplt.connect_viewport(pplt)
+fplt.connect_viewport(pplt2)
+
+
+
+
+
+
+
+
 
 plt.show()

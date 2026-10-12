@@ -42,7 +42,8 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylabel="Angular Rate [rad/s]")
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
-                         light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
+                         # light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
+                         light=None,
                          solid=[self.data[f'accSmooth[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'spfSp[{i}]'].to_numpy() for i in range(3)],
                          series_labels=["X", "Y", "Z"],
