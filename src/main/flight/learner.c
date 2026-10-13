@@ -894,10 +894,14 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         actG2rotHover = actG2rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
-#ifndef LEARNER_HARDCODE_LINEAR_FORCES
+#ifdef LEARNER_HARDCODE_LINEAR_FORCES
         indi->actG1_fx[act]    = 0;
         indi->actG1_fy[act]    = 0;
         indi->actG1_fz[act]    = -438;
+#else
+        indi->actG1_fx[act]    = actG1linHover.V.X;
+        indi->actG1_fy[act]    = actG1linHover.V.Y;
+        indi->actG1_fz[act]    = actG1linHover.V.Z;
 #endif
         indi->actG1_roll[act]  = actG1rotHover.V.X;
         indi->actG1_pitch[act] = actG1rotHover.V.Y;
