@@ -29,5 +29,5 @@ void resetIndiProfile(indiProfile_t *profile);
 void changeIndiProfile(uint8_t profileIndex);
 
 void initIndiRuntimeParameters(void);
-void initIndiRuntime(void);
+void initIndiRuntime(bool initValues);
 void indiInit(const pidProfile_t * pidProfile);

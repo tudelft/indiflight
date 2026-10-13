@@ -30,6 +30,7 @@
 #include "common/filter.h"
 #include "flight/rpm_filter.h"
 #include "flight/mixer_init.h"
+#include "fc/runtime_config.h"
 
 #include "indi.h"
 #include "indi_init.h"
@@ -46,7 +47,8 @@ void changeIndiProfile(uint8_t profileIndex)
         systemConfigMutable()->indiProfileIndex = profileIndex;
     }
 
-    initIndiRuntime();
+    bool shouldInitializeValues = !ARMING_FLAG(ARMED);
+    initIndiRuntime(shouldInitializeValues);
 }
 
 void resetIndiProfile(indiProfile_t *indiProfile) {
@@ -180,6 +182,9 @@ void initIndiRuntimeParameters(void) {
     indiRun.rateGains.A[0] = MAX(1U, p->rateGains[0]) * 0.1f;
     indiRun.rateGains.A[1] = MAX(1U, p->rateGains[1]) * 0.1f;
     indiRun.rateGains.A[2] = MAX(1U, p->rateGains[2]) * 0.1f;
+    indiRun.attGainsCasc.A[0] = indiRun.attGains.A[0] / indiRun.rateGains.A[0]; // attitude gains simulating parallel PD
+    indiRun.attGainsCasc.A[1] = indiRun.attGains.A[1] / indiRun.rateGains.A[1]; // attitude gains simulating parallel PD
+    indiRun.attGainsCasc.A[2] = indiRun.attGains.A[2] / indiRun.rateGains.A[2]; // attitude gains simulating parallel PD
     indiRun.attMaxTiltRate = DEGREES_TO_RADIANS(p->attMaxTiltRate);
     indiRun.attMaxYawRate  = DEGREES_TO_RADIANS(p->attMaxYawRate);
     indiRun.attRateDenom = p->attRateDenom;
@@ -352,42 +357,43 @@ void initIndiRuntimeParameters(void) {
     #endif
 }
 
-void initIndiRuntime(void) {
+void initIndiRuntime(bool initializeValues) {
     // set parameters from profile
     initIndiRuntimeParameters();
 
     // reset runtime values
 
-    // ---- runtime values -- actuators
-    for (int i = 0; i < indiRun.actNum; i++) {
-        indiRun.d[i] = 0.f; // command issued to the actuators on [-1, 1] scale
-        indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
-        indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
-        indiRun.uState_fs[i] = 0.f; // sync-filtered estimated force state
-        indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
-        indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
-        //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
-        indiRun.omegaDot_fs[i] = 0.f; // sync-filtered motor rate rad/s/s
-    }
-    // ---- runtime values -- axes
-    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        indiRun.attGainsCasc.A[axis] = indiRun.attGains.A[axis] / indiRun.rateGains.A[axis]; // attitude gains simulating parallel PD
-        indiRun.rateSpBody.A[axis] = 0.; // rate setpoint in body coordinates
-        indiRun.rateDotSpBody.A[axis] = 0.; // rate derivative setpoint in body coordinates
-        indiRun.spfSpBody.A[axis] = 0.; // specific force setpoint in body coordinates
-        indiRun.rateIMU.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
-        indiRun.rate_f.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
-        //indiRun.rate_fs.A[axis] = 0.; // sync-filtered gyro in rad/s
-        indiRun.rateDotIMU.A[axis] = 0.; // unfiltered gyro derivative in rad/s/s
-        indiRun.rateDot_fs.A[axis] = 0.; // sync-filtered gyro derivative in rad/s/s
-        indiRun.spfIMU.A[axis] = 0.; // unfiltered accelerometer (specific force) in N/kg
-        indiRun.spf_fs.A[axis] = 0.; // sync-filtered accelerometer (specific force) in N/kg
-    }
-    indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
-    indiRun.attSpNedPreFeedforward = ( const fp_quaternion_t ) { 1.f, 0.f, 0.f, 0.f };
-    indiRun.attErrBody = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
-    for (int j = 0; j < MAXV; j++) {
-        indiRun.dv[j] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    if (initializeValues) {
+        // ---- runtime values -- actuators
+        for (int i = 0; i < indiRun.actNum; i++) {
+            indiRun.d[i] = 0.f; // command issued to the actuators on [-1, 1] scale
+            indiRun.u[i] = 0.f; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
+            indiRun.uState[i] = 0.f; // estimated force state of the actuators [-1, 1]
+            indiRun.uState_fs[i] = 0.f; // sync-filtered estimated force state
+            indiRun.omega[i] = 0.f; // unfiltered motor speed rad/s
+            indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
+            //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
+            indiRun.omegaDot_fs[i] = 0.f; // sync-filtered motor rate rad/s/s
+        }
+        // ---- runtime values -- axes
+        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            indiRun.rateSpBody.A[axis] = 0.; // rate setpoint in body coordinates
+            indiRun.rateDotSpBody.A[axis] = 0.; // rate derivative setpoint in body coordinates
+            indiRun.spfSpBody.A[axis] = 0.; // specific force setpoint in body coordinates
+            indiRun.rateIMU.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
+            indiRun.rate_f.A[axis] = 0.; // unfiltered-filtered gyro in rad/s
+            //indiRun.rate_fs.A[axis] = 0.; // sync-filtered gyro in rad/s
+            indiRun.rateDotIMU.A[axis] = 0.; // unfiltered gyro derivative in rad/s/s
+            indiRun.rateDot_fs.A[axis] = 0.; // sync-filtered gyro derivative in rad/s/s
+            indiRun.spfIMU.A[axis] = 0.; // unfiltered accelerometer (specific force) in N/kg
+            indiRun.spf_fs.A[axis] = 0.; // sync-filtered accelerometer (specific force) in N/kg
+        }
+        indiRun.attSpNed = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
+        indiRun.attSpNedPreFeedforward = ( const fp_quaternion_t ) { 1.f, 0.f, 0.f, 0.f };
+        indiRun.attErrBody = (const fp_quaternion_t) { 1.f, 0.f, 0.f, 0.f };
+        for (int j = 0; j < MAXV; j++) {
+            indiRun.dv[j] = 0.f; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+        }
     }
 
     // ---- housekeeping
@@ -396,8 +402,14 @@ void initIndiRuntime(void) {
 
     // ---- filters
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-        biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
-        biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        if (initializeValues) {
+            biquadFilterInitLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+            biquadFilterInitLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        } else {
+            biquadFilterUpdateLPF(&indiRun.rateFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+            biquadFilterUpdateLPF(&indiRun.spfFilter[axis], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        }
+
         if (!indiRun.useGainScheduling) {
             biquadFilterInitLeadLag(&indiRun.feedforwardFilter[axis], 1.0f, 0.0f, 0.0f, 0.0f, 0.0f); // initialize as static gain of 1
         } else {
@@ -419,10 +431,17 @@ void initIndiRuntime(void) {
         biquadFilterInitLeadLag(&indiRun.rateLlFilter[axis], indiRun.rateCoefs[0], indiRun.rateCoefs[1], indiRun.rateCoefs[2], indiRun.rateCoefs[3], indiRun.rateCoefs[4]);
         biquadFilterInitLeadLag(&indiRun.attLlFilter[axis], indiRun.attCoefs[0], indiRun.attCoefs[1], indiRun.attCoefs[2], indiRun.attCoefs[3], indiRun.attCoefs[4]);
     }
+
     for (int i = 0; i < indiRun.actNum; i++) {
-        pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
-        biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
-        biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        if (initializeValues) {
+            pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
+            biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+            biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        } else {
+            pt1FilterUpdateCutoff(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
+            biquadFilterUpdateLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+            biquadFilterUpdateLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
+        }
         if (indiRun.useMotorLeadLag) {
             // initialize motor lead-lag filter
             // b0 = 1, b1 = 0, b2 = 0, a1 = -exp(-dT/tauEst), a2 = exp(-dT/tauDes)
