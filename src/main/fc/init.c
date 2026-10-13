@@ -742,7 +742,7 @@ void init(void)
     pidInit(currentPidProfile);
 #ifdef USE_INDI
     //indiInit(currentPidProfile);
-    initIndiRuntime();
+    initIndiRuntime(true);
 #endif
 #ifdef USE_LEARNER
     initLearner();
