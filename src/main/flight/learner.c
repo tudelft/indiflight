@@ -617,16 +617,19 @@ void updateLearner(timeUs_t current) {
 
     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
+#define LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S (500.f)
     if (motorLearningConditions) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
-                learnRun.motorSqrtD[act],
-                1.f,
+                0.f*learnRun.motorSqrtD[act],
+                0.f*1.f,
                 -1e-4f * learnRun.motorOmegaDot[act]
             };
-            float y = learnRun.motorOmega[act] * 1e-3f; // get into range of 1
+            float y = (learnRun.motorOmega[act] - LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S) * 1e-3f; // get into range of 1
             rlsNewSample( &motorRls[act], A, &y );
+            motorRls[act].x[1] = 0.f;
+            motorRls[act].x[2] = 0.f;
         }
     }
     learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
@@ -862,7 +865,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->actNum = MIN(learnerConfig()->numAct, MAXU);
     for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
-        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
+        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S;
 #ifdef LEARNER_HARDCODE_MAXRPM
         maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
 #endif
