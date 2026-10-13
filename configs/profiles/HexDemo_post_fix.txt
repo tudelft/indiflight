@@ -48,7 +48,7 @@
 #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
-## #define LEARNER_HARDCODE_MAXRPM
+#define LEARNER_HARDCODE_MAXRPM
 #define LEARNER_HARDCODE_LINEAR_FORCES
 
 ################################################
