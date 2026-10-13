@@ -36,7 +36,7 @@ remote_flash_dfu : check_dirty check_remote
 	$(V0) $(MAKE) -j $(TARGET_DFU)
 # temporarily stop ser2net to release tty device
 	$(SSHPASS) -p $(REMOTE_PASSWORD) \
-		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
+		ssh -o StrictHostKeyCheckinno -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
 			'sudo systemctl stop ser2net.service && mkdir -p ~/indiflight/obj'
 	sleep 1
 # bring FC into DFU mode. Continue on failure, because maybe it's already in DFU mode
@@ -52,5 +52,5 @@ remote_flash_dfu : check_dirty check_remote
 # flash and restart ser2net
 	$(SSHPASS) -p $(REMOTE_PASSWORD) \
 		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 $(REMOTE_USER)@$(REMOTE_IP) \
-			'dfu-util -a 0 -D /home/${REMOTE_USER}/indiflight/$(TARGET_DFU) -s :leave; \
+			'sudo dfu-util -a 0 -D /home/${REMOTE_USER}/indiflight/$(TARGET_DFU) -s :leave; \
 				sudo systemctl start ser2net.service'
