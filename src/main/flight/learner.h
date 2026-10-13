@@ -156,4 +156,6 @@ typedef struct motor_state_s {
     motor_query_state_t queryState;
 } motor_state_t;
 
+extern motor_state_t motorQueryStates[MAX_SUPPORTED_MOTORS];
+
 void runLearningQueryStateMachine(timeUs_t current);
