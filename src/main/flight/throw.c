@@ -130,7 +130,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 && isTouchingGround()
 #ifdef USE_LOCAL_POSITION
                 && ( (!autoMode && throwConfig()->allowManualModes)
-                        || (autoMode && isConvergedEkf()) )
+                        || (autoMode && isConvergedEkf() && posSpNed.new) )
 #else
                 && !autoMode
                 && throwConfig()->allowManualModes
@@ -139,6 +139,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
+                posSpNed.trackPsi = false; // don't care about yaw when being thrown
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:
