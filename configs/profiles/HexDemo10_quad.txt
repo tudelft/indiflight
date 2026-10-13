@@ -251,8 +251,8 @@ set indi_act_g1_fz =  -740,-740,-740,-740
 # set indi_act_g1_roll = -8,4955,6,-4959
 # set indi_act_g1_pitch = 5778,-2833,-5696,2916
 # set indi_act_g1_yaw =  201,-196,210,-215
-set indi_act_g1_roll = 0,2500,0,-2500
-set indi_act_g1_pitch = 3500,-1400,-3500,1400
+set indi_act_g1_roll = 0,1400,0,-1400
+set indi_act_g1_pitch = 2500,-1000,-2500,1000
 set indi_act_g1_yaw =  200,-200,200,-200
 
 # Nm / (kgm^2) / (rad/s/s) * 1e5
