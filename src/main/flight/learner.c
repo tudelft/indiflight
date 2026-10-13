@@ -857,7 +857,7 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
 #ifdef LEARNER_HARDCODE_MAXRPM
-        maxOmega = 2.f * M_PIf / 60.f  *  indi->actMaxRpm[act];
+        maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
 #endif
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
@@ -895,9 +895,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
 #ifndef LEARNER_HARDCODE_LINEAR_FORCES
-        indi->actG1_fx[act]    = actG1linHover.V.X;
-        indi->actG1_fy[act]    = actG1linHover.V.Y;
-        indi->actG1_fz[act]    = actG1linHover.V.Z;
+        indi->actG1_fx[act]    = 0;
+        indi->actG1_fy[act]    = 0;
+        indi->actG1_fz[act]    = -438;
 #endif
         indi->actG1_roll[act]  = actG1rotHover.V.X;
         indi->actG1_pitch[act] = actG1rotHover.V.Y;
