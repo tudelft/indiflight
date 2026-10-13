@@ -41,7 +41,7 @@ if args.name is None:
     args.name = args.logfile.split("/")[-1].split(".")[0]
 
 class Hexarotor(Craft3D):
-    def __init__(self, l=0.2, R=0.1):
+    def __init__(self, l=0.5, R=0.1):
         body = np.array([
             [    l,   -l/4,     0.],
             [    l,   +l/4,     0.],
@@ -115,9 +115,11 @@ mplt = IndiflightMotorSysIdPlotter(log.data, Nr=4, name=f"{args.name} -- Onboard
 #craft = Tailsitter()
 craft = Hexarotor()
 pplt = IndiflightViewport(craft, log.data, Nr=6, Ns=0, follow=False, title=f"{args.name} -- Onboard ID Analysis -- {log.parameters['Firmware revision']}")
-#pfplt = IndiflightViewport(craft, log.data, Nr=2, Ns=2, follow=True, title=f"{args.name} -- Onboard ID Analysis")
+pplt2 = IndiflightViewport(craft, log.data, Nr=6, Ns=0, follow=True, title=f"{args.name} -- Onboard ID Analysis -- {log.parameters['Firmware revision']}")
 fplt.connect_viewport(pplt)
 mplt.connect_viewport(pplt)
+fplt.connect_viewport(pplt2)
+mplt.connect_viewport(pplt2)
 #splt.connect_viewport(pplt)
 
 #fplt.connect_viewport(pfplt)

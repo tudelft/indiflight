@@ -579,7 +579,7 @@ void updateLearner(timeUs_t current) {
         }
 
         // test beun for tiny whoop
-        # ifdef LEARNER_PARAM_OVERRIDE
+#if (false)
         const indiProfile_t *p = indiProfiles(0);
 
         for (int motor = 0; motor < learnerConfig()->numAct; motor++) {
@@ -602,7 +602,7 @@ void updateLearner(timeUs_t current) {
 
             // motorRls[motor].x[0] = 1e-3f * 0.01f * maxOmega;
         }
-        # endif
+#endif
     } else {
         was_reset_fx_rls = false;
     }
@@ -856,9 +856,9 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]);
-        #ifdef LEARNER_PARAM_OVERRIDE
-        maxOmega = 2.f * M_PIf / 60.f  *  indiProfiles(0)->actMaxRpm[act];
-        #endif
+#ifdef LEARNER_HARDCODE_MAXRPM
+        maxOmega = 2.f * M_PIf / 60.f  *  indi->actMaxRpm[act];
+#endif
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale
@@ -894,9 +894,11 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         actG2rotHover = actG2rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
+#ifndef LEARNER_HARDCODE_LINEAR_FORCES
         indi->actG1_fx[act]    = actG1linHover.V.X;
         indi->actG1_fy[act]    = actG1linHover.V.Y;
         indi->actG1_fz[act]    = actG1linHover.V.Z;
+#endif
         indi->actG1_roll[act]  = actG1rotHover.V.X;
         indi->actG1_pitch[act] = actG1rotHover.V.Y;
         indi->actG1_yaw[act]   = actG1rotHover.V.Z;
