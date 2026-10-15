@@ -42,14 +42,23 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylabel="Angular Rate [rad/s]")
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[1, 1]),
-                         # light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
-                         light=None,
+                         light=[self.data[f'accADCafterRpm[{i}]'].to_numpy() for i in range(3)],
                          solid=[self.data[f'accSmooth[{i}]'].to_numpy() for i in range(3)],
                          dashed=[self.data[f'spfSp[{i}]'].to_numpy() for i in range(3)],
                          series_labels=["X", "Y", "Z"],
                          style_labels=["Raw", "Filtered", "Setpoint"],
                          title="Body Specific Forces",
                          ylabel="Specific Force [N/kg]")
+
+        if "spf_corrected[0]" in self.data.columns:
+            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
+                             light=[self.data[f'accSmooth[{i}]'].to_numpy() for i in range(3)],
+                             solid=[self.data[f'spf_corrected[{i}]'].to_numpy()/100 for i in range(3)],
+                             dashed=None,
+                             series_labels=["X", "Y", "Z"],
+                             style_labels=["Raw", "Filtered", "Setpoint"],
+                             title="Body Specific Forces",
+                             ylabel="Specific Force [N/kg]")
 
         self._plot_timeseries(self.fig.add_subplot(self.gs[1, 2]),
                          light=None,
@@ -92,7 +101,7 @@ class IndiflightPlotter(FlightPlotterBase):
                          ylabel="Actuator Commands [-]",
                          ylimits=(-0.05, 1.05))
         if self.Ns > 0:
-            self._plot_timeseries(self.fig.add_subplot(self.gs[2, 1]),
+            self._plot_timeseries(self.fig.add_subplot(self.gs[3, 1]),
                                 light=None, #[self.data[f'motor[{i}]'].to_numpy() for i in range(N)],
                                 solid=[self.data[f'u_state[{i}]'].to_numpy() for i in range(self.Nr, N)],
                                 dashed=[self.data[f'u[{i}]'].to_numpy() for i in range(self.Nr, N)],
