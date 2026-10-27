@@ -262,6 +262,11 @@ typedef struct indiRuntime_s {
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
 
+    // ---- closed loop rpm controller
+    float K_rpm;
+    float rpm_delay_buffer_[MAXU];
+    biquadFilter_t rpmFeedbackFilter_[MAXU];
+
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz

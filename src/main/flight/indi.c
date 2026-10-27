@@ -690,6 +690,36 @@ void getMotorCommands(timeUs_t current) {
         // apply lag filter to simulate spinup dynamics
         du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
 
+        // RPM feedback conrol: 
+        if (indiRun.actIsMotor[i]) {
+            // 1. Calculate Target RPM (Feedforward Baseline)
+            float omega_max = indiRun.actMaxOmega[i];
+            float rpm_set = sqrtf(omega_max * omega_max * indiRun.u[i]);
+            
+            // 2. Calculate Error
+            float rpm_measured = indiRun.omega_fs[i];
+            float error = rpm_set - rpm_measured;
+            
+            // 3. Proportional Correction
+            float p_term = indiRun.K_rpm * error;
+            
+            // 4. INDI Feedback Path
+            float delayed_cmd = indiRun.rpm_delay_buffer[i];
+            float cmd_filtered = biquadFilterApply(&indiRun.rpmFeedbackFilter[i], delayed_cmd);
+            
+            // 5. Calculate final command and constrain between 0 and 1
+            float dshot_cmd = constrainf(indiRun.u[i] + p_term + cmd_filtered, 0.0f, 1.0f);
+            
+            // 6. Update history and assign to actual output
+            indiRun.rpm_delay_buffer[i] = dshot_cmd;
+            indiRun.d[i] = dshot_cmd;
+ 
+        } else {
+            // Fallback for servos
+            indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
+        }
+
+
         indiRun.d[i] = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
     }
 }

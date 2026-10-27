@@ -874,6 +874,22 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         //                                            inv y-scale   a-scale     config-scale
         indi->actTimeConstMs[act] = (uint8_t) constrainf(1e3f      *  1e-4f  *    1000.f     * motorRls[act].x[3], 10.f, 200.f);
 
+          // --- CUSTOM CLOSED-LOOP RPM INITIALIZATION ---
+        // 1. Get the newly learned time constant in seconds (tau_d)
+        float learned_tau_d = indi->actTimeConstMs[act] * 0.001f;
+ 
+        // 2. Dynamically calculate K_rpm and tau_f based on tau_d
+        // (Replace these formulas with your actual inversion derivations)
+        indiRun.K_rpm = 0.5f * learned_tau_d; // Example relation
+        float learned_tau_f = learned_tau_d / 3.0f; // Example relation
+ 
+        // 3. Convert tau_f to cutoff frequency and initialize the filter dynamically
+        float cutoff_hz = 1.0f / (2.0f * M_PIf * learned_tau_f);
+        biquadFilterInitLPF(&indiRun.rpmFeedbackFilter_[act], cutoff_hz, gyro.targetLooptime);
+        
+        // 4. Ensure the delay buffer is zeroed out for the new profile
+        indiRun.rpm_delay_buffer_[act] = 0.0f;
+
         if ((motorRls[act].x[0] > 0.f) && (motorRls[act].x[1] > 0.f)) {
             indi->actNonlinearity[act] = (uint8_t) 100.f * constrainf(
                 motorRls[act].x[0] / (motorRls[act].x[0] + motorRls[act].x[1]),
