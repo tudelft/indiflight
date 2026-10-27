@@ -704,14 +704,14 @@ void getMotorCommands(timeUs_t current) {
             float p_term = indiRun.K_rpm * error;
             
             // 4. INDI Feedback Path
-            float delayed_cmd = indiRun.rpm_delay_buffer[i];
-            float cmd_filtered = biquadFilterApply(&indiRun.rpmFeedbackFilter[i], delayed_cmd);
+            float delayed_cmd = indiRun.rpm_delay_buffer_[i];
+            float cmd_filtered = biquadFilterApply(&indiRun.rpmFeedbackFilter_[i], delayed_cmd);
             
             // 5. Calculate final command and constrain between 0 and 1
             float dshot_cmd = constrainf(indiRun.u[i] + p_term + cmd_filtered, 0.0f, 1.0f);
             
             // 6. Update history and assign to actual output
-            indiRun.rpm_delay_buffer[i] = dshot_cmd;
+            indiRun.rpm_delay_buffer_[i] = dshot_cmd;
             indiRun.d[i] = dshot_cmd;
  
         } else {
