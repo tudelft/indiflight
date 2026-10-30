@@ -71,7 +71,7 @@ set gyro_2_align_pitch = 0
 # feature
 feature GPS
 feature TELEMETRY
-feature BARO
+# feature BARO
 #feature MAG
 #feature LED_STRIP
 #feature OSD
@@ -262,8 +262,8 @@ indiprofile 0
 
 # --- attitude control config and limits ---
 # Attitude: (deg/s/s) / (deg) * 10    Rate: (deg/s/s) / (deg/s)*10
-set indi_attitude_gains = 400, 400, 400
-set indi_rate_gains     =  100,  100,  100
+set indi_attitude_gains = 400, 300, 400
+set indi_rate_gains     =  100, 100, 100
 # set indi_attitude_gains = 500, 500, 500
 # set indi_rate_gains     =  180,  180,  180
 # set indi_attitude_gains = 200, 200, 200
@@ -300,7 +300,7 @@ set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
 set indi_act_nonlinearity = 40, 40, 0, 0             # %
 set indi_act_min =   0,   0, -40, -40              # %, degree
-set indi_act_max = 70, 70,  40,  40              # %, degree
+set indi_act_max = 80, 80,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 5,5,1,1
 
@@ -417,16 +417,16 @@ positionprofile 0
 
 # gains * 10
 set position_horizontal_p = 25
-set position_horizontal_i = 8
+set position_horizontal_i = 5
 set position_horizontal_d = 22
-set position_vertical_p = 214
+set position_vertical_p = 8
 set position_vertical_i = 5
-set position_vertical_d = 83
+set position_vertical_d = 15
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 1000
-set position_max_horizontal_accel = 1200
-set position_max_upwards_speed = 250
+set position_max_horizontal_speed = 3500
+set position_max_horizontal_accel = 2000
+set position_max_upwards_speed = 500
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
 set position_max_downwards_accel = 600

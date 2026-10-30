@@ -96,18 +96,30 @@ static bool attitudeQuaternionFilterPrimed;
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
 // The plan is disabled by default so position mode keeps its existing behavior.
-#define POSITION_WAYPOINT_COUNT 6
+#define POSITION_WAYPOINT_COUNT 16
 static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
-    { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 1.f, .velocityLimit = 10.f },
-    { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
-    { .location = { .V = { .X = 60.f, .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
-    { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 30.f },
-    { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 15.f },
-    { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.f, .heightTolerance = 20.f, .velocityLimit = 10.f },
-    //{ .location = { .V = { .X = 20.f, .Y =  30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    //{ .location = { .V = { .X = 20.f, .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    //{ .location = { .V = { .X = 0.f,  .Y = -30.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
-    //{ .location = { .V = { .X = 0.f,  .Y = - 0.f, .Z = -5.f } }, .tolerance = 3.f, .heightTolerance = 3.f, .velocityLimit = 10.f },
+    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.0f, .heightTolerance = 1.0f, .velocityLimit = 10.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
+    // { .location = { .V = { .X = 60.f, .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
+    // { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 10.f, .heading = -1.f },
+    { .location = { .V = { .X = +0.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.f },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.f },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.f },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.33f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.33f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.67f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.67f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 1.00f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 1.00f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 1.33f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 1.33f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 1.67f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 1.67f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 2.00f*0.5f*M_PIf },
+    { .location = { .V = { .X = +2.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 2.00f*0.5f*M_PIf },
+    { .location = { .V = { .X = -3.5f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.f }
 };
 
 static unsigned int activeWaypointIndex;
@@ -140,9 +152,13 @@ static bool updateWaypointTraversal(bool allowWaypoints)
         activeWaypointIndex++;
     }
 
+    const float heading = positionWaypoints[activeWaypointIndex].heading;
     posSpNed.pos = positionWaypoints[activeWaypointIndex].location;
     posSpNed.valid = true;
-    posSpNed.trackPsi = false;
+    posSpNed.trackPsi = heading >= 0.f;
+    if (posSpNed.trackPsi) {
+        posSpNed.psi = heading;
+    }
     return true;
 }
 
@@ -383,9 +399,9 @@ void updatePosCtl(timeUs_t current) {
     }
 
     // always use NDI function to map acc setpoints
-    // posGetAttSpNedAndSpfSpBody(current);
+    posGetAttSpNedAndSpfSpBody(current);
     // posGetAttSpNedAndSpfSpBody_INDI(current);
-    posGetAttSpNedAndSpfSpBody_DF(current);
+    // posGetAttSpNedAndSpfSpBody_DF(current);
 }
 
 void posGetVelSpNedFromPosSp(void) {
@@ -736,6 +752,7 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
         spfSpBodyFromPos.V.X = 0.f;
         spfSpBodyFromPos.V.Y = 0.f;
         spfSpBodyFromPos.V.Z = a_B_r.V.Z;
+        // spfSpBodyFromPos.V.Z = -T_r;
 
         // we can calculate body rates to maintain V_B as good as possible using 
         //   omega_B = R_B^I  (v_I x A_I) / (v_I^T v_I)

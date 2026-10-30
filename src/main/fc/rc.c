@@ -111,14 +111,14 @@ void setSticksReference(void)
 
 bool haveSticksMoved(void)
 {
-    for (int i = 0; i < 3; i++) {
-        if (fabsf(getRcDeflection(i) - sticksReference[i]) > RC_STICK_MOVEMENT_THRESHOLD) {
-            return true;
-        }
-    }
-    if (fabsf(1e-3f * (rcCommand[THROTTLE] - 1000.f) - sticksReference[THROTTLE]) > RC_STICK_MOVEMENT_THRESHOLD) {
-        return true;
-    }
+    // for (int i = 0; i < 3; i++) {
+    //     if (fabsf(getRcDeflection(i) - sticksReference[i]) > RC_STICK_MOVEMENT_THRESHOLD) {
+    //         return true;
+    //     }
+    // }
+    // if (fabsf(1e-3f * (rcCommand[THROTTLE] - 1000.f) - sticksReference[THROTTLE]) > RC_STICK_MOVEMENT_THRESHOLD) {
+    //     return true;
+    // }
     return false;
 }
 

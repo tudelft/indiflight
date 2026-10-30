@@ -58,6 +58,7 @@ typedef struct positionWaypoint_s {
     float tolerance; // horizontal acceptance radius in m
     float heightTolerance; // vertical acceptance distance in m
     float velocityLimit; // maximum waypoint velocity in m/s
+    float heading; // yaw setpoint in rad; if > 0, yaw is tracked (trackPsi), otherwise yaw is free
 } positionWaypoint_t;
 
 typedef struct positionRuntime_s {
