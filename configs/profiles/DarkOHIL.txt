@@ -163,7 +163,7 @@ set blackbox_sample_rate = 1/4  # relative to pid
 
 # ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
 set ekf_use_quat = 1
-set ekf_use_for_manual_flight = 0
+set ekf_use_for_manual_flight = 1
 set ekf_meas_source = 0
 set ekf_proc_noise_acc = 500000, 500000, 500000
 set ekf_proc_noise_gyro = 100000, 100000, 100000
@@ -425,7 +425,7 @@ set position_vertical_d = 15
 
 # max velocities in cm/s and cm/s^2
 set position_max_horizontal_speed = 3500
-set position_max_horizontal_accel = 2000
+set position_max_horizontal_accel = 1200
 set position_max_upwards_speed = 500
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
@@ -434,7 +434,7 @@ set position_max_downwards_accel = 600
 # max tilt, yaw gain * 10, thrust config
 set position_max_tilt = 45
 set position_yaw_p = 50
-set position_use_thrust_attenuation = 0
+set position_use_thrust_attenuation = 1
 
 
 positionprofile 2

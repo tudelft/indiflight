@@ -419,11 +419,11 @@ set position_vertical_i = 5
 set position_vertical_d = 15
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 1000
+set position_max_horizontal_speed = 3500
 set position_max_horizontal_accel = 1200
 set position_max_upwards_speed = 500
 set position_max_downwards_speed = 150
-set position_max_upwards_accel = 2000
+set position_max_upwards_accel = 3000
 set position_max_downwards_accel = 600
 
 # max tilt, yaw gain * 10, thrust config

@@ -96,30 +96,43 @@ static bool attitudeQuaternionFilterPrimed;
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
 // The plan is disabled by default so position mode keeps its existing behavior.
-#define POSITION_WAYPOINT_COUNT 16
+#define POSITION_WAYPOINT_COUNT 7
 static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
-    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.0f, .heightTolerance = 1.0f, .velocityLimit = 10.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
-    // { .location = { .V = { .X = 60.f, .Y =  100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
-    // { .location = { .V = { .X = 60.f, .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -25.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 20.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -25.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 10.f, .heading = -1.f },
-    { .location = { .V = { .X = +0.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
-    { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
-    { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf }
+    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 5.0f, .heightTolerance = 5.0f, .velocityLimit = 10.f, .heading = DEGREES_TO_RADIANS(161.f) },
+    // { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    // { .location = { .V = { .X = 100.f, .Y =  100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    // { .location = { .V = { .X = 100.f, .Y = -100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 5.f, .heading = -1.f },
+
+    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 5.0f, .heightTolerance = 5.0f, .velocityLimit = 4.f, .heading = DEGREES_TO_RADIANS(161.f) },
+    { .location = { .V = { .X = -94.55f, .Y = 52.56f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    { .location = { .V = { .X = -62.00f, .Y = 147.11f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    { .location = { .V = { .X = 127.11f, .Y = 82.00f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    { .location = { .V = { .X = 94.55f, .Y = -12.56f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
+    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 5.f, .heading = -1.f },
+
+  
+
+    // { .location = { .V = { .X = +0.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf }
+
 };
 
 static unsigned int activeWaypointIndex;
@@ -399,9 +412,9 @@ void updatePosCtl(timeUs_t current) {
     }
 
     // always use NDI function to map acc setpoints
-    posGetAttSpNedAndSpfSpBody(current);
+    // posGetAttSpNedAndSpfSpBody(current);
     // posGetAttSpNedAndSpfSpBody_INDI(current);
-    // posGetAttSpNedAndSpfSpBody_DF(current);
+    posGetAttSpNedAndSpfSpBody_DF(current);
 }
 
 void posGetVelSpNedFromPosSp(void) {
