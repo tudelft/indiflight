@@ -309,10 +309,41 @@ fig.tight_layout(rect=[0, 0, 1, 0.96])
 
 ls_Phi.plotParameters(
     parGroups=[[0, 2, 3], [1], [4,5,6,7], [8,10,11], [9], [12,13]],
-    parGroupNames=["Cxu,Cyv,Czw","Czu", "Cmu,Clv,Cnv,Cnw", "Clp,Cmq,Cnr", "Cnp", "elev"],
+    parGroupNames=["Cxu,Cyv,Czw","Czu", "Cmu,Clv,Cnv,Cmw", "Clp,Cmq,Cnr", "Cnp", "elev"],
     sharey=False,
     zoomy=False,
 )
+
+
+# %% assemble symmetric Phi matrix from LS coefficients
+# theta = [Cxu, Czu, Cyv, Czw, Cmu, Clv, Cnv, Cmw, Clp, Cnp, Cmq, Cnr, elev0, elev1]
+th = ls_Phi.theta.squeeze()
+Cxu, Czu, Cyv, Czw, Cmu, Clv, Cnv, Cmw, Clp, Cnp, Cmq, Cnr = th[:12]
+
+# state order eta = [u, v, w, p, q, r]; mirrors the regressor layout in run_analysis
+Phi_ls = np.zeros((6, 6))
+Phi_ls[0, 0] = Cxu;  Phi_ls[0, 2] = Phi_ls[2, 0] = Czu;  Phi_ls[2, 2] = Czw
+Phi_ls[1, 1] = Cyv
+Phi_ls[0, 4] = Phi_ls[4, 0] = Cmu
+Phi_ls[1, 3] = Phi_ls[3, 1] = Clv
+Phi_ls[1, 5] = Phi_ls[5, 1] = Cnv
+Phi_ls[2, 4] = Phi_ls[4, 2] = Cmw
+Phi_ls[3, 3] = Clp;  Phi_ls[3, 5] = Phi_ls[5, 3] = Cnp;  Phi_ls[5, 5] = Cnr
+Phi_ls[4, 4] = Cmq
+
+np.set_printoptions(linewidth=200, precision=3, suppress=False)
+blocks = {
+    "Phi_vv (3x3, symmetric)": Phi_ls[:3, :3],
+    "Phi_OO (3x3, symmetric)": Phi_ls[3:, 3:],
+    "Phi_vO (3x3 off-diagonal block; Phi_Ov = Phi_vO^T)": Phi_ls[:3, 3:],
+}
+for name, M in blocks.items():
+    print(f"\n{name} =")
+    print(M)
+print("\nFull Phi (6x6, symmetric) =")
+print(np.array2string(Phi_ls, formatter={"float_kind": lambda x: f"{x:+.3e}"}))
+print(f"symmetric: {np.allclose(Phi_ls, Phi_ls.T)}")
+print("elevon coeffs =", th[12:])
 
 all_axes = list(ls_Phi.all_axes)
 cursor = BlittedCursor(all_axes + fplt.all_axes, sharex=True)

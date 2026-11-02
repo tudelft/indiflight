@@ -107,13 +107,12 @@ map AETR1234
 aux 0 0 1 1700 2100 0 0
 aux 1 1 3 900 1300 0 0 ## ANGLE
 aux 2 2 3 1300 2100 0 0 ## HORIZON
-aux 3 55 0 1700 2100 0 0
+aux 3 55 0 1700 2100 0 0 ## POSITION
 #aux 3 58 3 1300 2100 0 0 ## LEARNER
 #aux 5 60 3 1700 2100 0 0 ## NN
-#aux 5 13 7 1700 2100 0 0 ## beeper instead of NN
 aux 4 61 7 1700 2100 0 0 ## reset home
-aux 5 36 2 1700 2100 0 0
-aux 6 56 6 1700 2100 0 0
+aux 5 36 2 1700 2100 0 0 ## PREARM
+aux 6 13 6 1700 2100 0 0 ## BEEPER
 
 # blackbox config
 set blackbox_mode = NORMAL

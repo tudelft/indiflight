@@ -93,8 +93,8 @@ if __name__=="__main__":
     # tail.setRotor(1, X=[-0.01, +0.13, -0.07], k=1.e-6, cm=+0.005, wmax=3000., tau=0.03, kESC=0.5, I=2e-6) # FR
 
     tail = TailsitterPhiFF()
-    # tail.setWind([0., 3., 0.,])
-    tail.setWind([0., 0., 0.,])
+    tail.setWind([0., 3., 0.,])
+    # tail.setWind([0., 0., 0.,])
     mass = 0.700
     tail.setInertia(m=mass, I=1*np.diag([5.73e-3, 0.625*1.35e-3, 0.5*5.43e-3]))
 

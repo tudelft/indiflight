@@ -154,7 +154,6 @@ if __name__ == '__main__':
     R_no_psi = R_phi*R_theta
 
     T = sp.symbols('T', real=True)
-    # expr_R  =  R @ A @ R.T  @ v_I   +   R @ ax_B * T
 
 
     # lets get the eulers ZXY convention (from Ezra Tal)
