@@ -161,11 +161,11 @@ set ekf_use_quat = 0
 set ekf_use_for_manual_flight = 1
 set ekf_meas_source = 2
 set ekf_proc_noise_acc = 500000, 500000, 500000
-set ekf_proc_noise_gyro = 100000, 100000, 100000
-set ekf_proc_noise_acc_bias = 20, 20, 20
-set ekf_proc_noise_gyro_bias = 10, 10, 10
-set ekf_meas_noise_position = 1000, 1000, 1000
-#set ekf_meas_noise_position = 10000, 10000, 40000
+set ekf_proc_noise_gyro = 10000, 10000, 10000
+set ekf_proc_noise_acc_bias = 0, 0, 0
+set ekf_proc_noise_gyro_bias = 0, 0, 0
+#set ekf_meas_noise_position = 1000, 1000, 1000
+set ekf_meas_noise_position = 50000, 50000, 50000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
 
