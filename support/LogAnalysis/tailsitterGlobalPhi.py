@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from scipy.signal import savgol_filter, butter, sosfilt, sosfilt_zi
+from scipy.signal import savgol_filter, butter, sosfilt, sosfilt_zi, sosfiltfilt
 
 def quaternion_rotate(q, v, inverse=False):
     # helper function to rotate a vector with a quaternion
@@ -61,7 +61,8 @@ class Tailsitter(nn.Module):
         self.d0 = nn.Parameter(torch.zeros(2, 1)) # 0-force elevon angle
         self.sqrtphi = nn.Parameter(1*torch.ones(1))
         actuation_coeffs = [
-            'cxww',         'cxd', 'cxdd', 
+            'cxww',         'cxd', 'cxdd',
+            'cyww',         'cyd', 'cydd',
 
             'czww',         'czd2',
             'clww',
@@ -70,8 +71,8 @@ class Tailsitter(nn.Module):
         ]
         phi_coeffs = [
             'cxu',
-                    'cyv',
-            'czu',         'czw',
+            'cyu',  'cyv',
+            'czu',  'czv',  'czw',
                     'clv',        'clp',
             'cmu',         'cmw',        'cmq',
                     'cnv',        'cnp',        'cnr',
@@ -118,8 +119,8 @@ class Tailsitter(nn.Module):
         # build lower triangular 6x6 phi-theoretic coefficient matrix without preallocation
         # PHI = torch.tensor([
         #     [self.cxu,     0,          0,          0,              0,            0         ],
-        #     [0,            self.cyv,   0,          0,              0,            0         ],
-        #     [self.czu,     0,          self.czw,   0,              0,            0         ],
+        #     [self.cyu,     self.cyv,   0,          0,              0,            0         ],
+        #     [self.czu,     self.czv,   self.czw,   0,              0,            0         ],
         #     [0,            self.clv,   0,          self.clp,       0,            0         ],
         #     [self.cmu,     0,          self.cmw,   0,              self.cmq,     0         ],
         #     [0,            self.cnv,   0,          self.cnp,       0,            self.cnr  ]
@@ -128,8 +129,10 @@ class Tailsitter(nn.Module):
         # explicitely writing tensor doesnt work, need to preallocate and assign
         PHI = torch.zeros((6,6))
         PHI[0,0] = self.cxu
+        PHI[1,0] = self.cyu
         PHI[1,1] = self.cyv
         PHI[2,0] = self.czu
+        PHI[2,1] = self.czv
         PHI[2,2] = self.czw
 
         PHI[3,1] = self.clv
@@ -155,7 +158,7 @@ class Tailsitter(nn.Module):
         # ACTUATION MODEL
         #      prop thrust contribution         prop rate contribution           elevon contribution           elev rate contrib              elev acc contrib
         screw[0] +=  self.cxww * (ww[0] + ww[1])  +  0                        +  self.cxd * (wwDd[0] + wwDd[1])  +  self.cxdd * (d1d + d2d)
-        screw[1] +=  0                            +  0                        +  0                               +  0
+        screw[1] +=  self.cyww * (ww[0] + ww[1])  +  0                        +  self.cyd * (wwDd[0] + wwDd[1])  +  self.cydd * (d1d + d2d)
         screw[2] +=  self.czww * (ww[0] + ww[1])  +  0                        +  self.czd2 * d2abs               +  0
         screw[3] +=  self.clww * (ww[0] - ww[1])  +  0                        +  0                               +  0
         screw[4] +=  self.cmww * (ww[0] + ww[1])  +  0                        +  self.cmd * (wwDd[0] + wwDd[1])  +  self.cmdd * (d1d + d2d)  +   self.cmddd * (d1dd + d2dd)
@@ -174,7 +177,8 @@ model = Tailsitter()
 model.to(device=device)
 
 # ablations: keep parameters at their initial value from __init__
-exclude = ['czd2', 'cndd', 'cxdd', 'cmww']
+#exclude = ['czd2', 'cndd', 'cxdd', 'cmww']
+exclude = ['czd2', 'cndd', 'cmww']
 for par in exclude:
     model.get_parameter(par).requires_grad = False
 
@@ -185,7 +189,8 @@ for par in exclude:
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/MIRROR_DarkO/LOG00063.BFL", resetTime=True, timeRange=(8000, 91000))   # after tuning, higher speeds
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00066_simplifiedDynFx.BFL", resetTime=True, timeRange=(9000, 50000))   # dynamic fx, hover
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00079.BFL", resetTime=True, timeRange=(6587, 50000))   # dynamic fx, hover
-log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
+#log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
+log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2026-10-29/LOG00035_autoId.BFL", resetTime=False, timeRange=(53500, 114000))   # dynamic fx, hover
 
 # preproc columns that are not in indiflight log tools yet
 data = log.data
@@ -198,21 +203,30 @@ mean_dt = t.diff().mean()
 data['servo_feedback[1]'] *= 1 # set to -1 for old datafiles
 
 # convert columns to tensors
-series = {'localVel': range(3), 'localQuat': range(4), 'accADCafterRpm': range(3),
+USE_ACC_SMOOTH = True  # True: use onboard-filtered accSmooth instead of accADCafterRpm
+acc_key = 'accSmooth' if USE_ACC_SMOOTH else 'accADCafterRpm'
+series = {'localVel': range(3), 'localQuat': range(4), acc_key: range(3),
           'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
           'motor': range(2), 'u': range(4)}
 # series = {'extVel': range(3), 'extAtt': range(4), 'accADCafterRpm': range(3),
 #           'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
 #           'motor': range(4)}
 order = 2
-freq = 20
+freq = 10
 butter_sos = butter(order, Wn=freq, btype='lowpass', output='sos', fs=1/mean_dt)
+# with accSmooth, all other signals get an additional causal filter to match its onboard filtering
+extra_sos = butter(order, Wn=50, btype='lowpass', output='sos', fs=1/mean_dt)
 for key, val in series.items():
     tmp = data[[f'{key}[{i}]' for i in val]].to_numpy(dtype=np.float32).T
     #tmp_f   = torch.tensor( savgol_filter(tmp, window_length=25, polyorder=3, deriv=0, delta=mean_dt) ).to(device=device)
     zi = sosfilt_zi(butter_sos)
     zis = np.repeat(zi, len(val), axis=0) * tmp[:, 0, np.newaxis]
-    tmp_f = torch.tensor( sosfilt(butter_sos, tmp, zi=zis[np.newaxis])[0], dtype=torch.float32 ).to(device=device)
+    tmp_f = sosfilt(butter_sos, tmp, zi=zis[np.newaxis])[0]
+    if USE_ACC_SMOOTH and key != acc_key:
+        zi = sosfilt_zi(extra_sos)
+        zis = np.repeat(zi, len(val), axis=0) * tmp_f[:, 0, np.newaxis]
+        tmp_f = sosfilt(extra_sos, tmp_f, zi=zis[np.newaxis])[0]
+    tmp_f = torch.tensor( tmp_f, dtype=torch.float32 ).to(device=device)
     tmp_fd  = torch.tensor( savgol_filter(tmp_f, window_length=25, polyorder=3, deriv=1, delta=mean_dt) ).to(device=device)
     tmp_fdd = torch.tensor( savgol_filter(tmp_f, window_length=25, polyorder=3, deriv=2, delta=mean_dt) ).to(device=device)
     series[key] = [tmp_f, tmp_fd, tmp_fdd]
@@ -221,7 +235,7 @@ for key, val in series.items():
 # q_true = series['extAtt'][0]
 v_true = series['localVel'][0]
 q_true = series['localQuat'][0]
-a_true = series['accADCafterRpm'][0]
+a_true = series[acc_key][0]
 O_true = series['gyroADCafterRpm'][0]
 Od_true = series['gyroADCafterRpm'][1]
 w_true = series['omegaUnfiltered'][0]
@@ -234,10 +248,26 @@ del_12 = series['motor'][0][:2]
 # get velocity in body frame for drag model
 v_body_true  = quaternion_rotate(q_true, v_true, inverse=True)
 
+# test option for the Phi_vv z-rotation: rotate the xy specific force targets and body velocity by a random but reproducible angle
+ROTATE_XY_TARGETS = True
+RANDOMIZE_ROTATION = True  # True: seeded random angle (skips the simulator verification); False: fixed test angle below
+ROTATION_SEED = 0
+if ROTATE_XY_TARGETS:
+    rot_angle = np.random.default_rng(ROTATION_SEED).uniform(-np.pi, np.pi) if RANDOMIZE_ROTATION else np.pi/2
+    c, s_ = np.cos(rot_angle), np.sin(rot_angle)
+    a_true = torch.vstack(( c*a_true[0] - s_*a_true[1],
+                            s_*a_true[0] + c*a_true[1],
+                            a_true[2] ))
+    v_body_true = torch.vstack(( c*v_body_true[0] - s_*v_body_true[1],
+                                 s_*v_body_true[0] + c*v_body_true[1],
+                                 v_body_true[2] ))
+    print(f"Rotated xy force targets and body velocity by {np.degrees(rot_angle):.3f} deg about z (seed {ROTATION_SEED})")
+
 # regressors and targets
 scale = np.array([ 1,1,1, 1,1,1, 1,1,1, 1e-3,1e-3, 5e-2,5e-2, 1,1, .1,.1, .01,.01 ], dtype=np.float32)
 x = torch.vstack([ v_body_true, O_true, Od_true, w_true, wd_true, d_true, dd_true, ddd_true ])
 x = x * scale[:, np.newaxis] # make regressors roughtly unit
+
 y_true = torch.concat((a_true, Od_true))
 
 # loss function           accelerations   gyro derivatives
@@ -264,7 +294,7 @@ for epoch in range(epochs):
 
 #%% PLOTS
 import matplotlib
-matplotlib.use('tkagg')
+matplotlib.use('QtAgg')
 
 fig, axs = plt.subplots(6, 3)
 fig.suptitle("DarkO Phi-model (based on motor speeds, elevon deflection, and speed)")
@@ -277,7 +307,7 @@ for i in range(6):
     axs[i, 0].plot(t, model.forward(x).detach().cpu()[i], '--')
     axs[i, 0].set_ylabel(f"${IMU_LABELS[i]}$")
 
-axs[0, 0].legend(["Raw Measured", "Modelled"])
+axs[0, 0].legend(["Measured", "Modelled"])
 [ax.set_ylim((-10, 10)) for ax in axs[0:2, 0]]
 axs[2, 0].set_ylim((-20, 0))
 [ax.set_ylim((-50, +50)) for ax in axs[3:, 0]]
@@ -323,14 +353,47 @@ axs[2, 2].set_ylabel("$\omega\ (rad/s)$")
 bc = BlittedCursor(axs.flatten(), sharex=True)
 fig.show()
 
+#%% TROUBLESHOOTING PLOT: outputs only, unfiltered / 5Hz zero-phase filtered / filtered error
+cutoff = 5
+sos_filt = butter(2, Wn=cutoff, btype='lowpass', output='sos', fs=1/mean_dt)
+y_meas_np = y_true.cpu().numpy()
+y_model_np = model.forward(x).detach().cpu().numpy()
+y_meas_filt = sosfiltfilt(sos_filt, y_meas_np, axis=1)
+y_model_filt = sosfiltfilt(sos_filt, y_model_np, axis=1)
+
+fig2, axs2 = plt.subplots(6, 3, sharex=True)
+fig2.suptitle(f"Phi-model outputs: raw | {cutoff} Hz zero-phase filtered | filtered error (measured - modelled)")
+for i in range(6):
+    axs2[i, 0].plot(t, y_meas_np[i], '-')
+    axs2[i, 0].plot(t, y_model_np[i], '--')
+    axs2[i, 0].set_ylabel(f"${IMU_LABELS[i]}$")
+    axs2[i, 1].plot(t, y_meas_filt[i], '-')
+    axs2[i, 1].plot(t, y_model_filt[i], '--')
+    axs2[i, 2].plot(t, y_meas_filt[i] - y_model_filt[i], '-')
+
+axs2[0, 0].legend(["Measured", "Modelled"])
+axs2[0, 1].legend([f"Measured ({cutoff}Hz)", f"Modelled ({cutoff}Hz)"])
+axs2[0, 2].legend([f"Error ({cutoff}Hz)"])
+for col in range(2):
+    [ax.set_ylim((-7.5, 7.5)) for ax in axs2[0:2, col]]
+    axs2[2, col].set_ylim((-20, 0))
+    [ax.set_ylim((-25, +25)) for ax in axs2[3:, col]]
+[ax.grid(True) for ax in axs2.flatten()]
+[ax.set_xlabel("Time [s]") for ax in axs2[-1, :]]
+fig2.subplots_adjust(left=0.086, bottom=0.11, right=0.952, top=0.907)
+bc2 = BlittedCursor(axs2.flatten(), sharex=True)
+fig2.show()
+
 test = 1
 
 # analyse PHI matrix to see if it is positive definite
 
 PHI = np.zeros((6,6), dtype=np.float64)
 PHI[0,0] = model.cxu.item()
+PHI[1,0] = model.cyu.item()
 PHI[1,1] = model.cyv.item()
 PHI[2,0] = model.czu.item()
+PHI[2,1] = model.czv.item()
 PHI[2,2] = model.czw.item()
 PHI[3,1] = model.clv.item()
 PHI[3,3] = model.clp.item()
@@ -369,6 +432,46 @@ print("], dtype=np.float32)")
 
 print()
 print("Eigenvalues of PHI matrix:", eigenvalues)
+print()
+
+np.set_printoptions(linewidth=200, precision=3, suppress=False)
+for name, M in {
+    "Phi_vv (3x3, symmetric)": PHI[:3, :3],
+    "Phi_OO (3x3, symmetric)": PHI[3:, 3:],
+    "Phi_vO (3x3 off-diagonal block; Phi_Ov = Phi_vO^T)": PHI[:3, 3:],
+}.items():
+    print(f"\n{name} =")
+    print(M)
+print("\nFull Phi (6x6, symmetric) =")
+print(np.array2string(PHI, formatter={"float_kind": lambda x: f"{x:+.3e}"}))
+print(f"symmetric: {np.allclose(PHI, PHI.T)}")
+print()
+
+#%% rotate about z so that the xy coupling Phi_vv[0,1] vanishes
+# the xy block of Phi_vv is symmetric 2x2, so its eigenvectors give the principal axes
+lam, V = np.linalg.eigh(PHI[:2, :2])
+V = V[:, ::-1]                      # order by descending eigenvalue, x-like axis first
+if V[0, 0] < 0: V[:, 0] *= -1       # make the first axis point along +x-ish ...
+V[:, 1] = np.array([-V[1, 0], V[0, 0]])  # ... and the second 90 deg ccw, so det(R) = +1
+psi = np.arctan2(V[1, 0], V[0, 0])  # rotation angle of the new axes w.r.t. the old ones (about z)
+
+Rz = np.eye(3)
+Rz[:2, :2] = V
+R6 = np.kron(np.eye(2), Rz)         # velocities and body rates rotate identically
+PHI_rot = R6.T @ PHI @ R6           # coefficients expressed in the rotated frame
+
+print(f"Rotation about z: psi = {np.degrees(psi):.3f} deg")
+if ROTATE_XY_TARGETS:
+    # rotation-covariance check: rotating the xy targets and body velocity by rot_angle should rotate
+    # the principal axes of Phi_vv by the same angle (a principal axis is a line, so wrap into +-90 deg)
+    psi_err = np.degrees(psi - rot_angle)
+    print(f"applied rot_angle = {np.degrees(rot_angle):.3f} deg; psi - rot_angle = {psi_err:.3f} deg")
+print("Rz =")
+print(np.array2string(Rz, formatter={"float_kind": lambda x: f"{x:+.4f}"}))
+print("Rotated Phi (6x6, symmetric) =")
+print(np.array2string(PHI_rot, formatter={"float_kind": lambda x: f"{x:+.3e}"}))
+print(f"rotated Phi_vv[0,1] = {PHI_rot[0,1]:.3e}")
+print(f"eigenvalues unchanged: {np.allclose(np.sort(np.linalg.eigvals(PHI_rot).real), np.sort(eigenvalues.real))}")
 print()
 
 cd = np.array([ model.cxd.item(), 0, 0, 0, model.cmd.item(), model.cnd.item() ])
@@ -438,65 +541,70 @@ print()
 
 #%% verification with pyIndiflight simulator
 
-test_cases = [
-    {'name': 'off',       'w': [0., 0.]      , 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'hover',     'w': [1500., 1500.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'motors',    'w': [1500., 1500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'motorHigh', 'w': [2500., 2500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'roll',      'w': [1500.,    0.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'pureRoll',  'w': [1500.,    0.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'hover',     'w': [1500., 1500.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'pitch',     'w': [1500., 1500.], 'd': d0+[0.1, 0.1]  , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'yaw',       'w': [1500., 1500.], 'd': d0+[-0.1, +0.1], 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
-    {'name': 'throw',     'w': [0., 0.]      , 'd': d0             , 'velI': [3., 3., -10.], 'OB': [4., 5., 6.]},
-]
+# the simulator comparison assumes the extracted actuation model (thrust axis, motor position) is
+# expressed in the airframe frame, which no longer holds after a randomized xy rotation
+if ROTATE_XY_TARGETS and RANDOMIZE_ROTATION:
+    print("Skipping pyIndiflight simulator verification: the xy targets and velocity were rotated by a randomized angle.")
+else:
+    test_cases = [
+        {'name': 'off',       'w': [0., 0.]      , 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'hover',     'w': [1500., 1500.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'motors',    'w': [1500., 1500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'motorHigh', 'w': [2500., 2500.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'roll',      'w': [1500.,    0.], 'd': [0., 0.]       , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'pureRoll',  'w': [1500.,    0.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'hover',     'w': [1500., 1500.], 'd': d0             , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'pitch',     'w': [1500., 1500.], 'd': d0+[0.1, 0.1]  , 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'yaw',       'w': [1500., 1500.], 'd': d0+[-0.1, +0.1], 'velI': [0., 0., 0.], 'OB': [0., 0., 0.]},
+        {'name': 'throw',     'w': [0., 0.]      , 'd': d0             , 'velI': [3., 3., -10.], 'OB': [4., 5., 6.]},
+    ]
 
-# add __file__/../simulation/PyNDIflight to path for pyNDIflight import
-import os
-import sys
-sys.path.append( os.path.abspath( os.path.join( os.path.dirname(__file__), '..', 'simulation' ) ) )
+    # add __file__/../simulation/PyNDIflight to path for pyNDIflight import
+    import os
+    import sys
+    sys.path.append( os.path.abspath( os.path.join( os.path.dirname(__file__), '..', 'simulation' ) ) )
 
-from PyNDIflight.crafts import TailsitterPhi
-from PyNDIflight.helpers import quatRotate
+    from PyNDIflight.crafts import TailsitterPhi
+    from PyNDIflight.helpers import quatRotate
 
 
-model.r.requires_grad = False
-model.r *= 0. # pretend IMU is at CG for simulator comparison
-test_x = torch.zeros((19,1))
+    model.r.requires_grad = False
+    model.r *= 0. # pretend IMU is at CG for simulator comparison
+    test_x = torch.zeros((19,1))
 
-for case in test_cases:
-    tail = TailsitterPhi()
-    tail.setRotor(0, X=[dx, +dy, dz], ax=axis, k=k_tot, cm=-cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
-    tail.setRotor(1, X=[dx, -dy, dz], ax=axis, k=k_tot, cm=+cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
-    tail.setInertia(model.m, np.array(model.I))
-    tail.setPhiModel(model.sqrtphi.item()**2, PHI)
-    tail.setElevonModel(cd, cdd, cddd, d0)
+    for case in test_cases:
+        tail = TailsitterPhi()
+        tail.setRotor(0, X=[dx, +dy, dz], ax=axis, k=k_tot, cm=-cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
+        tail.setRotor(1, X=[dx, -dy, dz], ax=axis, k=k_tot, cm=+cmotor, wmax=3000, tau=0.03, kESC=0.5, I=Imotor)
+        tail.setInertia(model.m, np.array(model.I))
+        tail.setPhiModel(model.sqrtphi.item()**2, PHI)
+        tail.setElevonModel(cd, cdd, cddd, d0)
 
-    tail.r_w[:] = case['w']
-    tail.r_wdot[:] = [0., 0.]
-    tail.r_tau[:] = np.inf
-    tail.s_d[:] = case['d']
-    tail.s_dd[:] = [0., 0.]
-    tail.s_D *= 0.
-    tail.s_P *= 0.
-    tail.setPose(np.array([0., 0., -10.]), np.array([1., 0., 0., 0.]))
-    tail.setTwist(np.array(case['velI']), np.array(case['OB']))
-    tail.vB = quatRotate(tail.qInv, tail.vI)
+        tail.r_w[:] = case['w']
+        tail.r_wdot[:] = [0., 0.]
+        tail.r_tau[:] = np.inf
+        tail.s_d[:] = case['d']
+        tail.s_dd[:] = [0., 0.]
+        tail.s_D *= 0.
+        tail.s_P *= 0.
+        tail.setPose(np.array([0., 0., -10.]), np.array([1., 0., 0., 0.]))
+        tail.setTwist(np.array(case['velI']), np.array(case['OB']))
+        tail.vB = quatRotate(tail.qInv, tail.vI)
 
-    tail.tick(1e-9)
+        tail.tick(1e-9)
 
-    ysim = np.concatenate((tail.fspB, tail.ODotB))
+        ysim = np.concatenate((tail.fspB, tail.ODotB))
 
-    test_x[0:3] = torch.tensor(case['velI']).unsqueeze(1)
-    test_x[3:6] = torch.tensor(case['OB']).unsqueeze(1)
-    test_x[9:11] = torch.tensor(case['w']).unsqueeze(1)
-    test_x[13:15] = torch.tensor(case['d']).unsqueeze(1)
+        test_x[0:3] = torch.tensor(case['velI']).unsqueeze(1)
+        test_x[3:6] = torch.tensor(case['OB']).unsqueeze(1)
+        test_x[9:11] = torch.tensor(case['w']).unsqueeze(1)
+        test_x[13:15] = torch.tensor(case['d']).unsqueeze(1)
 
-    ymodel = model.forward( test_x * scale[:, np.newaxis] ).detach().cpu().numpy().squeeze()
-    e = ymodel - ysim
+        ymodel = model.forward( test_x * scale[:, np.newaxis] ).detach().cpu().numpy().squeeze()
+        e = ymodel - ysim
 
-    if e.dot(e) < 1e-6:
-        print(f"Test case '{case['name']}' passed.")
-    else:
-        print(f"Test case '{case['name']}' FAILED with error norm {np.linalg.norm(e)}.")
-        print(f"w: {case['w']}, d: {case['d']}  =>  fspB sim: {ysim[:3]}, ODotB sim: {ysim[3:6]} => fspB model: {ymodel[:3]}, ODotB model: {ymodel[3:6]}")
+        if e.dot(e) < 1e-6:
+            print(f"Test case '{case['name']}' passed.")
+        else:
+            print(f"Test case '{case['name']}' FAILED with error norm {np.linalg.norm(e)}.")
+            print(f"w: {case['w']}, d: {case['d']}  =>  fspB sim: {ysim[:3]}, ODotB sim: {ysim[3:6]} => fspB model: {ymodel[:3]}, ODotB model: {ymodel[3:6]}")

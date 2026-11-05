@@ -756,7 +756,7 @@ typedef struct blackboxMainState_s {
 #endif
 #endif // USE_LOCAL_POSITION
 #ifdef USE_EKF
-    int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int32_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t ekf_quat[4];
     int16_t ekf_acc_b[XYZ_AXIS_COUNT];
@@ -1194,7 +1194,7 @@ static void writeIntraframe(void)
 #endif
 #ifdef USE_EKF
     if (testBlackboxCondition(CONDITION(EKF))) {
-        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
@@ -1496,8 +1496,8 @@ static void writeInterframe(void)
 
 #ifdef USE_EKF
     if (testBlackboxCondition(CONDITION(EKF))) {
-        arraySubInt16(deltas16, blackboxCurrent->ekf_pos, blackboxLast->ekf_pos, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt32(deltas, blackboxCurrent->ekf_pos, blackboxLast->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_vel, blackboxLast->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
@@ -2260,6 +2260,7 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_BOARD_INFO
         BLACKBOX_PRINT_HEADER_LINE("Board information", "%s %s",            getManufacturerId(), getBoardName());
 #endif
+        BLACKBOX_PRINT_HEADER_LINE("MCU ID", "%08x%08x%08x",                U_ID_0, U_ID_1, U_ID_2);
         BLACKBOX_PRINT_HEADER_LINE("Log start datetime", "%s",              blackboxGetStartDateTime(buf));
         BLACKBOX_PRINT_HEADER_LINE("Craft name", "%s",                      pilotConfig()->craftName);
         BLACKBOX_PRINT_HEADER_LINE("I interval", "%d",                      blackboxIInterval);
