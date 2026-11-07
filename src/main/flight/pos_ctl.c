@@ -50,7 +50,7 @@
 #error "USE_LOCAL_POSITION require the use of USE_EKF"
 #endif
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 1);
 
 void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
     for (int i = 0; i < POSITION_PROFILE_COUNT; i++) {
@@ -74,6 +74,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->weathervane_p = 0;
         p->weathervane_min_v = 200;
         p->use_spf_attenuation = 1;
+        p->stick_takeover = 1;
     }
 }
 
@@ -206,6 +207,7 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_p = p->weathervane_p * 0.1f;
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
+    posRuntime.stick_takeover = (bool) p->stick_takeover;
 
     // init stick velocity filters (2nd order LPF)
     for (int i = 0; i < 3; i++) {
@@ -272,7 +274,7 @@ void updatePosCtl(timeUs_t current) {
         // reset sticks, so that we can detect new stick movement later
         manual_takeover = false;
         setSticksReference();
-    } else if (!manual_takeover && ARMING_FLAG(ARMED) && haveSticksMoved()) {
+    } else if (!manual_takeover && ARMING_FLAG(ARMED) && posRuntime.stick_takeover && haveSticksMoved()) {
         manual_takeover = true;
         posSpNed.valid = false;
 #ifdef USE_TRAJECTORY_TRACKER

@@ -2670,6 +2670,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_P, "%d",  posProfile->weathervane_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
 #endif
         BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF

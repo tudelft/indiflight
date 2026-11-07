@@ -48,6 +48,7 @@ typedef struct positionProfile_s {
     uint8_t weathervane_p; // deg/s per deg * 10
     uint16_t weathervane_min_v; // cm/s min speed to use weathervaneing
     uint8_t use_spf_attenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
+    uint8_t stick_takeover;       // bool: moving the sticks while armed aborts automatic flight (manual takeover)
     // --- inaccessible from CLI / dump files for now
     uint16_t vert_max_iterm; // cm/s
     uint16_t horz_max_iterm; // cm/s
@@ -81,6 +82,7 @@ typedef struct positionRuntime_s {
     float weathervane_p; // deg/s per deg
     float weathervane_min_v; // m/s min speed to use weathervaneing
     bool use_spf_attenuation;
+    bool stick_takeover;
     bool arrest_motion; // if true, command zero velocity until it is reached
     bool arrest_z_motion_only; // if true, only command zero velocity in z direction
 } positionRuntime_t;

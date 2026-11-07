@@ -1338,6 +1338,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_POSITION_WEATHERVANE_P,          VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_p) },
     { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 25, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
     { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
+    { PARAM_NAME_POSITION_STICK_TAKEOVER,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, stick_takeover) },
 #endif
 
 #ifdef USE_EKF

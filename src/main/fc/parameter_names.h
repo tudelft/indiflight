@@ -190,6 +190,7 @@
 #define PARAM_NAME_POSITION_WEATHERVANE_P "position_weathervane_p"
 #define PARAM_NAME_POSITION_WEATHERVANE_MIN_V "position_weathervane_min_v"
 #define PARAM_NAME_POSITION_THRUST_ATTENUATION "position_use_thrust_attenuation"
+#define PARAM_NAME_POSITION_STICK_TAKEOVER "position_stick_takeover"
 #endif
 
 #ifdef USE_EKF
