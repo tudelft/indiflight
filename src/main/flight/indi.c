@@ -426,7 +426,7 @@ void getAlphaSpBody(timeUs_t current) {
         if (attEstNed.w * indiRun.attSpNed.w < 0.f)
             QUAT_SCALAR_MULT(indiRun.attSpNed, -1.f);
 
-#ifdef INDI_IS_TAILSITTER
+#if defined(INDI_IS_TAILSITTER) && false
         indiRun.attErrBody = chain_quaternion(&attEstNedInv, &indiRun.attSpNed);
         if (indiRun.attErrBody.w < 0.f) {
             QUAT_SCALAR_MULT(indiRun.attErrBody, -1.f);
@@ -701,7 +701,7 @@ void getMotorCommands(timeUs_t current) {
                 k = 1.413e-6;
                 A = sq(5*0.0254/2)*M_PIf; // quick maths --> flight at 10m/s with props off is same as hover
 
-                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim + q*A/k;
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim + 0*q*A/k;
                 indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100);
             }
 

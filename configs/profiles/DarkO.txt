@@ -16,7 +16,7 @@
 
 ## ----- Other features
 #define USE_GPS
-#define USE_GEOFENCE
+## #define USE_GEOFENCE
 
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
@@ -154,11 +154,11 @@ set ekf_meas_delay = 0
 
 # geofence (relative to whats hardcoded in local_pos.c:69)
 # this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
-geofence clear
-geofence 519906550 43766450
-geofence 519906550 43766050
-geofence 519906300 43766050
-geofence 519906300 43766450
+# geofence clear
+# geofence 519906550 43766450
+# geofence 519906550 43766050
+# geofence 519906300 43766050
+# geofence 519906300 43766450
 
 # meter over WGS ellipsoid! not over ground TODO
 set geofence_max_altitude 20

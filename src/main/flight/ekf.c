@@ -218,7 +218,7 @@ void initEkf(timeUs_t currentTimeUs) {
         Q[15] = 0.f;
     }
 
-#if defined(USE_BARO)  // todo: figure this out properly
+#if defined(USE_BARO) && false  // todo: figure this out properly
     // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion.
     if (sensors(SENSOR_BARO)) {
         float mean = 0.f;
@@ -335,7 +335,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
-#if defined(USE_BARO) // figure this out properly
+#if defined(USE_BARO) && false // figure this out properly
         if (sensors(SENSOR_BARO)) {
             // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion
             float mean = 0.f;

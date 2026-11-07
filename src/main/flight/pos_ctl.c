@@ -136,7 +136,7 @@ static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
 };
 
 static unsigned int activeWaypointIndex;
-static bool waypointRunActive;
+static bool waypointRunActive = false;
 
 static bool updateWaypointTraversal(bool allowWaypoints)
 {
@@ -282,7 +282,7 @@ void updatePosCtl(timeUs_t current) {
 #endif
     }
 
-    const bool waypointActive = updateWaypointTraversal(
+    const bool waypointActive = updateWaypointTraversal( false &&
         !manual_takeover && ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE));
     UNUSED(waypointActive);
 
@@ -412,9 +412,9 @@ void updatePosCtl(timeUs_t current) {
     }
 
     // always use NDI function to map acc setpoints
-    // posGetAttSpNedAndSpfSpBody(current);
+    posGetAttSpNedAndSpfSpBody(current);
     // posGetAttSpNedAndSpfSpBody_INDI(current);
-    posGetAttSpNedAndSpfSpBody_DF(current);
+    // posGetAttSpNedAndSpfSpBody_DF(current);
 }
 
 void posGetVelSpNedFromPosSp(void) {
