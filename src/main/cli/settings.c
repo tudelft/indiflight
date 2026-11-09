@@ -1352,6 +1352,8 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_EKF_MEAS_NOISE_POSITION,    VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
     { PARAM_NAME_EKF_MEAS_NOISE_QUAT,        VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 4,           PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_quat) },
     { PARAM_NAME_EKF_MEAS_DELAY,             VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
+    { PARAM_NAME_EKF_HEIGHT_SOURCE,          VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 1 },  PG_EKF_CONFIG, offsetof(ekfConfig_t, height_source) },
+    { PARAM_NAME_EKF_BARO_RPM_COEFF,         VAR_INT16  | MASTER_VALUE,              .config.minmax = { -32000, 32000 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, baro_rpm_coeff) },
 #endif
 
 #ifdef USE_CATAPULT

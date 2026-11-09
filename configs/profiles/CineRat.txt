@@ -151,6 +151,8 @@ set ekf_meas_noise_position = 1000, 1000, 1000
 #set ekf_meas_noise_position = 5000, 5000, 40000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
+set ekf_height_source = 0
+set ekf_baro_rpm_coeff = 0
 
 # filter setups
 set gyro_lpf1_static_hz = 100

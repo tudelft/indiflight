@@ -50,7 +50,7 @@
 #error "USE_EKF requires USE_LOCAL_POSITION"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 2);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
     .use_quat_measurement = 1,
     .use_for_manual_flight = 0,
@@ -62,6 +62,8 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
     .meas_noise_position  = { 1000, 1000, 1000 },
     .meas_noise_quat      = { 50000, 50000, 50000, 50000 },
     .meas_delay = 0,
+    .height_source = EKF_HEIGHT_SOURCE_POS_MEAS,
+    .baro_rpm_coeff = 0,
 ); 
 
 fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
@@ -148,6 +150,28 @@ void forceDeinitEkf(void) {
 }
 
 
+// height measurement (NED z) used by the ekf: baro or posMeasNed, see ekf_height_source
+static float getEkfHeightMeasurement(void) {
+#if defined(USE_BARO)
+    if ((ekfConfig()->height_source == EKF_HEIGHT_SOURCE_BARO) && sensors(SENSOR_BARO)) {
+        float height = 0.01f * baro.altitude; // cm to m
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) && defined(USE_INDI)
+        // calibrate sensor for prop speeds. doesnt take into account ground effect
+        if ((ekfConfig()->baro_rpm_coeff != 0) && isDshotTelemetryActive() && (indiRun.actNum > 0)) {
+            float mean = 0.f; // rad/s
+            for (int i=0; i<indiRun.actNum; i++) {
+                mean += indiRun.omega_fs[i];
+            }
+            mean /= indiRun.actNum;
+            height += 1e-3f * ekfConfig()->baro_rpm_coeff * sq(1e-3f*mean);
+        }
+#endif
+        return -height; // NED
+    }
+#endif
+    return posMeasNed.pos.V.Z;
+}
+
 void initEkf(timeUs_t currentTimeUs) {
     if ( !(posMeasNed.new)
             || (cmpTimeUs(currentTimeUs, posMeasNed.time_us) > EKF_MAX_MEAS_AGE_US) ) {
@@ -218,21 +242,7 @@ void initEkf(timeUs_t currentTimeUs) {
         Q[15] = 0.f;
     }
 
-#if defined(USE_BARO)  // todo: figure this out properly
-    // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion.
-    if (sensors(SENSOR_BARO)) {
-        float mean = 0.f;
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && false
-        if (isDshotTelemetryActive()) { 
-            for (int i=0; i<indiRun.actNum; i++) {
-                mean += indiRun.omega_fs[i] / indiRun.actNum;
-            }
-        }
-#endif
-        X0[2] = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
-        // X0[2] = posMeasNed.pos.V.Z; //todo testingggg
-    }
-#endif
+    X0[2] = getEkfHeightMeasurement();
 
 	// initialize ekf
     ekf_set_use_quat(use_quat);
@@ -335,25 +345,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 
 		ekf_Z[0] = posMeasNed.pos.V.X;
 		ekf_Z[1] = posMeasNed.pos.V.Y;
-#if defined(USE_BARO) // figure this out properly
-        if (sensors(SENSOR_BARO)) {
-            // IMAV hack: this should be a parameter, not a macro, or even better, some decent fusion
-            float mean = 0.f;
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) && false
-            if (isDshotTelemetryActive()) { 
-                for (int i=0; i<indiRun.actNum; i++) {
-                    mean += indiRun.omega_fs[i] / indiRun.actNum;
-                }
-            }
-#endif
-            float baroCalib = -(0.01f*baro.altitude - 0.24f*sq(1e-3f*mean)); // calibrate sensor for prop speeds. doesnt take into account ground effect
-            // DEBUG_SET(DEBUG_BARO, 3, lrintf(-100.f*baroCalib));
-            ekf_Z[2] = baroCalib;
-        } else
-#endif
-        {// GPS
-		    ekf_Z[2] = posMeasNed.pos.V.Z;
-        }
+        ekf_Z[2] = getEkfHeightMeasurement();
 
         bool use_quat = ekfConfig()->use_quat_measurement && posMeasNed.quat_valid;
 

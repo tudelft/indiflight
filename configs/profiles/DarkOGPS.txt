@@ -167,6 +167,8 @@ set ekf_proc_noise_gyro_bias = 0, 0, 0
 set ekf_meas_noise_position = 50000, 50000, 50000
 set ekf_meas_noise_quat = 50000, 50000, 50000, 50000
 set ekf_meas_delay = 0
+set ekf_height_source = 1
+set ekf_baro_rpm_coeff = 0
 
 # geofence
 # around table behind simona

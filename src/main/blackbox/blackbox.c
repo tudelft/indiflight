@@ -2697,6 +2697,8 @@ static bool blackboxWriteSysinfo(void)
                                                                                     ekfConfig()->meas_noise_quat[2],
                                                                                     ekfConfig()->meas_noise_quat[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",                 ekfConfig()->meas_delay);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_HEIGHT_SOURCE, "%d",              ekfConfig()->height_source);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_BARO_RPM_COEFF, "%d",             ekfConfig()->baro_rpm_coeff);
 #endif
 #ifdef USE_CATAPULT
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_TARGET_ALTITUDE, "%d",  catapultConfig()->altitude);

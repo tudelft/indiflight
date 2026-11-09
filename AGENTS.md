@@ -56,6 +56,9 @@ To add a setting, `grep` for an existing sibling and copy each of its occurrence
    BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_FOO, "%d", posProfile->foo);
    ```
 
+6. **`configs/profiles/*.txt`**: Add the new config option(s) with default setting
+   at the appropriate places (if any).
+
 To **modify** a setting (rename, change range, type or default), apply the change
 consistently across all of these places. A retype also needs a PG version bump.
 A rename changes the CLI name, so old `diff`/`dump` files will no longer apply it.

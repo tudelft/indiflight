@@ -204,6 +204,8 @@
 #define PARAM_NAME_EKF_MEAS_NOISE_POSITION  "ekf_meas_noise_position"
 #define PARAM_NAME_EKF_MEAS_NOISE_QUAT      "ekf_meas_noise_quat"
 #define PARAM_NAME_EKF_MEAS_DELAY           "ekf_meas_delay"
+#define PARAM_NAME_EKF_HEIGHT_SOURCE        "ekf_height_source"
+#define PARAM_NAME_EKF_BARO_RPM_COEFF       "ekf_baro_rpm_coeff"
 #endif
 
 #ifdef USE_CATAPULT

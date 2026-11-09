@@ -35,6 +35,11 @@
 
 #include "pg/pg.h"
 
+typedef enum {
+    EKF_HEIGHT_SOURCE_POS_MEAS = 0,    // posMeasNed.pos.V.Z
+    EKF_HEIGHT_SOURCE_BARO = 1,        // barometer (falls back to posMeasNed if no baro)
+} ekfHeightSource_e;
+
 typedef struct ekfConfig_s {
     uint8_t use_quat_measurement;      // bool
     uint8_t use_for_manual_flight;
@@ -46,6 +51,8 @@ typedef struct ekfConfig_s {
     uint32_t meas_noise_position[3];   // noise covariance * 1e6
     uint32_t meas_noise_quat[4];       // noise covariance * 1e6
     uint8_t meas_delay;                // ms
+    uint8_t height_source;             // ekfHeightSource_e
+    int16_t baro_rpm_coeff;            // baro height correction in m per (krad/s)^2 of mean motor speed, * 1000
 } ekfConfig_t;
 
 PG_DECLARE(ekfConfig_t, ekfConfig);
