@@ -96,7 +96,7 @@ static fp_vector_t filteredSpfBody;
 static bool attitudeQuaternionFilterPrimed;
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
-// The plan is disabled by default so position mode keeps its existing behavior.
+// The plan is flown in WAYPOINT_MODE (BOXWAYPOINTS, on top of POSITION_MODE).
 #define POSITION_WAYPOINT_COUNT 7
 static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
     // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 5.0f, .heightTolerance = 5.0f, .velocityLimit = 10.f, .heading = DEGREES_TO_RADIANS(161.f) },
@@ -137,32 +137,55 @@ static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
 };
 
 static unsigned int activeWaypointIndex;
-static bool waypointRunActive;
+static bool waypointRunActive;  // waypoints drive the position setpoint in this loop
+static bool waypointResumable;  // false: next engagement of WAYPOINT_MODE starts at the first waypoint
 
-static bool updateWaypointTraversal(bool allowWaypoints)
+static bool isWaypointReached(unsigned int index)
 {
-    if (!allowWaypoints || POSITION_WAYPOINT_COUNT == 0) {
-        waypointRunActive = false;
-        activeWaypointIndex = 0;
-        return false;
+    const positionWaypoint_t *waypoint = &positionWaypoints[index];
+    const float northError = waypoint->location.V.X - posEstNed.V.X;
+    const float eastError = waypoint->location.V.Y - posEstNed.V.Y;
+    const float downError = waypoint->location.V.Z - posEstNed.V.Z;
+    const float horizontalDistance = sqrtf(northError * northError + eastError * eastError);
+
+    return (horizontalDistance <= waypoint->tolerance) && (fabsf(downError) <= waypoint->heightTolerance);
+}
+
+// WAYPOINT_MODE runs on top of POSITION_MODE (it is only enabled by core.c while
+// POSITION_MODE is active). Edge handling:
+// - rising edge: start at the first waypoint if the plan was never started, was
+//   finished, or POSITION_MODE was left in between. Otherwise resume the last waypoint.
+// - falling edge (switch off, POSITION_MODE still on): arrest motion and hold position.
+// - plan finished: WAYPOINT_MODE is switched off here and the final waypoint is held.
+//   core.c only re-enables it after the switch is cycled.
+static void updateWaypointMode(void)
+{
+    static bool waypointModePrev = false;
+    const bool positionMode = FLIGHT_MODE(POSITION_MODE);
+    const bool waypointMode = positionMode && FLIGHT_MODE(WAYPOINT_MODE)
+        && (POSITION_WAYPOINT_COUNT > 0);
+
+    if (!positionMode) {
+        waypointResumable = false;
     }
 
-    if (!waypointRunActive) {
-        waypointRunActive = true;
-        activeWaypointIndex = 0;
-    }
-
-    while (activeWaypointIndex + 1 < POSITION_WAYPOINT_COUNT) {
-        const positionWaypoint_t *waypoint = &positionWaypoints[activeWaypointIndex];
-        const float northError = waypoint->location.V.X - posEstNed.V.X;
-        const float eastError = waypoint->location.V.Y - posEstNed.V.Y;
-        const float downError = waypoint->location.V.Z - posEstNed.V.Z;
-        const float horizontalDistance = sqrtf(northError * northError + eastError * eastError);
-
-        if (horizontalDistance > waypoint->tolerance || fabsf(downError) > waypoint->heightTolerance) {
-            break;
+    if (waypointMode && !waypointModePrev) {
+        if (!waypointResumable) {
+            activeWaypointIndex = 0;
         }
+        waypointResumable = true;
+    } else if (!waypointMode && waypointModePrev && positionMode && ARMING_FLAG(ARMED)) {
+        posArrestMotion();
+    }
+    waypointModePrev = waypointMode;
 
+    waypointRunActive = waypointMode && ARMING_FLAG(ARMED);
+    if (!waypointRunActive) {
+        return;
+    }
+
+    // advance through all waypoints that are already reached
+    while ((activeWaypointIndex + 1 < POSITION_WAYPOINT_COUNT) && isWaypointReached(activeWaypointIndex)) {
         activeWaypointIndex++;
     }
 
@@ -173,7 +196,14 @@ static bool updateWaypointTraversal(bool allowWaypoints)
     if (posSpNed.trackPsi) {
         posSpNed.psi = heading;
     }
-    return true;
+
+    if ((activeWaypointIndex + 1 == POSITION_WAYPOINT_COUNT) && isWaypointReached(activeWaypointIndex)) {
+        // plan finished: hold the final waypoint in normal position mode
+        waypointRunActive = false;
+        waypointResumable = false;
+        waypointModePrev = false; // not a falling edge, don't arrest motion
+        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    }
 }
 
 static float activeWaypointVelocityLimit(void)
@@ -269,12 +299,16 @@ void updatePosCtl(timeUs_t current) {
     static bool latch_descend = false;
     static bool manual_takeover = false;
 
-    if (manual_takeover && posSpNed.valid) {
+    updateWaypointMode();
+
+    if (manual_takeover && (posSpNed.valid || waypointRunActive)) {
         // no more manual control because new setpoint received
         // reset sticks, so that we can detect new stick movement later
         manual_takeover = false;
         setSticksReference();
-    } else if (!manual_takeover && ARMING_FLAG(ARMED) && posRuntime.stick_takeover && haveSticksMoved()) {
+    } else if (!manual_takeover && ARMING_FLAG(ARMED) && posRuntime.stick_takeover
+            && !FLIGHT_MODE(WAYPOINT_MODE) && haveSticksMoved()) {
+        // stick takeover is never allowed in waypoint mode
         manual_takeover = true;
         posSpNed.valid = false;
 #ifdef USE_TRAJECTORY_TRACKER
@@ -283,10 +317,6 @@ void updatePosCtl(timeUs_t current) {
         }
 #endif
     }
-
-    const bool waypointActive = updateWaypointTraversal(
-        !manual_takeover && ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE));
-    UNUSED(waypointActive);
 
     static timeUs_t lastHoldSpTimeUs = 0;
 #ifdef USE_GEOFENCE
@@ -357,7 +387,7 @@ void updatePosCtl(timeUs_t current) {
         }
     } else {
         // not deadreckoning for too long, setpoint valid. lets fly
-        if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE | GPS_RESCUE_MODE)) ) {
+        if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | GPS_RESCUE_MODE)) ) {
             resetIterms();
         }
 

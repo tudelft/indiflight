@@ -87,7 +87,7 @@ class IndiflightLog(object):
                 case 5: return "PASSTHRU"
                 case 6: return "FAILSAFE"
                 case 7: return "GPSRESCUE"
-                case 8: return "VELCTL"
+                case 8: return "WAYPOINTS"
                 case 9: return "POSCTL"
                 case 10: return "CATAPULT"
                 case 11: return "LEARNER"

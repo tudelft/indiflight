@@ -120,7 +120,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // throwing state machine
     bool enableConditions;
-    bool autoMode = FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE); // NN/catapult disabled already
+    bool autoMode = FLIGHT_MODE(POSITION_MODE); // NN/catapult disabled already
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:

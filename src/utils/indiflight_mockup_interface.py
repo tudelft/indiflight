@@ -36,7 +36,7 @@ class flightModeFlags():
     PASSTHRU_MODE    = (1 << 8)
     FAILSAFE_MODE    = (1 << 10)
     GPS_RESCUE_MODE  = (1 << 11)
-    VELOCITY_MODE    = (1 << 12)
+    WAYPOINT_MODE    = (1 << 12)
     POSITION_MODE    = (1 << 13)
     CATAPULT_MODE    = (1 << 14)
     LEARNER_MODE     = (1 << 15)

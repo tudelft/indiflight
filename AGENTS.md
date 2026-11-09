@@ -119,9 +119,59 @@ rows changes the log format for every field after it.
 Header values (constant per log, e.g. settings) are a separate mechanism: a single
 `BLACKBOX_PRINT_HEADER_LINE(name, fmt, value)` in `blackboxWriteSysinfo()`.
 
+## Adding or modifying a flight mode (RC mode box)
+
+A flight mode is a switch ("box", `boxId_e`) plus a flag (`flightModeFlags_e`).
+Example: `BOXWAYPOINTS` / `WAYPOINT_MODE`, which sits on top of `BOXPOSCTL` /
+`POSITION_MODE`. Grep for a sibling (e.g. `BOXPOSCTL`, `POSITION_MODE`) and
+copy each occurrence.
+
+1. **`src/main/fc/rc_modes.h`**: add the box to `boxId_e` in the flight mode
+   block (before `BOXID_FLIGHTMODE_LAST`, update it if you append at the end).
+   - Mode switch assignments are stored in EEPROM by `boxId_e` index. Inserting,
+     removing or reusing a slot remaps users' switches, so **bump the PG version**
+     of `modeActivationConditions` in `src/main/fc/rc_modes.c` (users' `aux`
+     settings then reset; mention this to the user).
+2. **`src/main/fc/runtime_config.h`**: add the flag to `flightModeFlags_e` (one
+   bit) and map the box to it in `BOXID_TO_FLIGHT_MODE_MAP_INITIALIZER`. A
+   static assert checks that the map has `BOXID_FLIGHTMODE_LAST + 1` entries.
+3. **`src/main/msp/msp_box.c`**: add `{ .boxId, .boxName, .permanentId }` to
+   `boxes[]` and enable it with `BME(...)` in `initActiveBoxIds()` under the
+   matching `#ifdef`.
+   - `permanentId` is what the configurator and CLI `aux` lines use. Use a
+     new, unused id; never reuse the id of a removed box (old `diff` files would
+     silently map to the new mode).
+4. **`src/main/fc/core.c`**, `processRxModes()`
+   (near `BOXPOSCTL`): set/clear the flag from `IS_RC_MODE_ACTIVE(BOX...)` with
+   `ENABLE_FLIGHT_MODE`/`DISABLE_FLIGHT_MODE`. Modes that depend on another mode
+   (e.g. `WAYPOINT_MODE` needs `POSITION_MODE`) are gated here, so code
+   elsewhere can test `FLIGHT_MODE(POSITION_MODE)` alone.
+5. **Users of the flag**: `FLIGHT_MODE(...)` checks in e.g. `flight/pos_ctl.c`,
+   `flight/indi.c`, `flight/ekf.c` (`ekf_should_use`), `flight/throw.c`
+   (`autoMode`).
+6. **Tooling**: `src/utils/indiflight_mockup_interface.py` (`flightModeFlags`
+   bits) and the `modeToText()` box names in
+   `support/LogAnalysis/indiflight_log_tools/indiflight_log_tools/indiflight_log_importer.py`.
+   The blackbox `flightModeFlags` field logs the *box* (switch) states
+   (`rcModeActivationMask`, `boxId_e` bit order), not `flightModeFlags_e`.
+
+Waypoint mode specifics: the plan is the `positionWaypoints[]` table in
+`flight/pos_ctl.c`. Edge handling (start at the first waypoint, resume, arrest
+motion on switch-off, auto-off when finished) is in `updateWaypointMode()`.
+`core.c` only enables `WAYPOINT_MODE` on the rising edge of
+`BOXWAYPOINTS && POSITION_MODE`, so the auto-off sticks until the switch is cycled.
+
 ## Building
 
-- Run `make STM32H743 YES=y -j16` as the compile check (`YES=y` skips the
+- Run `make STM32H743 YES=y -j16` as the basic compile check (`YES=y` skips the
   dirty-tree prompt). Output goes to `obj/`.
+- The bare `STM32H743` target defines no gyro/acc and none of the indiflight
+  features (`USE_EKF`, `USE_LOCAL_POSITION`, `USE_BARO`, ...), so it fails in
+  `gyro_init.c`/`acceleration_init.c` and doesn't compile most indiflight code.
+  To compile with the features enabled, pass the flags from `make/local_.mk`:
+  ```sh
+  FLAGS=$(make -s -f make/local_.mk -f <(printf 'p:\n\t@echo $(EXTRA_FLAGS)\n') p)
+  make STM32H743 YES=y -j16 EXTRA_FLAGS="$FLAGS"
+  ```
 - The SITL target currently fails in unrelated driver code (`atomic.h`,
   `dshot_dpwm.c`), so don't use it as a compile check.

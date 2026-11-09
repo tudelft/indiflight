@@ -101,14 +101,14 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXSTICKCOMMANDDISABLE, .boxName = "STICK COMMANDS DISABLE", .permanentId = 51},
     { .boxId = BOXBEEPERMUTE, .boxName = "BEEPER MUTE", .permanentId = 52},
     { .boxId = BOXREADY, .boxName = "READY", .permanentId = 53},
-    { .boxId = BOXVELCTL, .boxName = "VELOCITY CONTROL", .permanentId = 54},
     { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55},
     { .boxId = BOXTHROWTOARM, .boxName = "THROWTOARM", .permanentId = 56 },
     { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 },
     { .boxId = BOXLEARNER, .boxName = "LEARNER", .permanentId = 58 },
     { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 59 },
     { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 },
-    { .boxId = BOXRESETHOME, .boxName = "RESET HOME", .permanentId = 61 }
+    { .boxId = BOXRESETHOME, .boxName = "RESET HOME", .permanentId = 61 },
+    { .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 62 } // 54 was VELOCITY CONTROL, don't reuse
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -363,9 +363,7 @@ void initActiveBoxIds(void)
     BME(BOXREADY);
 #ifdef USE_LOCAL_POSITION
     BME(BOXPOSCTL);
-#endif
-#ifdef USE_VEL_CTL
-    BME(BOXVELCTL);
+    BME(BOXWAYPOINTS);
 #endif
 
 #undef BME

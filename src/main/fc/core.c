@@ -1141,6 +1141,19 @@ void processRxModes(timeUs_t currentTimeUs)
             posSpNed.valid = false;
         }
     }
+
+    // WAYPOINT_MODE runs on top of POSITION_MODE and is never active without it.
+    // It engages on the rising edge of (BOXWAYPOINTS && POSITION_MODE). pos_ctl
+    // switches it off when the waypoint plan is finished; it then stays off until
+    // the switch is cycled (or POSITION_MODE is re-entered).
+    static bool waypointRequestedPrev = false;
+    const bool waypointRequested = IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE);
+    if (!waypointRequested) {
+        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    } else if (!waypointRequestedPrev) {
+        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    }
+    waypointRequestedPrev = waypointRequested;
 #endif
 
     if (!ARMING_FLAG(ARMED)) {
@@ -1162,21 +1175,6 @@ void processRxModes(timeUs_t currentTimeUs)
         }
     }
 
-
-#ifdef USE_VEL_CTL
-    if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {
-        // logic can be improved by considering ext_pos_state. this logic means
-        // that whenever external pos drops out, we will get a 1 0 0 0 attitude
-        // command, but no automatic piloted-fallback
-        //if (!FLIGHT_MODE(ANGLE_MODE))
-        //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
-
-        if (!FLIGHT_MODE(VELOCITY_MODE))
-            ENABLE_FLIGHT_MODE(VELOCITY_MODE);
-    } else {
-        DISABLE_FLIGHT_MODE(VELOCITY_MODE);
-    }
-#endif
 
 #ifdef USE_CATAPULT
     if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {

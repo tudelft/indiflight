@@ -289,8 +289,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 #endif
 
     // --- check if ekf will be used by control/ahrs
-    ekf_should_use = ( FLIGHT_MODE(POSITION_MODE) 
-                            || FLIGHT_MODE(VELOCITY_MODE)
+    ekf_should_use = ( FLIGHT_MODE(POSITION_MODE)
                             || FLIGHT_MODE(NN_MODE)
                             || FLIGHT_MODE(CATAPULT_MODE) );
     ekf_should_use |= ekfConfig()->use_for_manual_flight;

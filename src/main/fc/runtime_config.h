@@ -97,7 +97,7 @@ typedef enum {
 //    RANGEFINDER_MODE= (1 << 9),
     FAILSAFE_MODE   = (1 << 10),
     GPS_RESCUE_MODE = (1 << 11),
-    VELOCITY_MODE    = (1 << 12),
+    WAYPOINT_MODE    = (1 << 12), // only active together with POSITION_MODE
     POSITION_MODE    = (1 << 13),
     CATAPULT_MODE    = (1 << 14),
     LEARNER_MODE     = (1 << 15),
@@ -120,7 +120,7 @@ extern flightModeFlags_e flightModeFlags;
    [BOXPASSTHRU]    = LOG2(PASSTHRU_MODE),               \
    [BOXFAILSAFE]    = LOG2(FAILSAFE_MODE),               \
    [BOXGPSRESCUE]   = LOG2(GPS_RESCUE_MODE),             \
-   [BOXVELCTL]      = LOG2(VELOCITY_MODE),               \
+   [BOXWAYPOINTS]   = LOG2(WAYPOINT_MODE),               \
    [BOXPOSCTL]      = LOG2(POSITION_MODE),               \
    [BOXCATAPULT]    = LOG2(CATAPULT_MODE),               \
    [BOXLEARNER]     = LOG2(LEARNER_MODE),                \

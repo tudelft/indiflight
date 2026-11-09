@@ -253,7 +253,8 @@ if __name__=="__main__":
             sil.mockup.sendPositionSetpoint( [0., 0., -3.], 0. )
             armed = True
 
-        # if not start_trajectory and sim.t > 8. and sil is not None:
+        if not start_trajectory and sim.t > 8. and sil is not None:
+            sil.mockup.enableFlightMode(flightModeFlags.WAYPOINT_MODE)
         #     # start trajectory tracking at 8*0.5 = 4m/s target speed
         #     sil.mockup.sendKeyboard('1')
         #     # sil.mockup.sendPositionSetpoint( [4., 0., -1.5], 0. )
