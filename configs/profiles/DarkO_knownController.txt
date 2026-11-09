@@ -27,7 +27,8 @@
 ## ----- Outputs and logging
 #define USE_DSHOT
 #define USE_SERVOS
-#define USE_ACTUATORS_T4
+## #define USE_ACTUATORS_T4
+#define USE_SERVOS_FEETECH
 #define USE_BLACKBOX
 
 ## ----- Developer features

@@ -279,7 +279,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     /* Tricopter tail servo */
     {"servo",       5, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(TRICOPTER)},
 
-#ifdef USE_ACTUATORS_T4
+#ifdef USE_SERVO_FEEDBACK
     {"servo_feedback", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
     {"servo_feedback", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
     {"servo_feedback", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
@@ -710,7 +710,7 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
-#ifdef USE_ACTUATORS_T4
+#ifdef USE_SERVO_FEEDBACK
     int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
 #endif
 #ifdef USE_INDI
@@ -1142,7 +1142,7 @@ static void writeIntraframe(void)
         }
     }
 
-#ifdef USE_ACTUATORS_T4
+#ifdef USE_SERVO_FEEDBACK
     blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
 #endif
 
@@ -1369,7 +1369,7 @@ static void writeInterframe(void)
             blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
         }
     }
-#ifdef USE_ACTUATORS_T4
+#ifdef USE_SERVO_FEEDBACK
     arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
     blackboxWriteSigned16VBArray(deltas16, 4);
 #endif
@@ -1912,7 +1912,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->servo[5] = servo[5];
 #endif
 
-#ifdef USE_ACTUATORS_T4
+#ifdef USE_SERVO_FEEDBACK
     for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
         blackboxCurrent->servo_feedback[i] = servo_feedback[i];
     }

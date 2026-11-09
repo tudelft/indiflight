@@ -95,6 +95,7 @@
 #include "io/vtx_rtc6705.h"
 #include "io/hil.h"
 #include "io/t4.h"
+#include "io/feetech.h"
 
 #include "msp/msp_serial.h"
 
@@ -1579,15 +1580,23 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
     if (isMixerUsingServos()) {
         writeServos();
     }
-#endif
-#ifdef USE_ACTUATORS_T4
     static unsigned servoCounter = 0;
     if (++servoCounter % 4 == 0) {
+#ifdef USE_ACTUATORS_T4
         sendActuatorsT4();
+#endif
+#ifdef USE_SERVOS_FEETECH
+        sendServosFeetech(currentTimeUs);
+#endif
         servoCounter = 0;
     }
+#ifdef USE_ACTUATORS_T4
     handleActuatorsT4(); // is this the best place?
 #endif
+#ifdef USE_SERVOS_FEETECH
+    handleServosFeetech(currentTimeUs);
+#endif
+#endif // USE_SERVOS
 
     writeMotors();
 

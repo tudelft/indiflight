@@ -71,6 +71,7 @@ COMMON_SRC = \
             io/local_pos.c \
 			io/hil.c \
 			io/t4.c \
+			io/feetech.c \
             msp/msp.c \
             msp/msp_box.c \
             msp/msp_serial.c \
@@ -309,6 +310,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
 			io/local_pos.c \
             io/keyboard.c \
 			io/t4.c \
+			io/feetech.c \
             rx/ibus.c \
             rx/rx.c \
             rx/rx_spi.c \

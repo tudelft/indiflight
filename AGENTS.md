@@ -161,6 +161,80 @@ motion on switch-off, auto-off when finished) is in `updateWaypointMode()`.
 `core.c` only enables `WAYPOINT_MODE` on the rising edge of
 `BOXWAYPOINTS && POSITION_MODE`, so the auto-off sticks until the switch is cycled.
 
+## Adding a serial peripheral driver (e.g. Feetech servos, T4 board)
+
+Example: `USE_SERVOS_FEETECH` (`io/feetech.c`), modelled on `USE_ACTUATORS_T4`
+(`io/t4.c`). A driver that owns a UART is enabled by a compile flag and is
+bound to a port by a serial function bit. Grep for a sibling (e.g.
+`FUNCTION_SERVOS_FEETECH`, `USE_SERVOS_FEETECH`) and copy each occurrence.
+
+1. **`src/main/io/serial.h`**: add a bit to `serialPortFunction_e`
+   (`FUNCTION_SERVOS_FEETECH = (1 << 22)`). The bit index is stored in
+   `serial` CLI lines and used by the configurator, so never renumber or reuse
+   one. `functionMask` is `uint32_t`, so bits up to 31 are fine for CLI and
+   MSP2 (the legacy MSP `MSP_CF_SERIAL_CONFIG` only carries 16 bits). Only add
+   it to `ALL_FUNCTIONS_SHARABLE_WITH_MSP` / `TELEMETRY_*_MASK` in
+   `io/serial.c` if the port can really be shared.
+2. **Driver files** in `src/main/io/`: `<name>.c` (wrapped in
+   `#if defined(USE_<FLAG>)`, with `#error` checks for required flags),
+   `<name>.h` (public API), and for a protocol `<name>_protocol.h` holding
+   only instruction/register/frame defines. API pattern:
+   `init<Name>()` (looks up `findSerialPortConfig(FUNCTION_...)`),
+   `configure<Name>Port()` (`openSerialPort(...)`), `free<Name>Port()`,
+   and loop functions that return early when the port is `NULL`.
+   Half-duplex buses use
+   `SERIAL_BIDIR | SERIAL_BIDIR_PP | SERIAL_BIDIR_NOPULL`; the receiver then
+   sees an echo of every frame it sends, so the parser must reject it.
+3. **`make/source.mk`**: add `io/<name>.c` next to `io/t4.c`. It appears in
+   **two** lists (the common sources and the speed-optimised list). A file
+   that is missing here is silently never compiled.
+4. **`src/main/fc/init.c`**: call `init...()` and `configure...Port()` under
+   the flag, next to `initActuatorsT4()`.
+5. **`src/main/fc/core.c`**, `subTaskInnerLoopApplyToActuators()`: call the
+   receive/send functions under the flag, inside the non-`HIL_BUILD` branch
+   next to the T4 block. `currentTimeUs` is in scope; time-slice inside the
+   driver (`cmpTimeUs`) instead of counting loop iterations.
+6. **Servo interface** (`flight/servos.h`): drivers read commands from
+   `servo_normalized[]` (±1, zeroed by `core.c` when disarmed) and write
+   measured angles to `servo_feedback[]` in centidegrees, where 10000 cdeg =
+   normalized 1 (`core.c` computes `servo_normalized_feedback = servo_feedback * 1e-4`,
+   used by INDI and the learner). Only one driver may fill `servo_feedback[]`;
+   `feetech.c` `#error`s if `USE_ACTUATORS_T4` is also set.
+   `USE_SERVO_FEEDBACK` (defined in `servos.h` when any such driver is
+   enabled) guards the `servo_feedback` blackbox fields; add new drivers to
+   that `#if`. Blackbox logs 4 feedback fields regardless of the driver's
+   servo count.
+7. **Configurator** (submodule `support/indiflight-configurator`, commit it
+   separately): add the function to `src/js/msp/MSPHelper.js`
+   (`SERIALPORT_FUNCTIONS`, value = bit index), `src/js/tabs/ports.js`
+   (`functionRules`, `groups` decides the dropdown) and
+   `locales/en/messages.json` (`portsFunction_<NAME>`).
+8. **`configs/profiles/*.txt`**: list the flag (commented `## #define ...`
+   if off) next to `USE_ACTUATORS_T4`, and the `serial <port> <mask> ...`
+   line uses the bit value (`4194304` for Feetech).
+
+Compile check: add `-DUSE_SERVOS -DUSE_SERVOS_FEETECH` (or
+`-DUSE_ACTUATORS_T4`) to `EXTRA_FLAGS`; `make/local_.mk` doesn't enable
+either.
+
+### Feetech STS specifics (`io/feetech.c`)
+
+- 1 Mbaud, frames `FF FF ID LEN INSTR PARAMS... CHK`, `LEN = params + 2`,
+  `CHK = ~sum(ID..last param)`. Registers are little-endian.
+- Servo `i` has bus ID `i + 1` and maps to `servo_normalized[i]` /
+  `servo_feedback[i]`. `FEETECH_SERVO_COUNT` (in `feetech.h`) sets how many.
+- One frame per 1 ms slot, rotating write-goal(servo 1), read(servo 1),
+  write(servo 2), read(servo 2), ... so each servo updates at
+  `1000 / (2 * FEETECH_SERVO_COUNT)` Hz.
+- Telemetry is a READ of 8 registers from `PRESENT_POSITION_L` (position,
+  speed, load, voltage, temperature), reply `LEN == 10`. The parser accepts
+  only that length, which also rejects the half-duplex echoes of our own
+  READ (`LEN 4`) and WRITE (`LEN 9`) and the WRITE status replies (`LEN 2`).
+  If you change the request size or the write frame, make sure these lengths
+  stay distinct.
+- Position, speed and load are sign-magnitude (sign bit 15, 15 and 10).
+- Command scaling: normalized ±1 = ±100 deg; 4096 steps/rev, centre 2048.
+
 ## Building
 
 - Run `make STM32H743 YES=y -j16` as the basic compile check (`YES=y` skips the
