@@ -109,4 +109,4 @@ repo builds the wheels and uploads them to PyPI.
 
 ## License
 
-GPL-3.0-or-later (see the headers of the source files).
+GPL-3.0-or-later, see `LICENSE`.
