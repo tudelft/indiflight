@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "indiflight_log_tools"
-version = "0.3.0"
+version = "0.3.1"
 description = "Import Indiflight BFL logs fast and in correct units."
 readme = "README.md"
 authors = [{ name = "Till Blaha", email = "t.m.blaha@tudelft.nl" }]
