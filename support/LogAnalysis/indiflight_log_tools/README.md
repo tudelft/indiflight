@@ -2,8 +2,9 @@
 
 ## Installation
 
-Once published on PyPI (prebuilt wheels for Linux x86_64/aarch64 and macOS,
-any Python >= 3.10, no compiler needed):
+From PyPI (prebuilt wheels for Linux x86_64/aarch64 and macOS, any
+Python >= 3.10, no compiler needed). On Windows, use WSL; see
+[`../README.md`](../README.md).
 ```
 pip install indiflight_log_tools            # add [rerun] for bfl2rerun
 ```

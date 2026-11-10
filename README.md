@@ -5,6 +5,15 @@ This is a direct fork of the 4.4-maintenance branch of Betaflight, implementing 
 Supporting software:
 [![Github](https://img.shields.io/badge/Github-indiflight_support-blue?logo=github)](https://github.com/tudelft/indiflightSupport) Contains information on research papers connected with Indiflight and  Documentation on Drone builds/setups. N.B. until recently it also contained simulation and groundstation code, but this is know included in this repo.
 
+## Log analysis
+
+Python tools to decode and plot blackbox logs are in
+[`support/LogAnalysis`](support/LogAnalysis/), including installation instructions.
+In short (Linux, macOS, or WSL on Windows):
+
+    pip install indiflight_log_tools
+    pip install "pyFlightPlotter @ git+https://github.com/tudelft/pyFlightPlotter"
+
 ## Introduction to Indiflight Configuration
 
 INDIflight has compile-time configuration and run-time configuration.

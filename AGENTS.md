@@ -204,8 +204,9 @@ bound to a port by a serial function bit. Grep for a sibling (e.g.
    enabled) guards the `servo_feedback` blackbox fields; add new drivers to
    that `#if`. Blackbox logs 4 feedback fields regardless of the driver's
    servo count.
-7. **Configurator** (submodule `support/indiflight-configurator`, commit it
-   separately): add the function to `src/js/msp/MSPHelper.js`
+7. **Configurator** (separate repo
+   [tudelft/indiflight-configurator](https://github.com/tudelft/indiflight-configurator),
+   not part of this repo): add the function to `src/js/msp/MSPHelper.js`
    (`SERIALPORT_FUNCTIONS`, value = bit index), `src/js/tabs/ports.js`
    (`functionRules`, `groups` decides the dropdown) and
    `locales/en/messages.json` (`portsFunction_<NAME>`).
