@@ -12,6 +12,8 @@
 
 #ifdef WIN32
     #include <io.h>
+#else
+    #include <unistd.h>
 #endif
 
 #include <stdio.h>
@@ -52,7 +54,7 @@ typedef struct decodeOptions_t {
     Unit unitGPSSpeed, unitFrameTime, unitVbat, unitAmperage, unitHeight, unitAcceleration, unitRotation, unitFlags, unitDegrees;
 } decodeOptions_t;
 
-decodeOptions_t options = {
+static const decodeOptions_t defaultOptions = {
     .help = 0, .raw = 0, .limits = 0, .debug = 0, .toStdout = 0,
     .logNumber = -1,
     .simulateIMU = false, .imuIgnoreMag = 0,
@@ -80,6 +82,11 @@ decodeOptions_t options = {
     .unitDegrees = UNIT_RAW
 };
 
+// Reset to defaultOptions on every main() call, because this file is also
+// built as a shared library whose main() is called repeatedly in one process.
+decodeOptions_t options;
+
+
 //We'll use field names to identify GPS field units so the values can be formatted for display
 typedef enum {
     GPS_FIELD_TYPE_INTEGER,
@@ -96,6 +103,10 @@ static uint32_t lastFrameIteration;
 
 static FILE *csvFile = 0, *eventFile = 0, *gpsCsvFile = 0, *headersFile = 0;
 static char *eventFilename = 0, *gpsCsvFilename = 0;
+
+// Log currently being decoded, so that main() can release it after a fatalError()
+static flightLog_t *currentLog = NULL;
+static int currentFd = -1;
 //static gpxWriter_t *gpx = 0;
 
 // Computed states:
@@ -153,7 +164,7 @@ static char *INFLIGHT_ADJUSTMENT_FUNCTIONS[ADJUSTMENT_FUNCTION_COUNT] = {
 //        break;
 //        default:
 //            fprintf(stderr, "Bad amperage unit %d\n", (int) unit);
-//            exit(-1);
+//            fatalError();
 //        break;
 //    }
 //}
@@ -172,7 +183,7 @@ static void fprintfMicrosecondsInUnit(FILE *file, int64_t microseconds, Unit uni
         break;
         default:
             fprintf(stderr, "Bad time unit %d\n", (int) unit);
-            exit(-1);
+            fatalError();
         break;
     }
 }
@@ -572,11 +583,11 @@ void outputMainFrameFields(flightLog_t *log, int64_t frameTime, int64_t *frame)
                 fprintf(csvFile, "X");
             } else if (!fprintfMainFieldInUnit(log, csvFile, i, frameTime, mainFieldUnit[i])) {
                 fprintf(stderr, "Bad unit for field %d\n", i);
-                exit(-1);
+                fatalError();
             }
         } else if (!fprintfMainFieldInUnit(log, csvFile, i, frame[i], mainFieldUnit[i])) {
             fprintf(stderr, "Bad unit for field %d\n", i);
-            exit(-1);
+            fatalError();
         }
     }
 
@@ -1195,6 +1206,11 @@ int decodeFlightLog(flightLog_t *log, const char *filename, int logIndex)
             fprintf(stderr, "Failed to create output file %s\n", csvFilename);
 
             free(csvFilename);
+            free(eventFilename);
+            eventFilename = NULL;
+            if (headersFile)
+                fclose(headersFile);
+            headersFile = NULL;
             return -1;
         }
 
@@ -1223,10 +1239,13 @@ int decodeFlightLog(flightLog_t *log, const char *filename, int logIndex)
 
     if (!options.toStdout)
         fclose(csvFile);
+    csvFile = NULL;
 
     free(eventFilename);
+    eventFilename = NULL;
     if (eventFile)
         fclose(eventFile);
+    eventFile = NULL;
 
     //free(gpsCsvFilename);
     //if (gpsCsvFile)
@@ -1238,6 +1257,7 @@ int decodeFlightLog(flightLog_t *log, const char *filename, int logIndex)
         writeLogHeaders(log, logIndex);
         fclose(headersFile);
     }
+    headersFile = NULL;
     return success ? 0 : -1;
 }
 
@@ -1389,49 +1409,49 @@ void parseCommandlineOptions(int argc, char **argv)
             case SETTING_UNIT_GPS_SPEED:
                 if (!unitFromName(optarg, &options.unitGPSSpeed)) {
                     fprintf(stderr, "Bad GPS speed unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_FRAME_TIME:
                 if (!unitFromName(optarg, &options.unitFrameTime)) {
                     fprintf(stderr, "Bad frame time unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_VBAT:
                 if (!unitFromName(optarg, &options.unitVbat)) {
                     fprintf(stderr, "Bad VBAT unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_AMPERAGE:
                 if (!unitFromName(optarg, &options.unitAmperage)) {
                     fprintf(stderr, "Bad Amperage unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_HEIGHT:
                 if (!unitFromName(optarg, &options.unitHeight)) {
                     fprintf(stderr, "Bad height unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_ACCELERATION:
                 if (!unitFromName(optarg, &options.unitAcceleration)) {
                     fprintf(stderr, "Bad acceleration unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_ROTATION:
                 if (!unitFromName(optarg, &options.unitRotation)) {
                     fprintf(stderr, "Bad rotation unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             case SETTING_UNIT_FLAGS:
                 if (!unitFromName(optarg, &options.unitFlags)) {
                     fprintf(stderr, "Bad flags unit\n");
-                    exit(-1);
+                    fatalError();
                 }
             break;
             //case SETTING_DECLINATION:
@@ -1456,7 +1476,7 @@ void parseCommandlineOptions(int argc, char **argv)
             break;
             case ':':
                 fprintf(stderr, "%s: option '%s' requires an argument\n", argv[0], argv[optind-1]);
-                exit(-1);
+                fatalError();
             break;
             default:
                 if (optopt == 0)
@@ -1464,17 +1484,50 @@ void parseCommandlineOptions(int argc, char **argv)
                 else
                     fprintf(stderr, "%s: option '-%c' is invalid\n", argv[0], optopt);
 
-                exit(-1);
+                fatalError();
             break;
         }
     }
 }
 
-int main(int argc, char **argv)
+static void closeLogFile(void)
+{
+    if (currentLog)
+        flightLogDestroy(currentLog);
+    currentLog = NULL;
+
+    if (currentFd >= 0)
+        close(currentFd);
+    currentFd = -1;
+}
+
+// Release whatever a fatalError() left behind in the middle of decoding
+static void cleanupAfterFatalError(void)
+{
+    if (csvFile && csvFile != stdout)
+        fclose(csvFile);
+    csvFile = NULL;
+
+    if (eventFile)
+        fclose(eventFile);
+    eventFile = NULL;
+
+    if (headersFile)
+        fclose(headersFile);
+    headersFile = NULL;
+
+    free(eventFilename);
+    eventFilename = NULL;
+
+    closeLogFile();
+}
+
+// Returns 0 if all requested logs were decoded, -1 otherwise
+static int decodeMain(int argc, char **argv)
 {
     flightLog_t *log;
-    int fd;
     int logIndex;
+    int result = 0;
 
     platform_init();
 
@@ -1493,39 +1546,76 @@ int main(int argc, char **argv)
     for (int i = optind; i < argc; i++) {
         const char *filename = argv[i];
 
-        fd = open(filename, O_RDONLY);
-        if (fd < 0) {
+        currentFd = open(filename, O_RDONLY);
+        if (currentFd < 0) {
             fprintf(stderr, "Failed to open log file '%s': %s\n\n", filename, strerror(errno));
+            result = -1;
             continue;
         }
 
-        log = flightLogCreate(fd);
+        log = currentLog = flightLogCreate(currentFd);
 
         if (!log) {
             fprintf(stderr, "Failed to read log file '%s'\n\n", filename);
+            closeLogFile();
+            result = -1;
             continue;
         }
 
         if (log->logCount == 0) {
             fprintf(stderr, "Couldn't find the header of a flight log in the file '%s', is this the right kind of file?\n\n", filename);
+            closeLogFile();
+            result = -1;
             continue;
         }
 
         if (options.logNumber > 0 || options.toStdout) {
             logIndex = validateLogIndex(log);
 
-            if (logIndex == -1)
+            if (logIndex == -1) {
+                closeLogFile();
                 return -1;
+            }
 
-            decodeFlightLog(log, filename, logIndex);
+            if (decodeFlightLog(log, filename, logIndex) != 0)
+                result = -1;
         } else {
             //Decode all the logs
             for (logIndex = 0; logIndex < log->logCount; logIndex++)
-                decodeFlightLog(log, filename, logIndex);
+                if (decodeFlightLog(log, filename, logIndex) != 0)
+                    result = -1;
         }
 
-        flightLogDestroy(log);
+        closeLogFile();
     }
 
-    return 0;
+    return result;
+}
+
+/*
+ * Also the entry point of the shared library (called via ctypes), so it must
+ * never exit() the process. Returns 0 on success, -1 if a log could not be
+ * decoded and -2 after a fatal error (corrupt log, bad option).
+ */
+int main(int argc, char **argv)
+{
+    // static: must keep its value across the longjmp() back into this frame
+    static jmp_buf fatalErrorJump;
+    int result;
+
+    options = defaultOptions;
+    optind = 1; // restart getopt() for repeated calls
+
+    if (setjmp(fatalErrorJump)) {
+        setFatalErrorHandler(NULL);
+        cleanupAfterFatalError();
+        fflush(stderr);
+        return -2;
+    }
+
+    setFatalErrorHandler(&fatalErrorJump);
+    result = decodeMain(argc, argv);
+    setFatalErrorHandler(NULL);
+
+    return result;
 }

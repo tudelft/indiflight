@@ -489,7 +489,7 @@ static int64_t applyPrediction(flightLog_t *log, int fieldIndex, int predictor, 
         case FLIGHT_LOG_FIELD_PREDICTOR_MOTOR_0:
             if (log->mainFieldIndexes.motor[0] < 0) {
                 fprintf(stderr, "Attempted to base prediction on motor[0] without that field being defined\n");
-                exit(-1);
+                fatalError();
             }
             value += current[log->mainFieldIndexes.motor[0]];
         break;
@@ -517,7 +517,7 @@ static int64_t applyPrediction(flightLog_t *log, int fieldIndex, int predictor, 
         case FLIGHT_LOG_FIELD_PREDICTOR_HOME_COORD:
             if (log->gpsHomeFieldIndexes.GPS_home[0] < 0) {
                 fprintf(stderr, "Attempted to base prediction on GPS home position without GPS home frame definition\n");
-                exit(-1);
+                fatalError();
             }
 
             value += private->gpsHomeHistory[1][log->gpsHomeFieldIndexes.GPS_home[0]];
@@ -525,7 +525,7 @@ static int64_t applyPrediction(flightLog_t *log, int fieldIndex, int predictor, 
         case FLIGHT_LOG_FIELD_PREDICTOR_HOME_COORD_1:
             if (log->gpsHomeFieldIndexes.GPS_home[1] < 1) {
                 fprintf(stderr, "Attempted to base prediction on GPS home position without GPS home frame definition\n");
-                exit(-1);
+                fatalError();
             }
 
             value += private->gpsHomeHistory[1][log->gpsHomeFieldIndexes.GPS_home[1]];
@@ -539,7 +539,7 @@ static int64_t applyPrediction(flightLog_t *log, int fieldIndex, int predictor, 
 		break;
         default:
             fprintf(stderr, "Unsupported field predictor %d\n", predictor);
-            exit(-1);
+            fatalError();
     }
 
     return value;
@@ -657,7 +657,7 @@ static void parseFrame(flightLog_t *log, mmapStream_t *stream, uint8_t frameType
                 break;
                 default:
                     fprintf(stderr, "Unsupported field encoding %d\n", encoding[i]);
-                    exit(-1);
+                    fatalError();
             }
 
             value = applyPrediction(log, i, raw ? FLIGHT_LOG_FIELD_PREDICTOR_0 : predictor[i], value, frame, previous, previous2);
@@ -893,7 +893,7 @@ static void flightlogDecodeFlagsToString(uint32_t flags, int numFlags, const cha
     // The buffer should at least be large enough for us to add the "no flags present" message in!
     if (destLen < strlen(NO_FLAGS_MESSAGE) + 1) {
         fprintf(stderr, "Flag buffer too short\n");
-        exit(-1);
+        fatalError();
     }
 
     for (int i = 0; i < numFlags; i++) {
@@ -904,7 +904,7 @@ static void flightlogDecodeFlagsToString(uint32_t flags, int numFlags, const cha
             if (destLen < (printedFlag ? 1 : 0) + flagNameLen + 1 /* Null-terminator */) {
                 // Not enough room in the dest string to fit this flag
                 fprintf(stderr, "Flag buffer too short\n");
-                exit(-1);
+                fatalError();
             }
 
             if (printedFlag) {

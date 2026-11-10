@@ -23,6 +23,10 @@ import shutil
 import glob
 import re
 import json
+import tempfile
+import threading
+import time
+import weakref
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -78,6 +82,42 @@ class IndiflightLog(object):
         + sorted(glob.glob(os.path.join(os.path.dirname(__file__), "blackbox_decode*.so")))
         + sorted(glob.glob(os.path.join(os.path.dirname(__file__), "blackbox_decode*.pyd")))
     ), None)
+
+    _lib = None
+    _libLock = threading.Lock()
+    STALE_CACHE_SECONDS = 7 * 24 * 3600
+
+    @classmethod
+    def _loadLibrary(cls):
+        if cls._lib is None:
+            if cls.LIBRARY_SO is None:
+                raise ImportError(
+                    "blackbox_decode library not found next to indiflight_log_importer.py. "
+                    "The package was probably installed without compiling the C decoder; "
+                    "reinstall it from a wheel or with a C compiler available.")
+            lib = ctypes.CDLL(cls.LIBRARY_SO)
+            lib.main.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_char_p))
+            lib.main.restype = ctypes.c_int
+            cls._lib = lib
+        return cls._lib
+
+    @classmethod
+    def _removeStaleCacheDirs(cls, cachedir):
+        # Folders are normally removed by weakref.finalize. Leftovers from
+        # crashed/killed processes are deleted once they are old enough to
+        # surely not be in use anymore. Files from older versions (log.bfl,
+        # log.XX.csv, ... directly in cachedir) are cleaned up the same way.
+        cutoff = time.time() - cls.STALE_CACHE_SECONDS
+        for path in glob.glob(os.path.join(cachedir, "log*")):
+            try:
+                if os.path.getmtime(path) > cutoff:
+                    continue
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
+            except OSError:
+                pass  # removed concurrently by another process
 
     @staticmethod
     def modeToText(bits):
@@ -150,40 +190,37 @@ class IndiflightLog(object):
 
         self.logIdStr = str(logId).zfill(2)
 
-        # setup libary
-        if self.LIBRARY_SO is None:
-            raise ImportError(
-                "blackbox_decode library not found next to indiflight_log_importer.py. "
-                "The package was probably installed without compiling the C decoder; "
-                "reinstall it from a wheel or with a C compiler available.")
-        lib = ctypes.CDLL(self.LIBRARY_SO)
-        lib.main.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_char_p))
-        lib.main.restype = ctypes.c_int
+        self.filename = filename
 
-        # setup paths
+        # Each instance decodes into its own folder, so that several processes
+        # (or threads) can parse logs at the same time. The folder is removed
+        # when the instance is garbage collected (outputCsv() copies from it).
         cachedir = user_cache_dir(self.CACHE_NAME, self.CACHE_NAME)
-        if not os.path.exists(cachedir):
-            os.makedirs(cachedir)
-        else:
-            files = glob.glob(os.path.join(cachedir, "log*"))
-            for f in files:
-                os.remove(f)
+        os.makedirs(cachedir, exist_ok=True)
+        self._removeStaleCacheDirs(cachedir)
+        self.cachedir = tempfile.mkdtemp(prefix="log-", dir=cachedir)
+        self._cleanup = weakref.finalize(self, shutil.rmtree, self.cachedir, ignore_errors=True)
 
-        self.cache_bfl = os.path.join(cachedir, "log.bfl")
-        self.cache_csv = os.path.join(cachedir, f"log.{self.logIdStr}.csv")
-        self.cache_events = os.path.join(cachedir, f"log.{self.logIdStr}.event")
-        self.cache_headers_csv = os.path.join(cachedir, f"log.{self.logIdStr}.headers.csv")
+        self.cache_bfl = os.path.join(self.cachedir, "log.bfl")
+        self.cache_csv = os.path.join(self.cachedir, f"log.{self.logIdStr}.csv")
+        self.cache_events = os.path.join(self.cachedir, f"log.{self.logIdStr}.event")
+        self.cache_headers_csv = os.path.join(self.cachedir, f"log.{self.logIdStr}.headers.csv")
 
         # copy to cache folder
-        self.filename = filename
         shutil.copy(filename, self.cache_bfl)
 
         # convert to csv
         logger.info("Parsing logfile")
-        argv = [b"blackbox_decode", os.fsencode(self.cache_bfl)]
-        argc = 2
-        argv_ctypes = (ctypes.c_char_p * argc)(*argv)
-        _ = lib.main(argc, argv_ctypes)
+        argv = [b"blackbox_decode", b"--index", str(logId).encode(), os.fsencode(self.cache_bfl)]
+        argv_ctypes = (ctypes.c_char_p * len(argv))(*argv)
+        lib = self._loadLibrary()
+        # the decoder keeps its state in globals, so only one call at a time
+        with self._libLock:
+            ret = lib.main(len(argv), argv_ctypes)
+        if ret != 0:
+            raise RuntimeError(
+                f"blackbox_decode failed on log {logId} of {filename} (code {ret}), "
+                "see stderr for details. Corrupt log, or wrong logId?")
 
         # dump data rows into pandas frame. # TODO: only import until range?
         logger.info("Importing into dataframe")

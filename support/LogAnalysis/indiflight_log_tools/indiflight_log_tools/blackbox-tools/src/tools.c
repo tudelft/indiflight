@@ -1,5 +1,21 @@
 #include <string.h>
+#include <stdlib.h>
 #include "tools.h"
+
+static jmp_buf *fatalErrorHandler = NULL;
+
+void setFatalErrorHandler(jmp_buf *handler)
+{
+    fatalErrorHandler = handler;
+}
+
+void fatalError(void)
+{
+    if (fatalErrorHandler) {
+        longjmp(*fatalErrorHandler, 1);
+    }
+    exit(-1);
+}
 
 int32_t signExtend24Bit(uint32_t u)
 {

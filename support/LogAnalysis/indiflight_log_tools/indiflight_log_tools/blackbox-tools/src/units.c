@@ -3,6 +3,7 @@
 #include <ctype.h>
 
 #include "units.h"
+#include "tools.h"
 
 double convertMetersPerSecondToUnit(double meterspersec, Unit unit)
 {
@@ -22,11 +23,11 @@ double convertMetersPerSecondToUnit(double meterspersec, Unit unit)
 
         case UNIT_RAW:
             fprintf(stderr, "Attempted to convert speed to raw units but this data is already cooked\n");
-            exit(-1);
+            fatalError();
         break;
         default:
             fprintf(stderr, "Bad speed unit in conversion\n");
-            exit(-1);
+            fatalError();
     }
 }
 

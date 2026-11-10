@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <setjmp.h>
 
 #define ARRAY_LENGTH(x) (sizeof((x))/sizeof((x)[0]))
 
@@ -38,5 +40,25 @@ bool startsWith(const char *string, const char *checkStartsWith);
 bool endsWith(const char *string, const char *checkEndsWith);
 
 void* memmem(const void *haystack, size_t haystackLen, const void *needle, size_t needleLen);
+
+#if defined(__GNUC__) || defined(__clang__)
+    #define NORETURN __attribute__((noreturn))
+#elif defined(_MSC_VER)
+    #define NORETURN __declspec(noreturn)
+#else
+    #define NORETURN
+#endif
+
+/*
+ * Unrecoverable decoder error (corrupt log, bad option, ...). The message
+ * should already have been printed to stderr.
+ *
+ * When a handler is armed with setFatalErrorHandler(), this longjmp()s back to
+ * it, so the library can return an error code to its caller (e.g. Python via
+ * ctypes) instead of terminating the whole process. Without a handler it calls
+ * exit(-1) like before.
+ */
+NORETURN void fatalError(void);
+void setFatalErrorHandler(jmp_buf *handler);
 
 #endif
