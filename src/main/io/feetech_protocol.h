@@ -48,6 +48,14 @@
 #define FEETECH_REG_MIN_ANGLE_LIMIT_H   10
 #define FEETECH_REG_MAX_ANGLE_LIMIT_L   11
 #define FEETECH_REG_MAX_ANGLE_LIMIT_H   12
+// Phase / "setting byte". Not written by the driver; set it once per servo,
+// e.g. with FD.exe through `serialpassthrough <uart index> 1000000`.
+// To reverse a servo, set BIT0 (+1, drive direction) and BIT7 (+128, position
+// feedback direction) together. Setting only one of them flips the position
+// loop into positive feedback and the servo runs into its end stop.
+// Example (tested): 108 (as shipped) -> 237 reverses goal and feedback.
+// Other bits are undocumented; leave them as they are.
+#define FEETECH_REG_PHASE               18
 #define FEETECH_REG_CW_DEAD             26
 #define FEETECH_REG_CCW_DEAD            27
 
