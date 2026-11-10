@@ -2,31 +2,32 @@
 
 ## Installation
 
-Pre-requisites
+Once published on PyPI (prebuilt wheels for Linux x86_64/aarch64 and macOS,
+any Python >= 3.10, no compiler needed):
 ```
-sudo apt install gcc python3-pip
-pip install setuptools[core] build
-```
-
-Go to folder and build module
-```
-cd LogAnalysis/indiflight_log_tools/
-python -m build
+pip install indiflight_log_tools            # add [rerun] for bfl2rerun
 ```
 
-Install it in your environment
+From the git repo (compiles the C decoder, so needs `gcc`/`clang`):
 ```
-pip install dist/indiflight_log_tools-0.2.1-<depends on your platform>.whl
-```
-
-Test it 
-```
-cd ~/    # or anywhere else, but not the current folder
-ipython -i -c "from indiflight_log_tools import IndiflightLog"
+pip install "git+https://github.com/tudelft/indiflight#subdirectory=support/LogAnalysis/indiflight_log_tools"
 ```
 
-If no error, then it should have worked!
+From a local checkout (`-e` for development):
+```
+pip install -e support/LogAnalysis/indiflight_log_tools
+```
 
+Test it
+```
+cd ~/    # or anywhere else, but not the source folder
+python -c "from indiflight_log_tools import IndiflightLog; print(IndiflightLog.LIBRARY_SO)"
+```
+
+### Releasing
+
+Bump `version` in `pyproject.toml`, then push a tag `log-tools-v<version>`.
+`.github/workflows/log-tools-wheels.yml` builds the wheels and uploads them to PyPI.
 
 ## Usage
 

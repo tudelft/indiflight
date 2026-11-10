@@ -71,7 +71,13 @@ class IndiflightLog(object):
     DSHOT_MIN = 158.
     DSHOT_MAX = 2048.
     CACHE_NAME = "indiflight_logs"
-    LIBRARY_SO = os.path.join(os.path.dirname(__file__), "blackbox_decode.cpython-312-x86_64-linux-gnu.so")
+    # blackbox_decode.so since 0.3.0; older builds used the CPython suffix
+    # (blackbox_decode.cpython-3XX-<platform>.so), so fall back to globbing.
+    LIBRARY_SO = next(iter(
+        sorted(glob.glob(os.path.join(os.path.dirname(__file__), "blackbox_decode.so")))
+        + sorted(glob.glob(os.path.join(os.path.dirname(__file__), "blackbox_decode*.so")))
+        + sorted(glob.glob(os.path.join(os.path.dirname(__file__), "blackbox_decode*.pyd")))
+    ), None)
 
     @staticmethod
     def modeToText(bits):
@@ -145,6 +151,11 @@ class IndiflightLog(object):
         self.logIdStr = str(logId).zfill(2)
 
         # setup libary
+        if self.LIBRARY_SO is None:
+            raise ImportError(
+                "blackbox_decode library not found next to indiflight_log_importer.py. "
+                "The package was probably installed without compiling the C decoder; "
+                "reinstall it from a wheel or with a C compiler available.")
         lib = ctypes.CDLL(self.LIBRARY_SO)
         lib.main.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_char_p))
         lib.main.restype = ctypes.c_int
@@ -169,7 +180,7 @@ class IndiflightLog(object):
 
         # convert to csv
         logger.info("Parsing logfile")
-        argv = [b"blackbox_decode", self.cache_bfl.encode("ascii")]
+        argv = [b"blackbox_decode", os.fsencode(self.cache_bfl)]
         argc = 2
         argv_ctypes = (ctypes.c_char_p * argc)(*argv)
         _ = lib.main(argc, argv_ctypes)

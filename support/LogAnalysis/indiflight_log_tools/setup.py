@@ -1,51 +1,66 @@
-from setuptools import setup, Extension
-import os
+# Metadata lives in pyproject.toml. This file only describes the C decoder.
+#
+# The decoder (blackbox-tools) is NOT a Python extension module: it has no
+# PyInit_* function and is loaded with ctypes. We still use setuptools'
+# Extension machinery to compile it (it handles compilers, flags and
+# cross-platform details), but:
+#   - the output file gets a fixed name (blackbox_decode.so) instead of
+#     blackbox_decode.cpython-3XX-<platform>.so, so the Python code can find it
+#     regardless of the interpreter version, and
+#   - the wheel is tagged py3-none-<platform> instead of cp3XX-cp3XX-<platform>,
+#     so a single wheel per OS/arch installs on every Python 3 version.
 
-# Define the C extension
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
+
+try:
+    from setuptools.command.bdist_wheel import bdist_wheel  # setuptools >= 70.1
+except ImportError:
+    from wheel.bdist_wheel import bdist_wheel
+
+SRC = "indiflight_log_tools/blackbox-tools/src/"
+
+
+class build_plain_shared_lib(build_ext):
+    def get_ext_filename(self, fullname):
+        # indiflight_log_tools.blackbox_decode -> indiflight_log_tools/blackbox_decode.so
+        return fullname.replace(".", "/") + ".so"
+
+    def get_export_symbols(self, ext):
+        # don't require a PyInit_blackbox_decode symbol
+        return ext.export_symbols
+
+
+class bdist_wheel_py3_none(bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False  # still platform specific
+
+    def get_tag(self):
+        _, _, plat = super().get_tag()
+        return "py3", "none", plat
+
+
 blackbox_decode = Extension(
-    'indiflight_log_tools.blackbox_decode',  # Name of the extension
-    sources=[
-        "indiflight_log_tools/blackbox-tools/src/blackbox_decode.c",
-        "indiflight_log_tools/blackbox-tools/src/blackbox_fielddefs.c",
-        "indiflight_log_tools/blackbox-tools/src/decoders.c",
-        "indiflight_log_tools/blackbox-tools/src/parser.c",
-        "indiflight_log_tools/blackbox-tools/src/platform.c",
-        "indiflight_log_tools/blackbox-tools/src/stats.c",
-        "indiflight_log_tools/blackbox-tools/src/stream.c",
-        "indiflight_log_tools/blackbox-tools/src/tools.c",
-        "indiflight_log_tools/blackbox-tools/src/units.c"
-    ],
-    include_dirs=["indiflight_log_tools/blackbox-tools/src/"],  # Include directories for header files
-    extra_compile_args=["-fPIC", "-O3"],     # Additional compiler flags
-    extra_link_args=["-lm"],                  # Linker arguments
+    "indiflight_log_tools.blackbox_decode",
+    sources=[SRC + f for f in (
+        "blackbox_decode.c",
+        "blackbox_fielddefs.c",
+        "decoders.c",
+        "parser.c",
+        "platform.c",
+        "stats.c",
+        "stream.c",
+        "tools.c",
+        "units.c",
+    )],
+    include_dirs=[SRC],
+    extra_compile_args=["-O3", "-std=gnu99"],
+    libraries=["m"],
+    export_symbols=["main"],
 )
 
-# Call the setup function
 setup(
-    name="indiflight_log_tools",               # Package name
-    version="0.2.1",                           # Initial version
-    description="Import Indiflight BFL logs fast and in correct units.",  # Package description
-    author="Till Blaha",                       # Author name
-    author_email="t.m.blaha@tudelft.nl",      # Author email
-    license="LICENSE",                         # License file (specify separately)
-    long_description=open("README.md").read(), # Read long description from README file
-    long_description_content_type="text/markdown",  # Specify content type for long description
-    keywords=["example", "keywords"],          # Keywords
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "Operating System :: Linux",
-    ],
-    packages=["indiflight_log_tools"],             # Specify your package (replace with actual package name)
-    ext_modules=[blackbox_decode],              # Include the C extension in the build
-    install_requires=[                          # Package dependencies
-        "matplotlib >=3.9.2",
-        "numpy >=1.26.4",
-        "pandas >=2.2.2",
-        "platformdirs >=4.2.2",
-        "scipy >=1.14.0",
-    ],
-    scripts=[
-        "bin/bfl2csv",
-        "bin/bfl2rerun",
-    ]
+    ext_modules=[blackbox_decode],
+    cmdclass={"build_ext": build_plain_shared_lib, "bdist_wheel": bdist_wheel_py3_none},
 )

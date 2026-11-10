@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-
-# Convert .BFL binary logs and send them to rerun
+# Command line tools bfl2csv and bfl2rerun (installed as console scripts)
 #
 # Copyright 2024 Till Blaha (Delft University of Technology)
 #
@@ -18,25 +16,44 @@
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from indiflight_log_tools import IndiflightLog
-import rerun as rr
+from os import path
 
-if __name__=="__main__":
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+from .indiflight_log_importer import IndiflightLog
+
+
+def bfl2csv(argv=None):
+    """Convert .BFL binary logs to .csv"""
+    parser = ArgumentParser(description=bfl2csv.__doc__, formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("logfile", metavar="x.BFL", help="BFL log to be converted")
+    parser.add_argument("-i", "--id", required=False, type=int, default=1, help="If multiple logs combined in one file, select this one.")
+    parser.add_argument("-o", "--output-dir", required=False, type=str, default=None, help="Output Directory. If not passed, same directory as logfile.")
+    parser.add_argument("-u", "--units", required=False, type=str, default="raw", help="raw or si")
+    args = parser.parse_args(argv)
+
+    outdir = args.output_dir if args.output_dir else path.dirname(path.abspath(args.logfile))
+
+    log = IndiflightLog(args.logfile, logId=args.id, timeRange=None, resetTime=False)
+    log.outputCsv(units=args.units, path=outdir)
+
+
+def bfl2rerun(argv=None):
+    """Convert .BFL binary logs and send them to rerun"""
+    parser = ArgumentParser(description=bfl2rerun.__doc__, formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("logfile", metavar="x.BFL", help="BFL log to be added")
     parser.add_argument("-i", "--id", required=False, type=int, default=1, help="If multiple logs combined in one file, select this one.")
     parser.add_argument("-n", "--name", required=False, type=str, default="fc", help="Entity name for rerun.")
     parser.add_argument("-c", "--clock-offset", required=False, type=float, default=0., help="Clock offset in seconds to add to the log time.")
-    parser.add_argument("-s", "--spawn", required=False, action='store_true', default=False, help="Spawn new recording and, if necessary, a new rerun window)"),
+    parser.add_argument("-s", "--spawn", required=False, action='store_true', default=False, help="Spawn new recording and, if necessary, a new rerun window")
     parser.add_argument("-r", "--recording-id", required=False, type=str, default=None, help="Write to this recording_id")
-    #parser.add_argument("-t", "--time-range", required=False, nargs=2, default=None, help="start and endtime in ms")
-    #parser.add_argument("-r", "--reset-time", required=False, action='store_true', help="Reset time in log to start from 0. Not compatible with units raw")
+    args = parser.parse_args(argv)
 
-    args = parser.parse_args()
+    try:
+        import rerun as rr
+    except ImportError:
+        parser.exit(1, "bfl2rerun needs rerun: pip install 'indiflight_log_tools[rerun]'\n")
 
     rr.init("droneracing", recording_id=args.recording_id, spawn=args.spawn)
     rr.connect()
 
     log = IndiflightLog(args.logfile, logId=args.id, timeRange=None, resetTime=False)
     log.addToRerun(args.name, clockOffsetSeconds=args.clock_offset)
-

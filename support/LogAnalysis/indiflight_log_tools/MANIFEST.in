@@ -1,1 +1,2 @@
-graft indiflight_log_tools/blackbox-tools/src/
+graft indiflight_log_tools/blackbox-tools/src
+include LICENSE README.md

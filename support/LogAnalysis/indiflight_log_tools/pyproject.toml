@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indiflight_log_tools"
+version = "0.3.0"
+description = "Import Indiflight BFL logs fast and in correct units."
+readme = "README.md"
+authors = [{ name = "Till Blaha", email = "t.m.blaha@tudelft.nl" }]
+license = { file = "LICENSE" }
+# match statements in indiflight_log_importer.py need 3.10
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+# Keep lower bounds loose: tight pins are what cause resolver conflicts with
+# whatever else users have in their environment.
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "platformdirs>=3.0",
+]
+
+[project.optional-dependencies]
+rerun = ["rerun-sdk"]
+
+[project.scripts]
+bfl2csv = "indiflight_log_tools.cli:bfl2csv"
+bfl2rerun = "indiflight_log_tools.cli:bfl2rerun"
+
+[project.urls]
+Repository = "https://github.com/tudelft/indiflight"
+
+[tool.setuptools]
+packages = ["indiflight_log_tools"]
+include-package-data = false  # C sources go in the sdist only
+
+# The decoder is a plain C shared library loaded with ctypes. It does not use
+# the Python C API, so one wheel per OS/arch works for every Python 3 version.
+# Build only once (cp312) and setup.py tags the result py3-none-<platform>.
+[tool.cibuildwheel]
+build = "cp312-*"
+skip = "*-musllinux_*"
+test-command = "python -c \"import indiflight_log_tools as m; print(m.IndiflightLog.LIBRARY_SO)\""
+
+[tool.cibuildwheel.linux]
+archs = ["native"]  # x86_64 and aarch64 via separate runners
+# glibc 2.28: Ubuntu 20.04+, Debian 10+, RHEL 8+. Current numpy has no wheels
+# for the older manylinux2014 image, so the test step would try to compile it.
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]

@@ -1,0 +1,66 @@
+# Builds wheels for support/LogAnalysis/indiflight_log_tools and publishes them
+# to PyPI when a tag like log-tools-v0.3.0 is pushed.
+#
+# The C decoder is loaded with ctypes and is independent of the Python version,
+# so cibuildwheel builds one py3-none-<platform> wheel per OS/arch.
+#
+# One-time PyPI setup ("trusted publishing", no API token needed):
+#   pypi.org -> Your projects -> indiflight_log_tools -> Publishing -> add GitHub
+#   publisher: owner tudelft, repo indiflight, workflow log-tools-wheels.yml,
+#   environment pypi. (For a new project use "pending publisher".)
+
+name: indiflight_log_tools wheels
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["log-tools-v*"]
+  pull_request:
+    paths: ["support/LogAnalysis/indiflight_log_tools/**", ".github/workflows/log-tools-wheels.yml"]
+
+env:
+  PKG_DIR: support/LogAnalysis/indiflight_log_tools
+
+jobs:
+  wheels:
+    name: Wheel ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu: x86_64 / aarch64 manylinux, macos-14: arm64 + x86_64 (cross)
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pypa/cibuildwheel@v2.23.3
+        with:
+          package-dir: ${{ env.PKG_DIR }}
+          output-dir: wheelhouse
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx run build --sdist --outdir dist ${{ env.PKG_DIR }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/log-tools-v')
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
