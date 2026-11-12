@@ -1,186 +1,20 @@
 #%% 
 from indiflight_log_tools import IndiflightLog
-from indiflightPlotter import IndiflightPlotter, IndiflightViewport
 from pyFlightPlotter import BlittedCursor
 
 from matplotlib import pyplot as plt
 import numpy as np
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
-from scipy.signal import savgol_filter, butter, sosfilt, sosfilt_zi, sosfiltfilt
+from scipy.signal import butter, sosfiltfilt
 
-def quaternion_rotate(q, v, inverse=False):
-    # helper function to rotate a vector with a quaternion
-    w, x, y, z = (-1 if inverse else 1) * q[0, :], q[1, :], q[2, :], q[3, :]
-    vx, vy, vz = v[0, :], v[1, :], v[2, :]
-
-    tx =  w * vx + y * vz - z * vy
-    ty =  w * vy + z * vx - x * vz
-    tz =  w * vz + x * vy - y * vx
-    tw = -x * vx - y * vy - z * vz
-
-    # Compute result quaternion (q * v * q_conj)
-    rx = tw * -x + tx *  w + ty * -z - tz * -y
-    ry = tw * -y + ty *  w + tz * -x - tx * -z
-    rz = tw * -z + tz *  w + tx * -y - ty * -x
-
-    return torch.vstack([rx, ry, rz])
-
-#%% DEFINE model
-
-from scipy.constants import g as GRAVITY
-def inertiaFromPendulumPeriod(P, R, m):
-    # assuming a phyiscal pendulum with centroid R from the rotation point and
-    # mass m. If it oscillates with period P, we can readily calculate the 
-    # inertia I.
-    # However, if R is rather large (m*R*R > I), then accuracy of this
-    # calculation decreases, especially P and R must be known very precisely 
-    # (+-1%) for a reasonable estimate (+- 10%)
-
-    # https://phys.libretexts.org/Bookshelves/University_Physics/Book%3A_University_Physics_(OpenStax)/Book%3A_University_Physics_I_-_Mechanics_Sound_Oscillations_and_Waves_(OpenStax)/15%3A_Oscillations/15.05%3A_Pendulums
-    # T = 2pi * sqrt(I/(mgR)) where R is distance axle to CoG
-    # I = T^2 / (4pi^2) * mgR
-
-    # inertia around rotation point
-    Iaxle = (m*GRAVITY*R*P*P) / (4*np.pi*np.pi)
-
-    # subtract parallel axis term, as Iaxle = I + m*R*R
-    return Iaxle - m*R*R
+# model, preprocessing, fit and parameter extraction live in tailsitter_id.global_phi
+from tailsitter_id import global_phi as gp
+from tailsitter_id.global_phi import format_scientific
 
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device("cpu")  # LBGFS is faster on cpu
-
-class Tailsitter(nn.Module):
-    def __init__(self):
-        super(Tailsitter, self).__init__()
-
-        self.r = nn.Parameter(torch.zeros(3, 1))  # IMU offset
-        self.d0 = nn.Parameter(torch.zeros(2, 1)) # 0-force elevon angle
-        self.sqrtphi = nn.Parameter(1*torch.ones(1))
-        actuation_coeffs = [
-            'cxww',         'cxd', 'cxdd',
-            'cyww',         'cyd', 'cydd',
-
-            'czww',         'czd2',
-            'clww',
-            'cmww',         'cmd',  'cmdd', 'cmddd',
-            'cnww', 'cnwd', 'cnd',  'cndd',
-        ]
-        phi_coeffs = [
-            'cxu',
-            'cyu',  'cyv',
-            'czu',  'czv',  'czw',
-                    'clv',        'clp',
-            'cmu',         'cmw',        'cmq',
-                    'cnv',        'cnp',        'cnr',
-        ]
-
-        coefficients = actuation_coeffs + phi_coeffs
-        for name in coefficients:
-            setattr(self, name, nn.Parameter(torch.zeros(1)))
-
-        #%% guessed inertia
-        # self.m = 0.5
-        # Inp = np.diag([6e-3, 2e-3, 6.5e-3]).astype(np.float32)
-
-        #%% measured inertia by osciallation period
-        self.m = 0.564
-        Ixx = inertiaFromPendulumPeriod(P=4.538/5, R=85e-3, m=self.m)  # roll
-        Iyy = inertiaFromPendulumPeriod(P=3.315/5, R=79e-3, m=self.m) # pitch
-        Izz = inertiaFromPendulumPeriod(P=4.534/5, R=131e-3, m=self.m)  # yaw
-        Inp = np.diag([Ixx, Iyy, Izz]).astype(np.float32) # (5.73, 1.35, 5.43) e-3 kg m^2
-
-        self.I = torch.tensor( Inp )
-        self.Iinv = torch.tensor( np.linalg.inv( Inp ) )
-
-    def forward(self, x):
-        # STATE
-        # body vel    body rate   body rate deriv    prop speeds (derivative)   elevon angles   elevon vel   elevon accelerations
-        vx, vy, vz,  Ox, Oy, Oz,   Odx, Ody, Odz,      w1, w2, w1d, w2d,           d1, d2,       d1d, d2d,       d1dd, d2dd =  x
-
-        v  = torch.vstack((vx, vy, vz))
-        O  = torch.vstack((Ox, Oy, Oz))
-        Od = torch.vstack((Odx, Ody, Odz))
-
-        eta = torch.sqrt(torch.sum(v**2, axis=0) + self.sqrtphi**2 * torch.sum(O**2, axis=0))
-
-        # REGRESSOR primitives
-        ww = torch.stack([w1*w1, w2*w2])                              # prop speeds ** 2
-        # wwDd = ww * torch.sin( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
-        # wwDd = ww * torch.sin( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles - zero-force angle )
-        # wwDd = ww * ( (torch.stack([d1, d2]) ) )          # prop speeds ** 2 * sin ( elevon angles )
-        wwDd = ww * ( (torch.stack([d1, d2]) - self.d0) )    # prop speeds ** 2 * sin ( elevon angles - zero-moment angle)
-        d2abs = torch.sin( d1 ).abs() + torch.sin( d2 ).abs()         # for reduction of the prop thrust
-
-        # AERO MODEL using phi-theory
-        # build lower triangular 6x6 phi-theoretic coefficient matrix without preallocation
-        # PHI = torch.tensor([
-        #     [self.cxu,     0,          0,          0,              0,            0         ],
-        #     [self.cyu,     self.cyv,   0,          0,              0,            0         ],
-        #     [self.czu,     self.czv,   self.czw,   0,              0,            0         ],
-        #     [0,            self.clv,   0,          self.clp,       0,            0         ],
-        #     [self.cmu,     0,          self.cmw,   0,              self.cmq,     0         ],
-        #     [0,            self.cnv,   0,          self.cnp,       0,            self.cnr  ]
-        # ])
-
-        # explicitely writing tensor doesnt work, need to preallocate and assign
-        PHI = torch.zeros((6,6))
-        PHI[0,0] = self.cxu
-        PHI[1,0] = self.cyu
-        PHI[1,1] = self.cyv
-        PHI[2,0] = self.czu
-        PHI[2,1] = self.czv
-        PHI[2,2] = self.czw
-
-        PHI[3,1] = self.clv
-        PHI[3,3] = self.clp
-        PHI[4,0] = self.cmu
-        PHI[4,2] = self.cmw
-        PHI[4,4] = self.cmq
-        PHI[5,1] = self.cnv
-        PHI[5,3] = self.cnp
-        PHI[5,5] = self.cnr
-
-        PHI = PHI + PHI.T - torch.diag(torch.diagonal(PHI))  # make symmetric
-        eta_B = torch.vstack([
-            vx,
-            vy,
-            vz,
-            Ox,
-            Oy,
-            Oz
-        ])
-        screw = - eta * ( PHI @ eta_B )
-
-        # ACTUATION MODEL
-        #      prop thrust contribution         prop rate contribution           elevon contribution           elev rate contrib              elev acc contrib
-        screw[0] +=  self.cxww * (ww[0] + ww[1])  +  0                        +  self.cxd * (wwDd[0] + wwDd[1])  +  self.cxdd * (d1d + d2d)
-        screw[1] +=  self.cyww * (ww[0] + ww[1])  +  0                        +  self.cyd * (wwDd[0] + wwDd[1])  +  self.cydd * (d1d + d2d)
-        screw[2] +=  self.czww * (ww[0] + ww[1])  +  0                        +  self.czd2 * d2abs               +  0
-        screw[3] +=  self.clww * (ww[0] - ww[1])  +  0                        +  0                               +  0
-        screw[4] +=  self.cmww * (ww[0] + ww[1])  +  0                        +  self.cmd * (wwDd[0] + wwDd[1])  +  self.cmdd * (d1d + d2d)  +   self.cmddd * (d1dd + d2dd)
-        screw[5] +=  self.cnww * (ww[0] - ww[1])  +  self.cnwd * (w1d - w2d)  +  self.cnd * (wwDd[0] - wwDd[1])  +  self.cndd * (d1d - d2d)
-
-        f = screw[:3]
-        m = screw[3:]
-
-        # KINETICS (todo: use measured dOdt, for IMU offset contribution to fIMU?)
-        a_modelled = f / self.m  +  Od.cross(self.r, dim=0)  +  O.cross(O.cross(self.r, dim=0), dim=0)
-        dO_modelled = self.Iinv @ ( m  -  O.cross(self.I @ O, dim=0) )
-
-        return torch.concat([a_modelled, dO_modelled], dim=0)
-
-model = Tailsitter()
-model.to(device=device)
-
-# ablations: keep parameters at their initial value from __init__
-#exclude = ['czd2', 'cndd', 'cxdd', 'cmww']
-exclude = ['czd2', 'cndd', 'cmww']
-for par in exclude:
-    model.get_parameter(par).requires_grad = False
 
 
 #%% DATA loading
@@ -192,104 +26,33 @@ for par in exclude:
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
 log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2026-10-29/LOG00035_autoId.BFL", resetTime=False, timeRange=(53500, 114000))   # dynamic fx, hover
 
-# preproc columns that are not in indiflight log tools yet
-data = log.data
-t = data['timeS']
-mean_dt = t.diff().mean()
-#data[[f'extAtt[{i}]' for i in range(4)]] /= 8.128
-#data[[f'localQuat[{i}]' for i in range(4)]] /= 8128.
-#data[[f'localVel[{i}]' for i in range(3)]] /= 100.
-#data[[f'servo_feedback[{i}]' for i in range(4)]] *= np.pi/180 / 100
-data['servo_feedback[1]'] *= 1 # set to -1 for old datafiles
-
-# convert columns to tensors
-USE_ACC_SMOOTH = True  # True: use onboard-filtered accSmooth instead of accADCafterRpm
-acc_key = 'accSmooth' if USE_ACC_SMOOTH else 'accADCafterRpm'
-series = {'localVel': range(3), 'localQuat': range(4), acc_key: range(3),
-          'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
-          'motor': range(2), 'u': range(4)}
-# series = {'extVel': range(3), 'extAtt': range(4), 'accADCafterRpm': range(3),
-#           'gyroADCafterRpm': range(3), 'omegaUnfiltered': range(2), 'servo_feedback': range(2),
-#           'motor': range(4)}
-order = 2
-freq = 10
-butter_sos = butter(order, Wn=freq, btype='lowpass', output='sos', fs=1/mean_dt)
-# with accSmooth, all other signals get an additional causal filter to match its onboard filtering
-extra_sos = butter(order, Wn=50, btype='lowpass', output='sos', fs=1/mean_dt)
-for key, val in series.items():
-    tmp = data[[f'{key}[{i}]' for i in val]].to_numpy(dtype=np.float32).T
-    #tmp_f   = torch.tensor( savgol_filter(tmp, window_length=25, polyorder=3, deriv=0, delta=mean_dt) ).to(device=device)
-    zi = sosfilt_zi(butter_sos)
-    zis = np.repeat(zi, len(val), axis=0) * tmp[:, 0, np.newaxis]
-    tmp_f = sosfilt(butter_sos, tmp, zi=zis[np.newaxis])[0]
-    if USE_ACC_SMOOTH and key != acc_key:
-        zi = sosfilt_zi(extra_sos)
-        zis = np.repeat(zi, len(val), axis=0) * tmp_f[:, 0, np.newaxis]
-        tmp_f = sosfilt(extra_sos, tmp_f, zi=zis[np.newaxis])[0]
-    tmp_f = torch.tensor( tmp_f, dtype=torch.float32 ).to(device=device)
-    tmp_fd  = torch.tensor( savgol_filter(tmp_f, window_length=25, polyorder=3, deriv=1, delta=mean_dt) ).to(device=device)
-    tmp_fdd = torch.tensor( savgol_filter(tmp_f, window_length=25, polyorder=3, deriv=2, delta=mean_dt) ).to(device=device)
-    series[key] = [tmp_f, tmp_fd, tmp_fdd]
-
-# v_true = series['extVel'][0]
-# q_true = series['extAtt'][0]
-v_true = series['localVel'][0]
-q_true = series['localQuat'][0]
-a_true = series[acc_key][0]
-O_true = series['gyroADCafterRpm'][0]
-Od_true = series['gyroADCafterRpm'][1]
-w_true = series['omegaUnfiltered'][0]
-wd_true = series['omegaUnfiltered'][1]
-d_true = series['servo_feedback'][0]
-dd_true = series['servo_feedback'][1]
-ddd_true = series['servo_feedback'][2]
-del_12 = series['motor'][0][:2]
-
-# get velocity in body frame for drag model
-v_body_true  = quaternion_rotate(q_true, v_true, inverse=True)
-
 # test option for the Phi_vv z-rotation: rotate the xy specific force targets and body velocity by a random but reproducible angle
 ROTATE_XY_TARGETS = True
 RANDOMIZE_ROTATION = True  # True: seeded random angle (skips the simulator verification); False: fixed test angle below
 ROTATION_SEED = 0
+rot_angle = None
 if ROTATE_XY_TARGETS:
     rot_angle = np.random.default_rng(ROTATION_SEED).uniform(-np.pi, np.pi) if RANDOMIZE_ROTATION else np.pi/2
-    c, s_ = np.cos(rot_angle), np.sin(rot_angle)
-    a_true = torch.vstack(( c*a_true[0] - s_*a_true[1],
-                            s_*a_true[0] + c*a_true[1],
-                            a_true[2] ))
-    v_body_true = torch.vstack(( c*v_body_true[0] - s_*v_body_true[1],
-                                 s_*v_body_true[0] + c*v_body_true[1],
-                                 v_body_true[2] ))
     print(f"Rotated xy force targets and body velocity by {np.degrees(rot_angle):.3f} deg about z (seed {ROTATION_SEED})")
 
-# regressors and targets
-scale = np.array([ 1,1,1, 1,1,1, 1,1,1, 1e-3,1e-3, 5e-2,5e-2, 1,1, .1,.1, .01,.01 ], dtype=np.float32)
-x = torch.vstack([ v_body_true, O_true, Od_true, w_true, wd_true, d_true, dd_true, ddd_true ])
-x = x * scale[:, np.newaxis] # make regressors roughtly unit
+# filtering, derivatives, body velocity, (rotated) targets and scaled regressors x
+USE_ACC_SMOOTH = True  # True: use onboard-filtered accSmooth instead of accADCafterRpm
+prep = gp.prepare_data(log.data, use_acc_smooth=USE_ACC_SMOOTH,
+                       servo1_sign=1, # set to -1 for old datafiles
+                       xy_rotation=rot_angle, device=device)
+t, mean_dt, series = prep['t'], prep['mean_dt'], prep['series']
+x, y_true, v_body_true = prep['x'], prep['y_true'], prep['v_body_true']
+O_true = series['gyroADCafterRpm'][0]
+w_true = series['omegaUnfiltered'][0]
+d_true, dd_true, ddd_true = series['servo_feedback']
+scale = gp.SCALE
 
-y_true = torch.concat((a_true, Od_true))
+#%% FIT (LBFGS, 100 epochs, weighted MSE)
 
-# loss function           accelerations   gyro derivatives
-weights = torch.tensor([[0.1, 0.1, 0.1, 0.02, 0.02, 0.02]]).T.to(device=device) / 6 / len(data)**0.5 * 10
-def weighted_mse_loss(pred, true, weight):
-    return torch.sum( (weight * (pred - true)) ** 2)
-
-optimizer = optim.LBFGS(model.parameters(), lr=5e-1); epochs = 100
-#optimizer = optim.AdamW(model.parameters(), lr=2e-1); epochs = 2000
-
-for epoch in range(epochs):
-    def closure():
-        optimizer.zero_grad()
-        y_pred = model(x)
-        loss = weighted_mse_loss(y_pred, y_true, weights)
-        loss.backward()
-        return loss
-
-    optimizer.step(closure)
-
-    if epoch % 1 == 0:
-        print(f'Model Epoch {epoch}: Loss = {closure().item():.5f}')
+# ablations: keep parameters at their initial value
+#exclude = ['czd2', 'cndd', 'cxdd', 'cmww']
+exclude = ['czd2', 'cndd', 'cmww']
+model = gp.fit(x, y_true, prep['n_samples'], exclude=exclude, epochs=100, lr=5e-1, device=device)
 
 
 #%% PLOTS
@@ -386,50 +149,16 @@ fig2.show()
 
 test = 1
 
+
 # analyse PHI matrix to see if it is positive definite
-
-PHI = np.zeros((6,6), dtype=np.float64)
-PHI[0,0] = model.cxu.item()
-PHI[1,0] = model.cyu.item()
-PHI[1,1] = model.cyv.item()
-PHI[2,0] = model.czu.item()
-PHI[2,1] = model.czv.item()
-PHI[2,2] = model.czw.item()
-PHI[3,1] = model.clv.item()
-PHI[3,3] = model.clp.item()
-PHI[4,0] = model.cmu.item()
-PHI[4,2] = model.cmw.item()
-PHI[4,4] = model.cmq.item()
-PHI[5,1] = model.cnv.item()
-PHI[5,3] = model.cnp.item()
-PHI[5,5] = model.cnr.item()
-
-PHI = PHI + PHI.T - np.diag(np.diagonal(PHI))  # make symmetric
+PHI = gp.phi_matrix(model)
 eigenvalues = np.linalg.eigvals(PHI)
 
-#%% output the PHI matrix
-# rounded to 3 significant digits in scientific format for easy copy-pasting into simulator
-# also, keep zeros as 0, and not 0.000e+00
-def format_scientific(num):
-    if abs(num) < 1e-9:
-        return "         0"
-    elif num >= 0:
-        return f"+{num:.3e}"
-    else:
-        return f"{num:.3e}"
-
+#%% output the identified model, rounded for easy copy-pasting into the simulator
+p = gp.extract_parameters(model)
 print()
 print()
-print(f"m = {model.m:.3e}  # mass in kg")
-print(f"I = np.diag([{model.I[0,0]:.3e}, {model.I[1,1]:.3e}, {model.I[2,2]:.3e}])  # inertia matrix in kg m^2")
-print()
-print(f"phi = {model.sqrtphi.item()**2:.3e}")
-print(f"Phi = np.array([")
-for row in PHI:
-    formatted_row = [format_scientific(val) for val in row]
-    print("[" + ", ".join(formatted_row) + "],")
-print("], dtype=np.float32)")
-
+gp.print_parameters(p)
 print()
 print("Eigenvalues of PHI matrix:", eigenvalues)
 print()
@@ -474,69 +203,9 @@ print(f"rotated Phi_vv[0,1] = {PHI_rot[0,1]:.3e}")
 print(f"eigenvalues unchanged: {np.allclose(np.sort(np.linalg.eigvals(PHI_rot).real), np.sort(eigenvalues.real))}")
 print()
 
-cd = np.array([ model.cxd.item(), 0, 0, 0, model.cmd.item(), model.cnd.item() ])
-cd *= scale[9]**2 * scale[13]
-
-cdd = np.array([ model.cxdd.item(), 0, 0, 0, model.cmdd.item(), model.cndd.item() ])
-cdd *= scale[15]
-
-cddd = np.array([ 0, 0, 0, 0, model.cmddd.item(), 0 ])
-cddd *= scale[17]
-
-# output in scientific format with 3 significant digits
-print(f"cd = np.array([{', '.join(format_scientific(val) for val in cd)}], dtype=np.float32)")
-print(f"cdd = np.array([{', '.join(format_scientific(val) for val in cdd)}], dtype=np.float32)")
-print(f"cddd = np.array([{', '.join(format_scientific(val) for val in cddd)}], dtype=np.float32)")
-d0 = model.d0.detach().cpu().numpy().squeeze()
-print(f"d0 = np.array([{', '.join(format_scientific(val) for val in d0)}], dtype=np.float32)")
-print()
-
-# motor max thrust and location
-k_tot = np.sqrt(model.czww.item()**2 + model.cxww.item()**2)
-k_tot *= scale[9]**2
-print(f"k = {k_tot:.3e} N/(rad/s)^2")
-
-axis = np.array([ model.cxww.item(), 0, model.czww.item() ])
-axis /= np.linalg.norm(axis)
-
-# motor position n := axis
-# 
-#  Clww / k_tot = +nz dy + cm nx
-#  Cmww / k_tot = -nz dx + nx dz
-#  Cnww / k_tot = -nx dy + cm nz
-#
-# nx, nz known. choose ny = 0, and dz = -0.07. solve for dx, dy, cm
-#
-dz = -0.07
-nx = axis[0]
-nz = axis[2]
-
-A = np.array([[  0, +nz, +nx],
-              [-nz,   0,   0],
-              [  0, -nx, +nz]], dtype=np.float32)
-b = np.array([ model.clww.item()*scale[9]**2 / k_tot,
-               model.cmww.item()*scale[9]**2 / k_tot - nx*dz,
-               model.cnww.item()*scale[9]**2 / k_tot ])
-dx, dy, cmotor = np.linalg.solve(A, b)
-
-# L = model.cmww / k
-# dy = model.clww.item()*scale[9]**2 / (k_tot*axis[2]) # meter offset of motor in y
-# dx = (-model.cmww.item()*scale[9]**2 / k_tot + axis[0]*dz) / axis[2]
-print(f"X_motor = np.array([{dx:.3e}, {dy:.3e}, {dz:.3e}], dtype=np.float32)")
-print(f"axis = np.array([{axis[0]:.3e}, {axis[1]:.3e}, {axis[2]:.3e}], dtype=np.float32)")
-
-# motor moment coefficient
-# cmotor = model.cnww.item() * scale[9]**2 / k_tot
-print(f"cmotor = {cmotor:.3e}  # motor torque coefficient")
-
-Imotor = np.abs(model.cnwd.item() * scale[11])
-print(f"I_motor = {Imotor:.3e}  # motor rotational inertia")
-print()
-
-# imu offset
-print(f"r_IMU = np.array([{', '.join(format_scientific(val) for val in model.r.detach().cpu().numpy().flatten())}], dtype=np.float32)")
-print()
-print()
+cd, cdd, cddd, d0 = p['cd'], p['cdd'], p['cddd'], p['d0']
+k_tot, axis, cmotor, Imotor = p['k'], p['axis'], p['cmotor'], p['Imotor']
+dx, dy, dz = p['X_motor']
 
 
 #%% verification with pyIndiflight simulator
@@ -559,13 +228,9 @@ else:
         {'name': 'throw',     'w': [0., 0.]      , 'd': d0             , 'velI': [3., 3., -10.], 'OB': [4., 5., 6.]},
     ]
 
-    # add __file__/../simulation/PyNDIflight to path for pyNDIflight import
-    import os
-    import sys
-    sys.path.append( os.path.abspath( os.path.join( os.path.dirname(__file__), '..', 'simulation' ) ) )
-
-    from PyNDIflight.crafts import TailsitterPhi
-    from PyNDIflight.helpers import quatRotate
+    from tailsitter_id.actuation import import_pyndiflight
+    crafts, helpers = import_pyndiflight()
+    TailsitterPhi, quatRotate = crafts.TailsitterPhi, helpers.quatRotate
 
 
     model.r.requires_grad = False

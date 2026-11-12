@@ -1,6 +1,7 @@
 from indiflight_log_tools import IndiflightLog
 from indiflight_log_tools.signal_tools import Signal
-from estimators import LMS, RLS, RLS_fortescue, EWMV, Welford, LS
+from estimators import RLS, LS
+from tailsitter_id import offline_rls
 from pyFlightPlotter import BlittedCursor
 from pyFlightPlotter.crafts import Tailsitter
 from indiflightPlotter import IndiflightPlotter, IndiflightViewport
@@ -50,72 +51,21 @@ N = log.data.shape[0]
 iend = log.data.index[-1]
 n = 2
 
+# gyro, rotor speeds, servos, attitude and velocity: tailsitter_id.offline_rls (15 Hz, localVel)
+prep = offline_rls.prepare_data(log.data, freq_hz=15, order=2)
+t = prep['t']
+Of, wf, df = prep['signals']['Of'], prep['signals']['wf'], prep['signals']['df']
+
 t_raw = log.data["timeS"]                                    .to_numpy()
-O_raw = log.data[[f"gyroADCafterRpm[{i}]" for i in range(3)]].to_numpy()
-a_raw = log.data[[f"accADCafterRpm[{i}]"  for i in range(3)]].to_numpy()
-w_raw = log.data[[f"omegaUnfiltered[{i}]" for i in range(n)]].to_numpy()
 dm_raw = log.data[[f"motor[{i}]" for i in range(n)]]         .to_numpy() + 0.084
 u_raw = log.data[[f"u[{i}]" for i in range(4)]]              .to_numpy()
-d_raw = log.data[[f'servo_feedback[{i}]' for i in range(2)]] .to_numpy()
-# d_raw = np.roll(d_raw, -15, axis=0)
-q_raw = log.data[[f"quat[{i}]" for i in range(4)]]           .to_numpy()
-v_raw = log.data[[f"localVel[{i}]" for i in range(3)]]       .to_numpy()
-
-t = np.linspace(t_raw[0], t_raw[-1], N)
-dt = np.mean(np.diff(t))
-
-O = Signal(t_raw, O_raw, rebase=t)
-a = Signal(t_raw, a_raw, rebase=t)
-w = Signal(t_raw, w_raw, rebase=t)
-dm = Signal(t_raw, dm_raw, rebase=t)
-u = Signal(t_raw, u_raw, rebase=t)
-d = Signal(t_raw, d_raw, rebase=t)
-q = Signal(t_raw, q_raw, rebase=t)
-v = Signal(t_raw, v_raw, rebase=t)
 
 order = 2
 freq_hz = 15
-Of = O.filter("lowpass", order, freq_hz)
-af = a.filter("lowpass", order, freq_hz)
-wf = w.filter("lowpass", order, freq_hz)
-dmf = dm.filter("lowpass", order, freq_hz)
-uf = u.filter("lowpass", order, freq_hz)
-df = d.filter("lowpass", order, freq_hz)
-qf = q.filter("lowpass", order, freq_hz)
-vf = v.filter("lowpass", order, freq_hz)
-
-import quaternion
-qfy_norm = quaternion.as_quat_array( qf.y / np.linalg.norm(qf.y, axis=1, keepdims=True))
-qfy_norm_inv = quaternion.as_quat_array( (qf.y * np.array([-1, 1, 1, 1])) / np.linalg.norm(qf.y, axis=1, keepdims=True))
-R_BI = quaternion.as_rotation_matrix(qfy_norm)
-R_IB = quaternion.as_rotation_matrix(qfy_norm_inv)
-v_B = (R_IB @ vf.y[:, :, np.newaxis]).squeeze()
-v_norm = np.linalg.norm(v_B, axis=1)
-O_norm = np.linalg.norm(Of.y, axis=1)
-
-eta_B = np.hstack((v_B, Of.y))
-phi = 0.0
-eta = np.sqrt(v_norm**2 + phi * O_norm**2)
+dmf = Signal(t_raw, dm_raw, rebase=t).filter("lowpass", order, freq_hz)
+uf = Signal(t_raw, u_raw, rebase=t).filter("lowpass", order, freq_hz)
 
 #%% do moments first
-
-Oyz = Of.y[:, 1] * Of.y[:, 2]
-Ozx = Of.y[:, 2] * Of.y[:, 0]
-Oxy = Of.y[:, 0] * Of.y[:, 1]
-OI = np.array([np.diag([Oxy[i], Oyz[i], Ozx[i]]) for i in range(Oyz.shape[0])])
-
-w2 = wf.y*wf.y
-wdot = wf.dot().y
-w2d = w2 * df.y
-ddot = df.dot().y
-ddotdot = df.dot().dot().y
-
-w2a = np.repeat(w2[:,0] + w2[:,1], 3).reshape(-1, 3)
-w2t = np.array([w2[:,0] - w2[:,1], w2[:,0] + w2[:,1], w2[:,0] - w2[:,1]]).T
-wdott = np.array([wdot[:,0] - wdot[:,1], wdot[:,0] + wdot[:,1], wdot[:,0] - wdot[:,1]]).T
-w2dt = np.array([w2d[:,0] - w2d[:,1], w2d[:,0] + w2d[:,1], w2d[:,0] - w2d[:,1]]).T
-ddott = np.array([ddot[:,0] - ddot[:,1], ddot[:,0] + ddot[:,1], ddot[:,0] - ddot[:,1]]).T
-ddotdott = np.array([ddotdot[:,0] - ddotdot[:,1], ddotdot[:,0] + ddotdot[:,1], ddotdot[:,0] - ddotdot[:,1]]).T
 
 rls_motors = RLS(8, 2, gamma=1e-11, forgetting=0.9999)
 rls_motors.setTitle("RLS for Motors")
@@ -175,190 +125,16 @@ for ti, dmi, wi, wdoti, ui, di, ddoti, dddoti in tqdm(zip(t, dmf.y, wf.y, wf.dot
 #                         parGroupNames=["a", "b", "c", "d"],
 #                         sharey=False, zoomy=False)
 
-rls_m_act = RLS(9, 3, gamma=1e-11, forgetting=0.9999)
-rls_m_act.setTitle("RLS Moments -- Actuators Only")
-rls_m_act.setParameters([0, 0, 0, 0, 0, 0, 0, 0, 0])
-rls_m_act.setCovariance(1e-11 * np.diag([1, 1, 1, # Cw2
-                                         1e-6, 1e-6, # Cw2d (y, z only)
-                                         1e+2, # Cwdot (z only)
-                                         1e+1, 1e+1, # Cddot (y, z only)
-                                         1e-1 # Cddotdot (y only)
-                                         ]))
+#%% moment RLS models (tailsitter_id.offline_rls: regressors, initial covariances, forgetting)
 
-rls_m_act_I = RLS(12, 3, gamma=1e-11, forgetting=0.9999)
-rls_m_act_I.setTitle("RLS Moments -- Actuators and inertias")
-rls_m_act_I.setParameters([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-rls_m_act_I.setCovariance(1e-11 * np.diag([1e9, 1e9, 1e9, # inertia terms
-                                           1, 1, 1, # Cw2
-                                           1e-6, 1e-6, # Cw2d (y, z only)
-                                           1e+2, # Cwdot (z only)
-                                           1e+1, 1e+1, # Cddot (y, z only)
-                                           1e-1, # Cddotdot (y only)
-                                           ]))
+rls = offline_rls.run(prep, full=True)
+rls_phi9, rls_phi9_noI, rls_phi7_noI = rls['phi9'], rls['phi9_noI'], rls['phi7_noI']
+rls_phi3_noI, rls_noPhi_noI = rls['phi3_noI'], rls['noPhi_noI']
+rls_phi7, rls_phi3, rls_noPhi = rls['phi7'], rls['phi3'], rls['noPhi']
+rls_act_phi3_I, rls_act_phi3_noI, rls_act_noPhi_noI = rls['act_phi3_I'], rls['act_phi3_noI'], rls['act_noPhi_noI']
 
-rls_phi5 = RLS(17, 3, gamma=1e-11, forgetting=0.9999)
-rls_phi5.setTitle("RLS Moments -- Inertias, Actuators and 5-param Phi")
-rls_phi5.setParameters([0, 0, 0,  0, 0, 0,  0, 0,  0,  0, 0,  0,    0, 0,  0, 0, 0])
-rls_phi5.setCovariance(1e-11 * np.diag([1e9, 1e9, 1e9, # inertia terms 
-                                        1, 1, 1, # Cw2
-                                        1e-6, 1e-6, # Cw2d (y, z only)
-                                        1e+2, # Cwdot (z only)
-                                        1e+1, 1e+1, # Cddot (y, z only)
-                                        1e-1, # Cddotdot (y only)
-                                        1e9, 1e9,    # C_r_vy, C_q_vz
-                                        1e9, 1e9, 1e9, # rate damping
-                                        ]))
-
-rls_phi8 = RLS(20, 3, gamma=1e-11, forgetting=0.9999)
-rls_phi8.setTitle("RLS Moments -- Inertias, Actuators and 8-param Phi")
-rls_phi8.setParameters([0, 0, 0,  0, 0, 0,  0, 0,  0,  0, 0,  0,    0, 0,   0, 0, 0, 0, 0, 0])
-rls_phi8.setCovariance(1e-11 * np.diag([1e9, 1e9, 1e9, # inertia terms
-                                        1, 1, 1, # Cw2
-                                        1e-6, 1e-6, # Cw2d (y, z only)
-                                        1e+2, # Cwdot (z only)
-                                        1e+1, 1e+1, # Cddot (y, z only)
-                                        1e-1, # Cddotdot (y only)
-                                        1e9, 1e9, 1e9, 1e9, # C_p_vy, C_q_vx, C_q_vz, C_r_vy
-                                        1e9, 1e9, 1e9, 1e9, # rate damping diagonal, and C_r_wx
-                                        ]))
-
-rls_phi9 = RLS(21, 3, gamma=1e-11, forgetting=0.9999)
-rls_phi9.setTitle("RLS Moments -- Inertias, Actuators and 9-param Phi")
-rls_phi9.setParameters([0, 0, 0,  0, 0, 0,  0, 0,  0,  0, 0,  0,    0, 0,   0, 0, 0, 0, 0, 0, 0])
-rls_phi9.setCovariance(1e-11 * np.diag([1e9, 1e9, 1e9, # inertia terms
-                                        1, 1, 1, # Cw2
-                                        1e-1, 1e-1, # Cw2d (y, z only)
-                                        1e+2, # Cwdot (z only)
-                                        1e+6, 1e+6, # Cddot (y, z only)
-                                        1e+4, # Cddotdot (y only)
-                                        1e9, 1e9, 1e9, 1e9, # C_p_vy, C_q_vx, C_q_vz, C_r_vy
-                                        1e9, 1e9, 1e9, 1e9, 1e9, # rate damping diagonal, and C_r_wx
-                                        ]))
-
-from copy import deepcopy
-
-rls_phi9_noI = deepcopy(rls_phi9)
-rls_phi9_noI.setTitle("RLS Moments -- Actuators and 9-param Phi")
-
-rls_phi7_noI = deepcopy(rls_phi9)
-rls_phi7_noI.setTitle("RLS Moments -- Actuators and 7-param Phi")
-
-rls_phi3_noI = deepcopy(rls_phi9)
-rls_phi3_noI.setTitle("RLS Moments -- Actuators and 3-param Phi")
-
-rls_noPhi_noI = deepcopy(rls_phi9)
-rls_noPhi_noI.setTitle("RLS Moments -- Actuators only")
-
-rls_phi7 = deepcopy(rls_phi9)
-rls_phi7.setTitle("RLS Moments -- Inertias, Actuators and 7-param Phi")
-
-rls_phi3 = deepcopy(rls_phi9)
-rls_phi3.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
-
-rls_noPhi = deepcopy(rls_phi9)
-rls_noPhi.setTitle("RLS Moments -- Inertias and Actuators only")
-
-rls_act_phi3_I = RLS(24, 3, gamma=1e-11, forgetting=0.9999)
-rls_act_phi3_I.setTitle("RLS Moments -- Inertias, Actuators and 3-param Phi")
-rls_act_phi3_I.setParameters([0, 0, 0,   0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,    0, 0, 0,  0, 0, 0,   0, 0, 0])
-rls_act_phi3_I.setCovariance(1e-12*np.diag([1e11, 1e11, 1e11,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1, 1, 1e3,  1, 1, 1e3,    1e11, 1e11, 1e11]))
-
-rls_act_phi3_noI = deepcopy(rls_act_phi3_I)
-rls_act_phi3_noI.setTitle("RLS Moments -- Actuators and 3-param Phi")
-
-rls_act_noPhi_noI = deepcopy(rls_act_phi3_I)
-rls_act_noPhi_noI.setTitle("RLS Moments -- Actuators only")
-
-
-rls_var = EWMV(forgetting=0.99)
-rls_var.setTitle("EMWV Moments Variance")
-rls_var.setParameters([0, 0])
-
-rls_var_welford = Welford()
-rls_var_welford.setTitle("Welford Moments Variance")
-rls_var_welford.setParameters([0, 0])
-
-
-def skew(x):
-    return np.array([[0, -x[2], x[1]],
-                     [x[2], 0, -x[0]],
-                     [-x[1], x[0], 0]])
-
-A_act_hist = []
-for ti, di, w2i, wdoti, w2_ai, w2_ti, w2_d_ti, wdot_ti, ddot_ti, ddotdot_ti, Oi, Odoti, eta_Bi, eta_i in tqdm(zip(t, df.y, w2, wdot, w2a, w2t, w2dt, wdott, ddott, ddotdott, Of.y, Of.dot().y, eta_B, eta), total=len(w2a)):
-    y = Odoti
-    # first try: actuayors only, negelct aerodynamics
-    # T = Cw2 * w2ti  +  Cw2d * w2dti  +  Cwdot * wdotti  +  Cddot * ddti  +  Cddotdot * dddti
-    inertia_regs = -np.diag([Oi[1]*Oi[2], Oi[2]*Oi[0], Oi[0]*Oi[1]])
-
-    Aphi9 = np.zeros((3, 21))
-    Aphi9[0:3, 0:3] = inertia_regs
-    Aphi9[0:3, 3:6] = np.diag(w2_ti[0:3])
-    Aphi9[1:3, 6:8] = np.diag(w2_d_ti[1:3])
-    Aphi9[2:3, 8:9] = np.diag(wdot_ti[2:3])
-    Aphi9[1:3, 9:11] = 0.*np.diag(ddot_ti[1:3])
-    Aphi9[1:2, 11:12] = 0.*np.diag(ddotdot_ti[1:2])
-    Aphi9[0, 12]    = -eta_i * eta_Bi[1] # C_p_vy
-    Aphi9[1, 13]    = -eta_i * eta_Bi[0] # C_q_vx
-    Aphi9[1, 14]    = -eta_i * eta_Bi[2] # C_q_vz
-    Aphi9[2, 15]    = -eta_i * eta_Bi[1] # C_r_vy
-    Aphi9[:, 16:19] = -eta_i * np.diag(eta_Bi[3:]) # C_m_w
-    Aphi9[2, 19]    = -eta_i * eta_Bi[3] # C_r_wx
-    Aphi9[0, 20]    = -eta_i * eta_Bi[5] # C_p_wz
-    rls_phi9.newSample(Aphi9, y, ti); rls_phi9.update()
-
-    A_phi9_noI = Aphi9.copy()
-    A_phi9_noI[0:3, 0:3] = 0.
-    rls_phi9_noI.newSample(A_phi9_noI, y, ti); rls_phi9_noI.update()
-
-    A_phi7_noI = A_phi9_noI.copy()
-    A_phi7_noI[0:3, 19:21] = 0.
-    rls_phi7_noI.newSample(A_phi7_noI, y, ti); rls_phi7_noI.update()
-
-    A_phi3_noI = A_phi7_noI.copy()
-    A_phi3_noI[0:3, 12:16] = 0.
-    rls_phi3_noI.newSample(A_phi3_noI, y, ti); rls_phi3_noI.update()
-
-    A_noPhi_noI = A_phi3_noI.copy()
-    A_noPhi_noI[0:3, 16:19] = 0.
-    rls_noPhi_noI.newSample(A_noPhi_noI, y, ti); rls_noPhi_noI.update()
-
-    A_phi7 = Aphi9.copy()
-    A_phi7[0:3, 19:21] = 0.
-    rls_phi7.newSample(A_phi7, y, ti); rls_phi7.update()
-
-    A_phi3 = A_phi7.copy()
-    A_phi3[0:3, 12:16] = 0.
-    rls_phi3.newSample(A_phi3, y, ti); rls_phi3.update()
-
-    A_noPhi = A_phi3.copy()
-    A_noPhi[0:3, 16:19] = 0.
-    rls_noPhi.newSample(A_noPhi, y, ti); rls_noPhi.update()
-
-    # EMWV variance estimation
-    e_sample = rls_noPhi.predictNew(A_noPhi).squeeze() - y
-    rls_var.newSample(np.zeros(2), e_sample[0], ti); rls_var.update()
-
-    #  |  w1*w1  |  w1*w1*delta1  |  wdot1  |  w2*w2  |  w2*w2*delta2  |  wdot2  |
-    A_act_phi3_I = np.zeros((3, 24))
-    A_act_phi3_I[:, :3] = inertia_regs
-    A_act_phi3_I[0, 3:6]   = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_act_phi3_I[0, 6:9]   = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    A_act_phi3_I[1, 9:12]  = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_act_phi3_I[1, 12:15] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    A_act_phi3_I[2, 15:18] = [w2i[0], w2i[0] * di[0], 0*wdoti[0]]
-    A_act_phi3_I[2, 18:21] = [w2i[1], w2i[1] * di[1], 0*wdoti[1]]
-    A_act_phi3_I[:, 21:24] = - eta_i * np.diag(eta_Bi[3:]) # C_m_w
-    A_act_hist.append(A_act_phi3_I)
-    rls_act_phi3_I.newSample(A_act_phi3_I, y, ti); rls_act_phi3_I.update()
-
-    A_act_phi3_noI = A_act_phi3_I.copy()
-    A_act_phi3_noI[:, :3] = 0
-    rls_act_phi3_noI.newSample(A_act_phi3_noI, y, ti); rls_act_phi3_noI.update()
-
-    A_act_noPhi_noI = A_act_phi3_noI.copy()
-    A_act_noPhi_noI[:, 21:24] = 0
-    rls_act_noPhi_noI.newSample(A_act_noPhi_noI, y, ti); rls_act_noPhi_noI.update()
+# regressors of rls_act_phi3_I (incl. inertia and aero columns), for the error metrics
+A_act_hist = offline_rls.regressors('act', prep['O'], prep['w'], prep['wdot'], prep['d'], vB=prep['vB'])
 
 # remove all [9, 10] and [11] entries from all these parGroups, and also parGroupNames, go!
 
