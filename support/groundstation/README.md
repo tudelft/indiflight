@@ -40,17 +40,12 @@ You can compile it on the target hardware, or use a cross-compiler.
 
 To setup the cross-compiler install docker (<https://docs.docker.com/engine/install/ubuntu/>) and do the steps in [Cross-Compiler/README.md].
 
-Then cross-compile and deploy:
+Then cross-compile and deploy. Run this from the **repository root** (not from `relay/`): the relay needs the `lib/main/pi-protocol` submodule, which is only visible inside the container if the whole repo is mounted. `--wd` selects the package inside it.
 ```
-cd relay
-docker run -v rootfs:/rootfs --mount type=bind,src=./,dst=/package pi-cross --processes=8 --clean-build --deploy=/home/pi
+cd /path/to/indiflight
+docker run --env-file remote.env -v rootfs:/rootfs --mount type=bind,src=./,dst=/package pi-cross --wd=support/groundstation/relay --processes=8 --clean-build --deploy=/home/pi
 ```
-
-New command:
-```
-cd relay
-docker run --env-file ../../../remote.env -v rootfs:/rootfs -v ../../../lib/main/pi-protocol/:/lib/main/pi-protocol --mount type=bind,src=./,dst=/package aarch64-linux-gnu-cross --processes=8 --clean-build --deploy=/home/pi
-```
+(With the `pi-cross` alias from the Cross-Compiler README: `pi-cross --wd=support/groundstation/relay --clean-build --deploy=/home/pi`.)
 
 start on pi:
 ```
