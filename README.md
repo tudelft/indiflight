@@ -66,16 +66,30 @@ Run all the commands below from the root of this repository.
 
 ### Step 2 -- Building
 
-As mentioned above, building needs a compile-time configuration for the board 
-used and the features required. These need to be supplied as environment
-to the docker image:
+Building needs a compile-time configuration: a board (`configs/boards/`) and a
+profile (`configs/profiles/`).
 
-    docker run --privileged -it                \
-        -v ./:/indiflight                      \
-        -e BOARD=MTKS-H743 -e PROFILE=CineRat  \
-        indiflight-builder
+**Select them in VS Code:** `Ctrl+Shift+P` → `Tasks: Run Task` →
+**IntelliSense: select board and profile**, then pick both from the dropdowns.
+This saves the choice in `.vscode/build_selection.json` and configures
+IntelliSense with the same flags as the build. Without VS Code, run
+`python3 support/scripts/intellisense_config.py` instead.
 
-The `.hex` binary is now available in `./obj`.
+Then build:
+
+    docker run --privileged -it -v ./:/indiflight indiflight-builder
+
+The `.hex` binary is now available in `./obj`. The board and profile used are
+printed before and after the build. Check them before flashing.
+
+New `.txt` files appear in the dropdowns after running
+`python3 support/scripts/intellisense_config.py --sync` once. If IntelliSense
+does not update, run `C/C++: Reset IntelliSense Database`.
+
+**Alternative:** pass the configuration directly. This overrides the selection:
+
+    docker run --privileged -it -v ./:/indiflight \
+        -e BOARD=MTKS-H743 -e PROFILE=CineRat indiflight-builder
 
 ### Step 3 -- Flashing
 
@@ -93,10 +107,8 @@ In the configurator, go to "presets", click "load profile" and load first the bo
 
 Disconnect the indiflight configurator, then run (sometimes twice):
 
-    docker run --privileged -it                                      \
-        -v ./:/indiflight                                            \
-        -e BOARD=MTKS-H743 -e PROFILE=CineRat -e UPLOAD_PARAMETERS=y \
-        indiflight-builder dfu_flash
+    docker run --privileged -it -v ./:/indiflight \
+        -e UPLOAD_PARAMETERS=y indiflight-builder dfu_flash
 
 (an error such as "could not download status" is fine)
 

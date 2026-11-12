@@ -69,3 +69,6 @@ build*/
 output/
 *.pkl
 *.csv
+# IntelliSense (support/scripts/intellisense_config.py)
+.vscode/compile_commands.json
+.vscode/build_selection.json

@@ -33,8 +33,61 @@
             ],
             "type": "shell",
         },
+        {
+            // regenerates compile_commands.json with the #defines of
+            // configs/boards/<board>.txt + configs/profiles/<profile>.txt
+            "label": "IntelliSense: select board and profile",
+            "type": "process",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/support/scripts/intellisense_config.py",
+                "${input:intellisenseBoard}",
+                "${input:intellisenseProfile}"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
     ],
     "inputs": [
+        // options are kept in sync with configs/*/*.txt by intellisense_config.py
+        {
+            "id": "intellisenseBoard",
+            "type": "pickString",
+            "description": "IntelliSense board (configs/boards)",
+            "options": [
+                "FPVM-BETAFLIGHTF4",
+                "MTKS-H743"
+            ]
+        },
+        {
+            "id": "intellisenseProfile",
+            "type": "pickString",
+            "description": "IntelliSense profile (configs/profiles)",
+            "options": [
+                "CineRat",
+                "CineRatGPS",
+                "CineRatMotorTest",
+                "CineRatOpti",
+                "DarkO",
+                "DarkOGPS",
+                "DarkOHIL",
+                "DarkOOpti",
+                "DarkO_knownController",
+                "DarkO_uros",
+                "HexDemo",
+                "HexDemo1",
+                "HexDemo2",
+                "HexDemo3",
+                "Meteor75",
+                "Meteor75_TomTests",
+                "Meteor75_demo",
+                "Meteor75_uros"
+            ]
+        },
         {
             "type": "promptString",
             "id": "mirrorDestination",

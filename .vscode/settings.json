@@ -1,5 +1,6 @@
 {
     "cortex-debug.gdbPath": "gdb-multiarch",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/.vscode/compile_commands.json",
     "cortex-debug.liveWatchRefreshRate": 1000,
     "files.associations": {
         "*.ptx": "platformio-debug.asm",

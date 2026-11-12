@@ -762,3 +762,8 @@ include $(ROOT)/make/remote_flash.mk
 
 echo-cflags:
 	@echo $(CFLAGS)
+
+# total number of objects, parsed by entrypoint.sh for the [n/N] progress counter
+ifeq ($(PROGRESS),y)
+$(info %%TOTAL $(words $(sort $(TARGET_OBJS))))
+endif
