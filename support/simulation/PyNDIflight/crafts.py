@@ -495,7 +495,7 @@ class TailsitterPhiFF(Craft):
         self.cd[:] = np.asarray(cd, dtype=np.float32)
         self.cdd[:] = np.asarray(cdd, dtype=np.float32)
         self.cddd[:] = np.asarray(cddd, dtype=np.float32)
-        self.cd_qinf[:] = np.asarray(cd, dtype=np.float32)
+        self.cd_qinf[:] = np.asarray(cd_qinf, dtype=np.float32)
         self.d0[:] = np.asarray(d0, dtype=np.float32)
 
     def customPhysics(self, dt):

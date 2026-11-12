@@ -21,7 +21,8 @@
 #
 #jax.config.update('jax_platform_name', 'cpu')
 
-from numba import njit
+# the @njit decorators below are disabled; re-add `from numba import njit` when enabling them.
+# Importing numba unconditionally breaks this module with NumPy > 2.0 (numba 0.60).
 import numpy as np
 
 #@njit("f4[::1](f4[::1], f4[::1])")
