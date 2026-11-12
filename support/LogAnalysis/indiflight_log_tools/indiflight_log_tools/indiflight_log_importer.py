@@ -552,50 +552,136 @@ class IndiflightLog(object):
         else:
             highRes = 1.
 
+        # motor[] is motor_normalized mapped linearly onto [motorOutputLow, motorOutputHigh]
+        # (core.c), and the header logs exactly these endpoints
+        motorLow, motorHigh = self.DSHOT_MIN, self.DSHOT_MAX
+        if "motorOutput" in self.parameters.keys():
+            try:
+                motorLow, motorHigh = (float(v) for v in str(self.parameters["motorOutput"]).split(","))
+            except ValueError:
+                pass
+
+        # Unit conversion of every logged signal. Must mirror loadMainState()
+        # in src/main/blackbox/blackbox.c (and the slow fields table). Checked
+        # against indiflight and the kibangadas modular_drone_learning fork.
+        # Every signal of blackboxMainFields[] / blackboxSlowFields[] is either
+        # handled by a branch below (the comment of each branch lists all
+        # signals it catches, also those caught only via startswith), or is
+        # intentionally left raw because it has no SI meaning or is SI already:
+        #
+        #   time               us (timeUs/timeMs/timeS are derived above)
+        #   axisP/I/D/F[0..2]  PID controller outputs, dimensionless
+        #   magADC[0..2]       raw magnetometer units
+        #   rssi               0..1023
+        #   debug[0..3]        meaning depends on debug_mode
+        #   servo[5]           tricopter tail servo, PWM us
+        #   rpmOmega_f[0..7]   rad/s already (fork only)
+        #   rpmControlRan[0..7] 0/1 flag (fork only)
+        #   extTime            us
+        #   latest_key_pressed, tt_active, nn_active: integer flags/codes
+        #   GPS_* frames       not merged into this dataframe
+        #   LEARNER/rls fields handled further down (partly commented out)
+        #
+        # Branch order matters where prefixes overlap: 'rcCommand[3]' before
+        # 'rcCommand', 'setpoint[3]' before 'setpoint', 'accSp' before 'acc',
+        # 'omega_dot' before 'omega', 'd[' never matches 'debug' or 'dv'.
         for col in data.columns:
             if col == 'loopIteration':
                 data[col] = data[col].astype(int)
             elif col == 'rcCommand[3]':
+                # throttle 1000..2000 * highRes -> [0, 1]
                 data[col] -= 1000. * highRes
                 data[col] /= 1000. * highRes
             elif col.startswith('rcCommand'):
+                # rcCommand[0..2]: -500..500 * highRes -> [-1, 1]
                 data[col] /= 500. * highRes
+            elif col == 'setpoint[3]':
+                # mixer throttle * 1000 -> [0, 1]
+                data[col] /= 1000.
+            elif col.startswith('setpoint'):
+                # setpoint[0..2]: PID rate setpoint deg/s * highRes -> rad/s
+                data[col] /= self.RADIANS_TO_DEGREES * highRes
+            elif col == 'vbatLatest':
+                # 0.01 V -> V
+                data[col] /= 100.
+            elif col == 'amperageLatest':
+                # 0.01 A -> A
+                data[col] /= 100.
+            elif col == 'baroAlt' or col == 'surfaceRaw':
+                # baro altitude, rangefinder altitude: cm -> m
+                data[col] /= self.METER_TO_CM
             elif col.startswith('gyro'):
+                # gyroADC, gyroADCafterRpm, gyroSp, gyroFf (fork):
+                # deg/s * highRes -> rad/s
                 data[col] /= self.RADIANS_TO_DEGREES * highRes
             elif col.startswith('accSp'):
+                # accSp[0..2]: cm/s^2 -> m/s^2
                 data[col] /= self.METER_TO_CM
             elif col.startswith('acc'):
+                # accSmooth, accADCafterRpm: raw, acc_1G = 1g -> m/s^2
                 data[col] *= self.ONE_G / self.parameters['acc_1G']
             elif re.match(r'^motor\[[0-9]+\]$', col):
-                data[col] -= self.DSHOT_MIN
-                data[col] /= (self.DSHOT_MAX - self.DSHOT_MIN)
+                # motor[0..7]: [motorOutputLow, motorOutputHigh] -> [0, 1]
+                # (does not match the motor_N_rls_* learner fields)
+                data[col] -= motorLow
+                data[col] /= (motorHigh - motorLow)
             elif col.startswith('quat') or col.startswith('extQuat') or col.startswith('ekf_quat') or col.startswith('localQuat'):
+                # quat, quatSp, quatSpPreFf (fork), ekf_quat, localQuat,
+                # extQuat (legacy): * UNIT_FLOAT_TO_SIGNED16VB -> unit quaternion
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('alpha'):
+                # alpha, alphaSp: deg/s^2 * 0.1 -> rad/s^2
                 data[col] /= self.RADIANS_TO_DECADEGREES
             elif col.startswith('spfSp'):
+                # spfSp[0..2]: cm/s^2 -> m/s^2
                 data[col] /= self.METER_TO_CM
             elif col.startswith('dv'):
+                # dv[0..5]: pseudocontrol * 10
                 data[col] /= 10.
+            elif col.startswith('d['):
+                # d[0..7] (fork): * UNIT_FLOAT_TO_SIGNED16VB -> [-1, 1]
+                data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('u['):
+                # u[0..7]: * UNIT_FLOAT_TO_SIGNED16VB -> [-1, 1]
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('u_state'):
+                # u_state[0..7]: * UNIT_FLOAT_TO_SIGNED16VB -> [-1, 1]
+                data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
+            elif col.startswith('rpmCmd_f'):
+                # rpmCmd_f[0..7] (fork): * UNIT_FLOAT_TO_SIGNED16VB -> [-1, 1]
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('omega_dot'):
+                # omega_dot[0..7]: rad/s^2 * 0.01 -> rad/s^2
                 data[col] *= 100
             elif col.startswith('omega'):
+                # omega, omegaUnfiltered, omegaSp (fork): rad/s already
                 data[col] /= 1.
             elif col.startswith('servo_feedback'):
+                # servo_feedback[0..3]: centidegrees -> rad
                 data[col] /= 100 * self.RADIANS_TO_DEGREES
+            elif col in ('pitot_pressureZero', 'pitot_pressure'):
+                # 0.01 Pa -> Pa
+                data[col] /= 100.
+            elif col == 'pitot_temperature':
+                # 0.01 K -> K
+                data[col] /= 100.
+            elif col == 'pitot_airSpeed':
+                # cm/s -> m/s
+                data[col] /= self.METER_TO_CM
             elif col.startswith('pos') or col.startswith('extPos') or col.startswith('ekf_pos') or col.startswith('localPos'):
+                # pos, posSp, ekf_pos, localPos, extPos (legacy): mm -> m
                 data[col] /= self.METER_TO_MM
             elif col.startswith('vel') or col.startswith('extVel') or col.startswith('ekf_vel') or col.startswith('localVel'):
+                # vel, velSp, ekf_vel, localVel, extVel (legacy): cm/s -> m/s
                 data[col] /= self.METER_TO_CM
             elif col.startswith('extAtt') or col.startswith('ekf_att'):
+                # extAtt, ekf_att: legacy, no longer in blackbox.c (/1000)
                 data[col] /= 1000.
             elif col.startswith('ekf_acc_b'):
+                # ekf_acc_b[0..2]: mm/s^2 -> m/s^2
                 data[col] /= 1000.
             elif col.startswith('ekf_gyro_b'):
+                # ekf_gyro_b[0..2]: mdeg/s -> rad/s
                 data[col] /= self.RADIANS_TO_DEGREES * 1000.
             # elif (match := re.match(r'^motor_[0-9]+_rls_x\[([0-9]+)\]$', col)):
             #     bbscaler = 1000.
@@ -650,7 +736,10 @@ class IndiflightLog(object):
                 data[col] /= 0.001 * ((1 << 16) - 1)
             elif (col == "flightModeFlags") or (col == "stateFlags")\
                     or (col == "failsafePhase") or (col == "rxSignalReceived")\
-                    or (col == "rxFlightChannelValid"):
+                    or (col == "rxFlightChannelsValid") or (col == "rxFlightChannelValid"):
+                # all of blackboxSlowFields[] (rxFlightChannelValid: old typo,
+                # kept for compatibility): integer flags, empty before the
+                # first slow frame
                 with pd.option_context("future.no_silent_downcasting", True):
                     data.replace({col: {"": 0}}, inplace=True)
                 data[col] = data[col].astype(int)
