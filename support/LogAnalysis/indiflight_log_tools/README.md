@@ -92,12 +92,12 @@ bfl2rerun --help                           # shorthand for log.addToRerun()
   `RuntimeError`, and the decoder's message is printed to stderr. Your
   Python session keeps running, so you can catch the error and continue,
   e.g. when you loop over a folder of logs.
-- Each `IndiflightLog` instance decodes into its own folder in the user cache
-  directory (`~/.cache/indiflight_logs/` on Linux,
-  `~/Library/Caches/indiflight_logs/` on macOS), so several processes can
-  parse logs at the same time. The folder is deleted when the object is
-  garbage collected. Folders left behind by killed processes are deleted
-  after 7 days.
+- Each `IndiflightLog` instance decodes into its own temporary folder
+  (`/tmp/indiflight-log-<hash>-*` on Linux, the system temp directory
+  elsewhere) and deletes it as soon as the log is parsed, so decoded logs
+  don't pile up on disk, and several processes can parse logs (even the same
+  one) at the same time. Folders left behind by killed processes are deleted
+  after a day. `outputCsv()` writes from memory.
 - Threads can create `IndiflightLog` objects too, but the C decoder handles
   one log at a time. Use processes if you want to decode in parallel.
 

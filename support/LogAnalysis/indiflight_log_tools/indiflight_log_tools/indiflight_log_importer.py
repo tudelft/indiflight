@@ -1,4 +1,4 @@
-# Load and cache indiflight logs into SI units, also provide simple plotting
+# Load indiflight logs into SI units, also provide simple plotting
 #
 # Copyright 2024 Till Blaha (Delft University of Technology)
 #
@@ -23,15 +23,15 @@ import shutil
 import glob
 import re
 import json
+import hashlib
+import io
 import tempfile
 import threading
 import time
-import weakref
 import numpy as np
 from matplotlib import pyplot as plt
 
 import ctypes
-from platformdirs import user_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class IndiflightLog(object):
     # (Betaflight DSHOT_MIN_THROTTLE / DSHOT_MAX_THROTTLE)
     DSHOT_MIN = 48.
     DSHOT_MAX = 2047.
-    CACHE_NAME = "indiflight_logs"
+    TEMP_PREFIX = "indiflight-log-"
     # blackbox_decode.so since 0.3.0; older builds used the CPython suffix
     # (blackbox_decode.cpython-3XX-<platform>.so), so fall back to globbing.
     LIBRARY_SO = next(iter(
@@ -87,7 +87,7 @@ class IndiflightLog(object):
 
     _lib = None
     _libLock = threading.Lock()
-    STALE_CACHE_SECONDS = 7 * 24 * 3600
+    STALE_TEMP_SECONDS = 24 * 3600
 
     @classmethod
     def _loadLibrary(cls):
@@ -104,22 +104,25 @@ class IndiflightLog(object):
         return cls._lib
 
     @classmethod
-    def _removeStaleCacheDirs(cls, cachedir):
-        # Folders are normally removed by weakref.finalize. Leftovers from
-        # crashed/killed processes are deleted once they are old enough to
-        # surely not be in use anymore. Files from older versions (log.bfl,
-        # log.XX.csv, ... directly in cachedir) are cleaned up the same way.
-        cutoff = time.time() - cls.STALE_CACHE_SECONDS
-        for path in glob.glob(os.path.join(cachedir, "log*")):
+    def _removeStaleTempDirs(cls):
+        # Temporary folders are removed right after decoding. Leftovers from
+        # killed processes are deleted once they are old enough to surely not
+        # be in use anymore.
+        cutoff = time.time() - cls.STALE_TEMP_SECONDS
+        for path in glob.glob(os.path.join(tempfile.gettempdir(), cls.TEMP_PREFIX + "*")):
             try:
-                if os.path.getmtime(path) > cutoff:
-                    continue
-                if os.path.isdir(path):
+                if os.path.getmtime(path) <= cutoff:
                     shutil.rmtree(path, ignore_errors=True)
-                else:
-                    os.remove(path)
             except OSError:
                 pass  # removed concurrently by another process
+
+    @staticmethod
+    def _readText(path):
+        try:
+            with open(path, 'r') as file:
+                return file.read()
+        except FileNotFoundError:
+            return None
 
     @staticmethod
     def modeToText(bits):
@@ -194,45 +197,46 @@ class IndiflightLog(object):
 
         self.filename = filename
 
-        # Each instance decodes into its own folder, so that several processes
-        # (or threads) can parse logs at the same time. The folder is removed
-        # when the instance is garbage collected (outputCsv() copies from it).
-        cachedir = user_cache_dir(self.CACHE_NAME, self.CACHE_NAME)
-        os.makedirs(cachedir, exist_ok=True)
-        self._removeStaleCacheDirs(cachedir)
-        self.cachedir = tempfile.mkdtemp(prefix="log-", dir=cachedir)
-        self._cleanup = weakref.finalize(self, shutil.rmtree, self.cachedir, ignore_errors=True)
+        # Decode into a private temporary folder in /tmp (named after a hash of
+        # the log path, plus a random suffix) and delete it as soon as everything
+        # is parsed into memory: decoded csvs are large and are never reused.
+        # Several processes or threads can load logs, even the same one, at once.
+        self._removeStaleTempDirs()
+        tag = hashlib.sha1(f"{os.path.abspath(filename)}:{logId}".encode()).hexdigest()[:12]
+        with tempfile.TemporaryDirectory(prefix=f"{self.TEMP_PREFIX}{tag}-") as tmpdir:
+            # the decoder writes its output next to its input, so give it a link
+            tmp_bfl = os.path.join(tmpdir, "log.bfl")
+            try:
+                os.symlink(os.path.abspath(filename), tmp_bfl)
+            except OSError:
+                shutil.copy(filename, tmp_bfl)  # filesystems without symlinks
 
-        self.cache_bfl = os.path.join(self.cachedir, "log.bfl")
-        self.cache_csv = os.path.join(self.cachedir, f"log.{self.logIdStr}.csv")
-        self.cache_events = os.path.join(self.cachedir, f"log.{self.logIdStr}.event")
-        self.cache_headers_csv = os.path.join(self.cachedir, f"log.{self.logIdStr}.headers.csv")
+            # convert to csv
+            logger.info("Parsing logfile")
+            argv = [b"blackbox_decode", b"--index", str(logId).encode(), os.fsencode(tmp_bfl)]
+            argv_ctypes = (ctypes.c_char_p * len(argv))(*argv)
+            lib = self._loadLibrary()
+            # the decoder keeps its state in globals, so only one call at a time
+            with self._libLock:
+                ret = lib.main(len(argv), argv_ctypes)
+            if ret != 0:
+                raise RuntimeError(
+                    f"blackbox_decode failed on log {logId} of {filename} (code {ret}), "
+                    "see stderr for details. Corrupt log, or wrong logId?")
 
-        # copy to cache folder
-        shutil.copy(filename, self.cache_bfl)
+            # dump data rows into pandas frame. # TODO: only import until range?
+            logger.info("Importing into dataframe")
+            self.raw = pd.read_csv(os.path.join(tmpdir, f"log.{self.logIdStr}.csv"), skipinitialspace=True)
+            self.raw.set_index('loopIteration', inplace=True)
 
-        # convert to csv
-        logger.info("Parsing logfile")
-        argv = [b"blackbox_decode", b"--index", str(logId).encode(), os.fsencode(self.cache_bfl)]
-        argv_ctypes = (ctypes.c_char_p * len(argv))(*argv)
-        lib = self._loadLibrary()
-        # the decoder keeps its state in globals, so only one call at a time
-        with self._libLock:
-            ret = lib.main(len(argv), argv_ctypes)
-        if ret != 0:
-            raise RuntimeError(
-                f"blackbox_decode failed on log {logId} of {filename} (code {ret}), "
-                "see stderr for details. Corrupt log, or wrong logId?")
-
-        # dump data rows into pandas frame. # TODO: only import until range?
-        logger.info("Importing into dataframe")
-        self.raw = pd.read_csv(self.cache_csv, skipinitialspace=True)
-        self.raw.set_index('loopIteration', inplace=True)
+            # header and event files are small: keep their text for outputCsv()
+            self._headersText = self._readText(os.path.join(tmpdir, f"log.{self.logIdStr}.headers.csv"))
+            self._eventsText = self._readText(os.path.join(tmpdir, f"log.{self.logIdStr}.event"))
 
         # get parameters
         try:
             par_frame = pd.read_csv(
-                self.cache_headers_csv,
+                io.StringIO(self._headersText),
                 skiprows=13,
                 header=None,
                 usecols=[0, 1],
@@ -248,19 +252,12 @@ class IndiflightLog(object):
                     pass  # Leave the value as a string if it can't be converted
         except:
             logger.error(f"No header file for log {self.logIdStr} in {self.filename}. Likely empty or corrupt log. Continuing")
-            open(self.cache_headers_csv, 'a').close() # create empty file
             self.parameters = {}
 
         # get events
-        try:
-            with open(self.cache_events, 'r') as file:
-                self.events = [json.loads(line) for line in file]
-
-        except FileNotFoundError:
+        if self._eventsText is None:
             logger.error(f"No event file for log {self.logIdStr} in {self.filename}. Likely empty or corrupt log. Continuing")
-            open(self.cache_events, 'a').close() # create empty file
-            self.events = []
-
+        self.events = [json.loads(line) for line in (self._eventsText or "").splitlines() if line.strip()]
 
         self.num_learner_vars = sum([
             re.match(r'^fx_p_rls_x\[[0-9]+\]$', c) is not None 
@@ -285,15 +282,15 @@ class IndiflightLog(object):
 
         logger.warning(f"Outputting converted csv to {outputPath}/")
 
-        # always just copy headers and events
-        shutil.copy(self.cache_headers_csv,
-            os.path.join(outputPath, fileStem+f".{self.logIdStr}.headers.csv"))
-        shutil.copy(self.cache_events,
-            os.path.join(outputPath, fileStem+f".{self.logIdStr}.event"))
+        # always write headers and events as decoded
+        for ext, text in (("headers.csv", self._headersText), ("event", self._eventsText)):
+            with open(os.path.join(outputPath, fileStem+f".{self.logIdStr}.{ext}"), 'w') as file:
+                file.write(text or "")
 
         if units.lower() == "raw":
-            shutil.copy(self.cache_csv, 
-                os.path.join(outputPath, fileStem+f".{self.logIdStr}.raw.csv"))
+            self.raw.to_csv(
+                os.path.join(outputPath, fileStem+f".{self.logIdStr}.raw.csv"),
+                index=True)
         elif units.lower() == "si":
             self.data.to_csv(
                 os.path.join(outputPath, fileStem+f".{self.logIdStr}.si.csv"),
