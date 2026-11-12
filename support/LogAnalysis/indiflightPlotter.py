@@ -5,6 +5,14 @@ from scipy.spatial.transform import Rotation as R
 
 from indiflight_log_tools.signal_tools import Signal
 
+
+def learnerSecondHalfOffset(data):
+    """Column index of fx_{p,q,r}_rls_x where the second half of the rotational learner
+    parameters starts: BLACKBOX_LEARNER_N (blackbox.c), i.e. 4, or 8 with
+    BLACKBOX_LEARNER_LOG_8_MOTORS. fx_*_rls_x[N + i] = 1e3 * fxRls[3..5].x[5 + i]."""
+    return sum(c.startswith('fx_p_rls_x[') for c in data.columns) // 2
+
+
 class IndiflightPlotter(FlightPlotterBase):
     """Wrapper class for FlightPlotterBase that implements the layout and populates the plots for general Indiflight analysis"""
     def __init__(self, data, Nr=0, Ns=0, name="Flight Plotter"):
@@ -962,7 +970,8 @@ class IndiflightMoments(FlightPlotterBase):
         q = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
         r = np.array([self.data[f'fx_r_rls_x[{i}]'] for i in pqr_range]) * 1e-3 * 1e-0 * 1e-5
 
-        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+        Nh = learnerSecondHalfOffset(self.data)
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(Nh, Nh+2)]) * 1e-3 * 1e-0 * 1e-0
 
         AXES = ['x', 'y', 'z', 'p', 'q', 'r']
 
@@ -982,9 +991,9 @@ class IndiflightMoments(FlightPlotterBase):
 
 
         #%% online and final aero moments
-        paero = -np.array([self.data[f'fx_p_rls_x[6]']]).squeeze() / 1000 * 1e-1
-        qaero = -np.array([self.data[f'fx_q_rls_x[6]']]).squeeze() / 1000 * 1e-1
-        raero = -np.array([self.data[f'fx_r_rls_x[6]']]).squeeze() / 1000 * 1e-1
+        paero = np.array([self.data[f'fx_p_rls_x[{Nh+2}]']]).squeeze() / 1000 * 1e-1
+        qaero = np.array([self.data[f'fx_q_rls_x[{Nh+2}]']]).squeeze() / 1000 * 1e-1
+        raero = np.array([self.data[f'fx_r_rls_x[{Nh+2}]']]).squeeze() / 1000 * 1e-1
         Laero_online = -self.eta * gyro[0] * self.I[0,0] * paero
         Maero_online = -self.eta * gyro[1] * self.I[1,1] * qaero
         Naero_online = -self.eta * gyro[2] * self.I[2,2] * raero
@@ -1275,7 +1284,8 @@ class IndiflightEffectiveness(FlightPlotterBase):
         cnd = r[Nr:, idx]
         cnwd = r[4:6, idx]
 
-        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(4,6)]) * 1e-3 * 1e-0 * 1e-0
+        Nh = learnerSecondHalfOffset(self.data)
+        qd = np.array([self.data[f'fx_q_rls_x[{i}]'] for i in range(Nh, Nh+2)]) * 1e-3 * 1e-0 * 1e-0
 
         eff = np.zeros((6, 4))
         eff[0, :Nr] = x[:Nr, idx]
