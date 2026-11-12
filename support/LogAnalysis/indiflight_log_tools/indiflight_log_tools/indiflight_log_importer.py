@@ -72,8 +72,10 @@ class IndiflightLog(object):
     RAD_TO_MRAD = 1000.
     ONE_G = 9.80665
     PERCENT = 100.
-    DSHOT_MIN = 158.
-    DSHOT_MAX = 2048.
+    # fallback motor output range if the log has no motorOutput header
+    # (Betaflight DSHOT_MIN_THROTTLE / DSHOT_MAX_THROTTLE)
+    DSHOT_MIN = 48.
+    DSHOT_MAX = 2047.
     CACHE_NAME = "indiflight_logs"
     # blackbox_decode.so since 0.3.0; older builds used the CPython suffix
     # (blackbox_decode.cpython-3XX-<platform>.so), so fall back to globbing.
@@ -570,17 +572,20 @@ class IndiflightLog(object):
         # intentionally left raw because it has no SI meaning or is SI already:
         #
         #   time               us (timeUs/timeMs/timeS are derived above)
-        #   axisP/I/D/F[0..2]  PID controller outputs, dimensionless
         #   magADC[0..2]       raw magnetometer units
-        #   rssi               0..1023
         #   debug[0..3]        meaning depends on debug_mode
         #   servo[5]           tricopter tail servo, PWM us
         #   rpmOmega_f[0..7]   rad/s already (fork only)
         #   rpmControlRan[0..7] 0/1 flag (fork only)
         #   extTime            us
         #   latest_key_pressed, tt_active, nn_active: integer flags/codes
-        #   GPS_* frames       not merged into this dataframe
+        #   GPS_numSat         count
+        #   GPS_coord[0..1]    deg already: logged as 1e-7 deg, but
+        #                      blackbox_decode prints it as degrees
         #   LEARNER/rls fields handled further down (partly commented out)
+        #
+        # GPS frames are merged into the main csv (blackbox_decode mergeGPS
+        # default); before the first GPS frame their columns read 0.
         #
         # Branch order matters where prefixes overlap: 'rcCommand[3]' before
         # 'rcCommand', 'setpoint[3]' before 'setpoint', 'accSp' before 'acc',
@@ -588,6 +593,22 @@ class IndiflightLog(object):
         for col in data.columns:
             if col == 'loopIteration':
                 data[col] = data[col].astype(int)
+            elif col.startswith('axis'):
+                # axisP, axisI, axisD, axisF [0..2]: PID terms, mixer divides
+                # by PID_MIXER_SCALING = 1000 -> [-1, 1] full mixer authority
+                data[col] /= 1000.
+            elif col == 'rssi':
+                # 0..RSSI_MAX_VALUE (1023) -> [0, 1]
+                data[col] /= 1023.
+            elif col == 'GPS_altitude':
+                # altCm / 10, i.e. dm -> m (blackbox_decode prints it raw)
+                data[col] /= 10.
+            elif col == 'GPS_speed':
+                # cm/s -> m/s (blackbox_decode prints it raw, unitGPSSpeed RAW)
+                data[col] /= self.METER_TO_CM
+            elif col == 'GPS_ground_course':
+                # logged as 0.1 deg, blackbox_decode already prints deg -> rad
+                data[col] /= self.RADIANS_TO_DEGREES
             elif col == 'rcCommand[3]':
                 # throttle 1000..2000 * highRes -> [0, 1]
                 data[col] -= 1000. * highRes
@@ -726,7 +747,8 @@ class IndiflightLog(object):
             #     yscaler = 1.
             #     ascaler = 1e-2
             #     data[col] /= bbscaler * yscaler / ascaler
-            elif (col.startswith("learnerGains")):
+            elif col.startswith("learner_gains") or col.startswith("learnerGains"):
+                # learner_gains[i]: gain * 10 (learnerGains: older logs)
                 data[col] /= 10.
             elif (col.startswith("hoverAttitude")):
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
