@@ -260,23 +260,44 @@ nu_hat = np.hstack((res.FM_hat[:, :3] / m, res.FM_hat[:, 3:] @ np.linalg.inv(I).
 # %% plots
 
 title = f"{args.name} -- {act.name}"
-fig, axes = plt.subplots(2, 3, sharex=True, figsize=(16, 8))
-for idx, ax in enumerate(axes.ravel()):
-    ax.plot(fd.t, y_obs[:, idx], color="k", lw=1.0, label="measured")
-    if res.rows[idx]:
-        ax.plot(fd.t, y_act[:, idx], lw=1.0, label="actuation model")
-        ax.plot(fd.t, nu[:, idx], lw=1.0, alpha=0.8, label="residual")
-        ax.plot(fd.t, nu_hat[:, idx], "--", lw=1.0, label=f"aero fit, $R^2$ = {res.r2[idx]:.2f}")
-    else:
-        ax.text(0.5, 0.5, "not modelled", transform=ax.transAxes, ha="center", va="center", color="gray")
-    ax.set_title(OUTPUT_LABELS[idx])
-    ax.set_ylabel(OUTPUT_UNITS[idx])
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=7)
-for ax in axes[-1]:
-    ax.set_xlabel("time [s]")
-fig.suptitle(f"{title}\nmeasured / actuation model / residual / aero fit")
-fig.tight_layout()
+
+
+def plot_signals(y_obs, y_act, nu, nu_hat, suptitle, sharex=False):
+    # sharex may be an axes to share with: BlittedCursor re-shares everything with the first axes
+    fig, axes = plt.subplots(2, 3, sharex=sharex, figsize=(16, 8))
+    for idx, ax in enumerate(axes.ravel()):
+        ax.plot(fd.t, y_obs[:, idx], color="k", lw=1.0, label="measured")
+        if res.rows[idx]:
+            ax.plot(fd.t, y_act[:, idx], lw=1.0, label="actuation model")
+            ax.plot(fd.t, nu[:, idx], lw=1.0, alpha=0.8, label="residual")
+            ax.plot(fd.t, nu_hat[:, idx], "--", lw=1.0, label=f"aero fit, $R^2$ = {res.r2[idx]:.2f}")
+        else:
+            ax.text(0.5, 0.5, "not modelled", transform=ax.transAxes, ha="center", va="center", color="gray")
+        ax.set_title(OUTPUT_LABELS[idx])
+        ax.set_ylabel(OUTPUT_UNITS[idx])
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="upper right", fontsize=7)
+    for ax in axes[-1]:
+        ax.set_xlabel("time [s]")
+    fig.suptitle(suptitle)
+    fig.tight_layout()
+    return fig, axes
+
+
+fig, axes = plot_signals(y_obs, y_act, nu, nu_hat,
+                         f"{title}\nmeasured / actuation model / residual / aero fit")
+
+# same plot, every signal low-pass filtered (2nd order Butterworth, zero phase so that
+# the signals stay time-aligned with the unfiltered plot and the flight plots)
+from scipy.signal import butter, sosfiltfilt
+LP_CUTOFF_HZ = 5.0
+fs = 1.0 / np.median(np.diff(fd.t))
+sos_lp = butter(2, LP_CUTOFF_HZ, btype="low", fs=fs, output="sos")
+lp = lambda x: sosfiltfilt(sos_lp, x, axis=0)
+fig_lp, axes_lp = plot_signals(lp(y_obs), lp(y_act), lp(nu), lp(nu_hat),
+                               f"{title}\nmeasured / actuation model / residual / aero fit, "
+                               f"all signals low-pass filtered ({LP_CUTOFF_HZ:g} Hz, 2nd order)")
+                               #sharex=axes[0, 0])
 
 figp, axp = plt.subplots(1, len(aero_fit.PARAM_GROUPS), figsize=(16, 4))
 for ax, (group, names) in zip(axp, aero_fit.PARAM_GROUPS.items()):
@@ -292,7 +313,7 @@ for ax, (group, names) in zip(axp, aero_fit.PARAM_GROUPS.items()):
 figp.suptitle(f"{title}\naero parameters, nominal $\\pm 2\\sigma$")
 figp.tight_layout()
 
-cursor_axes = list(axes.ravel())
+cursor_axes = list(axes.ravel()) + list(axes_lp.ravel())
 if not args.no_flight_plots:
     from indiflightPlotter import IndiflightPlotter, IndiflightViewport
     from pyFlightPlotter.crafts import Tailsitter

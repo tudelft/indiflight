@@ -24,7 +24,8 @@ device = torch.device("cpu")  # LBGFS is faster on cpu
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00066_simplifiedDynFx.BFL", resetTime=True, timeRange=(9000, 50000))   # dynamic fx, hover
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00079.BFL", resetTime=True, timeRange=(6587, 50000))   # dynamic fx, hover
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
-log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2026-10-29/LOG00035_autoId.BFL", resetTime=False, timeRange=(53500, 114000))   # dynamic fx, hover
+#log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2026-10-29/LOG00035_autoId.BFL", resetTime=False, timeRange=(53500, 114000))   # dynamic fx, hover
+log = IndiflightLog("/home/tmblaha/Downloads/LOG00048_autoId.BFL", resetTime=True, timeRange=(20000, 90000))   # dynamic fx, hover
 
 # test option for the Phi_vv z-rotation: rotate the xy specific force targets and body velocity by a random but reproducible angle
 ROTATE_XY_TARGETS = True
