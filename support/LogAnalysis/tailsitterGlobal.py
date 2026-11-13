@@ -1,5 +1,6 @@
 #%% 
 from indiflight_log_tools import IndiflightLog
+from logbook_source import fetch_logs
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -126,6 +127,9 @@ class Motor(nn.Module):
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00066_simplifiedDynFx.BFL", resetTime=True, timeRange=(9000, 50000))   # dynamic fx, hover
 #log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-02-21/LOG00079.BFL", resetTime=True, timeRange=(6587, 50000))   # dynamic fx, hover
 log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-11-14/LOG00230_fastSysId.BFL", resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
+
+# example with logbook
+#log = IndiflightLog(fetch_logs([FLIGHT])[0], resetTime=False, timeRange=(98000, 175000))   # dynamic fx, hover
 
 # preproc columns that are not in indiflight log tools yet
 data = log.data

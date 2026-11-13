@@ -1,5 +1,6 @@
 import numpy as np
 from indiflight_log_tools import IndiflightLog
+from logbook_source import fetch_logs
 from indiflight_log_tools.signal_tools import Signal
 
 #ranges = [(27850, 28350), (31470, 32000), (41550, 42150)]
@@ -7,6 +8,9 @@ from indiflight_log_tools.signal_tools import Signal
 
 ranges = [(6718, 7318), (8675, 8675+550), (10788, 10788+600), (12779, 12799+600)]
 location = "/mnt/data/WorkData/BlackboxLogs/2025-03-18/throws/btfl_003.bbl"
+
+# or, replace by:
+#location = fetch_logs([FLIGHT])[0]
 
 
 #%% data importing

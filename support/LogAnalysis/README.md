@@ -67,10 +67,19 @@ python -c "from indiflight_log_tools import IndiflightLog; import pyFlightPlotte
 Plot a log with the Indiflight layout (run from this folder):
 
 ```sh
-python indiflightPlotter.py /path/to/LOG00001.BFL                    # multirotor
-python indiflightPlotter.py /path/to/LOG00001.BFL --type tailsitter
+python indiflightPlotter.py 42 --logId 1 --resetTime                  # logbook flight 42, multirotor
+python indiflightPlotter.py 42 --logId 1 --resetTime --type tailsitter
+python indiflightPlotter.py --file /path/to/LOG00001.BFL --logId 1 --no-resetTime  # local log file
 python indiflightPlotter.py --help
 ```
+
+Logs come from a MAVLab logbook by flight number (downloaded and cached) or from a
+local file with `--file`. Flight numbers need a server: pass `--server` or set
+`LOGDB_SERVER`. Scripts that analyse a collection of logs take several flight
+numbers at once. A second log (`--source-*` in `tailsitterFFAero.py`) takes a
+flight number or `--source-file` the same way. The shared options (`--logId`, required,
+`--resetTime`, `--crop`, `--name`, the source options and the flight/file
+arguments) live in [`logbook_source.py`](logbook_source.py).
 
 Convert a log to CSV:
 

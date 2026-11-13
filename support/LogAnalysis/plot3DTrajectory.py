@@ -77,20 +77,17 @@ def color_for_index(idx, idx_start, idx_end):
 
 
 if __name__ == "__main__":
+    from logbook_source import add_log_source_args, add_log_options, resolve_log_source
     parser = ArgumentParser(description="Plot 3D trajectory with vehicle attitude from a log file.",
                             formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("logfile", type=str, help="Path to the log file.")
-    parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
-    parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
-    parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
-                        help="Crop the log to the given time range (in seconds).")
+    add_log_source_args(parser)
+    add_log_options(parser)
     parser.add_argument("--auto-crop", action="store_true",
                         help="Automatically detect start/end times using learning detection (subtracts 0.5s from start, then applies --auto-crop-end-offset to end).")
     parser.add_argument("--auto-crop-end-offset", type=float, default=1.0,
                         help="Offset in seconds added to detected auto-crop end time.")
     parser.add_argument("--plot-every", type=float, default=1.0,
                         help="Plot craft position and attitude every N seconds.")
-    parser.add_argument("--name", required=False, help="Name for the plot, used in title.")
     parser.add_argument("--craft-type", type=str, default="multirotor", 
                         choices=["quadrotor", "tailsitter"],
                         help="Type of craft for visualization.")
@@ -103,11 +100,13 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
+    (args.logfile,) = resolve_log_source(parser, args, single=True)
+    
     if args.name is None:
         args.name = args.logfile.split("/")[-1].split(".")[0]
     
     # Load the log
-    log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
+    log = IndiflightLog(args.logfile, logId=args.logId, resetTime=args.resetTime)
     
     # Crop if requested
     if args.crop:

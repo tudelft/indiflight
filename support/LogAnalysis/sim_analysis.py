@@ -12,24 +12,22 @@ from scipy.spatial.transform import Rotation as R
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, ArgumentTypeError
 
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source, open_log
+
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument("log", type=str, metavar="LOG.bbl", help="Path to the log file to analyze.")
-parser.add_argument("--id", required=False, type=int, default=1, metavar="ID",
-                    help="Log ID to use for the analysis. Default is 1.")
-parser.add_argument("--reset-time", required=False, action="store_true", help="Reset the time in the log to start at 0.")
-parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
-                    help="Crop the log to the given time range (in seconds).")
+add_log_source_args(parser)
+add_log_options(parser)
 parser.add_argument("--type", type=str, default="multirotor", choices=["tailsitter", "multirotor"],
                     help="Type of craft for visualization.")
 
 args = parser.parse_args()
 
-log = IndiflightLog(args.log, logId=args.id, resetTime=args.reset_time)
-if args.crop:
-    log.data, _ = log.crop(args.crop[0], args.crop[1])
+(args.logfile,) = resolve_log_source(parser, args, single=True)
+
+log = open_log(args.logfile, args)
 
 # extract filename from log path
-log_name = args.log.split("/")[-1].split(".")[0]
+log_name = args.logfile.split("/")[-1].split(".")[0]
 
 import matplotlib.pyplot as plt
 plt.close('all')

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from indiflight_log_tools import IndiflightLog
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source
 
 from indiflightPlotter import IndiflightPlotter, IndiflightViewport, IndiflightIndividualSysIdPlotter
 from pyFlightPlotter import Tailsitter, BlittedCursor, local_rc
@@ -22,9 +23,7 @@ from flight_metrics import (
 plt.close('all')
 plt.rcParams.update(local_rc)
 
-LOG_ID = 1
 OUTPUT_PATH = Path("support/LogAnalysis/tailsitter_run_summary.pkl")
-RESET_TIME = True
 GROUND_Z_THRESHOLD = -0.2
 GROUND_TIME_THRESHOLD = 5.0
 RMS_TIME_THRESHOLD = 5.0
@@ -45,12 +44,8 @@ def build_parser():
         description="Join tailsitter Monte Carlo logs with sampled parameters and export summary tables.",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        "--logs",
-        type=str,
-        required=True,
-        help="Directory containing blackbox logs. All .bfl, .BFL, and .bbl files are discovered recursively.",
-    )
+    add_log_source_args(parser, multi=True)
+    add_log_options(parser, name=False, crop=False)
     parser.add_argument(
         "--params-pkl",
         required=True,
@@ -63,22 +58,6 @@ def build_parser():
         help="Disable all plot windows during processing.",
     )
     return parser
-
-
-def expand_inputs(log_path):
-    root = Path(log_path)
-    if root.is_file():
-        if root.suffix.lower() in {".bfl", ".bbl"}:
-            return [str(root)]
-        raise FileNotFoundError(f"Unsupported log file type: {root}")
-
-    if not root.exists():
-        raise FileNotFoundError(f"Log directory does not exist: {root}")
-
-    files = [str(path) for path in sorted(root.rglob("*")) if path.is_file() and path.suffix.lower() in {".bfl", ".bbl"}]
-    if not files:
-        raise FileNotFoundError(f"No .bfl/.bbl logs found under: {root}")
-    return files
 
 
 def load_parameter_runs(params_pkl):
@@ -315,7 +294,7 @@ if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
 
-    log_files = expand_inputs(args.logs)
+    log_files = resolve_log_source(parser, args, multi=True)
     payload, sampled_runs = load_parameter_runs(args.params_pkl)
 
     # if len(log_files) != len(sampled_runs):
@@ -325,7 +304,7 @@ if __name__ == "__main__":
 
     rows = []
     for idx, (log_file, sampled, tail) in enumerate(zip(log_files, sampled_runs, payload['sampled_tails'])):
-        log = IndiflightLog(log_file, logId=LOG_ID, resetTime=RESET_TIME)
+        log = IndiflightLog(log_file, logId=args.logId, resetTime=args.resetTime)
 
         row = {
             "log_idx": idx,

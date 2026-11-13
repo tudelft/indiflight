@@ -16,14 +16,14 @@ from copy import deepcopy
 from itertools import product
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source
 
 parser = ArgumentParser(description="Perform offline estimator prototyping on a log file.",
                         formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument("logpath", type=str, help="Path to the log file.")
-# parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
-# parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
-parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
-                    help="Crop the log to the given time range (in seconds).")
+add_log_source_args(parser, multi=True)
+add_log_options(parser)
+parser.add_argument("--output", type=str, default="output",
+                    help="Folder for the plots and tables.")
 parser.add_argument("--skip-ls", action="store_true",
                     help="Skip LS estimators (faster; runs only RLS variants).")
 parser.add_argument("--skip-plots", action="store_true",
@@ -35,15 +35,12 @@ args = parser.parse_args()
 # if args.name is None:
 #     args.name = args.logfile.split("/")[-1].split(".")[0]
 
-# log_path  = "/mnt/data/WorkData/BlackboxLogs/tailsitterSimStudy"
 
-import glob
-log_glob = "LOG*.BFL"
-log_list = sorted( glob.glob(f"{args.logpath}/{log_glob}") )
+log_list = resolve_log_source(parser, args, multi=True)
 logs = []
 for log_file in log_list:
     print(f"Processing log file: {log_file}")
-    log = IndiflightLog(log_file, logId=1, resetTime=False)
+    log = IndiflightLog(log_file, logId=args.logId, resetTime=args.resetTime)
     log.name = log_file.split("/")[-1].split(".")[0]
     if args.crop:
         log.data, _ = log.crop(args.crop[0], args.crop[1])
@@ -58,7 +55,7 @@ for log_file in log_list:
 
 # add output folder to logfolder path
 import os
-output_path = f"{args.logpath}/output"
+output_path = args.output
 os.makedirs(output_path, exist_ok=True)
 
 

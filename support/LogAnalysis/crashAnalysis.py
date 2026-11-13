@@ -22,9 +22,10 @@ plt.rcParams.update(local_rc)
 import os
 import sys
 import numpy as np
+from logbook_source import fetch_logs
 from flight_metrics import ACT_TRUE, suppress_output, compute_fx_fit_metrics, extract_learning_metrics, infer_learning_indices
 
-path = "/mnt/data/WorkData/BlackboxLogs/"
+path = "/mnt/data/WorkData/BlackboxLogs/"  # can be replaced by logbook flights, see files below
 # files = [
 #     "2025-12-17/LOG00250_success.BFL",
 #     "2025-12-17/LOG00251_omg.BFL",
@@ -85,6 +86,7 @@ files = [
     ("2026-04-29/LOG00334.BFL", True),
     ("2026-04-29/LOG00335.BFL", True),
 ]
+files = []  # set from the logbook: (flight number, is_success) pairs
 
 import pandas as pd
 df = pd.DataFrame(columns=["Filename", "Firmware Revision", "Success",
@@ -101,6 +103,7 @@ for flight in files:
     file, is_success = flight
     with suppress_output():
         log = IndiflightLog(path + file, logId=1, resetTime=True)
+        # log = IndiflightLog(fetch_logs([file])[0], logId=1, resetTime=True)
 
     print()
     print(f"- Filename {file}")

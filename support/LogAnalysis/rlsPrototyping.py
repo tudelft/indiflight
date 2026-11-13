@@ -2,7 +2,6 @@ from indiflight_log_tools import IndiflightLog
 from indiflight_log_tools.signal_tools import Signal
 from estimators import LMS, RLS, EWMV, RLS_fortescue
 from pyFlightPlotter import BlittedCursor
-from indiflightPlotter import IndiflightPlotter, IndiflightSysIdPlotter, IndiflightViewport
 
 import numpy as np
 from tqdm import tqdm
@@ -12,44 +11,23 @@ plt.close('all')
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source
+
 parser = ArgumentParser(description="Perform offline estimator prototyping on a log file.",
                         formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument("logfile", type=str, help="Path to the log file.")
-parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
-parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
-parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
-                    help="Crop the log to the given time range (in seconds).")
-parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
+add_log_source_args(parser)
+add_log_options(parser)
 
 args = parser.parse_args()
+
+(args.logfile,) = resolve_log_source(parser, args, single=True)
 
 if args.name is None:
     args.name = args.logfile.split("/")[-1].split(".")[0]
 
-log = IndiflightLog(args.logfile, logId=args.id, resetTime=args.resetTime)
+log = IndiflightLog(args.logfile, logId=args.logId, resetTime=args.resetTime)
 if args.crop:
     log.data, _ = log.crop(args.crop[0], args.crop[1])
-
-# log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2025-05-02/btfl_004_adaptationInflightCrashAfterDisturbance.bbl",
-#                     logId=3,
-#                     resetTime=True)
-# log.data, _ = log.crop(4.643, +np.inf)
-# log.data, _ = log.crop(62., 200.)
-
-# log = IndiflightLog("/mnt/data/WorkData/BlackboxLogs/2024-10-09_TII_Wednesday/LOG00109_LongOval_140perc.BFL",
-#                     logId=1,
-#                     resetTime=True)
-# log.data, _ = log.crop(18., 26.)
-
-
-# fplt = FlightPlotter(log.data, name=f"{args.name} -- Flight Data")
-# splt = SysIdPlotter(log.data, name=f"{args.name} -- Onboard Sys ID Analysis")
-# pplt = Viewport(log.data, follow=False, name=f"{args.name} -- Onboard ID Analysis")
-# 
-# fplt.connect_viewport(pplt)
-# splt.connect_viewport(pplt)
-
-# cursor = BlittedCursor(fplt.all_axes + splt.all_axes, sharex=True)
 
 
 #%% load data for offline estimator

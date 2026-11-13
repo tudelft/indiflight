@@ -36,6 +36,7 @@ from tailsitter_id.actuation import (DEFAULT_INERTIA, DEFAULT_MASS, OUTPUT_LABEL
                                      CraftActuationModel, OnboardLearnerActuationModel,
                                      import_pyndiflight, load_actuation_model)
 from tailsitter_id import aero_fit
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source
 
 
 # %% option 1: manual PyNDIflight.crafts.TailsitterPhi configuration
@@ -73,25 +74,18 @@ def build_manual_craft():
 # %% arguments
 
 def add_source_args(p, positional=True):
-    if positional:
-        p.add_argument("source", type=str, help="Log file to identify the actuation model from.")
-    p.add_argument("--source-id", type=int, default=1, help="Log ID in the source file.")
-    p.add_argument("--source-resetTime", action="store_true", help="Reset source time to start of the log.")
+    add_log_source_args(p, prefix="source", positional=positional)
     rng = p.add_mutually_exclusive_group()
-    rng.add_argument("--source-crop", nargs=2, metavar=("START", "END"), type=float,
-                     help="Crop the source log to this time range (s).")
+    add_log_options(p, prefix="source", crop_group=rng)
     rng.add_argument("--source-auto-range", action="store_true",
                      help="Crop the source log to the span in which motors are commanded.")
 
 
 parser = ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument("logfile", type=str, help="Target log (forward flight) to fit the aero model on.")
-parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
-parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
+add_log_source_args(parser)  # target: forward flight to fit the aero model on
 rng = parser.add_mutually_exclusive_group()
-rng.add_argument("--crop", nargs=2, metavar=("START", "END"), type=float, help="Crop the target log (s).")
+add_log_options(parser, crop_group=rng)
 rng.add_argument("--auto-range", action="store_true", help="Crop the target log to the span in which motors are commanded.")
-parser.add_argument("--name", help="Name for the analysis, used in plots.")
 
 g = parser.add_argument_group("target signals")
 g.add_argument("--filter-hz", type=float, default=5., help="Low-pass cutoff for all target signals.")
@@ -132,8 +126,7 @@ add_source_args(p)
 p.add_argument("--model", help="Model to use (see tailsitter_id.offline_rls.MODELS). Prompted for if omitted.")
 
 p = sub.add_parser("onboard", help="Final onboard learner estimate (LEARNER mode).", formatter_class=ArgumentDefaultsHelpFormatter)
-p.add_argument("source", nargs="?", help="Log containing the learner estimate (default: the target log, uncropped).")
-add_source_args(p, positional=False)
+add_source_args(p)  # optional: the learner estimate log (default: the target log, uncropped)
 p.add_argument("--imu-offset", nargs=3, type=float, default=[0., 0., 0.], metavar=("X", "Y", "Z"),
                help="acc_offset (m) the learner corrected its specific force target with (not logged).")
 
@@ -141,6 +134,9 @@ p = sub.add_parser("file", help="Actuation model saved with --save-actuation.", 
 p.add_argument("path", help="Pickle file.")
 
 args = parser.parse_args()
+(args.logfile,) = resolve_log_source(parser, args, single=True)
+src_paths = resolve_log_source(parser, args, prefix="source", single=True, required=args.actuation != "onboard")
+args.source_logfile = src_paths[0] if src_paths else None
 if args.name is None:
     args.name = args.logfile.split("/")[-1].split(".")[0]
 
@@ -149,7 +145,7 @@ plt.close("all")
 
 # %% target log
 
-log, data = load_log(args.logfile, log_id=args.id, reset_time=args.resetTime, crop=args.crop, auto_range=args.auto_range)
+log, data = load_log(args.logfile, log_id=args.logId, reset_time=args.resetTime, crop=args.crop, auto_range=args.auto_range)
 fd = prepare_flight_data(data, name=args.name, filter_hz=args.filter_hz, zero_phase=args.zero_phase,
                          vel_source=args.vel_source, acc_source=args.acc_source)
 print(f"target: {args.logfile}, {fd.N} samples, {fd.t[0]:.2f} s to {fd.t[-1]:.2f} s")
@@ -158,7 +154,7 @@ print(f"target: {args.logfile}, {fd.N} samples, {fd.t[0]:.2f} s to {fd.t[-1]:.2f
 # %% actuation model
 
 def load_source():
-    return load_log(args.source, log_id=args.source_id, reset_time=args.source_resetTime,
+    return load_log(args.source_logfile, log_id=args.source_logId, reset_time=args.source_resetTime,
                     crop=args.source_crop, auto_range=args.source_auto_range)
 
 
@@ -189,7 +185,7 @@ if args.actuation == "manual":
 elif args.actuation == "global-phi":
     from tailsitter_id import global_phi
     _, src = load_source()
-    act, torch_model, _ = global_phi.fit_global_phi(src, name=f"global phi fit on {args.source.split('/')[-1]}",
+    act, torch_model, _ = global_phi.fit_global_phi(src, name=f"global phi fit on {args.source_logfile.split('/')[-1]}",
                                                     epochs=args.epochs, use_acc_smooth=not args.no_acc_smooth)
     print("\nFull model of the global fit (actuation + aero):")
     global_phi.print_parameters(act.parameters)
@@ -203,17 +199,17 @@ elif args.actuation == "rls":
     estimators = offline_rls.run(prep, None if args.model is None else [args.model])
     model_name = args.model or choose_rls_model(estimators, prep)
     act = offline_rls.OfflineRLSActuationModel(model_name, estimators[model_name].theta_h[-1],
-                                               name=f"offline RLS '{model_name}' on {args.source.split('/')[-1]}")
+                                               name=f"offline RLS '{model_name}' on {args.source_logfile.split('/')[-1]}")
 
 elif args.actuation == "onboard":
-    if args.source is None:
+    if args.source_logfile is None:
         src_log, src_data = log, log.data  # target log, uncropped
         src_name = args.logfile
         if args.source_crop or args.source_auto_range:
             sys.exit("--source-crop/--source-auto-range need an explicit source log")
     else:
         src_log, src_data = load_source()
-        src_name = args.source
+        src_name = args.source_logfile
     LEARNER_BOX = 11  # boxId_e BOXLEARNER, see IndiflightLog.modeToText
     if LEARNER_BOX not in {b for bits in src_log.flags['enable'] for b in bits}:
         print("WARNING: LEARNER mode was never enabled in the source log")

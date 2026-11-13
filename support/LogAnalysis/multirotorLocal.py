@@ -13,21 +13,21 @@ from pyFlightPlotter import BlittedCursor
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from logbook_source import add_log_source_args, add_log_options, resolve_log_source
+
 parser = ArgumentParser(description="Analyse onboard ID data from a log file.",
                         formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument("logfile", type=str, help="Path to the log file.")
-parser.add_argument("--id", type=int, default=1, help="Log ID to use.")
-# parser.add_argument("--resetTime", action="store_true", help="Reset time to start of the log.")
-parser.add_argument("--crop", required=False, nargs=2, metavar=("START", "END"), type=float,
-                    help="Crop the log to the given time range (in seconds).")
-parser.add_argument("--name", required=False, help="Name for the analysis, used in plots.")
+add_log_source_args(parser)
+add_log_options(parser)
 
 args = parser.parse_args()
+
+(args.logfile,) = resolve_log_source(parser, args, single=True)
 
 if args.name is None:
     args.name = args.logfile.split("/")[-1].split(".")[0]
 
-log = IndiflightLog(args.logfile, logId=args.id, resetTime=False)
+log = IndiflightLog(args.logfile, logId=args.logId, resetTime=args.resetTime)
 
 # crop log if requested
 if args.crop:
