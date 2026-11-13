@@ -57,6 +57,8 @@
 # CRAFT SETTINGS (formerly known as "profile") #
 ################################################
 
+set craft_name = DarkO 2
+
 ## ----- PERIPHERALS
 
 # feature
@@ -78,7 +80,7 @@ serial 0 262144 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
 serial 2 524288 115200 57600 0 115200 # HIL
-serial 1 1048576 115200 57600 0 115200 # actuator teensy board. has to be last somehow
+serial 1 4194304 115200 57600 0 115200 # feetech servos
 
 # rx
 set serialrx_provider = CRSF
@@ -118,9 +120,12 @@ set align_board_pitch = 90
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
 set acc_offset = -30, 0, 0
+set ibata_scale = 50
+set current_meter = ADC
 
 # motor setup
 set dshot_bidir = ON
+set dshot_edt = OFF
 set dshot_idle_value = 550
 set motor_pwm_protocol = DSHOT600
 set motor_poles = 14
@@ -128,7 +133,7 @@ set motor_output_reordering = 0,1,2,3,4,5,6,7
 mixer BI
 
 # failsafes
-set failsafe_delay = 5
+set failsafe_delay = 30
 set small_angle = 20   # angle at which to deny arming
 
 
@@ -140,7 +145,9 @@ set ahrs_process_denom = 8      # relative to imu
 set nn_rate_denom = 2           # relative to pid
 set blackbox_sample_rate = 1/4  # relative to pid
 
-# ekf (these are the defaults) source 0: pi, 1: uros, 2: gps
+# ekf (these are the defaults) 
+# meas_source      0: pi, 1: uros, 2: gps
+# height_source    0: position, 1: baro
 set ekf_use_quat = 1
 set ekf_use_for_manual_flight = 0
 set ekf_meas_source = 0
@@ -158,22 +165,22 @@ set ekf_baro_rpm_coeff = 0
 # geofence (relative to whats hardcoded in local_pos.c:69)
 # this defines the soft-geofence (NN-deactivate/HOLD/DESCEND actions)
 geofence clear
-geofence 519906550 43766450
-geofence 519906550 43766050
-geofence 519906300 43766050
-geofence 519906300 43766450
+# geofence 519906550 43766450
+# geofence 519906550 43766050
+# geofence 519906300 43766050
+# geofence 519906300 43766450
 
 # meter over WGS ellipsoid! not over ground TODO
-set geofence_max_altitude 20
+set geofence_max_altitude = 120
 
 # meter if violated geofence by this amount --> hard kill
-set geofence_hard_offset 10
+set geofence_hard_offset = 10
 
 # number of continuous violating GPS samples before triggering soft/hard geofence
-set geofence_grace_count 3
+set geofence_grace_count = 3
 
 # seconds of soft-violation without further input sticks/setpoint before descend is initiated
-set geofence_descend_delay 20
+set geofence_descend_delay = 20
 
 
 # filter setups
@@ -209,13 +216,13 @@ set thr_expo = 0
 set rates_type = ACTUAL
 set roll_rc_rate = 100
 set pitch_rc_rate = 100
-set yaw_rc_rate = 100
+set yaw_rc_rate = 20
 set roll_expo = 1
 set pitch_expo = 1
 set yaw_expo = 1
 set roll_srate = 70
 set pitch_srate = 70
-set yaw_srate = 70
+set yaw_srate = 20
 set throttle_limit_type = OFF
 set throttle_limit_percent = 100
 set roll_rate_limit = 1998
@@ -241,7 +248,7 @@ set indi_rate_gains     =  130,  100,  60
 
 # attitude controller limits: (deg/s)
 set indi_attitude_max_tilt_rate = 800
-set indi_attitude_max_yaw_rate = 500
+set indi_attitude_max_yaw_rate = 200
 
 # --- manual flight config and limits ---
 set indi_manual_max_upwards_accel = 30   # N/kg (or 255 to set to max possible)
@@ -267,7 +274,7 @@ set indi_act_max_rpm = 26000, 26000, 0, 0            # rpm
 set indi_act_hover_rpm = 13000, 13000, 0, 0  # rpm
 set indi_act_nonlinearity = 40, 40, 0, 0             # %
 set indi_act_min =   0,   0, -40, -40              # %, degree
-set indi_act_max = 70, 70,  40,  40              # %, degree
+set indi_act_max = 80, 80,  40,  40              # %, degree
 set indi_wls_act_preferred_state = 0,0,0,0
 set indi_wls_act_penalties = 5,5,1,1
 
@@ -384,16 +391,16 @@ positionprofile 0
 
 # gains * 10
 set position_horizontal_p = 25
-set position_horizontal_i = 8
+set position_horizontal_i = 5
 set position_horizontal_d = 22
 set position_vertical_p = 214
 set position_vertical_i = 5
 set position_vertical_d = 83
 
 # max velocities in cm/s and cm/s^2
-set position_max_horizontal_speed = 500
-set position_max_horizontal_accel = 1000
-set position_max_upwards_speed = 250
+set position_max_horizontal_speed = 1500
+set position_max_horizontal_accel = 1200
+set position_max_upwards_speed = 500
 set position_max_downwards_speed = 150
 set position_max_upwards_accel = 3000
 set position_max_downwards_accel = 600

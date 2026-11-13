@@ -119,19 +119,19 @@ static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = {
 
     // { .location = { .V = { .X = +0.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +2.0f,  .Y = +2.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
+    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
     // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf }
 
 };

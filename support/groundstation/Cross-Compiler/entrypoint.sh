@@ -132,16 +132,16 @@ make -j $processes # TODO: make the thread count a parameter that can be passed 
 # TODO: error handling, so we dont upload failed builds
 
 # upload if necessary
-if [ ! -z $deploy ]
+if [ -n $deploy ]
 then
     # resolve remote host (prefer REMOTE_NAME over REMOTE_IP)
-    if [[ -n $REMOTE_NAME ]]; then
-        REMOTE_HOST=$REMOTE_NAME
-    elif [[ -n $REMOTE_IP ]]; then
-        REMOTE_HOST=$REMOTE_IP
-    else
-        echo "REMOTE_IP or REMOTE_NAME must be set for deployment"
-        exit 1
+    if [[ -z $REMOTE_HOST ]]; then
+        if [[ -z $REMOTE_IP ]]; then
+            echo "REMOTE_IP or REMOTE_HOST must be set for deployment"
+            exit 1
+        else
+            REMOTE_HOST=$REMOTE_IP
+        fi
     fi
 
     echo -n "Deploying build... "
