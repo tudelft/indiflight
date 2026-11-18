@@ -588,13 +588,6 @@ void updateLearner(timeUs_t current) {
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             A[act] = 1e-5f * 2.f * learnRun.fxOmega[act] * learnRun.fxOmegaDiff[act];
             A[act + learnerConfig()->numAct] = 1e-3f * learnRun.fxOmegaDotDiff[act];
-            if (learningQueryState == LEARNING_QUERY_ACTIVE) {
-                // do not include motors that are not excited yet
-                if (motorQueryStates[act].queryState == MOTOR_QUERY_ZERO) {
-                    A[act] = 0.f;
-                    A[act + learnerConfig()->numAct] = 0.f;
-                }
-            }
         }
         float ySpf[3];
         float yRateDot[3];
