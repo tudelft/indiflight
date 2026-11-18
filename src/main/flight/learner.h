@@ -60,7 +60,10 @@ typedef struct learnerConfig_s {
     uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
     uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: from bandwidth equation (rlsInit). 1000000: no forgetting
     uint32_t hardcodeMaxRpm;    // 0: learned max rpm. otherwise: use this max rpm for all motors
-    int16_t hardcodeG1Fz;       // 0: learned linear forces. otherwise: fx = fy = 0, fz = this (same units as indi_act_g1_fz)
+    int16_t hardcodeG1Fz;       // used if hardcodeLinearForces. same units as indi_act_g1_fz, 0 is a valid value
+    uint8_t hardcodeLinearForces; // 0: learned fx, fy, fz. 1: use hardcodeG1Fx, hardcodeG1Fy, hardcodeG1Fz
+    int16_t hardcodeG1Fx;       // used if hardcodeLinearForces. same units as indi_act_g1_fx, 0 is a valid value
+    int16_t hardcodeG1Fy;       // used if hardcodeLinearForces. same units as indi_act_g1_fy, 0 is a valid value
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);

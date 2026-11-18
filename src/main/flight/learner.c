@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 3);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 4);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -93,7 +93,10 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .simpleMotorModel = true, // behaviour since f5d3392 "simplify motor model"
     .rlsLambda = 1000000,     // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
     .hardcodeMaxRpm = 0,      // 0: learned (was build flag LEARNER_HARDCODE_MAXRPM -> 37000)
-    .hardcodeG1Fz = 0         // 0: learned (was build flag LEARNER_HARDCODE_LINEAR_FORCES -> -438)
+    .hardcodeG1Fz = 0,
+    .hardcodeLinearForces = false, // 0: learned (was build flag LEARNER_HARDCODE_LINEAR_FORCES -> 0, 0, -438)
+    .hardcodeG1Fx = 0,
+    .hardcodeG1Fy = 0
 );
 
 // extern
@@ -939,10 +942,10 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         actG2rotHover = actG2rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
-        if (learnerConfig()->hardcodeG1Fz != 0) {
-            // learner_hardcode_g1_fz, replaces build flag LEARNER_HARDCODE_LINEAR_FORCES
-            indi->actG1_fx[act]    = 0;
-            indi->actG1_fy[act]    = 0;
+        if (learnerConfig()->hardcodeLinearForces) {
+            // learner_hardcode_linear_forces, replaces build flag LEARNER_HARDCODE_LINEAR_FORCES
+            indi->actG1_fx[act]    = learnerConfig()->hardcodeG1Fx;
+            indi->actG1_fy[act]    = learnerConfig()->hardcodeG1Fy;
             indi->actG1_fz[act]    = learnerConfig()->hardcodeG1Fz;
         } else {
             indi->actG1_fx[act]    = actG1linHover.V.X;
