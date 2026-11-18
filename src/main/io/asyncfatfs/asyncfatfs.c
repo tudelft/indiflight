@@ -3417,6 +3417,88 @@ static void afatfs_freeFileCreated(afatfsFile_t *file)
 
 #endif
 
+/**
+ * Return all space held by the freefile to the FAT and re-create the freefile from the largest block of contiguous free
+ * space, the same way as at boot when the freefile is empty.
+ *
+ * Space freed by deleting files only goes back to the freefile in one special case (deleting the newest contiguous
+ * file), so without this, contiguous files such as blackbox logs can't use the space of deleted files.
+ *
+ * Call with no file open in contiguous mode. Call repeatedly until it returns AFATFS_OPERATION_SUCCESS (or
+ * AFATFS_OPERATION_FAILURE). After success the filesystem is in the INITIALIZATION state while afatfs_poll() searches
+ * the FAT and sets up the new freefile, and READY again afterwards.
+ */
+afatfsOperationStatus_e afatfs_rebuildFreeFile(void)
+{
+#ifdef AFATFS_USE_FREEFILE
+    static enum {
+        REBUILD_START,
+        REBUILD_FREE_CLUSTERS,
+        REBUILD_SAVE_DIRECTORY_ENTRY,
+    } phase = REBUILD_START;
+    static uint32_t currentCluster, endCluster;
+
+    afatfsOperationStatus_e status;
+
+    doMore:
+    switch (phase) {
+        case REBUILD_START:
+            if (afatfs.filesystemState != AFATFS_FILESYSTEM_STATE_READY
+                || afatfs.freeFile.operation.operation == AFATFS_FILE_OPERATION_LOCKED) {
+                return AFATFS_OPERATION_FAILURE;
+            }
+            if (afatfs_fileIsBusy(&afatfs.freeFile)) {
+                return AFATFS_OPERATION_IN_PROGRESS;
+            }
+
+            // The freefile is contiguous by construction: clusters are only ever taken from its start
+            currentCluster = afatfs.freeFile.firstCluster;
+            endCluster = currentCluster + afatfs.freeFile.physicalSize / afatfs_clusterSize();
+
+            phase = currentCluster >= FAT_SMALLEST_LEGAL_CLUSTER_NUMBER ? REBUILD_FREE_CLUSTERS : REBUILD_SAVE_DIRECTORY_ENTRY;
+            goto doMore;
+
+        case REBUILD_FREE_CLUSTERS:
+            status = afatfs_FATFillWithPattern(AFATFS_FAT_PATTERN_FREE, &currentCluster, endCluster);
+
+            if (status == AFATFS_OPERATION_SUCCESS) {
+                afatfs.freeFile.firstCluster = 0;
+                afatfs.freeFile.logicalSize = 0;
+                afatfs.freeFile.physicalSize = 0;
+
+                phase = REBUILD_SAVE_DIRECTORY_ENTRY;
+                goto doMore;
+            } else if (status == AFATFS_OPERATION_FAILURE) {
+                phase = REBUILD_START;
+                return AFATFS_OPERATION_FAILURE;
+            }
+            return AFATFS_OPERATION_IN_PROGRESS;
+
+        case REBUILD_SAVE_DIRECTORY_ENTRY:
+            status = afatfs_saveDirectoryEntry(&afatfs.freeFile, AFATFS_SAVE_DIRECTORY_NORMAL);
+
+            if (status == AFATFS_OPERATION_SUCCESS) {
+                // Continue like the boot-time initialisation of an empty freefile
+                afatfs.filesystemFull = false;
+                afatfs_findLargestContiguousFreeBlockBegin();
+                afatfs.initPhase = AFATFS_INITIALIZATION_FREEFILE_FAT_SEARCH;
+                afatfs.filesystemState = AFATFS_FILESYSTEM_STATE_INITIALIZATION;
+
+                phase = REBUILD_START;
+                return AFATFS_OPERATION_SUCCESS;
+            } else if (status == AFATFS_OPERATION_FAILURE) {
+                phase = REBUILD_START;
+                return AFATFS_OPERATION_FAILURE;
+            }
+            return AFATFS_OPERATION_IN_PROGRESS;
+    }
+
+    return AFATFS_OPERATION_FAILURE;
+#else
+    return AFATFS_OPERATION_SUCCESS;
+#endif
+}
+
 #ifdef AFATFS_USE_INTROSPECTIVE_LOGGING
 
 static void afatfs_introspecLogCreated(afatfsFile_t *file)

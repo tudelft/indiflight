@@ -31,6 +31,7 @@
 #include "blackbox_encoding.h"
 #include "blackbox_fielddefs.h"
 #include "blackbox_io.h"
+#include "blackbox_download.h"
 
 #include "build/build_config.h"
 #include "build/debug.h"
@@ -1911,6 +1912,11 @@ static void startInTestMode(void)
                 return; // When in test mode, we cannot share the MSP and serial logger port!
             }
         }
+#ifdef USE_MSP_LOG_DOWNLOAD
+        if (!blackboxDownloadReleaseForLogging()) {
+            return; // An MSP log download or erase still holds the storage, try again next iteration
+        }
+#endif
         blackboxStart();
         startedLoggingInTestMode = true;
     }
@@ -3163,6 +3169,12 @@ void blackboxUpdate(timeUs_t currentTimeUs)
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
         if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW) || shouldRunBecauseEkfInitialized) {
+#ifdef USE_MSP_LOG_DOWNLOAD
+            if (!blackboxDownloadReleaseForLogging()) {
+                // An MSP log download or erase still holds the storage, try again next iteration
+                break;
+            }
+#endif
             blackboxOpen();
             blackboxStart();
         }

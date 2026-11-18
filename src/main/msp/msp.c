@@ -30,6 +30,7 @@
 
 #include "blackbox/blackbox.h"
 #include "blackbox/blackbox_io.h"
+#include "blackbox/blackbox_download.h"
 
 #include "build/build_config.h"
 #include "build/debug.h"
@@ -2517,6 +2518,24 @@ static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDesc, int16_
         }
 
         break;
+
+#ifdef USE_MSP_LOG_DOWNLOAD
+    case MSP2_INDI_BLACKBOX_LOG_LIST:
+        blackboxDownloadMspList(src, dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_READ:
+        blackboxDownloadMspRead(src, dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_CLOSE:
+        blackboxDownloadMspClose(dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_ERASE_ALL:
+        blackboxDownloadMspEraseAll(src, dst);
+        break;
+#endif
 
     case MSP2_GET_TEXT:
         {
