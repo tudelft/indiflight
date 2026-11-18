@@ -1424,6 +1424,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, simpleMotorModel) },
     { PARAM_NAME_LEARNER_RLS_LAMBDA,        VAR_UINT32 | MASTER_VALUE, .config.u32Max = 1000000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rlsLambda) },
     { PARAM_NAME_LEARNER_HARDCODE_MAX_RPM,  VAR_UINT32 | MASTER_VALUE, .config.u32Max = 200000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeMaxRpm) },
+    { PARAM_NAME_LEARNER_HARDCODE_LINEAR_FORCES, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeLinearForces) },
+    { PARAM_NAME_LEARNER_HARDCODE_G1_FX,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fx) },
+    { PARAM_NAME_LEARNER_HARDCODE_G1_FY,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fy) },
     { PARAM_NAME_LEARNER_HARDCODE_G1_FZ,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fz) },
 #endif
 

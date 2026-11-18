@@ -280,6 +280,9 @@
 #define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
 #define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
 #define PARAM_NAME_LEARNER_HARDCODE_MAX_RPM "learner_hardcode_max_rpm"
+#define PARAM_NAME_LEARNER_HARDCODE_LINEAR_FORCES "learner_hardcode_linear_forces"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FX "learner_hardcode_g1_fx"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FY "learner_hardcode_g1_fy"
 #define PARAM_NAME_LEARNER_HARDCODE_G1_FZ "learner_hardcode_g1_fz"
 #endif
 
