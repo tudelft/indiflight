@@ -97,6 +97,19 @@ blackbox_unittest_SRC :=  \
 		$(USER_DIR)/common/typeconversion.c \
 		$(USER_DIR)/drivers/accgyro/gyro_sync.c
 
+blackbox_download_unittest_SRC := \
+		$(USER_DIR)/blackbox/blackbox_download.c \
+		$(USER_DIR)/common/huffman.c \
+		$(USER_DIR)/common/huffman_table.c \
+		$(USER_DIR)/common/streambuf.c \
+		$(USER_DIR)/io/asyncfatfs/fat_standard.c
+
+blackbox_download_unittest_DEFINES := \
+		USE_SDCARD= \
+		USE_FLASHFS= \
+		USE_HUFFMAN= \
+		USE_MSP_LOG_DOWNLOAD=
+
 blackbox_encoding_unittest_SRC :=  \
 		$(USER_DIR)/blackbox/blackbox_encoding.c \
 		$(USER_DIR)/common/encoding.c \

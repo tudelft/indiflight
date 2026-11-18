@@ -293,6 +293,11 @@
 #undef USE_SDCARD_SPI
 #endif
 
+// Listing, downloading and erasing blackbox logs (SD card or flash) over MSP
+#if defined(USE_BLACKBOX) && (defined(USE_SDCARD) || defined(USE_FLASHFS))
+#define USE_MSP_LOG_DOWNLOAD
+#endif
+
 #if !defined(USE_VCP)
 #undef USE_USB_CDC_HID
 #undef USE_USB_MSC

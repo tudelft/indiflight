@@ -67,6 +67,8 @@
 
 
 #include "io/asyncfatfs/asyncfatfs.h"
+
+#include "blackbox/blackbox_download.h"
 #include "io/beeper.h"
 #include "io/dashboard.h"
 #include "io/flashfs.h"
@@ -138,6 +140,10 @@ static void taskMain(timeUs_t currentTimeUs)
 
 #ifdef USE_SDCARD
     afatfs_poll();
+#endif
+
+#ifdef USE_MSP_LOG_DOWNLOAD
+    blackboxDownloadUpdate(millis());
 #endif
 
 #ifdef USE_FLASHFS
