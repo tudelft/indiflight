@@ -1,0 +1,329 @@
+From 9a0069f036cb2be903735beecccaaeff50ceb199 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 18 Nov 2026 14:49:17 +0100
+Subject: [PATCH 1/2] Learner: profile settings for motor model and RLS
+ forgetting factor
+
+Make the two changes from 5bf60bd and f5d3392 selectable from the profile
+instead of hardcoded:
+
+- learner_simple_motor_model (0/1, default 1)
+  1: omega - idle = a*d - tau*omegaDot (simplified model, f5d3392)
+  0: omega = a*d + b*sqrt(d) + c - tau*omegaDot (full model, before f5d3392)
+  Also applied in setFxRlsToProfile, so the in-flight reset initialises
+  the motor RLS consistently with the selected model.
+
+- learner_rls_lambda (0..1000000, lambda * 1e6, default 1000000)
+  0: forgetting factor from the bandwidth equation in rlsInit
+  otherwise: use the given value (clamped to [0.9, 1])
+  rlsInit computes the equation again; the learner overrides it through
+  the new rlsSetLambda. rlsInit has no callers outside the learner.
+
+Defaults reproduce the current behaviour. learnerConfig PG version 1 -> 2.
+Both settings are written to the blackbox header.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ShSV4NN8hhaJjwwPzXK1XY
+---
+ configs/profiles/HexDemo_post_fix.txt         |  5 ++
+ .../profiles/HexDemo_post_fix_RpmBench.txt    |  5 ++
+ src/main/blackbox/blackbox.c                  |  2 +
+ src/main/cli/settings.c                       |  2 +
+ src/main/common/rls.c                         | 15 +++-
+ src/main/common/rls.h                         |  1 +
+ src/main/fc/parameter_names.h                 |  2 +
+ src/main/flight/learner.c                     | 70 ++++++++++++++-----
+ src/main/flight/learner.h                     |  2 +
+ 9 files changed, 83 insertions(+), 21 deletions(-)
+
+diff --git a/configs/profiles/HexDemo_post_fix.txt b/configs/profiles/HexDemo_post_fix.txt
+index 6dbd5a0f7..522b18cd2 100644
+--- a/configs/profiles/HexDemo_post_fix.txt
++++ b/configs/profiles/HexDemo_post_fix.txt
+@@ -449,6 +449,11 @@ set learner_zeta_attitude = 80
+ set learner_zeta_velocity = 70
+ set learner_zeta_position = 90
+ 
++# motor model: 1 = omega - idle = a*d (simplified), 0 = omega = a*d + b*sqrt(d) + c
++set learner_simple_motor_model = 1
++# RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
++set learner_rls_lambda = 1000000
++
+ set learner_roll_misalignment = 0
+ set learner_pitch_misalignment = 0
+ set learner_yaw_misalignment = 0
+diff --git a/configs/profiles/HexDemo_post_fix_RpmBench.txt b/configs/profiles/HexDemo_post_fix_RpmBench.txt
+index 0f88de760..03b44ec18 100644
+--- a/configs/profiles/HexDemo_post_fix_RpmBench.txt
++++ b/configs/profiles/HexDemo_post_fix_RpmBench.txt
+@@ -454,6 +454,11 @@ set learner_zeta_attitude = 80
+ set learner_zeta_velocity = 70
+ set learner_zeta_position = 90
+ 
++# motor model: 1 = omega - idle = a*d (simplified), 0 = omega = a*d + b*sqrt(d) + c
++set learner_simple_motor_model = 1
++# RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
++set learner_rls_lambda = 1000000
++
+ set learner_roll_misalignment = 0
+ set learner_pitch_misalignment = 0
+ set learner_yaw_misalignment = 0
+diff --git a/src/main/blackbox/blackbox.c b/src/main/blackbox/blackbox.c
+index d56a1c9d4..f90c59cc0 100644
+--- a/src/main/blackbox/blackbox.c
++++ b/src/main/blackbox/blackbox.c
+@@ -2847,6 +2847,8 @@ static bool blackboxWriteSysinfo(void)
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndiProfileAfterQuery);
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPositionProfileAfterQuery);
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotationAfterQuery);
++        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, "%d",  learnerConfig()->simpleMotorModel);
++        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RLS_LAMBDA, "%u",  (unsigned) learnerConfig()->rlsLambda);
+ #endif
+ #ifdef USE_NN_CONTROL
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);
+diff --git a/src/main/cli/settings.c b/src/main/cli/settings.c
+index 60576fcc3..dc9f2611a 100644
+--- a/src/main/cli/settings.c
++++ b/src/main/cli/settings.c
+@@ -1421,6 +1421,8 @@ const clivalue_t valueTable[] = {
+     { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
+     { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
+     { PARAM_NAME_LEARNER_APPLY_HOVER,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyHoverRotationAfterQuery) },
++    { PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, simpleMotorModel) },
++    { PARAM_NAME_LEARNER_RLS_LAMBDA,        VAR_UINT32 | MASTER_VALUE, .config.u32Max = 1000000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rlsLambda) },
+ #endif
+ 
+ #ifdef USE_NN_CONTROL
+diff --git a/src/main/common/rls.c b/src/main/common/rls.c
+index 50328aa3d..9fa7a7dd4 100644
+--- a/src/main/common/rls.c
++++ b/src/main/common/rls.c
+@@ -96,8 +96,9 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
+     if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz))
+         return RLS_FAIL;
+ 
+-    // rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
+-    rls->lambdaBase = rls->lambda = 1.0f;
++    // forgetting factor from the action bandwidth. Callers can override it
++    // afterwards with rlsSetLambda (the learner does, see learner_rls_lambda)
++    rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
+ 
+     // initialize fortescue tuner
+     fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
+@@ -105,6 +106,16 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
+     return RLS_SUCCESS;
+ }
+ 
++// override the forgetting factor set by rlsInit. lambda in (0, 1], 1: no forgetting
++rls_exit_code_t rlsSetLambda(rls_t* rls, float lambda) {
++    if ((rls == NULL) || (lambda <= 0.f) || (lambda > 1.f))
++        return RLS_FAIL;
++
++    rls->lambdaBase = rls->lambda = lambda;
++
++    return RLS_SUCCESS;
++}
++
+ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float actMinBandwidthHz) {
+     if (rls == NULL)
+         return RLS_FAIL;
+diff --git a/src/main/common/rls.h b/src/main/common/rls.h
+index e89496aa4..40975d37d 100644
+--- a/src/main/common/rls.h
++++ b/src/main/common/rls.h
+@@ -97,6 +97,7 @@ typedef struct rls_parallel_s {
+ // we likely need to allocate 6 + 1 + 4 RLS's for a quad, thats 3.2KB
+ 
+ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz);
++rls_exit_code_t rlsSetLambda(rls_t* rls, float lambda);
+ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y);
+ rls_exit_code_t rlsParallelInit(rls_parallel_t* rls, int n, int p, float gamma, float Ts, float Tchar);
+ 
+diff --git a/src/main/fc/parameter_names.h b/src/main/fc/parameter_names.h
+index 7ff252481..e2e6caf69 100644
+--- a/src/main/fc/parameter_names.h
++++ b/src/main/fc/parameter_names.h
+@@ -277,6 +277,8 @@
+ #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
+ #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
+ #define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
++#define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
++#define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
+ #endif
+ 
+ #ifdef USE_NN_CONTROL
+diff --git a/src/main/flight/learner.c b/src/main/flight/learner.c
+index ef3c44bce..37177af53 100644
+--- a/src/main/flight/learner.c
++++ b/src/main/flight/learner.c
+@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
+ #error "must use learner with USE_INDI"
+ #endif
+ 
+-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
++PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
+ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
+     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
+     .numAct = 4,
+@@ -89,7 +89,9 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
+     .randomizeMisalignment = false,
+     .applyIndiProfileAfterQuery = false,
+     .applyPositionProfileAfterQuery = false,
+-    .applyHoverRotationAfterQuery = false
++    .applyHoverRotationAfterQuery = false,
++    .simpleMotorModel = true, // behaviour since f5d3392 "simplify motor model"
++    .rlsLambda = 1000000      // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
+ );
+ 
+ // extern
+@@ -145,6 +147,24 @@ static positionProfile_t dummy;
+ static positionProfile_t* positionProfileLearned = &dummy;
+ #endif
+ 
++// idle speed subtracted in the simple motor model (learner_simple_motor_model = 1)
++#define LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S (500.f)
++// lower bound on a user-set forgetting factor, below this the covariance blows up within a query
++#define LEARNER_RLS_LAMBDA_MIN 0.9f
++
++static float learnerIdleOmega(void) {
++    return learnerConfig()->simpleMotorModel ? LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S : 0.f;
++}
++
++// rlsInit, then apply learner_rls_lambda. 0 keeps the bandwidth equation from rlsInit
++static void learnerRlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz) {
++    rlsInit(rls, n, d, gamma, sampleTimeUs, actionBandwidthHz);
++    if (learnerConfig()->rlsLambda > 0) {
++        float lambda = constrainf(1e-6f * (float) learnerConfig()->rlsLambda, LEARNER_RLS_LAMBDA_MIN, 1.f);
++        rlsSetLambda(rls, lambda);
++    }
++}
++
+ // learning
+ void initLearner(void) {
+     // limited to 4 for now
+@@ -158,7 +178,7 @@ void initLearner(void) {
+ 
+     // float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
+     float actionBandwidthHz = 680.f / ((float) gyro.targetLooptime); // make sure lambdaBase is 0.995
+-    rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
++    learnerRlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+ 
+     // init filters and other rls
+     //rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
+@@ -166,12 +186,12 @@ void initLearner(void) {
+ 
+     // Spf
+     for (int i = 0; i < 3; i++) {
+-        rlsInit(&fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+     }
+ 
+     // RateDot
+     for (int i = 3; i < 6; i++) {
+-        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+     }
+ 
+     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+@@ -184,7 +204,7 @@ void initLearner(void) {
+     }
+ 
+     for (int act = 0; act < learnerConfig()->numAct; act++) {
+-        rlsInit(&motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
+         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
+@@ -205,13 +225,13 @@ static void setFxRlsToProfile(void) {
+     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
+ 
+     for (int axis = 0; axis < 3; axis++) {
+-        rlsInit(&fxRls[axis], learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&fxRls[axis], learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+     }
+     for (int i = 3; i < 6; i++) {
+-        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+     }
+     for (int act = 0; act < learnerConfig()->numAct; act++) {
+-        rlsInit(&motorRls[act], 4, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
++        learnerRlsInit(&motorRls[act], 4, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+     }
+ 
+     // inverse of updateLearnedParameters
+@@ -219,9 +239,15 @@ static void setFxRlsToProfile(void) {
+         float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
+         float isq = 1.f / sq(maxOmega);
+ 
+-        float k = 0.01f * p->actNonlinearity[motor];
+-        motorRls[motor].x[0] = 1e-3f * k * maxOmega;
+-        motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
++        if (learnerConfig()->simpleMotorModel) {
++            // omega - idle = a*d  ->  a = maxOmega - idle
++            motorRls[motor].x[0] = 1e-3f * (maxOmega - learnerIdleOmega());
++            motorRls[motor].x[1] = 0.f;
++        } else {
++            float k = 0.01f * p->actNonlinearity[motor];
++            motorRls[motor].x[0] = 1e-3f * k * maxOmega;
++            motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
++        }
+         motorRls[motor].x[2] = 0.;
+         motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
+ 
+@@ -617,19 +643,24 @@ void updateLearner(timeUs_t current) {
+ 
+     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
+ 
+-#define LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S (500.f)
+     if (motorLearningConditions) {
++        // simple:  omega - idle = a*d                 - tau*omegaDot  (sqrt(d) and constant terms disabled)
++        // full:    omega        = a*d + b*sqrt(d) + c - tau*omegaDot
++        const bool simple = learnerConfig()->simpleMotorModel;
++        const float idleOmega = learnerIdleOmega();
+         for (int act = 0; act < learnerConfig()->numAct; act++) {
+             float A[4] = {
+                 learnRun.motorD[act],
+-                0.f*learnRun.motorSqrtD[act],
+-                0.f*1.f,
++                simple ? 0.f : learnRun.motorSqrtD[act],
++                simple ? 0.f : 1.f,
+                 -1e-4f * learnRun.motorOmegaDot[act]
+             };
+-            float y = (learnRun.motorOmega[act] - LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S) * 1e-3f; // get into range of 1
++            float y = (learnRun.motorOmega[act] - idleOmega) * 1e-3f; // get into range of 1
+             rlsNewSample( &motorRls[act], A, &y );
+-            motorRls[act].x[1] = 0.f;
+-            motorRls[act].x[2] = 0.f;
++            if (simple) {
++                motorRls[act].x[1] = 0.f;
++                motorRls[act].x[2] = 0.f;
++            }
+         }
+     }
+     learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
+@@ -865,7 +896,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+     indi->actNum = MIN(learnerConfig()->numAct, MAXU);
+     for (int act = 0; act < indi->actNum ; act++) {
+         //              inv y-scale 
+-        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S;
++        // simple model: idle + a*1.  full model: a*1 + b*sqrt(1) (intercept c not included, as before f5d3392)
++        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + learnerIdleOmega();
+ #ifdef LEARNER_HARDCODE_MAXRPM
+         maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
+ #endif
+diff --git a/src/main/flight/learner.h b/src/main/flight/learner.h
+index 08058e01a..3a19f44f1 100644
+--- a/src/main/flight/learner.h
++++ b/src/main/flight/learner.h
+@@ -57,6 +57,8 @@ typedef struct learnerConfig_s {
+     uint8_t applyIndiProfileAfterQuery;
+     uint8_t applyPositionProfileAfterQuery;
+     uint8_t applyHoverRotationAfterQuery;
++    uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
++    uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: from bandwidth equation (rlsInit). 1000000: no forgetting
+ } learnerConfig_t;
+ 
+ PG_DECLARE(learnerConfig_t, learnerConfig);
+-- 
+2.43.0
+

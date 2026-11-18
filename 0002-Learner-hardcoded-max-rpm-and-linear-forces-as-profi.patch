@@ -1,0 +1,199 @@
+From ebf353634293cde65b84cb1d582a152959674e3d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 18 Nov 2026 14:54:10 +0100
+Subject: [PATCH 2/2] Learner: hardcoded max rpm and linear forces as profile
+ settings
+
+Replace the build flags LEARNER_HARDCODE_MAXRPM and
+LEARNER_HARDCODE_LINEAR_FORCES with settings:
+
+- learner_hardcode_max_rpm (0..200000, default 0)
+  0: max rpm from the learned motor model
+  otherwise: use this max rpm for all motors (flag used 37000)
+
+- learner_hardcode_g1_fz (-32000..32000, default 0)
+  0: learned fx, fy, fz
+  otherwise: fx = fy = 0, fz = this value, same units as
+  indi_act_g1_fz (flag used -438)
+
+The HexDemo_post_fix profiles drop the two #defines and set 37000 and
+-438 instead, so those builds behave as before. learnerConfig PG
+version 2 -> 3. Both settings are written to the blackbox header.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ShSV4NN8hhaJjwwPzXK1XY
+---
+ configs/profiles/HexDemo_post_fix.txt         |  5 +--
+ .../profiles/HexDemo_post_fix_RpmBench.txt    |  5 +--
+ src/main/blackbox/blackbox.c                  |  2 ++
+ src/main/cli/settings.c                       |  2 ++
+ src/main/fc/parameter_names.h                 |  2 ++
+ src/main/flight/learner.c                     | 32 +++++++++++--------
+ src/main/flight/learner.h                     |  2 ++
+ 7 files changed, 32 insertions(+), 18 deletions(-)
+
+diff --git a/configs/profiles/HexDemo_post_fix.txt b/configs/profiles/HexDemo_post_fix.txt
+index 522b18cd2..a6dff48b0 100644
+--- a/configs/profiles/HexDemo_post_fix.txt
++++ b/configs/profiles/HexDemo_post_fix.txt
+@@ -49,8 +49,6 @@ del
+ #define USE_CATAPULT
+ #define USE_LEARNER
+ ## #define USE_NN_CONTROL
+-#define LEARNER_HARDCODE_MAXRPM
+-#define LEARNER_HARDCODE_LINEAR_FORCES
+ 
+ ################################################
+ # CRAFT SETTINGS (formerly known as "profile") #
+@@ -453,6 +451,9 @@ set learner_zeta_position = 90
+ set learner_simple_motor_model = 1
+ # RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
+ set learner_rls_lambda = 1000000
++# hardcoded learner outputs (replace the old LEARNER_HARDCODE_* build flags). 0 = learned
++set learner_hardcode_max_rpm = 37000
++set learner_hardcode_g1_fz = -438
+ 
+ set learner_roll_misalignment = 0
+ set learner_pitch_misalignment = 0
+diff --git a/configs/profiles/HexDemo_post_fix_RpmBench.txt b/configs/profiles/HexDemo_post_fix_RpmBench.txt
+index 03b44ec18..ba36e6997 100644
+--- a/configs/profiles/HexDemo_post_fix_RpmBench.txt
++++ b/configs/profiles/HexDemo_post_fix_RpmBench.txt
+@@ -51,8 +51,6 @@
+ #define USE_CATAPULT
+ #define USE_LEARNER
+ ## #define USE_NN_CONTROL
+-#define LEARNER_HARDCODE_MAXRPM
+-#define LEARNER_HARDCODE_LINEAR_FORCES
+ 
+ ################################################
+ # CRAFT SETTINGS (formerly known as "profile") #
+@@ -458,6 +456,9 @@ set learner_zeta_position = 90
+ set learner_simple_motor_model = 1
+ # RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
+ set learner_rls_lambda = 1000000
++# hardcoded learner outputs (replace the old LEARNER_HARDCODE_* build flags). 0 = learned
++set learner_hardcode_max_rpm = 37000
++set learner_hardcode_g1_fz = -438
+ 
+ set learner_roll_misalignment = 0
+ set learner_pitch_misalignment = 0
+diff --git a/src/main/blackbox/blackbox.c b/src/main/blackbox/blackbox.c
+index f90c59cc0..23f24ce3c 100644
+--- a/src/main/blackbox/blackbox.c
++++ b/src/main/blackbox/blackbox.c
+@@ -2849,6 +2849,8 @@ static bool blackboxWriteSysinfo(void)
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotationAfterQuery);
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, "%d",  learnerConfig()->simpleMotorModel);
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RLS_LAMBDA, "%u",  (unsigned) learnerConfig()->rlsLambda);
++        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_MAX_RPM, "%u",  (unsigned) learnerConfig()->hardcodeMaxRpm);
++        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_G1_FZ, "%d",  learnerConfig()->hardcodeG1Fz);
+ #endif
+ #ifdef USE_NN_CONTROL
+         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);
+diff --git a/src/main/cli/settings.c b/src/main/cli/settings.c
+index dc9f2611a..1fa706cb4 100644
+--- a/src/main/cli/settings.c
++++ b/src/main/cli/settings.c
+@@ -1423,6 +1423,8 @@ const clivalue_t valueTable[] = {
+     { PARAM_NAME_LEARNER_APPLY_HOVER,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyHoverRotationAfterQuery) },
+     { PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, simpleMotorModel) },
+     { PARAM_NAME_LEARNER_RLS_LAMBDA,        VAR_UINT32 | MASTER_VALUE, .config.u32Max = 1000000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rlsLambda) },
++    { PARAM_NAME_LEARNER_HARDCODE_MAX_RPM,  VAR_UINT32 | MASTER_VALUE, .config.u32Max = 200000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeMaxRpm) },
++    { PARAM_NAME_LEARNER_HARDCODE_G1_FZ,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fz) },
+ #endif
+ 
+ #ifdef USE_NN_CONTROL
+diff --git a/src/main/fc/parameter_names.h b/src/main/fc/parameter_names.h
+index e2e6caf69..5dd35e2d6 100644
+--- a/src/main/fc/parameter_names.h
++++ b/src/main/fc/parameter_names.h
+@@ -279,6 +279,8 @@
+ #define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
+ #define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
+ #define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
++#define PARAM_NAME_LEARNER_HARDCODE_MAX_RPM "learner_hardcode_max_rpm"
++#define PARAM_NAME_LEARNER_HARDCODE_G1_FZ "learner_hardcode_g1_fz"
+ #endif
+ 
+ #ifdef USE_NN_CONTROL
+diff --git a/src/main/flight/learner.c b/src/main/flight/learner.c
+index 37177af53..985845eb2 100644
+--- a/src/main/flight/learner.c
++++ b/src/main/flight/learner.c
+@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
+ #error "must use learner with USE_INDI"
+ #endif
+ 
+-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
++PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 3);
+ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
+     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
+     .numAct = 4,
+@@ -91,7 +91,9 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
+     .applyPositionProfileAfterQuery = false,
+     .applyHoverRotationAfterQuery = false,
+     .simpleMotorModel = true, // behaviour since f5d3392 "simplify motor model"
+-    .rlsLambda = 1000000      // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
++    .rlsLambda = 1000000,     // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
++    .hardcodeMaxRpm = 0,      // 0: learned (was build flag LEARNER_HARDCODE_MAXRPM -> 37000)
++    .hardcodeG1Fz = 0         // 0: learned (was build flag LEARNER_HARDCODE_LINEAR_FORCES -> -438)
+ );
+ 
+ // extern
+@@ -898,9 +900,10 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+         //              inv y-scale 
+         // simple model: idle + a*1.  full model: a*1 + b*sqrt(1) (intercept c not included, as before f5d3392)
+         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + learnerIdleOmega();
+-#ifdef LEARNER_HARDCODE_MAXRPM
+-        maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
+-#endif
++        if (learnerConfig()->hardcodeMaxRpm > 0) {
++            // learner_hardcode_max_rpm, replaces build flag LEARNER_HARDCODE_MAXRPM
++            maxOmega = 2.f * M_PIf / 60.f  *  (float) learnerConfig()->hardcodeMaxRpm;
++        }
+         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
+         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
+         //                                            inv y-scale   a-scale     config-scale
+@@ -936,15 +939,16 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
+         actG2rotHover = actG2rotIMU[act];
+         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
+ 
+-#ifdef LEARNER_HARDCODE_LINEAR_FORCES
+-        indi->actG1_fx[act]    = 0;
+-        indi->actG1_fy[act]    = 0;
+-        indi->actG1_fz[act]    = -438;
+-#else
+-        indi->actG1_fx[act]    = actG1linHover.V.X;
+-        indi->actG1_fy[act]    = actG1linHover.V.Y;
+-        indi->actG1_fz[act]    = actG1linHover.V.Z;
+-#endif
++        if (learnerConfig()->hardcodeG1Fz != 0) {
++            // learner_hardcode_g1_fz, replaces build flag LEARNER_HARDCODE_LINEAR_FORCES
++            indi->actG1_fx[act]    = 0;
++            indi->actG1_fy[act]    = 0;
++            indi->actG1_fz[act]    = learnerConfig()->hardcodeG1Fz;
++        } else {
++            indi->actG1_fx[act]    = actG1linHover.V.X;
++            indi->actG1_fy[act]    = actG1linHover.V.Y;
++            indi->actG1_fz[act]    = actG1linHover.V.Z;
++        }
+         indi->actG1_roll[act]  = actG1rotHover.V.X;
+         indi->actG1_pitch[act] = actG1rotHover.V.Y;
+         indi->actG1_yaw[act]   = actG1rotHover.V.Z;
+diff --git a/src/main/flight/learner.h b/src/main/flight/learner.h
+index 3a19f44f1..8b42ebc37 100644
+--- a/src/main/flight/learner.h
++++ b/src/main/flight/learner.h
+@@ -59,6 +59,8 @@ typedef struct learnerConfig_s {
+     uint8_t applyHoverRotationAfterQuery;
+     uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
+     uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: from bandwidth equation (rlsInit). 1000000: no forgetting
++    uint32_t hardcodeMaxRpm;    // 0: learned max rpm. otherwise: use this max rpm for all motors
++    int16_t hardcodeG1Fz;       // 0: learned linear forces. otherwise: fx = fy = 0, fz = this (same units as indi_act_g1_fz)
+ } learnerConfig_t;
+ 
+ PG_DECLARE(learnerConfig_t, learnerConfig);
+-- 
+2.43.0
+

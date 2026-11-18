@@ -49,8 +49,6 @@ del
 #define USE_CATAPULT
 #define USE_LEARNER
 ## #define USE_NN_CONTROL
-#define LEARNER_HARDCODE_MAXRPM
-#define LEARNER_HARDCODE_LINEAR_FORCES
 
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
@@ -434,12 +432,12 @@ set throw_to_arm_allow_manual_modes = 0
 # learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
 set learner_mode = 6
 set learner_num_actuators = 6
-set learner_delay_time_ms = 250
+set learner_delay_time_ms = 100
 set learner_step_time_ms = 50
-set learner_ramp_time_ms = 100
-set learner_overlap_time_ms = 50
+set learner_ramp_time_ms = 1
+set learner_overlap_time_ms =1
 set learner_step_amplitude = 50
-set learner_ramp_amplitude = 100
+set learner_ramp_amplitude = 1
 set learner_gyro_max = 1500
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
@@ -448,6 +446,14 @@ set learner_zeta_rate = 90
 set learner_zeta_attitude = 80
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
+
+# motor model: 1 = omega - idle = a*d (simplified), 0 = omega = a*d + b*sqrt(d) + c
+set learner_simple_motor_model = 1
+# RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
+set learner_rls_lambda = 1000000
+# hardcoded learner outputs (replace the old LEARNER_HARDCODE_* build flags). 0 = learned
+set learner_hardcode_max_rpm = 37000
+set learner_hardcode_g1_fz = -438
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0
