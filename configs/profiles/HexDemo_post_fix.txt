@@ -451,8 +451,13 @@ set learner_zeta_position = 90
 set learner_simple_motor_model = 1
 # RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
 set learner_rls_lambda = 1000000
-# hardcoded learner outputs (replace the old LEARNER_HARDCODE_* build flags). 0 = learned
+# hardcoded max rpm (replaces LEARNER_HARDCODE_MAXRPM). 0 = learned
 set learner_hardcode_max_rpm = 37000
+# hardcoded linear forces (replaces LEARNER_HARDCODE_LINEAR_FORCES). switch 0 = learned fx, fy, fz
+# with switch 1 the three values are used as is (0 is a valid value), units as indi_act_g1_fx/fy/fz
+set learner_hardcode_linear_forces = 1
+set learner_hardcode_g1_fx = 0
+set learner_hardcode_g1_fy = 0
 set learner_hardcode_g1_fz = -438
 
 set learner_roll_misalignment = 0
