@@ -2849,6 +2849,8 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotationAfterQuery);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, "%d",  learnerConfig()->simpleMotorModel);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RLS_LAMBDA, "%u",  (unsigned) learnerConfig()->rlsLambda);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_MAX_RPM, "%u",  (unsigned) learnerConfig()->hardcodeMaxRpm);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_G1_FZ, "%d",  learnerConfig()->hardcodeG1Fz);
 #endif
 #ifdef USE_NN_CONTROL
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);

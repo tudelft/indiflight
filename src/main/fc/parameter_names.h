@@ -279,6 +279,8 @@
 #define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
 #define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
 #define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
+#define PARAM_NAME_LEARNER_HARDCODE_MAX_RPM "learner_hardcode_max_rpm"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FZ "learner_hardcode_g1_fz"
 #endif
 
 #ifdef USE_NN_CONTROL

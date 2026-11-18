@@ -59,6 +59,8 @@ typedef struct learnerConfig_s {
     uint8_t applyHoverRotationAfterQuery;
     uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
     uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: from bandwidth equation (rlsInit). 1000000: no forgetting
+    uint32_t hardcodeMaxRpm;    // 0: learned max rpm. otherwise: use this max rpm for all motors
+    int16_t hardcodeG1Fz;       // 0: learned linear forces. otherwise: fx = fy = 0, fz = this (same units as indi_act_g1_fz)
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);

@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 3);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -91,7 +91,9 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .applyPositionProfileAfterQuery = false,
     .applyHoverRotationAfterQuery = false,
     .simpleMotorModel = true, // behaviour since f5d3392 "simplify motor model"
-    .rlsLambda = 1000000      // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
+    .rlsLambda = 1000000,     // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
+    .hardcodeMaxRpm = 0,      // 0: learned (was build flag LEARNER_HARDCODE_MAXRPM -> 37000)
+    .hardcodeG1Fz = 0         // 0: learned (was build flag LEARNER_HARDCODE_LINEAR_FORCES -> -438)
 );
 
 // extern
@@ -898,9 +900,10 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         //              inv y-scale 
         // simple model: idle + a*1.  full model: a*1 + b*sqrt(1) (intercept c not included, as before f5d3392)
         float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + learnerIdleOmega();
-#ifdef LEARNER_HARDCODE_MAXRPM
-        maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
-#endif
+        if (learnerConfig()->hardcodeMaxRpm > 0) {
+            // learner_hardcode_max_rpm, replaces build flag LEARNER_HARDCODE_MAXRPM
+            maxOmega = 2.f * M_PIf / 60.f  *  (float) learnerConfig()->hardcodeMaxRpm;
+        }
         indi->actMaxRpm[act] = MAX(100.f, 60.f * 0.5f / M_PIf  *  maxOmega); // convert to deg/s
         indi->actHoverRpm[act] = indi->actMaxRpm[act] >> 1; // guess, shouldnt matter since we have useRpmDotFeedback = true
         //                                            inv y-scale   a-scale     config-scale
@@ -936,15 +939,16 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
         actG2rotHover = actG2rotIMU[act];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
-#ifdef LEARNER_HARDCODE_LINEAR_FORCES
-        indi->actG1_fx[act]    = 0;
-        indi->actG1_fy[act]    = 0;
-        indi->actG1_fz[act]    = -438;
-#else
-        indi->actG1_fx[act]    = actG1linHover.V.X;
-        indi->actG1_fy[act]    = actG1linHover.V.Y;
-        indi->actG1_fz[act]    = actG1linHover.V.Z;
-#endif
+        if (learnerConfig()->hardcodeG1Fz != 0) {
+            // learner_hardcode_g1_fz, replaces build flag LEARNER_HARDCODE_LINEAR_FORCES
+            indi->actG1_fx[act]    = 0;
+            indi->actG1_fy[act]    = 0;
+            indi->actG1_fz[act]    = learnerConfig()->hardcodeG1Fz;
+        } else {
+            indi->actG1_fx[act]    = actG1linHover.V.X;
+            indi->actG1_fy[act]    = actG1linHover.V.Y;
+            indi->actG1_fz[act]    = actG1linHover.V.Z;
+        }
         indi->actG1_roll[act]  = actG1rotHover.V.X;
         indi->actG1_pitch[act] = actG1rotHover.V.Y;
         indi->actG1_yaw[act]   = actG1rotHover.V.Z;
