@@ -17,7 +17,7 @@
 ## ----- Other features
 #define USE_GPS
 #define USE_GEOFENCE
-del
+
 ## ----- FPV features: LED and onscreen display
 ## #define USE_LED_STRIP
 #define USE_OSD
@@ -53,6 +53,8 @@ del
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
 ################################################
+
+set craft_name = Modular Hex 1
 
 ## ----- PERIPHERALS
 
@@ -248,7 +250,7 @@ set indi_act_time_constant_des_ms = 50,50,50,50,50,50
 # Motor model time constant H_tau_d is indi_act_time_constant_ms above.
 # Loop runs at 2 kHz here (8 kHz gyro / pid_process_denom 4).
 # Identify delay and time constant on the bench before enabling.
-set indi_use_rpm_ctl = 1
+set indi_use_rpm_ctl = 0
 set indi_rpm_ctl_gain = 10
 set indi_rpm_ctl_delay = 1
 set indi_rpm_ctl_lpf_hz = 10
@@ -434,10 +436,10 @@ set learner_mode = 6
 set learner_num_actuators = 6
 set learner_delay_time_ms = 100
 set learner_step_time_ms = 50
-set learner_ramp_time_ms = 1
-set learner_overlap_time_ms =1
+set learner_ramp_time_ms = 60
+set learner_overlap_time_ms =40
 set learner_step_amplitude = 50
-set learner_ramp_amplitude = 1
+set learner_ramp_amplitude = 0
 set learner_gyro_max = 1500
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
@@ -447,14 +449,9 @@ set learner_zeta_attitude = 80
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 
-# motor model: 1 = omega - idle = a*d (simplified), 0 = omega = a*d + b*sqrt(d) + c
-set learner_simple_motor_model = 1
-# RLS forgetting factor * 1e6 (1000000 = 1.0, no forgetting). 0 = use the bandwidth equation
-set learner_rls_lambda = 1000000
-# hardcoded max rpm (replaces LEARNER_HARDCODE_MAXRPM). 0 = learned
+set learner_simple_motor_model = 0
+set learner_rls_lambda = 0
 set learner_hardcode_max_rpm = 37000
-# hardcoded linear forces (replaces LEARNER_HARDCODE_LINEAR_FORCES). switch 0 = learned fx, fy, fz
-# with switch 1 the three values are used as is (0 is a valid value), units as indi_act_g1_fx/fy/fz
 set learner_hardcode_linear_forces = 1
 set learner_hardcode_g1_fx = 0
 set learner_hardcode_g1_fy = 0
