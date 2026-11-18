@@ -57,6 +57,8 @@ typedef struct learnerConfig_s {
     uint8_t applyIndiProfileAfterQuery;
     uint8_t applyPositionProfileAfterQuery;
     uint8_t applyHoverRotationAfterQuery;
+    uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
+    uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: from bandwidth equation (rlsInit). 1000000: no forgetting
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);

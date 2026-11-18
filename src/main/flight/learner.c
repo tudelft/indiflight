@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 1);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 2);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .mode = (uint8_t) LEARN_AFTER_CATAPULT,
     .numAct = 4,
@@ -89,7 +89,9 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .randomizeMisalignment = false,
     .applyIndiProfileAfterQuery = false,
     .applyPositionProfileAfterQuery = false,
-    .applyHoverRotationAfterQuery = false
+    .applyHoverRotationAfterQuery = false,
+    .simpleMotorModel = true, // behaviour since f5d3392 "simplify motor model"
+    .rlsLambda = 1000000      // lambda = 1, behaviour since 5bf60bd. 0: bandwidth equation
 );
 
 // extern
@@ -145,6 +147,24 @@ static positionProfile_t dummy;
 static positionProfile_t* positionProfileLearned = &dummy;
 #endif
 
+// idle speed subtracted in the simple motor model (learner_simple_motor_model = 1)
+#define LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S (500.f)
+// lower bound on a user-set forgetting factor, below this the covariance blows up within a query
+#define LEARNER_RLS_LAMBDA_MIN 0.9f
+
+static float learnerIdleOmega(void) {
+    return learnerConfig()->simpleMotorModel ? LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S : 0.f;
+}
+
+// rlsInit, then apply learner_rls_lambda. 0 keeps the bandwidth equation from rlsInit
+static void learnerRlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTimeUs, float actionBandwidthHz) {
+    rlsInit(rls, n, d, gamma, sampleTimeUs, actionBandwidthHz);
+    if (learnerConfig()->rlsLambda > 0) {
+        float lambda = constrainf(1e-6f * (float) learnerConfig()->rlsLambda, LEARNER_RLS_LAMBDA_MIN, 1.f);
+        rlsSetLambda(rls, lambda);
+    }
+}
+
 // learning
 void initLearner(void) {
     // limited to 4 for now
@@ -158,7 +178,7 @@ void initLearner(void) {
 
     // float actionBandwidthHz = 0.2f * ( 1. / (2.f * M_PIf * 0.015f) ); // 5 times slower than assumed fastest actuator
     float actionBandwidthHz = 680.f / ((float) gyro.targetLooptime); // make sure lambdaBase is 0.995
-    rlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+    learnerRlsInit(&imuRls, 3, 3, 1e2f, gyro.targetLooptime, actionBandwidthHz);
 
     // init filters and other rls
     //rlsParallelInit(&fxSpfRls, learnerConfig()->numAct, 3, 1e2f, dT, Tchar); // forces
@@ -166,12 +186,12 @@ void initLearner(void) {
 
     // Spf
     for (int i = 0; i < 3; i++) {
-        rlsInit(&fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&fxRls[i], learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
     }
 
     // RateDot
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
     }
 
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -184,7 +204,7 @@ void initLearner(void) {
     }
 
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsInit(&motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&motorRls[act], 4, 1, 1e2f, gyro.targetLooptime, actionBandwidthHz);
         biquadFilterInitLPF(&fxOmegaFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&fxUFilter[act], learnerConfig()->fxFiltHz, gyro.targetLooptime);
         biquadFilterInitLPF(&motorOmegaFilter[act], learnerConfig()->motorFiltHz, gyro.targetLooptime);
@@ -205,13 +225,13 @@ static void setFxRlsToProfile(void) {
     const indiProfile_t *p = indiProfiles(systemConfig()->indiProfileIndex);
 
     for (int axis = 0; axis < 3; axis++) {
-        rlsInit(&fxRls[axis], learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&fxRls[axis], learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
     }
     for (int i = 3; i < 6; i++) {
-        rlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&fxRls[i], 2*learnerConfig()->numAct, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
     }
     for (int act = 0; act < learnerConfig()->numAct; act++) {
-        rlsInit(&motorRls[act], 4, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
+        learnerRlsInit(&motorRls[act], 4, 1, LEARNER_INIT_COV_RESET, gyro.targetLooptime, actionBandwidthHz);
     }
 
     // inverse of updateLearnedParameters
@@ -219,9 +239,15 @@ static void setFxRlsToProfile(void) {
         float maxOmega = 2.f * M_PIf / 60.f  *  p->actMaxRpm[motor];
         float isq = 1.f / sq(maxOmega);
 
-        float k = 0.01f * p->actNonlinearity[motor];
-        motorRls[motor].x[0] = 1e-3f * k * maxOmega;
-        motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
+        if (learnerConfig()->simpleMotorModel) {
+            // omega - idle = a*d  ->  a = maxOmega - idle
+            motorRls[motor].x[0] = 1e-3f * (maxOmega - learnerIdleOmega());
+            motorRls[motor].x[1] = 0.f;
+        } else {
+            float k = 0.01f * p->actNonlinearity[motor];
+            motorRls[motor].x[0] = 1e-3f * k * maxOmega;
+            motorRls[motor].x[1] = 1e-3f * (1.f - k) * maxOmega;
+        }
         motorRls[motor].x[2] = 0.;
         motorRls[motor].x[3] = 1e-3f * 1e4f * 1e-3f * (p->actTimeConstMs[motor]);
 
@@ -617,19 +643,24 @@ void updateLearner(timeUs_t current) {
 
     bool motorLearningConditions = fxLearningConditions && (learningQueryState != LEARNING_QUERY_DONE); // motor fortescue didnt work for some reason 
 
-#define LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S (500.f)
     if (motorLearningConditions) {
+        // simple:  omega - idle = a*d                 - tau*omegaDot  (sqrt(d) and constant terms disabled)
+        // full:    omega        = a*d + b*sqrt(d) + c - tau*omegaDot
+        const bool simple = learnerConfig()->simpleMotorModel;
+        const float idleOmega = learnerIdleOmega();
         for (int act = 0; act < learnerConfig()->numAct; act++) {
             float A[4] = {
                 learnRun.motorD[act],
-                0.f*learnRun.motorSqrtD[act],
-                0.f*1.f,
+                simple ? 0.f : learnRun.motorSqrtD[act],
+                simple ? 0.f : 1.f,
                 -1e-4f * learnRun.motorOmegaDot[act]
             };
-            float y = (learnRun.motorOmega[act] - LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S) * 1e-3f; // get into range of 1
+            float y = (learnRun.motorOmega[act] - idleOmega) * 1e-3f; // get into range of 1
             rlsNewSample( &motorRls[act], A, &y );
-            motorRls[act].x[1] = 0.f;
-            motorRls[act].x[2] = 0.f;
+            if (simple) {
+                motorRls[act].x[1] = 0.f;
+                motorRls[act].x[2] = 0.f;
+            }
         }
     }
     learnerTimings.motor = cmpTimeUs(micros(), learnerTimings.start);
@@ -865,7 +896,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->actNum = MIN(learnerConfig()->numAct, MAXU);
     for (int act = 0; act < indi->actNum ; act++) {
         //              inv y-scale 
-        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + LEARNER_HARDCODED_IDLE_OMEGA_RAD_PER_S;
+        // simple model: idle + a*1.  full model: a*1 + b*sqrt(1) (intercept c not included, as before f5d3392)
+        float maxOmega =   1e3f  *  (motorRls[act].x[0] + motorRls[act].x[1]) + learnerIdleOmega();
 #ifdef LEARNER_HARDCODE_MAXRPM
         maxOmega = 2.f * M_PIf / 60.f  *  37000.f;
 #endif

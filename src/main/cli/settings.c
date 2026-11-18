@@ -1421,6 +1421,8 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_APPLY_INDI,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyIndiProfileAfterQuery) },
     { PARAM_NAME_LEARNER_APPLY_POSITION,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyPositionProfileAfterQuery) },
     { PARAM_NAME_LEARNER_APPLY_HOVER,       VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, applyHoverRotationAfterQuery) },
+    { PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, simpleMotorModel) },
+    { PARAM_NAME_LEARNER_RLS_LAMBDA,        VAR_UINT32 | MASTER_VALUE, .config.u32Max = 1000000, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rlsLambda) },
 #endif
 
 #ifdef USE_NN_CONTROL

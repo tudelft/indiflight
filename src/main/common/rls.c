@@ -96,11 +96,22 @@ rls_exit_code_t rlsInit(rls_t* rls, int n, int d, float gamma, uint32_t sampleTi
     if ((sampleTimeUs <= 0) || (actionBandwidthHz >= 0.45f * sampleFreqHz))
         return RLS_FAIL;
 
-    // rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
-    rls->lambdaBase = rls->lambda = 1.0f;
+    // forgetting factor from the action bandwidth. Callers can override it
+    // afterwards with rlsSetLambda (the learner does, see learner_rls_lambda)
+    rls->lambdaBase = rls->lambda = powf(1.f - (float) M_LN2f, (2.f * M_PIf * actionBandwidthHz) / (sampleFreqHz));
 
     // initialize fortescue tuner
     fortescueTuningInit( &(rls->fortescue), actionBandwidthHz, sampleTimeUs );
+
+    return RLS_SUCCESS;
+}
+
+// override the forgetting factor set by rlsInit. lambda in (0, 1], 1: no forgetting
+rls_exit_code_t rlsSetLambda(rls_t* rls, float lambda) {
+    if ((rls == NULL) || (lambda <= 0.f) || (lambda > 1.f))
+        return RLS_FAIL;
+
+    rls->lambdaBase = rls->lambda = lambda;
 
     return RLS_SUCCESS;
 }

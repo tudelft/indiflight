@@ -277,6 +277,8 @@
 #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
 #define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
+#define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
+#define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
 #endif
 
 #ifdef USE_NN_CONTROL
