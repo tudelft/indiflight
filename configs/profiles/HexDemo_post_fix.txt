@@ -250,7 +250,7 @@ set indi_act_time_constant_des_ms = 50,50,50,50,50,50
 # Motor model time constant H_tau_d is indi_act_time_constant_ms above.
 # Loop runs at 2 kHz here (8 kHz gyro / pid_process_denom 4).
 # Identify delay and time constant on the bench before enabling.
-set indi_use_rpm_ctl = 0
+set indi_use_rpm_ctl = 1
 set indi_rpm_ctl_gain = 10
 set indi_rpm_ctl_delay = 1
 set indi_rpm_ctl_lpf_hz = 10
@@ -437,7 +437,7 @@ set learner_num_actuators = 6
 set learner_delay_time_ms = 100
 set learner_step_time_ms = 50
 set learner_ramp_time_ms = 60
-set learner_overlap_time_ms =40
+set learner_overlap_time_ms = 40
 set learner_step_amplitude = 50
 set learner_ramp_amplitude = 0
 set learner_gyro_max = 1500
@@ -450,9 +450,9 @@ set learner_zeta_velocity = 70
 set learner_zeta_position = 90
 
 set learner_simple_motor_model = 0
-set learner_rls_lambda = 0
-set learner_hardcode_max_rpm = 37000
-set learner_hardcode_linear_forces = 1
+set learner_rls_lambda = 1
+set learner_hardcode_max_rpm = 0
+set learner_hardcode_linear_forces = 0
 set learner_hardcode_g1_fx = 0
 set learner_hardcode_g1_fy = 0
 set learner_hardcode_g1_fz = -438
