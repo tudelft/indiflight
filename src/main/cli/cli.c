@@ -4948,6 +4948,22 @@ static const char *getMcuTypeById(mcuTypeId_e id)
     }
 }
 
+static void cliPrintDefaultedPgWarning(void)
+{
+    const uint16_t count = getEEPROMDefaultedPgCount();
+    if (count == 0) {
+        return;
+    }
+
+    cliPrintLinef("###WARNING: %d PARAMETER GROUP(S) COULD NOT BE RESTORED AND ARE ON DEFAULTS###", count);
+    cliPrint("PGN:");
+    for (uint16_t i = 0; i < MIN(count, EEPROM_MAX_REPORTED_DEFAULTED_PGS); i++) {
+        cliPrintf(" %d", getEEPROMDefaultedPgn(i));
+    }
+    cliPrintLinefeed();
+    cliPrintLine("ARMING IS BLOCKED (REBOOT_REQD). RE-APPLY YOUR SETTINGS, THEN SAVE.");
+}
+
 static void cliStatus(const char *cmdName, char *cmdline)
 {
     UNUSED(cmdName);
@@ -5128,6 +5144,8 @@ if (buildKey) {
         cliPrintf(" %s", armingDisableFlagNames[bitpos]);
     }
     cliPrintLinefeed();
+
+    cliPrintDefaultedPgWarning();
 }
 
 static void cliTasks(const char *cmdName, char *cmdline)
@@ -7168,6 +7186,8 @@ void cliEnter(serialPort_t *serialPort)
     cliPrintLine("\r\nCLI");
 #endif
     //setArmingDisabled(ARMING_DISABLED_CLI); // tblaha: highway to the dangerzone TODO
+
+    cliPrintDefaultedPgWarning();
 
     cliPrompt();
 

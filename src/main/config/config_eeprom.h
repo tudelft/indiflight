@@ -30,5 +30,11 @@ bool isEEPROMStructureValid(void);
 bool loadEEPROM(void);
 void writeConfigToEEPROM(void);
 
+// Parameter groups that the last loadEEPROM() could not restore (stored version
+// mismatch, or no stored record), so they run on defaults. Cleared by a save.
+#define EEPROM_MAX_REPORTED_DEFAULTED_PGS 16
+uint16_t getEEPROMDefaultedPgCount(void);
+uint16_t getEEPROMDefaultedPgn(uint16_t index); // index < EEPROM_MAX_REPORTED_DEFAULTED_PGS
+
 uint16_t getEEPROMConfigSize(void);
 size_t getEEPROMStorageSize(void);

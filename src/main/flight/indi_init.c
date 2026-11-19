@@ -65,18 +65,24 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->feedforwardCoefs[i] = 0;
     }
 
-    indiProfile->feedforwardFilterCoefs[1] = 1; // Theoretically this makes the filter a straight pass-through, for safety probably better to disable if no values given.
-    for (int i = 1; i < 3; i++) {
-        indiProfile->feedforwardFilterCoefs[i] = 1;
-    }
+    // K, z, p. [0] was never written before (only zero thanks to the PG memset); keep those values explicit
+    indiProfile->feedforwardFilterCoefs[0] = 0;
+    indiProfile->feedforwardFilterCoefs[1] = 1;
+    indiProfile->feedforwardFilterCoefs[2] = 1;
     indiProfile->useFeedforwardFilter = false;
+
+    // ---- attitude lead-lag (previously not reset at all)
+    indiProfile->useAttLeadLag = false;
+    for (int i = 0; i < 5; i++) {
+        indiProfile->attCoefs[i] = 0;
+        indiProfile->rateCoefs[i] = 0;
+    }
 
     // ---- general INDI config
     indiProfile->useIncrement = true;
     indiProfile->useAccelForSpfz = true;
     indiProfile->useRpmDotFeedback = true;
     indiProfile->useMotorLeadLag = false;
-    indiProfile->useAttLeadLag = false;
 
     // ---- INDI actuator config
     indiProfile->actNum = 4;
@@ -115,6 +121,8 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     // ---- Tailsitter
     indiProfile->tails_use_scheduled = false;
     indiProfile->tails_use_sine = true;
+    indiProfile->tails_d0[0] = 0;
+    indiProfile->tails_d0[1] = 0;
     indiProfile->tails_cxw = 0;
     indiProfile->tails_cyw = 0;
     indiProfile->tails_czw = 0;
@@ -134,7 +142,7 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
     indiProfile->attRateDenom = 1;
     // ---- WLS config
     indiProfile->useConstantG2 = false;
-    indiProfile->useRpmFeedback = false;
+    indiProfile->rpmCtlGain = 0; // closed-loop rpm off by default: identical to previous behaviour
     indiProfile->maxRateSp[0] = 1800.f;          // maximum rate setpoint in deg/s
     indiProfile->maxRateSp[1] = 1800.f;          // maximum rate setpoint in deg/s
     indiProfile->maxRateSp[2] = 1800.f;          // maximum rate setpoint in deg/s
@@ -168,6 +176,11 @@ void resetIndiProfile(indiProfile_t *indiProfile) {
         indiProfile->applyDistToMotor[i] = false; // whether to apply disturbance to motor
     }
     #endif
+
+    // ---- closed loop rpm controller
+    indiProfile->rpmCtlDelay = 0; // N_d: no ESC command delay
+    indiProfile->rpmCtlLpfHz = 0; // H_tau_f: unfiltered
+    indiProfile->useRpmCtl = false; // rpm loop off: open-loop motor commands
 }
 
 void initIndiRuntimeParameters(void) {
@@ -189,8 +202,11 @@ void initIndiRuntimeParameters(void) {
     indiRun.useIncrement = (bool) p->useIncrement;
     indiRun.useAccelForSpfz = (bool) p->useAccelForSpfz;
     indiRun.useConstantG2 = (bool) p->useConstantG2;
-    indiRun.useRpmFeedback = (bool) p->useRpmFeedback;
     indiRun.useRpmDotFeedback = (bool) p->useRpmDotFeedback;
+    indiRun.useRpmCtl = (bool) p->useRpmCtl;
+    indiRun.rpmCtlGain = p->rpmCtlGain * 0.1f;
+    indiRun.rpmCtlDelay = MIN(p->rpmCtlDelay, RPM_CTL_MAX_DELAY);
+    indiRun.rpmCtlLpfHz = (float) p->rpmCtlLpfHz;
     indiRun.maxRateSp.A[0] = (float) DEGREES_TO_RADIANS(p->maxRateSp[0]);          // maximum rate setpoint in deg/s
     indiRun.maxRateSp.A[1] = (float) DEGREES_TO_RADIANS(p->maxRateSp[1]);          // maximum rate setpoint in deg/s
     indiRun.maxRateSp.A[2] = (float) DEGREES_TO_RADIANS(p->maxRateSp[2]);          // maximum rate setpoint in deg/s
@@ -280,9 +296,10 @@ void initIndiRuntimeParameters(void) {
     for (int i = 0; i < indiRun.actNum; i++) {
         if (indiRun.actIsMotor[i]) {
             updateLinearization(&indiRun.lin[i], indiRun.actNonlinearity[i]);
-        } else if (indiRun.actIsServo[i]) {
-            indiRun.lin[i].k = 0.f;
-            indiRun.lin[i].A = 0.f;
+        } else {
+            // servo or unused: identity in both directions. Clear all fields,
+            // so nothing is left over from a previous profile where i was a motor
+            indiRun.lin[i] = (actLin_t) { .A = 0.f, .B = 0.f, .C = 0.f, .k = 0.f };
         }
     }
 
@@ -368,6 +385,13 @@ void initIndiRuntime(void) {
         indiRun.omega_fs[i] = 0.f; // sync-filtered motor speed rad/s
         //indiRun.omegaDot[i] = 0.f; // unfiltered motor rate rad/s/s
         indiRun.omegaDot_fs[i] = 0.f; // sync-filtered motor rate rad/s/s
+        indiRun.omegaSp[i] = 0.f; // motor speed setpoint rad/s
+        indiRun.rpmCmd_f[i] = 0.f; // modelled command of the rpm loop
+        indiRun.rpmOmega_f[i] = 0.f; // filtered ESC rpm of the rpm loop
+        indiRun.rpmCmdHistIdx[i] = 0;
+        for (int k = 0; k < RPM_CTL_MAX_DELAY + 1; k++) {
+            indiRun.rpmCmdHist[i][k] = 0.f; // past applied commands
+        }
     }
     // ---- runtime values -- axes
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -421,6 +445,12 @@ void initIndiRuntime(void) {
     }
     for (int i = 0; i < indiRun.actNum; i++) {
         pt1FilterInit(&indiRun.uLagFilter[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT)); // to simulate spinup
+        // INDI rpm loop: motor model H_tau_d (same time constant as uLagFilter),
+        // and the same H_tau_f on command path and ESC rpm (gain 1 = pass-through when off)
+        float rpmLpfGain = (indiRun.rpmCtlLpfHz > 0.f) ? pt1FilterGain(indiRun.rpmCtlLpfHz, indiRun.dT) : 1.f;
+        pt1FilterInit(&indiRun.rpmCmdMotorModel[i], pt1FilterGain(1.f / (2.f * M_PIf * indiRun.actTimeConstS[i]), indiRun.dT));
+        pt1FilterInit(&indiRun.rpmCmdFilter[i], rpmLpfGain);
+        pt1FilterInit(&indiRun.rpmOmegaFilter[i], rpmLpfGain);
         biquadFilterInitLPF(&indiRun.uStateFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         biquadFilterInitLPF(&indiRun.omegaFilter[i], indiRun.imuSyncLp2Hz, gyro.targetLooptime); // only support 2nd order butterworth second order section for now
         if (indiRun.useMotorLeadLag) {

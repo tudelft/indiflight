@@ -37,6 +37,7 @@
 #define MAXU MAX_SUPPORTED_MOTORS
 #define MAX_SUPPORTED_PSEUDOCONTROLS 6
 #define MAXV MAX_SUPPORTED_PSEUDOCONTROLS
+#define RPM_CTL_MAX_DELAY 32 // max ESC command delay N_d of the INDI rpm controller, in loop iterations
 
 #if (MAXU > 8)
 #error "Blackbox will crash. Fix it to accept more that MAXU > 8"
@@ -112,7 +113,7 @@ typedef struct indiProfile_s {
     uint8_t attRateDenom;        // only execute attitude loop every attRateDenom loops
     // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
-    uint8_t useRpmFeedback;        // bool: make use of dshot rpm data in feedback loop if available. FIXME: actually implement this
+    uint8_t rpmCtlGain;            // INDI rpm loop gain K * 10, K normalised so 1 = omegaMax per full command (paper nominal). 0: off (open loop). Replaces the unused useRpmFeedback (same offset/size, no PG bump needed)
     // ---- WLS config
     uint8_t useWls;              // bool: enable Wls in favour of static pinv
     uint8_t wlsWarmstart;        // bool: use warmstarting of wls
@@ -155,6 +156,11 @@ typedef struct indiProfile_s {
     int16_t inputDistAmplitude; // amplitude of input disturbance in percent
     bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
 
+    // -------- closed loop rpm controller (rpmCtlGain lives further up)
+    // NB: any change to this struct needs a PG_INDI_PROFILE version bump in indi.c
+    uint8_t rpmCtlDelay;     // N_d: ESC command processing delay, in loop iterations [0, RPM_CTL_MAX_DELAY]
+    uint16_t rpmCtlLpfHz;    // H_tau_f: 1st order low pass on ESC rpm AND on the modelled command, Hz. 0: unfiltered
+    uint8_t useRpmCtl;       // bool: enable the INDI rpm loop (still needs rpmCtlGain > 0 and dshot rpm telemetry)
 } indiProfile_t;
 
 // linearization
@@ -179,7 +185,6 @@ typedef struct indiRuntime_s {
     bool useIncrement;
     bool useAccelForSpfz;
     bool useConstantG2;
-    bool useRpmFeedback;
     bool useRpmDotFeedback;
     fp_vector_t maxRateSp;          // maximum rate setpoint in rad/s
     // ---- INDI actuator config
@@ -262,6 +267,23 @@ typedef struct indiRuntime_s {
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
 
+    // ---- closed loop rpm controller
+    // INDI rpm control (Mancinelli et al., IMAV 2023, Fig. 4):
+    //   d = H_f(H_d(z^-Nd d_applied)) + K * (omegaSp - H_f(omega_esc)) / omegaMax
+    bool useRpmCtl; // enable the INDI rpm loop
+    float rpmCtlGain; // K, normalised. 0: off
+    uint8_t rpmCtlDelay; // N_d in loop iterations
+    float rpmCtlLpfHz; // H_tau_f cutoff Hz, 0: off
+    float omegaSp[MAXU]; // motor speed setpoint rad/s (omegaMax * sqrt(u))
+    float rpmCmdHist[MAXU][RPM_CTL_MAX_DELAY + 1]; // applied commands, for the N_d delay
+    uint8_t rpmCmdHistIdx[MAXU]; // next write position in rpmCmdHist
+    pt1Filter_t rpmCmdMotorModel[MAXU]; // H_tau_d: 1st order motor dynamics, actTimeConstMs
+    pt1Filter_t rpmCmdFilter[MAXU]; // H_tau_f on the command path
+    pt1Filter_t rpmOmegaFilter[MAXU]; // H_tau_f on the ESC rpm
+    float rpmCmd_f[MAXU]; // delayed, motor-modelled, filtered applied command [0, 1]
+    float rpmOmega_f[MAXU]; // filtered ESC rpm, rad/s
+    bool rpmControlRan[MAXU]; // closed loop law set d[i] this loop. false: open loop or overridden
+
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz
@@ -331,3 +353,4 @@ void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);
 void indiUpdateActuatorState( float* motor_normalized, float* servo_normalized );
+void indiUpdateRpmCtlState( const float* motor_normalized );
