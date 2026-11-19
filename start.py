@@ -3,7 +3,8 @@
 
 Serves a small HTTP API on localhost so the web configurator can list
 board/profile configs and compile this working tree inside the
-indiflight-builder Docker image. Standard library only.
+indiflight-builder Docker image, or run a SIL simulation of it
+(support/simulation, pyndiflight-sil image). Standard library only.
 
     python3 start.py [--host 127.0.0.1] [--port 8742] [--no-token] [--image indiflight-builder]
 """
@@ -19,6 +20,7 @@ import re
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -48,10 +50,23 @@ LOCAL_ORIGIN_RE = re.compile(r"^(https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)
 DEFINE_TOKEN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(=[A-Za-z0-9_.+:/-]*)?$")
 
 REPO = os.path.dirname(os.path.abspath(__file__))
+SIM_DIR = os.path.join(REPO, "support", "simulation")
 CONFIG_DIRS = {
     "boards": os.path.join(REPO, "configs", "boards"),
     "profiles": os.path.join(REPO, "configs", "profiles"),
+    "sims": SIM_DIR,
 }
+CONFIG_EXT = {"boards": ".txt", "profiles": ".txt", "sims": ".py"}
+# support/simulation/entrypoint.sh passes this option; scripts without it are helpers, not sims
+SIM_MARKER = "--sil-profile-txt"
+# Flask visualization and gdbserver ports inside the SIL container
+VIS_CONTAINER_PORT = 5000
+GDB_PORT = 3333
+# Sim script arguments go to argparse as an argv list (no shell), kept to plain option syntax
+SIM_ARG_RE = re.compile(r"^[A-Za-z0-9_.:/=+,-]+$")
+# Set by entrypoint.sh / the daemon itself; a duplicate would make argparse fail or point elsewhere
+RESERVED_SIM_ARGS = ("--sil", "--sil-profile-txt", "--hil")
+MAX_SIM_ARGS = 32
 TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".config", "indiflight-builder", "token")
 
 
@@ -104,28 +119,59 @@ def git_info():
 # --------------------------------------------------------------------------- configs
 
 def list_configs(kind):
-    d = CONFIG_DIRS[kind]
+    d, ext = CONFIG_DIRS[kind], CONFIG_EXT[kind]
     try:
-        names = [f[:-4] for f in os.listdir(d) if f.endswith(".txt") and os.path.isfile(os.path.join(d, f))]
+        names = [f[: -len(ext)] for f in os.listdir(d) if f.endswith(ext) and os.path.isfile(os.path.join(d, f))]
     except OSError:
         return []
-    return sorted(n for n in names if n != CUSTOM_NAME and NAME_RE.match(n))
+    names = [n for n in names if n != CUSTOM_NAME and NAME_RE.match(n)]
+    if kind == "sims":
+        names = [n for n in names if is_sim_script(os.path.join(d, n + ext))]
+    return sorted(names)
+
+
+def is_sim_script(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return SIM_MARKER in f.read()
+    except OSError:
+        return False
 
 
 def config_path(kind, name):
     """Path of a listed config, or None. Only names from the listing are accepted (no traversal)."""
     if not isinstance(name, str) or name not in list_configs(kind):
         return None
-    return os.path.join(CONFIG_DIRS[kind], name + ".txt")
+    return os.path.join(CONFIG_DIRS[kind], name + CONFIG_EXT[kind])
 
 
 # --------------------------------------------------------------------------- docker image
 
-def dockerfile_copy_sources():
-    """Source paths of all COPY/ADD instructions in the Dockerfile (relative to the repo)."""
+class ImageSpec:
+    """A docker image the daemon builds itself, from a Dockerfile and a context dir (relative to REPO)."""
+
+    def __init__(self, name, dockerfile, context=".", base=None):
+        self.name = name
+        self.dockerfile = dockerfile
+        self.context = context
+        # Image this one is built FROM: rebuilding the base must invalidate this one too
+        self.base = base
+
+    @property
+    def context_dir(self):
+        return os.path.normpath(os.path.join(REPO, self.context))
+
+    @property
+    def dockerfile_rel(self):
+        """Dockerfile path relative to the context dir."""
+        return os.path.relpath(os.path.join(REPO, self.dockerfile), self.context_dir)
+
+
+def dockerfile_copy_sources(spec):
+    """Source paths of all COPY/ADD instructions in the Dockerfile (relative to the context)."""
     sources = []
     try:
-        with open(os.path.join(REPO, "Dockerfile"), encoding="utf-8") as f:
+        with open(os.path.join(REPO, spec.dockerfile), encoding="utf-8") as f:
             text = f.read()
     except OSError:
         return sources
@@ -149,15 +195,16 @@ def dockerfile_copy_sources():
     return sources
 
 
-def context_files():
-    """Sorted relative paths of every context file the image build reads."""
-    files = {"Dockerfile"}
+def context_files(spec):
+    """Sorted paths (relative to the context dir) of every context file the image build reads."""
+    ctx = spec.context_dir
+    files = {spec.dockerfile_rel}
     missing = []
-    for src in dockerfile_copy_sources():
+    for src in dockerfile_copy_sources(spec):
         if re.match(r"^[a-z]+://", src):
             missing.append(src)  # remote ADD: hash the URL itself
             continue
-        matches = glob.glob(os.path.join(REPO, src))
+        matches = glob.glob(os.path.join(ctx, src))
         if not matches:
             missing.append(src)
         for m in matches:
@@ -165,21 +212,23 @@ def context_files():
                 for root, dirs, fnames in os.walk(m):
                     dirs[:] = [d for d in dirs if d != ".git"]
                     for fn in fnames:
-                        files.add(os.path.relpath(os.path.join(root, fn), REPO))
+                        files.add(os.path.relpath(os.path.join(root, fn), ctx))
             else:
-                files.add(os.path.relpath(m, REPO))
+                files.add(os.path.relpath(m, ctx))
     return sorted(files), sorted(missing)
 
 
-def image_hash():
-    files, missing = context_files()
+def image_hash(spec):
+    files, missing = context_files(spec)
     h = hashlib.sha256()
     # an image built for another platform must not count as up to date
     h.update(b"platform:" + DOCKER_PLATFORM.encode() + b"\0")
+    if spec.base is not None:
+        h.update(b"base:" + image_hash(spec.base).encode() + b"\0")
     for rel in files:
         h.update(rel.encode() + b"\0")
         try:
-            with open(os.path.join(REPO, rel), "rb") as f:
+            with open(os.path.join(spec.context_dir, rel), "rb") as f:
                 h.update(hashlib.sha256(f.read()).digest())
         except OSError:
             h.update(b"<unreadable>")
@@ -188,14 +237,14 @@ def image_hash():
     return h.hexdigest()[:32]
 
 
-def docker_status(image):
-    st = {"available": False, "image": image, "exists": False, "upToDate": False, "error": None}
+def docker_status(spec):
+    st = {"available": False, "image": spec.name, "exists": False, "upToDate": False, "error": None}
     rc, _, err = run(["docker", "version", "--format", "{{.Server.Version}}"], timeout=15)
     if rc != 0:
         st["error"] = (err.strip() or "docker not found") if rc is not None else (err or "docker not found")
         return st
     st["available"] = True
-    rc, out, _ = run(["docker", "image", "inspect", "--format", "{{json .Config.Labels}}", image], timeout=15)
+    rc, out, _ = run(["docker", "image", "inspect", "--format", "{{json .Config.Labels}}", spec.name], timeout=15)
     if rc != 0:
         return st
     st["exists"] = True
@@ -203,7 +252,7 @@ def docker_status(image):
         labels = json.loads(out.strip() or "null") or {}
     except ValueError:
         labels = {}
-    st["upToDate"] = labels.get(HASH_LABEL) == image_hash()
+    st["upToDate"] = labels.get(HASH_LABEL) == image_hash(spec)
     return st
 
 
@@ -213,10 +262,17 @@ class Cancelled(Exception):
     pass
 
 
+FINISHED_STATES = ("success", "failed", "cancelled", "stopped")
+
+
 class Job:
+    kind = "build"
+    # Sent to every process in the container except the entrypoint to stop the job (see Builder.cancel)
+    stop_signal = "TERM"
+
     def __init__(self, jid, req, git):
         self.id = jid
-        self.board = req["board"]
+        self.board = req.get("board")
         self.profile = req["profile"]
         self.board_text = req.get("boardText")
         self.profile_text = req.get("profileText")
@@ -239,16 +295,17 @@ class Job:
         self.cond = threading.Condition()
         self.proc = None
         self.cancel_requested = False
-        self.container = "indiflight-build-" + jid
+        self.container = "indiflight-%s-%s" % (self.kind, jid)
         self.workdir = tempfile.mkdtemp(prefix="indiflight-job-%s-" % jid)
 
     @property
     def finished(self):
-        return self.state in ("success", "failed", "cancelled")
+        return self.state in FINISHED_STATES
 
     def summary(self):
         return {
             "id": self.id,
+            "kind": self.kind,
             "state": self.state,
             "board": self.board,
             "profile": self.profile,
@@ -282,9 +339,43 @@ class Job:
             self.cond.notify_all()
 
 
+class SimJob(Job):
+    """A SIL simulation: the MOCKUP build plus a PyNDIflight script, running until stopped."""
+
+    kind = "sim"
+    # KeyboardInterrupt in the sim script: Python exits normally, so the SIL library's
+    # blackbox log gets flushed. SIGTERM would kill it with the last log blocks still buffered.
+    stop_signal = "INT"
+
+    def __init__(self, jid, req, git):
+        super().__init__(jid, req, git)
+        self.sim = req["sim"]
+        self.sim_text = req.get("simText")
+        self.args = list(req.get("args") or [])
+        self.gdbserver = bool(req.get("gdbserver"))
+        self.host_network = bool(req.get("hostNetwork"))
+        self.vis_port = req["visPort"]
+        self.vis_ready = False
+        self.status = ""  # latest tqdm status line
+
+    def summary(self):
+        s = super().summary()
+        s["custom"]["sim"] = self.sim_text is not None
+        s.update({
+            "sim": self.sim,
+            "args": list(self.args),
+            "visPort": self.vis_port,
+            "visReady": self.vis_ready,
+            "gdbPort": GDB_PORT if self.gdbserver else None,
+            "status": self.status,
+        })
+        return s
+
+
 class Builder:
-    def __init__(self, image):
-        self.image = image
+    def __init__(self, image, sil_image):
+        self.image = image  # ImageSpec of the firmware builder
+        self.sil_image = sil_image  # ImageSpec of the PyNDIflight SIL runner (FROM the builder)
         self.lock = threading.Lock()
         self.jobs = {}  # insertion ordered, oldest first
         self.active = None
@@ -298,7 +389,7 @@ class Builder:
         with self.lock:
             return self.jobs.get(jid)
 
-    def start(self, req):
+    def start(self, req, job_cls=Job):
         created = now_iso()
         if self.active is not None:
             return None
@@ -307,7 +398,7 @@ class Builder:
             if self.active is not None:
                 return None
             jid = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
-            job = Job(jid, req, git)
+            job = job_cls(jid, req, git)
             job.created_at = created
             self.jobs[jid] = job
             self.active = job
@@ -325,18 +416,23 @@ class Builder:
             if job.finished:
                 return
             job.cancel_requested = True
-        # SIGTERM make and the compilers first (everything except the entrypoint,
-        # PID 1): make then deletes half-written objects. A plain `docker kill`
+        # Signal make and the compilers first (everything except the entrypoint,
+        # PID 1): on SIGTERM make deletes half-written objects. A plain `docker kill`
         # SIGKILLs them, leaving truncated .o files newer than their sources that
         # break the next incremental build with undefined references.
         # Retried because right after `docker run` starts the container may not exist yet.
+        # SIGINT is delivered only once: a second KeyboardInterrupt would abort the sim's cleanup.
         start = time.time()
+        signalled = False
         while time.time() - start < 25:
             proc = job.proc
             if proc is None or proc.poll() is not None:
                 break
             if time.time() - start < 10:
-                run(["docker", "exec", job.container, "bash", "-c", "kill -TERM -1"], timeout=10)
+                if not signalled or job.stop_signal != "INT":
+                    rc, _, _ = run(["docker", "exec", job.container, "bash", "-c", "kill -%s -1" % job.stop_signal],
+                                   timeout=10)
+                    signalled = rc == 0
                 if job.state == "image":
                     proc.terminate()
             else:
@@ -352,7 +448,7 @@ class Builder:
             job = self.active
             jobs = list(self.jobs.values())
         if job is not None:
-            print("Cancelling running build %s ..." % job.id, flush=True)
+            print("Stopping running %s %s ..." % (job.kind, job.id), flush=True)
             self.cancel(job)
             deadline = time.time() + 20
             while not job.finished and time.time() < deadline:
@@ -363,6 +459,8 @@ class Builder:
     # ------------------------------------------------------------------ job run
 
     def _run(self, job):
+        if isinstance(job, SimJob):
+            return self._run_sim(job)
         try:
             self._run_phases(job)
             job.exit_code = 0
@@ -395,17 +493,7 @@ class Builder:
 
     def _run_phases(self, job):
         job.log("Repository: %s (%s%s)" % (REPO, job.git["describe"], ", dirty" if job.git["dirty"] else ""))
-        st = docker_status(self.image)
-        if not st["available"]:
-            raise RuntimeError("Docker is not available: %s" % st["error"])
-        self._check_cancel(job)
-        if not st["upToDate"]:
-            job.set_state("image")
-            job.log("Building docker image %s (%s) ..." % (self.image, "outdated" if st["exists"] else "missing"))
-            self._build_image(job)
-        else:
-            job.log("Docker image %s is up to date" % self.image)
-        self._check_cancel(job)
+        self._ensure_image(job, self.image)
 
         mounts = self._config_mounts(job)
         board = CUSTOM_NAME if job.board_text is not None else job.board
@@ -449,19 +537,36 @@ class Builder:
             mounts += ["--mount", "type=bind,src=%s,dst=/indiflight/configs/%s,readonly" % (d, kind)]
         return mounts
 
-    def _build_image(self, job):
-        h = image_hash()
-        files, missing = context_files()
+    def _ensure_image(self, job, spec):
+        """Build spec (and first its base) unless the image is up to date."""
+        if spec.base is not None:
+            self._ensure_image(job, spec.base)
+        st = docker_status(spec)
+        if not st["available"]:
+            raise RuntimeError("Docker is not available: %s" % st["error"])
+        self._check_cancel(job)
+        if not st["upToDate"]:
+            job.set_state("image")
+            job.log("Building docker image %s (%s) ..." % (spec.name, "outdated" if st["exists"] else "missing"))
+            self._build_image(job, spec)
+        else:
+            job.log("Docker image %s is up to date" % spec.name)
+        self._check_cancel(job)
+
+    def _build_image(self, job, spec):
+        h = image_hash(spec)
+        files, missing = context_files(spec)
         if missing:
             job.log("Warning: Dockerfile sources not found locally: %s" % ", ".join(missing))
         # Minimal build context: only the files the Dockerfile reads, instead of
         # sending the whole repository (.git, obj, logs) to the daemon.
-        ctx = os.path.join(job.workdir, "image-context")
+        ctx = os.path.join(job.workdir, "image-context-" + spec.name)
         for rel in files:
             dst = os.path.join(ctx, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(os.path.join(REPO, rel), dst)
-        cmd = ["docker", "build", "--platform", DOCKER_PLATFORM, "--progress=plain", "--label", "%s=%s" % (HASH_LABEL, h), "-t", self.image, ctx]
+            shutil.copy2(os.path.join(spec.context_dir, rel), dst)
+        cmd = ["docker", "build", "--platform", DOCKER_PLATFORM, "--progress=plain", "--label", "%s=%s" % (HASH_LABEL, h),
+               "-t", spec.name, "-f", os.path.join(ctx, spec.dockerfile_rel), ctx]
         rc = self._stream(job, cmd, parse_progress=False)
         shutil.rmtree(ctx, ignore_errors=True)
         self._check_cancel(job)
@@ -479,7 +584,7 @@ class Builder:
             cmd += ["-e", "DEBUG=%s" % job.debug]
         if job.extra_flags:
             cmd += ["-e", "EXTRA_FLAGS=%s" % job.extra_flags]
-        cmd += [self.image] + make_args
+        cmd += [self.image.name] + make_args
         return self._stream(job, cmd, parse_progress=True)
 
     def _stream(self, job, cmd, parse_progress):
@@ -528,6 +633,215 @@ class Builder:
             flush_compiled()
         job.proc = None
         return rc
+
+    # ------------------------------------------------------------------ simulation
+
+    def _run_sim(self, job):
+        state = "failed"
+        try:
+            rc = self._run_sim_phases(job)
+            job.exit_code = rc
+            if job.cancel_requested:
+                job.log("Simulation stopped")
+                state = "stopped"
+            elif rc == 0:
+                job.log("Simulation finished")
+                state = "success"
+            else:
+                raise RuntimeError("Simulation exited with code %d" % rc)
+        except Cancelled:
+            job.error = "Cancelled"
+            job.log("Simulation cancelled")
+            state = "cancelled"
+        except Exception as e:  # noqa: BLE001 - any failure ends the job
+            if job.cancel_requested:
+                state = "stopped"
+            else:
+                job.error = str(e)
+                job.log("ERROR: %s" % e)
+        try:
+            job.vis_ready = False
+            # Before the final state: the "end" event must already list the logs.
+            # Logs written up to a crash or stop are still useful.
+            try:
+                self._collect_sim_logs(job)
+            except OSError as e:
+                job.log("Could not collect logs: %s" % e)
+            job.set_state(state)
+        finally:
+            with self.lock:
+                if self.active is job:
+                    self.active = None
+
+    def _run_sim_phases(self, job):
+        job.log("Repository: %s (%s%s)" % (REPO, job.git["describe"], ", dirty" if job.git["dirty"] else ""))
+        self._ensure_image(job, self.sil_image)
+
+        mounts = self._config_mounts(job)
+        profile = CUSTOM_NAME if job.profile_text is not None else job.profile
+        sim = job.sim
+        env = ["-e", "YES=y", "-e", "PROGRESS=y", "-e", "PYTHONUNBUFFERED=1",
+               "-e", "PROFILE=%s" % profile, "-e", "GDBSERVER=%s" % ("y" if job.gdbserver else "n")]
+        if job.sim_text is not None:
+            # entrypoint.sh runs ./support/simulation/${SIM}.py. Mounting a single file there would
+            # make Docker create an empty placeholder in the user's tree, so the script lives in
+            # /sim-custom and SIM walks up to it; PYTHONPATH keeps `import PyNDIflight` working.
+            d = os.path.join(job.workdir, "sim")
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, CUSTOM_NAME + ".py"), "w", encoding="utf-8", newline="\n") as f:
+                f.write(job.sim_text)
+            mounts += ["--mount", "type=bind,src=%s,dst=/sim-custom,readonly" % d]
+            sim = "../../../sim-custom/" + CUSTOM_NAME
+            env += ["-e", "PYTHONPATH=/indiflight/support/simulation"]
+        env += ["-e", "SIM=%s" % sim]
+        if job.debug:
+            env += ["-e", "DEBUG=%s" % job.debug]
+
+        if job.host_network:
+            ports = ["--network", "host"]
+        else:
+            # loopback only: the visualization and gdbserver have no authentication
+            ports = ["-p", "127.0.0.1:%d:%d" % (job.vis_port, VIS_CONTAINER_PORT)]
+            if job.gdbserver:
+                ports += ["-p", "127.0.0.1:%d:%d" % (GDB_PORT, GDB_PORT)]
+
+        cmd = (["docker", "run", "--rm", "--platform", DOCKER_PLATFORM, "--name", job.container,
+                "-v", "%s:/indiflight" % REPO] + mounts + env + ports + [self.sil_image.name] + job.args)
+        job.set_state("building")
+        threading.Thread(target=self._watch_vis, args=(job,), daemon=True).start()
+        return self._stream_sim(job, cmd)
+
+    def _watch_vis(self, job):
+        """Flag the job once the visualization answers. docker-proxy accepts connections before
+        Flask listens and then resets them, so only a real HTTP response counts."""
+        import urllib.request
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        url = "http://127.0.0.1:%d/" % job.vis_port
+        while not job.finished and not job.cancel_requested:
+            if job.state in ("building", "running"):
+                try:
+                    with opener.open(url, timeout=1) as r:
+                        if r.status == 200:
+                            job.vis_ready = True
+                            job.log("Visualization ready on %s" % url)
+                            job.set_state("running")
+                            return
+                except OSError:
+                    pass
+            time.sleep(0.5)
+
+    def _stream_sim(self, job, cmd):
+        """Like _stream, but tqdm's carriage-return redraws become status updates, not log lines."""
+        job.log("$ " + " ".join(cmd))
+        with job.cond:
+            self._check_cancel(job)
+            job.proc = subprocess.Popen(cmd, cwd=REPO, stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        compiled = [0]
+        out_lock = threading.Lock()
+        ansi_re = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+        iter_re = re.compile(r"(\d+)/(\d+)")
+        last_status = [0.0]
+
+        def flush_compiled():
+            if compiled[0]:
+                job.log("[compiled %d file%s]" % (compiled[0], "" if compiled[0] == 1 else "s"))
+                compiled[0] = 0
+
+        def on_status(text):
+            now = time.time()
+            if now - last_status[0] < PROGRESS_INTERVAL_S:
+                return
+            last_status[0] = now
+            m = iter_re.search(text)
+            with job.cond:
+                job.status = text
+            if job.state == "building":
+                job.set_state("running")
+            if m:
+                job.progress(int(m.group(1)), int(m.group(2)), text)
+            else:
+                job.progress(job.done, job.total, text)
+
+        def on_line(line, stream):
+            if line.startswith("%%TOTAL "):
+                return
+            if line.startswith("%% "):
+                compiled[0] += 1
+                return
+            flush_compiled()
+            job.log(line, stream)
+
+        def reader(pipe, stream):
+            fd = pipe.fileno()
+            buf = b""
+            while True:
+                chunk = os.read(fd, 65536)
+                if chunk:
+                    buf += chunk
+                while True:
+                    i = min((k for k in (buf.find(b"\r"), buf.find(b"\n")) if k >= 0), default=-1)
+                    if i < 0 or (buf[i:i + 1] == b"\r" and i == len(buf) - 1 and chunk):
+                        break  # no terminator yet, or a \r that may be the first half of \r\n
+                    term = buf[i:i + 1]
+                    seg = ansi_re.sub("", buf[:i].decode("utf-8", "replace"))
+                    if term == b"\r" and buf[i + 1:i + 2] == b"\n":
+                        term, i = b"\n", i + 1
+                    buf = buf[i + 1:]
+                    with out_lock:
+                        if term == b"\r":
+                            if seg.strip():
+                                on_status(seg.strip())
+                        else:
+                            on_line(seg, stream)
+                if not chunk:
+                    break
+            if buf:
+                with out_lock:
+                    on_line(ansi_re.sub("", buf.decode("utf-8", "replace")), stream)
+            pipe.close()
+
+        threads = [threading.Thread(target=reader, args=(job.proc.stdout, "stdout"), daemon=True),
+                   threading.Thread(target=reader, args=(job.proc.stderr, "stderr"), daemon=True)]
+        for t in threads:
+            t.start()
+        rc = job.proc.wait()
+        for t in threads:
+            t.join()
+        with out_lock:
+            flush_compiled()
+        job.proc = None
+        return rc
+
+    def _collect_sim_logs(self, job):
+        """Blackbox logs the SIL wrote into ./logs-mockup during this job.
+
+        The sim script can write to the repo, so links are not followed: a planted
+        logs-mockup/X -> /home/<user>/... would otherwise be served as an artifact.
+        """
+        d = os.path.join(REPO, "logs-mockup")
+        if os.path.islink(d) or not os.path.isdir(d):
+            return
+        outdir = os.path.join(job.workdir, "artifacts")
+        os.makedirs(outdir, exist_ok=True)
+        known = {a["name"] for a in job.artifacts}
+        for name in sorted(os.listdir(d)):
+            if name in known or not NAME_RE.match(name):
+                continue
+            try:
+                fd = os.open(os.path.join(d, name), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            except OSError:
+                continue  # symlink (ELOOP), vanished, or unreadable
+            with os.fdopen(fd, "rb") as src:
+                st = os.fstat(src.fileno())
+                if not stat.S_ISREG(st.st_mode) or st.st_mtime < job.started_ts - 2:
+                    continue
+                dst = os.path.join(outdir, name)
+                with open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+            kind = os.path.splitext(name)[1][1:].lower() or "file"
+            job.artifacts.append({"name": name, "kind": kind, "size": os.path.getsize(dst), "path": dst})
+            job.log("Log: logs-mockup/%s (%d bytes)" % (name, os.path.getsize(dst)))
 
     def _collect_artifacts(self, job):
         """Copy this build's outputs into the job dir (obj/ file names don't depend on board/profile,
@@ -735,11 +1049,12 @@ class Handler(BaseHTTPRequestHandler):
             active = b.active
             return self._json(200, {
                 "service": SERVICE, "version": API_VERSION, "repo": REPO,
-                "git": git_info(), "docker": docker_status(b.image),
+                "git": git_info(), "docker": docker_status(b.image), "simDocker": docker_status(b.sil_image),
                 "activeJob": active.id if active else None,
+                "activeJobKind": active.kind if active else None,
             })
         if method == "GET" and p == ["configs"]:
-            return self._json(200, {"boards": list_configs("boards"), "profiles": list_configs("profiles")})
+            return self._json(200, {kind: list_configs(kind) for kind in CONFIG_DIRS})
         if method == "GET" and len(p) == 3 and p[0] == "configs" and p[1] in CONFIG_DIRS:
             path = config_path(p[1], p[2])
             if path is None:
@@ -750,7 +1065,10 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET":
                 return self._json(200, b.summaries())
             return self._create_build(self._read_json())
-        if len(p) >= 2 and p[0] == "builds":
+        if p == ["sims"] and method == "POST":
+            return self._create_sim(self._read_json())
+        # build and sim jobs share one id space and the same per-job routes
+        if len(p) >= 2 and p[0] in ("builds", "sims"):
             job = b.get(p[1])
             if job is None:
                 raise ApiError(404, "Unknown build: %s" % p[1])
@@ -775,9 +1093,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, job.summary())
         raise ApiError(404, "Not found")
 
-    def _create_build(self, body):
+    def _parse_configs(self, body, keys):
         req = {}
-        for key in ("board", "profile"):
+        for key in keys:
             kind = key + "s"
             text_key = key + "Text"
             name = body.get(key)
@@ -796,10 +1114,18 @@ class Handler(BaseHTTPRequestHandler):
                 if config_path(kind, name) is None:
                     raise ApiError(400, "Unknown %s: %r" % (key, name))
                 req[key] = name
+        return req
+
+    @staticmethod
+    def _parse_debug(body):
         debug = body.get("debug")
         if debug not in (None, "INFO", "GDB"):
             raise ApiError(400, "debug must be \"INFO\", \"GDB\" or null")
-        req["debug"] = debug
+        return debug
+
+    def _create_build(self, body):
+        req = self._parse_configs(body, ("board", "profile"))
+        req["debug"] = self._parse_debug(body)
         extra = body.get("extraFlags")
         if extra is not None and not isinstance(extra, str):
             raise ApiError(400, "extraFlags must be a string")
@@ -813,9 +1139,51 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(clean, bool):
             raise ApiError(400, "clean must be a boolean")
         req["clean"] = clean
-        job = self.builder.start(req)
+        return self._start(req, Job)
+
+    def _create_sim(self, body):
+        sim_text = body.get("simText")
+        if sim_text is not None:
+            # Arbitrary Python by design, with the repo mounted read-write: the token is the only gate
+            if self.token is None:
+                raise ApiError(403, "Edited simulation scripts need token authentication; restart the "
+                                    "daemon without --no-token, or save the script in support/simulation")
+            if not isinstance(sim_text, str):
+                raise ApiError(400, "simText must be a string")
+            name = body.get("sim")
+            if name is not None and not isinstance(name, str):
+                raise ApiError(400, "sim must be a string")
+            req = {"simText": sim_text, "sim": name or CUSTOM_NAME}
+        else:
+            if config_path("sims", body.get("sim")) is None:
+                raise ApiError(400, "Unknown sim: %r" % body.get("sim"))
+            req = {"sim": body["sim"]}
+        if body.get("profile") is None and body.get("profileText") is None:
+            raise ApiError(400, "A simulation needs a profile")  # entrypoint.sh requires PROFILE
+        req.update(self._parse_configs(body, ("profile",)))
+        req["debug"] = self._parse_debug(body)
+        args = body.get("args") or []
+        if not isinstance(args, list) or len(args) > MAX_SIM_ARGS:
+            raise ApiError(400, "args must be a list of at most %d strings" % MAX_SIM_ARGS)
+        for a in args:
+            if not isinstance(a, str) or not SIM_ARG_RE.match(a):
+                raise ApiError(400, "Unsupported sim argument %r (letters, digits and _ . : / = + , -)" % (a,))
+            if a.split("=", 1)[0] in RESERVED_SIM_ARGS:
+                raise ApiError(400, "%s is set by the daemon" % a)
+        req["args"] = args
+        for key in ("gdbserver", "hostNetwork"):
+            if not isinstance(body.get(key, False), bool):
+                raise ApiError(400, "%s must be a boolean" % key)
+            req[key] = body.get(key, False)
+        req["visPort"] = VIS_CONTAINER_PORT if req["hostNetwork"] else free_port(VIS_CONTAINER_PORT)
+        return self._start(req, SimJob)
+
+    def _start(self, req, job_cls):
+        job = self.builder.start(req, job_cls)
         if job is None:
-            raise ApiError(409, "A build is already running: %s" % self.builder.active.id)
+            active = self.builder.active
+            raise ApiError(409, "A %s is already running: %s" % (
+                "simulation" if active.kind == "sim" else "build", active.id))
         return self._json(201, {"id": job.id})
 
     def _events(self, job):
@@ -871,6 +1239,19 @@ class Handler(BaseHTTPRequestHandler):
 
 # --------------------------------------------------------------------------- main
 
+def free_port(preferred):
+    """preferred if it is free on loopback, else any free port (macOS AirPlay holds 5000)."""
+    import socket
+    for port in (preferred, 0):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+                return sock.getsockname()[1]
+            except OSError:
+                continue
+    raise ApiError(500, "No free port for the visualization")
+
+
 def load_token():
     try:
         with open(TOKEN_FILE, encoding="utf-8") as f:
@@ -894,19 +1275,24 @@ def main():
     ap.add_argument("--port", type=int, default=8742, help="port (default 8742)")
     ap.add_argument("--no-token", action="store_true",
                     help="disable token authentication; the origin allowlist still applies, but any "
-                         "local process (and any page on an allowed origin) can then start builds")
+                         "local process (and any page on an allowed origin) can then start builds and simulations; "
+                         "edited simulation scripts are refused")
     ap.add_argument("--allow-origin", action="append", default=[], metavar="ORIGIN",
                     help="also accept requests from this browser origin, e.g. https://my.host:8443 "
                          "(repeatable; always allowed: %s, localhost/127.0.0.1 on any port, Tauri)"
                          % ", ".join(DEFAULT_ORIGINS))
     ap.add_argument("--image", default="indiflight-builder", help="docker image tag (default indiflight-builder)")
+    ap.add_argument("--sil-image", default="pyndiflight-sil",
+                    help="docker image tag of the SIL simulation runner (default pyndiflight-sil)")
     ap.add_argument("--platform", default=DOCKER_PLATFORM,
                     help="docker platform of the builder (default: native, here %s). "
                          "linux/amd64 on an ARM host runs the x86 toolchain under emulation" % DOCKER_PLATFORM)
     args = ap.parse_args()
     DOCKER_PLATFORM = args.platform
 
-    builder = Builder(args.image)
+    builder_image = ImageSpec(args.image, "Dockerfile")
+    sil_image = ImageSpec(args.sil_image, "support/simulation/sil.Dockerfile", "support/simulation", base=builder_image)
+    builder = Builder(builder_image, sil_image)
     Handler.builder = builder
     Handler.token = None if args.no_token else load_token()
     Handler.allowed_origins = set(DEFAULT_ORIGINS) | {o.rstrip("/") for o in args.allow_origin}
@@ -928,7 +1314,7 @@ def main():
         print("  WARNING: uninitialised submodules: %s" % ", ".join(g["submodulesMissing"]))
         print("           run: git submodule update --init --recursive")
     print("  platform: %s" % DOCKER_PLATFORM)
-    st = docker_status(args.image)
+    st = docker_status(builder_image)
     if not st["available"]:
         print("  docker: NOT AVAILABLE (%s)" % st["error"])
     elif not st["exists"]:
