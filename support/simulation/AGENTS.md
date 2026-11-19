@@ -98,3 +98,48 @@ These flags are set in the profile build-flag headers (for example HexDemo):
 - On the local venv (`~/.indiflight-venv`), numba fails to import with NumPy > 2.0.
   For offline checks of craft parameters, stub `numba.njit` as a pass-through
   decorator on `PYTHONPATH`. That is slow, but fine for one-off evaluations.
+
+## Running through the configurator's daemon (`start.py`)
+
+The web configurator's Simulation tab runs sims through `start.py` at the repo root.
+That daemon builds and runs the `pyndiflight-sil` image the same way the Docker
+section of `README.md` does. What a script needs for that to work:
+
+- **Listing:** the daemon only lists `support/simulation/*.py` files whose text contains
+  `--sil-profile-txt`. Helper modules stay hidden that way. A new sim must accept
+  `--sil` and `--sil-profile-txt`, which `entrypoint.sh` passes in.
+- **Arguments:** the configurator turns each `parser.add_argument("--x", ..., action="store_true",
+  help="...")` into a switch. It finds them with a regex over the source, so keep each
+  call self-contained and help strings free of unbalanced parentheses. Options that take
+  values still work, typed into the tab's "extra arguments" field.
+  `--sil`, `--sil-profile-txt` and `--hil` are rejected because the daemon sets them.
+- **Edited scripts** don't run from this folder. They are mounted at `/sim-custom/__custom__.py`,
+  `SIM` points there with `../../../sim-custom/__custom__`, and `PYTHONPATH` is set to this
+  folder. Import `PyNDIflight` as a package, and don't locate repo files relative to
+  `__file__`. Use paths relative to the working directory `/indiflight`, or derive them
+  from `args.sil`. Edited profiles are mounted as `configs/profiles/__custom__.txt`.
+- **Visualization:** Flask must listen on `0.0.0.0:5000` inside the container. The daemon
+  publishes that port on 127.0.0.1 (5000, or a free port if 5000 is taken) and reports it as
+  ready once `GET /` returns 200. The tab shows that page in an iframe, so it must
+  keep working when served from a different origin than the configurator.
+- **Progress:** tqdm on stderr. The daemon treats `\r`-terminated output as a status line and
+  reads `n/total` from it for the progress bar, so plain prints should end with `\n`.
+  `PYTHONUNBUFFERED=1` is set.
+- **Stop** sends SIGINT once to every process in the container except PID 1. The script should
+  simply let `KeyboardInterrupt` propagate: a normal Python exit flushes the SIL's
+  blackbox file, while SIGTERM or SIGKILL would lose the tail of it. The daemon falls back to
+  `docker kill` after 10 s. Logs never carry an "End of log" marker, not even after a
+  manual Ctrl-C.
+- **Logs:** after a run, the daemon copies regular files in `logs-mockup/` that are newer than
+  the job start (symlinks are skipped), and the tab offers them for download or in its
+  Blackbox Viewer.
+- **Image:** the image is rebuilt when `sil.Dockerfile`, a file it `COPY`s/`ADD`s
+  (relative to this folder, which is the build context), or the `indiflight-builder`
+  image changes. Only those files are sent as the context. A from-scratch build installs
+  ROS 2 and micro-ROS and takes 10+ minutes.
+- **Security:** edited scripts are arbitrary Python with the repo mounted read-write, so the
+  daemon refuses them when started with `--no-token`.
+- **Smoke test without the UI:** start `python3 start.py --port 8799 --no-token`, then:
+  `curl -X POST localhost:8799/api/sims -H 'Content-Type: application/json'
+  -d '{"sim":"exampleQuadSim","profile":"CineRat","args":["--throw","--learn"]}'`
+  Follow `/api/builds/<id>/events` (SSE), then stop with `POST /api/builds/<id>/cancel`.
