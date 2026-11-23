@@ -533,6 +533,8 @@ class IndiflightLog(object):
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('u_state'):
                 data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
+            elif col.startswith('d[') or col.startswith('rpmCmd_f'):
+                data[col] /= self.UNIT_FLOAT_TO_SIGNED16VB
             elif col.startswith('omega_dot'):
                 data[col] *= 100
             elif col.startswith('omega'):
