@@ -425,8 +425,13 @@ void init(void)
     initBoardInformation();
 #endif
 
-    if (!readSuccess || !isEEPROMVersionValid() || strncasecmp(systemConfig()->boardIdentifier, TARGET_BOARD_IDENTIFIER, sizeof(TARGET_BOARD_IDENTIFIER))) {
+    if (!isEEPROMVersionValid() || strncasecmp(systemConfig()->boardIdentifier, TARGET_BOARD_IDENTIFIER, sizeof(TARGET_BOARD_IDENTIFIER))) {
         resetEEPROM(false);
+    } else if (!readSuccess) {
+        // Only some parameter groups fell back to defaults (PG version bump, or a
+        // new group). Keep everything else, but do not allow arming until the
+        // config has been checked, saved and the board rebooted.
+        setRebootRequired();
     }
 
     systemState |= SYSTEM_STATE_CONFIG_LOADED;
