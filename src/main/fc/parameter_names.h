@@ -136,6 +136,10 @@
 #define PARAM_NAME_INDI_USE_INCREMENT "indi_use_increment"
 #define PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ "indi_use_accel_for_thrust"
 #define PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK "indi_use_rpm_dot_feedback"
+#define PARAM_NAME_INDI_USE_RPM_CTL "indi_use_rpm_ctl"
+#define PARAM_NAME_INDI_RPM_CTL_GAIN "indi_rpm_ctl_gain"
+#define PARAM_NAME_INDI_RPM_CTL_DELAY "indi_rpm_ctl_delay"
+#define PARAM_NAME_INDI_RPM_CTL_LPF_HZ "indi_rpm_ctl_lpf_hz"
 #define PARAM_NAME_INDI_ACT_NUM "indi_act_num"
 #define PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS "indi_act_time_constant_ms"
 #define PARAM_NAME_INDI_ACT_MAX_RPM "indi_act_max_rpm"
@@ -273,6 +277,13 @@
 #define PARAM_NAME_LEARNER_APPLY_INDI "learner_apply_indi_profile"
 #define PARAM_NAME_LEARNER_APPLY_POSITION "learner_apply_position_profile"
 #define PARAM_NAME_LEARNER_APPLY_HOVER "learner_apply_hover_rotation"
+#define PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL "learner_simple_motor_model"
+#define PARAM_NAME_LEARNER_RLS_LAMBDA "learner_rls_lambda"
+#define PARAM_NAME_LEARNER_HARDCODE_MAX_RPM "learner_hardcode_max_rpm"
+#define PARAM_NAME_LEARNER_HARDCODE_LINEAR_FORCES "learner_hardcode_linear_forces"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FX "learner_hardcode_g1_fx"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FY "learner_hardcode_g1_fy"
+#define PARAM_NAME_LEARNER_HARDCODE_G1_FZ "learner_hardcode_g1_fz"
 #endif
 
 #ifdef USE_NN_CONTROL

@@ -1794,6 +1794,11 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
     }
 #endif
+#ifdef USE_INDI
+    // INDI rpm loop must see the final commands that go to the ESCs
+    indiUpdateRpmCtlState( motor_normalized );
+#endif
+
     // get real motor outputs for the hardware implementation used
     for (int i = 0; i < numMotors; i++) {
         motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
