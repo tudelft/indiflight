@@ -418,6 +418,19 @@ static const configRecord_t *findEEPROM(const pgRegistry_t *reg, configRecordFla
     return NULL;
 }
 
+static uint16_t defaultedPgCount = 0;
+static uint16_t defaultedPgns[EEPROM_MAX_REPORTED_DEFAULTED_PGS];
+
+uint16_t getEEPROMDefaultedPgCount(void)
+{
+    return defaultedPgCount;
+}
+
+uint16_t getEEPROMDefaultedPgn(uint16_t index)
+{
+    return (index < EEPROM_MAX_REPORTED_DEFAULTED_PGS) ? defaultedPgns[index] : 0;
+}
+
 // Initialize all PG records from EEPROM.
 // This functions processes all PGs sequentially, scanning EEPROM for each one. This is suboptimal,
 //   but each PG is loaded/initialized exactly once and in defined order.
@@ -425,19 +438,29 @@ bool loadEEPROM(void)
 {
     bool success = true;
 
+    defaultedPgCount = 0;
+
     PG_FOREACH(reg) {
         const configRecord_t *rec = findEEPROM(reg, CR_CLASSICATION_SYSTEM);
+        bool loaded = false;
         if (rec) {
             // config from EEPROM is available, use it to initialize PG. pgLoad will handle version mismatch
-            if (!pgLoad(reg, rec->pg, rec->size - offsetof(configRecord_t, pg), rec->version)) {
-                success = false;
-            }
+            loaded = pgLoad(reg, rec->pg, rec->size - offsetof(configRecord_t, pg), rec->version);
         } else {
             pgReset(reg);
-
-            success = false;
         }
         *reg->fnv_hash = fnv_update(FNV_OFFSET_BASIS, reg->address, pgSize(reg));
+
+        if (!loaded) {
+            success = false;
+            if (defaultedPgCount < EEPROM_MAX_REPORTED_DEFAULTED_PGS) {
+                defaultedPgns[defaultedPgCount] = pgN(reg);
+            }
+            defaultedPgCount++;
+            // The stored record is stale even if the values are never changed,
+            // so the next save has to write it, or this group never recovers.
+            *reg->fnv_hash = ~(*reg->fnv_hash);
+        }
     }
 
     return success;
@@ -525,6 +548,7 @@ void writeConfigToEEPROM(void)
 
 
     if (success && isEEPROMVersionValid() && isEEPROMStructureValid()) {
+        defaultedPgCount = 0;
         return;
     }
 
