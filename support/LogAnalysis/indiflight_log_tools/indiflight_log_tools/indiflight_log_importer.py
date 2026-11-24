@@ -653,6 +653,9 @@ class IndiflightLog(object):
             elif col.startswith('spfSp'):
                 # spfSp[0..2]: cm/s^2 -> m/s^2
                 data[col] /= self.METER_TO_CM
+            elif col.startswith('spf_corrected'):
+                # spf_corrected[0..2] (learner): 100 * learnRun.fxSpf, cm/s^2 -> m/s^2
+                data[col] /= self.METER_TO_CM
             elif col.startswith('dv'):
                 # dv[0..5]: pseudocontrol * 10
                 data[col] /= 10.
