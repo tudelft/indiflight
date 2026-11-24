@@ -228,9 +228,17 @@ rls_exit_code_t rlsNewSample(rls_t* rls, float* AT, float* y, float lambda) {
         }
     }
 
+    // with a fixed forgetting factor < 1, unexcited directions of P grow
+    // without bound. Then stop forgetting until P comes down again.
+    bool limitCovariance = !useFortescue && (rls->lambda < 1.f);
+    float lambdaFixed = rls->lambda;
+
     float traceP = 0.f;
     for (int row = 0; row < rls->n; row++) {
         traceP += rls->P[row + row*rls->n];
+        if (limitCovariance && (rls->P[row + row*rls->n] > RLS_COV_MAX)) {
+            rls->lambda = 1.f + 0.1f * (1.f - lambdaFixed); // attempt return to lower P
+        }
     }
 
     // in the subtraction below numerical inaccuracies can creep in.

@@ -67,6 +67,7 @@ typedef struct learnerConfig_s {
     uint8_t hardcodeLinearForces; // 0: learned fx, fy, fz. 1: use hardcodeG1Fx, hardcodeG1Fy, hardcodeG1Fz
     int16_t hardcodeG1Fx;       // used if hardcodeLinearForces. same units as indi_act_g1_fx, 0 is a valid value
     int16_t hardcodeG1Fy;       // used if hardcodeLinearForces. same units as indi_act_g1_fy, 0 is a valid value
+    uint8_t fxIncremental;      // multirotor only. 1: identify effectiveness from increments (modular_drone), 0: global model (tailsitter branch)
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
@@ -110,6 +111,10 @@ typedef struct learningRuntime_s {
     float fxOmegaDotDot[MAXU];
     fp_vector_t fxRateDot;
     fp_vector_t fxSpf;
+    // increments for learner_fx_incremental
+    float fxOmegaDotDiff[MAXU];
+    fp_vector_t fxRateDotDiff;
+    fp_vector_t fxSpfDiff;
     float motorOmega[MAXU];
     float motorOmegaDot[MAXU];
     float motorD[MAXU];
@@ -177,3 +182,8 @@ typedef struct motor_state_s {
 } motor_state_t;
 
 void runLearningQueryStateMachine(timeUs_t current);
+
+// true while the learner query drives the actuators (from waiting for launch until done)
+bool learnerQueryIsActive(void);
+// true if actuator i is excited by the prober (prober_act_mask)
+bool learnerQueryActuatorSelected(int i);
