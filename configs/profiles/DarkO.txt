@@ -469,16 +469,36 @@ set throw_to_arm_release_delay_ms = 150
 set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
-# learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 6 # inoperable!
-set learner_num_actuators = 4
-set learner_delay_time_ms = 150
-set learner_step_time_ms = 50
-set learner_ramp_time_ms = 100
-set learner_overlap_time_ms = 50
-set learner_step_amplitude = 35
-set learner_ramp_amplitude = 70
-set learner_gyro_max = 1150
+# learner modes. probing bits: 1 in flight, 2 after throw, 4 after catapult
+#                fx/act/hover bits: 1 during flight (not probing), 2 during probing
+set learner_mode_probing = 6
+set learner_mode_fx = 3
+set learner_mode_act = 2
+set learner_mode_hover = 2
+set learner_mix_control_after_ms = 1000   # add control to the excitation after this time
+set learner_init_from_profile_fx = 0
+set learner_init_from_profile_act = 0
+set learner_act_mask = 65535
+set learner_fx_incremental = 0           # ignored with LEARNER_IS_TAILSITTER (global model only)
+set learner_simple_motor_model = 0
+set learner_rls_lambda = 0                 # 0: no forgetting while probing, fortescue/none after
+set learner_hardcode_max_rpm = 0
+set learner_hardcode_linear_forces = 0
+
+# excitation
+set prober_type = ORTHO
+set prober_act_mask = 65535
+set prober_pre_delay_ms = 100
+set prober_post_delay_ms = 0
+set prober_gyro_max = 1150
+set prober_steps_step_ms = 100
+set prober_steps_overlap_ms = 0
+set prober_steps_amplitude = 35
+set prober_stepramps_step_ms = 50
+set prober_stepramps_ramp_ms = 100
+set prober_stepramps_overlap_ms = 50
+set prober_stepramps_step_amplitude = 35
+set prober_stepramps_ramp_amplitude = 70
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40

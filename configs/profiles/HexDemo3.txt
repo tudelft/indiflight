@@ -233,8 +233,7 @@ set indi_sync_lowpass_hz = 5
 set indi_wls_axes_weights = 1,1,50,50,50,5
 
 # --- actuators: fields can have up to 8 elements ---
-set indi_act_is_motor = 1,1,1,1,1,1,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
+set indi_act_type = 1,1,1,1,1,1,0,0   # 0: off, 1: motor, 2: servo
 set indi_act_time_constant_ms = 25, 25, 25, 25, 25, 25       # ms
 set indi_act_max_rpm = 60000, 60000, 60000, 60000, 60000, 60000    # rpm
 set indi_act_hover_rpm = 30000, 30000, 30000, 30000, 30000, 30000  # rpm
@@ -279,8 +278,7 @@ set indi_attitude_max_tilt_rate = 500
 set indi_attitude_max_yaw_rate = 300
 set indi_manual_use_coordinated_yaw = 1
 set indi_manual_max_upwards_accel = 20
-set indi_act_is_motor = 1,1,1,1,0,0,0,0
-set indi_act_is_servo = 0,0,0,0,0,0,0,0
+set indi_act_type = 1,1,1,1,0,0,0,0   # 0: off, 1: motor, 2: servo
 set indi_act_time_constant_ms = 25, 25, 25, 25       # ms
 set indi_act_max_rpm = 40000, 40000, 40000, 40000    # rpm
 set indi_act_hover_rpm = 20000, 20000, 20000, 20000  # rpm
@@ -390,16 +388,36 @@ set throw_to_arm_release_delay_ms = 150
 set throw_to_arm_idle_before_throw = 0
 set throw_to_arm_allow_manual_modes = 0
 
-# learner 0: none, 1: learn during flight, 2: query and learn after catapult, 4: idem. after throw
-set learner_mode = 6
-set learner_num_actuators = 6
-set learner_delay_time_ms = 150
-set learner_step_time_ms = 50
-set learner_ramp_time_ms = 100
-set learner_overlap_time_ms = 50
-set learner_step_amplitude = 35
-set learner_ramp_amplitude = 70
-set learner_gyro_max = 1150
+# learner modes (from learner_mode = 6). probing bits: 1 in flight, 2 after throw, 4 after catapult
+#                fx/act/hover bits: 1 during flight (not probing), 2 during probing
+set learner_mode_probing = 6
+set learner_mode_fx = 2
+set learner_mode_act = 2
+set learner_mode_hover = 2
+set learner_mix_control_after_ms = 65535  # never add control to the excitation
+set learner_init_from_profile_fx = 0
+set learner_init_from_profile_act = 0
+set learner_act_mask = 63
+set learner_fx_incremental = 1           # identify from increments (modular_drone)
+set learner_simple_motor_model = 1
+set learner_rls_lambda = 1000000       # * 1e-6. 1000000: no forgetting
+set learner_hardcode_max_rpm = 0
+set learner_hardcode_linear_forces = 0
+set learner_hardcode_g1_fx = 0
+set learner_hardcode_g1_fy = 0
+set learner_hardcode_g1_fz = 0
+
+# excitation: one motor after the other, a step and then a ramp down (modular_drone)
+set prober_type = STEPRAMPS
+set prober_act_mask = 63
+set prober_pre_delay_ms = 150
+set prober_post_delay_ms = 0
+set prober_gyro_max = 1150
+set prober_stepramps_step_ms = 50
+set prober_stepramps_ramp_ms = 100
+set prober_stepramps_overlap_ms = 50
+set prober_stepramps_step_amplitude = 35
+set prober_stepramps_ramp_amplitude = 70
 set learner_imu_lowpass_hz = 10
 set learner_fx_lowpass_hz = 20
 set learner_motor_lowpass_hz = 40
@@ -407,6 +425,8 @@ set learner_zeta_rate = 90
 set learner_zeta_attitude = 90
 set learner_zeta_velocity = 70
 set learner_zeta_position = 90
+set learner_zeta_velocity_vert = 0     # 0: vertical gains same as horizontal (modular_drone)
+set learner_zeta_position_vert = 0
 
 set learner_roll_misalignment = 0
 set learner_pitch_misalignment = 0
