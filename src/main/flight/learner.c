@@ -271,9 +271,8 @@ void initLearnerFilters(void) {
 #define LEARNER_INIT_COV_QUERY 1e2f
 #define LEARNER_INIT_COV_RESET 1e1f
 
-#ifdef STM32H7
-FAST_CODE
-#endif
+// not FAST_CODE: runs once per query/takeoff, and with two callers LTO no
+// longer inlines it, so it would take 2.3kB of ITCM
 // fromProfileInFlight: (re)start in-flight learning from the current profile
 // (modular_drone setFxRlsToProfile). Leaves the IMU and servo estimates alone.
 static void initLearnerRls(bool fromProfileInFlight) {
