@@ -752,8 +752,9 @@ $(EKF_GEN_FILES) &: $(EKF_DIR)/generate_ekf.py $(wildcard $(EKF_DIR)/*.j2)
 	@echo "#### generating ekf..."
 	cd $(EKF_DIR) && python3 generate_ekf.py
 
-# rebuild everything when makefile changes or the extra flags have changed or pi-protocol has changed
-$(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildcard make/*) $(PI_GEN_FILES)
+# rebuild everything when makefile changes or the extra flags have changed or generated code has changed.
+# The generated headers must also exist before any object compiles (parallel builds on a fresh clone).
+$(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildcard make/*) $(PI_GEN_FILES) $(EKF_GEN_FILES)
 
 # include auto-generated dependencies
 -include $(TARGET_DEPS)

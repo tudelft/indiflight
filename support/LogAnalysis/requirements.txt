@@ -1,0 +1,5 @@
+# pip install -r support/LogAnalysis/requirements.txt
+# pyFlightPlotter's browser version (pyFlightPlotter.web) lives on the js-version branch.
+pyFlightPlotter @ git+https://github.com/tudelft/pyFlightPlotter.git@js-version
+numpy
+scipy

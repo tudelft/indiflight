@@ -66,6 +66,7 @@ logs-*/
 .jlink-commandfile
 build*/
 !src/main/build
+.vscode/settings.json
 output/
 *.pkl
 *.csv

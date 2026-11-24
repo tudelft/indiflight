@@ -1831,6 +1831,35 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     indiUpdateActuatorState( motor_normalized, servo_normalized_feedback );
 #endif
 
+    // apply motor lead-lag filter only after the commands are fed into the actuator state filter
+#ifdef USE_INDI
+    if (indiRun.useMotorLeadLag) {
+        int m = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && (m < numMotors)) {
+                float output = biquadFilterApply(&indiRun.motorLeadLagFilter[m], motor_normalized[m]);
+                motor_normalized[m++] = constrainf(output, 0.f, 1.f);
+            }
+        }
+    }
+#endif
+#ifdef INJECT_INPUT_DISTURBANCE
+#pragma message "WARNING: compiling with dangerous code."
+    // Ensure this only runs when not injecting an attitude setpoint and in angle mode (disable in horizon mode)
+    if (indiRun.injectInputDist && !indiRun.injectAttSp && FLIGHT_MODE(ANGLE_MODE)) {
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && indiRun.applyDistToMotor[i]) {
+                // inject disturbance into the motor output
+                motor_normalized[i] += indiRun.inputDistAmplitude;
+            }
+        }
+    }
+#endif
+#ifdef USE_INDI
+    // INDI rpm loop must see the final commands that go to the ESCs
+    indiUpdateRpmCtlState( motor_normalized );
+#endif
+
     // get real motor outputs for the hardware implementation used
     for (int i = 0; i < numMotors; i++) {
         motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);

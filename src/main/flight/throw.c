@@ -131,7 +131,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
                 && isTouchingGround()
 #ifdef USE_LOCAL_POSITION
                 && ( (!autoMode && throwConfig()->allowManualModes)
-                        || (autoMode && isConvergedEkf()) )
+                        || (autoMode && isConvergedEkf()) ) // no setpoint needed: THROWN arrests motion if there is none
 #else
                 && !autoMode
                 && throwConfig()->allowManualModes
@@ -140,6 +140,7 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
+                posSpNed.trackPsi = false; // don't care about yaw when being thrown
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:

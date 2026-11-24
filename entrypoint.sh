@@ -3,16 +3,17 @@
 cd /indiflight
 
 # BOARD/PROFILE: from -e BOARD=... -e PROFILE=..., otherwise from the selection
-# made with the VS Code task "IntelliSense: select board and profile"
+# made with the VS Code task "IntelliSense: select board and profile".
+# An explicitly empty -e PROFILE= builds without a profile.
 SELECTION_FILE=.vscode/build_selection.json
 BOARD_SRC="-e BOARD"
 PROFILE_SRC="-e PROFILE"
-if [[ -z "$BOARD" || -z "$PROFILE" ]] && [[ -f "$SELECTION_FILE" ]]; then
+if [[ -z "$BOARD" || -z "${PROFILE+set}" ]] && [[ -f "$SELECTION_FILE" ]]; then
     if [[ -z "$BOARD" ]]; then
         BOARD=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["board"])' "$SELECTION_FILE")
         BOARD_SRC="$SELECTION_FILE"
     fi
-    if [[ -z "$PROFILE" ]]; then
+    if [[ -z "${PROFILE+set}" ]]; then
         PROFILE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["profile"])' "$SELECTION_FILE")
         PROFILE_SRC="$SELECTION_FILE"
     fi

@@ -25,7 +25,11 @@ RUN mkdir -p /downloads && \
     make -f tools.mk OSFAMILY=linux DL_DIR=/downloads TOOLS_DIR=/tools arm_sdk_install && \
     rm tools.mk
 
-RUN cp -r /tools/*/* /usr/
+# Point make at this toolchain. tools.mk sets ARM_SDK_DIR with ?=, so this wins over a
+# host toolchain in the mounted ./tools/ (from `make arm_sdk_install`), which need not
+# run in this container (macOS binary, or x86 on an arm64 host).
+ENV ARM_SDK_DIR=/tools/gcc-arm-none-eabi-10.3-2021.10
+ENV PATH="${ARM_SDK_DIR}/bin:${PATH}"
 
 
 # install python utilities

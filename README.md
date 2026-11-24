@@ -91,6 +91,33 @@ does not update, run `C/C++: Reset IntelliSense Database`.
     docker run --privileged -it -v ./:/indiflight \
         -e BOARD=MTKS-H743 -e PROFILE=CineRat indiflight-builder
 
+### Building from the configurator
+
+The web configurator can build this working tree for you through a small local
+daemon (Python 3.10+, no dependencies; Docker must work without `sudo`):
+
+    python3 start.py
+
+It listens on `http://127.0.0.1:8742` and prints an access token (stored in
+`~/.config/indiflight-builder/token`) to paste into the configurator. It
+(re)builds the `indiflight-builder` image automatically when the `Dockerfile` or
+the files it copies have changed. Options: `--port`, `--host`, `--image`,
+`--no-token`, `--platform`, `--allow-origin`. Stop it with `Ctrl-C`, which also cancels a running build.
+
+A build runs code with this working tree mounted read-write, so the daemon only
+answers browser pages from `https://app.indiflight.org`, `localhost` (any port)
+and the desktop app; add others with `--allow-origin https://host:port`. It also
+only accepts plain `-DNAME[=value]`/`-UNAME` extra flags and `#define` lines.
+Keep the token private, and avoid `--no-token`.
+
+It runs on Linux, macOS (Docker Desktop) and Windows (inside WSL2 with Docker
+Desktop's WSL integration; clone into the Linux home folder, not `/mnt/c`). The
+builder image uses the host's native architecture, so on Apple Silicon it is
+`linux/arm64` with the aarch64 toolchain; `--platform linux/amd64` forces the x86
+image under emulation instead. Builds always use the image's compiler, even if
+`./tools/` holds one from `make arm_sdk_install`. The configurator's flasher tab
+has step-by-step setup instructions for each OS.
+
 ### Step 3 -- Flashing
 
 You can flash the `.hex` using the indiflight configurator. If at any point you

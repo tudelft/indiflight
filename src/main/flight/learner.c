@@ -65,7 +65,7 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 #error "must use learner with USE_INDI"
 #endif
 
-PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 5);
+PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 6);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
     // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
@@ -95,7 +95,14 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .randomizeMisalignment = false,
     .applyIndi = false,
     .applyPosition = false,
-    .applyHoverRotation = false
+    .applyHoverRotation = false,
+    .simpleMotorModel = false,
+    .rlsLambda = 0,
+    .hardcodeMaxRpm = 0,
+    .hardcodeG1Fz = 0,
+    .hardcodeLinearForces = false,
+    .hardcodeG1Fx = 0,
+    .hardcodeG1Fy = 0
 );
 
 // extern
