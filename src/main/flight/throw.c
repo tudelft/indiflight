@@ -140,7 +140,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
+#ifdef USE_LOCAL_POSITION
                 posSpNed.trackPsi = false; // don't care about yaw when being thrown
+#endif
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:
