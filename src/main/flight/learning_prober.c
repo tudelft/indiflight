@@ -55,6 +55,7 @@
 #include <stdbool.h>
 
 #include "flight/learner.h"
+#include "sensors/gyro.h"
 #include "learning_prober.h"
 #include "common/ortho_signals.h"
 #include "common/filter.h"
@@ -64,15 +65,21 @@
 
 #ifdef USE_LEARNER
 
-PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 0);
+#ifdef LEARNER_IS_TAILSITTER
+#define PROBER_DEFAULT_TYPE PROBER_ORTHO
+#else
+#define PROBER_DEFAULT_TYPE PROBER_STEPRAMPS // modular_drone
+#endif
+
+PG_REGISTER_WITH_RESET_TEMPLATE(proberConfig_t, proberConfig, PG_PROBER_CONFIG, 1);
 PG_RESET_TEMPLATE(proberConfig_t, proberConfig,
-    // .type = (uint8_t) PROBER_STEPS,
-    .type = (uint8_t) PROBER_ORTHO,
+    .type = (uint8_t) PROBER_DEFAULT_TYPE,
     .actMask = 0xFFFF, // all motors and servos
     // .numMotors = 2,
     // .numServos = 2,
     .preDelayMs = 100,
     .postDelayMs = 0,
+    .gyroMax = 1150,
     .steps_stepMs = 100,
     .steps_overlapMs = 0,
     .steps_amp = 35,
@@ -117,6 +124,112 @@ static void initSteps(void) {
 //         proberRuntime.sub.multisine.servoPhases[i] = 0.0f;
 //     }
 // }
+
+// --- stepramps (modular_drone learner query): motors one after the other,
+// each a step of stepramps_stepMs at stepAmp, then a ramp from rampAmp down to
+// 0 in stepramps_rampMs. The next motor starts stepramps_overlapMs before the
+// previous one finishes.
+#define PROBER_STEPRAMPS_GRACE_US 10000
+
+static void initStepRamps(void) {
+    const proberConfig_t* config = proberConfig();
+    prober_runtime_stepramps_t* r = &proberRuntime.sub.stepramps;
+
+    r->numSelected = 0;
+    for (int act = 0; act < indiRun.actNum; act++) {
+        if ((config->actMask & (1 << act)) && (indiRun.actType[act] == INDI_ACT_TYPE_MOTOR)) {
+            r->act[r->numSelected] = act;
+            r->state[r->numSelected] = PROBER_STEPRAMP_ZERO;
+            r->numSelected++;
+        }
+    }
+
+    int n = r->numSelected;
+    timeDelta_t durationUs = PROBER_STEPRAMPS_GRACE_US
+        + 1000 * n * (config->stepramps_stepMs + config->stepramps_rampMs)
+        - 1000 * MAX(n - 1, 0) * config->stepramps_overlapMs;
+    proberRuntime.safetyTimeoutUs += MAX(durationUs, 0);
+}
+
+static void startStepRamp(timeUs_t currentTimeUs, int k) {
+    const proberConfig_t* config = proberConfig();
+    prober_runtime_stepramps_t* r = &proberRuntime.sub.stepramps;
+    if (k >= r->numSelected) return;
+
+    r->startTimeUs[k] = currentTimeUs;
+    r->state[k] = PROBER_STEPRAMP_STEP;
+    // share the remaining gyro range between this and the remaining motors
+    for (int axis = 0; axis < 3; axis++) {
+        float g = gyro.gyroADCf[axis];
+        r->minGyro[k][axis] = g + (-config->gyroMax - g) / (r->numSelected - k);
+        r->maxGyro[k][axis] = g + (+config->gyroMax - g) / (r->numSelected - k);
+    }
+}
+
+static void updateStepRamps(timeUs_t currentTimeUs) {
+    const proberConfig_t* config = proberConfig();
+    prober_runtime_stepramps_t* r = &proberRuntime.sub.stepramps;
+    const timeDelta_t stepUs = 1000 * config->stepramps_stepMs;
+    const timeDelta_t rampUs = 1000 * config->stepramps_rampMs;
+
+    setZeroOutputs();
+
+    if ((r->numSelected > 0) && (r->state[0] == PROBER_STEPRAMP_ZERO)) {
+        startStepRamp(currentTimeUs, 0);
+    }
+
+    bool allDone = true;
+    for (int k = 0; k < r->numSelected; k++) {
+        if (r->state[k] == PROBER_STEPRAMP_ZERO) {
+            allDone = false;
+            break; // later motors have not started either
+        }
+
+        timeDelta_t timeInQuery = cmpTimeUs(currentTimeUs, r->startTimeUs[k]);
+
+        // trigger next motor, if overlap time reached
+        if ((k + 1 < r->numSelected)
+                && (r->state[k+1] == PROBER_STEPRAMP_ZERO)
+                && ((timeInQuery + 1000 * config->stepramps_overlapMs) > (stepUs + rampUs))) {
+            startStepRamp(currentTimeUs, k + 1);
+        }
+
+        // protect somewhat against gyro overrun, probably wont work because of filter delays
+        if (config->gyroMax > 0) {
+            for (int axis = 0; axis < 3; axis++) {
+                float val = gyro.gyroADCf[axis];
+                if ((val > r->maxGyro[k][axis]) || (val < r->minGyro[k][axis])) {
+                    r->state[k] = PROBER_STEPRAMP_DONE;
+                }
+            }
+        }
+
+        float output = 0.f;
+        if (r->state[k] == PROBER_STEPRAMP_STEP) {
+            if (timeInQuery > stepUs) {
+                r->state[k] = PROBER_STEPRAMP_RAMP;
+            } else {
+                output = 0.01f * config->stepramps_stepAmp;
+            }
+        }
+        if (r->state[k] == PROBER_STEPRAMP_RAMP) {
+            timeDelta_t timeInRamp = timeInQuery - stepUs;
+            if (timeInRamp > rampUs) {
+                r->state[k] = PROBER_STEPRAMP_DONE;
+            } else {
+                output = 0.01f * config->stepramps_rampAmp * (1.f - ((float) timeInRamp) / ((float) MAX(rampUs, 1)));
+            }
+        }
+
+        proberRuntime.output[r->act[k]] = output;
+        allDone &= (r->state[k] == PROBER_STEPRAMP_DONE);
+    }
+
+    if (allDone) {
+        proberRuntime.isGenFinished = true;
+        proberRuntime.genFinishTimeUs = currentTimeUs;
+    }
+}
 
 static void updateSteps(timeUs_t currentTimeUs) {
     const proberConfig_t* config = proberConfig();
@@ -262,7 +375,7 @@ void initProber(timeUs_t currentTimeUs) {
             initSteps();
             break;
         case PROBER_STEPRAMPS:
-            // Initialize stepramps prober runtime
+            initStepRamps();
             break;
 //         case PROBER_MULTISINE:
 //             // Initialize multisine prober runtime
@@ -431,7 +544,7 @@ void updateProber(timeUs_t currentTimeUs) {
             updateSteps(currentTimeUs);
             break;
         case PROBER_STEPRAMPS:
-            // Handle stepramps prober logic
+            updateStepRamps(currentTimeUs);
             break;
 //         case PROBER_MULTISINE:
 //             // Handle multisine prober logic
@@ -443,6 +556,7 @@ void updateProber(timeUs_t currentTimeUs) {
         case PROBER_ORTHO:
             // Handle orthogonal signal prober logic
             updateOrtho(currentTimeUs);
+            break;
         default:
             // Handle unknown prober type
             break;

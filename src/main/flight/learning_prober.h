@@ -33,6 +33,7 @@ typedef struct proberConfig_s {
     uint16_t actMask;
     uint16_t preDelayMs;  // delay before starting the prober
     uint16_t postDelayMs;  // delay after finishing the prober
+    uint16_t gyroMax;  // stepramps: end an actuator's excitation early if the gyro leaves this range, deg/s. 0: off
     // --- specific parameters
     // steps
     uint16_t steps_stepMs;  // duration of each step in ms
@@ -71,10 +72,20 @@ typedef struct prober_runtime_steps_s {
     timeUs_t nextStepTimeUs;  // when to apply the next step
 } prober_runtime_steps_t;
 
+typedef enum {
+    PROBER_STEPRAMP_ZERO = 0,
+    PROBER_STEPRAMP_STEP,
+    PROBER_STEPRAMP_RAMP,
+    PROBER_STEPRAMP_DONE
+} prober_stepramp_state_t;
+
 typedef struct prober_runtime_stepramps_s {
-    int currentStepIndex;  // index of the current step in the sequence
-    timeUs_t nextStepTimeUs;  // when to apply the next step
-    timeUs_t nextRampTimeUs;  // when to apply the next ramp
+    int numSelected;            // number of motors excited
+    int act[MAXU];              // actuator index of the k-th excited motor
+    timeUs_t startTimeUs[MAXU];
+    float minGyro[MAXU][3];     // deg/s
+    float maxGyro[MAXU][3];
+    prober_stepramp_state_t state[MAXU];
 } prober_runtime_stepramps_t;
 
 typedef struct prober_runtime_multisine_s {

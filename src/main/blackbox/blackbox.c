@@ -69,6 +69,7 @@
 #include "flight/pos_ctl.h"
 #include "flight/ekf.h"
 #include "flight/learner.h"
+#include "flight/learning_prober.h"
 #include "flight/nn_control.h"
 #include "flight/trajectory_tracker.h"
 #include "flight/catapult.h"
@@ -2889,15 +2890,28 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ALLOW_MANUAL_MODES, "%d",  throwConfig()->allowManualModes);
 #endif
 #ifdef USE_LEARNER
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_NUM_ACT, "%d",  learnerConfig()->numAct);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_DELAY_TIME_MS, "%d",  learnerConfig()->delayMs);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_TIME_MS, "%d",  learnerConfig()->stepMs);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_TIME_MS, "%d",  learnerConfig()->rampMs);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_OVERLAP_TIME_MS, "%d",  learnerConfig()->overlapMs);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_AMPLITUDE, "%d",  learnerConfig()->stepAmp);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_AMPLITUDE, "%d",  learnerConfig()->rampAmp);
-        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_GYRO_MAX, "%d",  learnerConfig()->gyroMax);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_PROBING, "%d",  learnerConfig()->modeProbing);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_FX, "%d",  learnerConfig()->modeFx);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_ACT, "%d",  learnerConfig()->modeAct);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_HOVER, "%d",  learnerConfig()->modeHover);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MIX_CONTROL_AFTER_MS, "%d",  learnerConfig()->mixControlAfterMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_INIT_FROM_PROFILE_FX, "%d",  learnerConfig()->initFromProfileFx);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_INIT_FROM_PROFILE_ACT, "%d",  learnerConfig()->initFromProfileAct);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ACT_MASK, "%d",  learnerConfig()->actMask);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_INCREMENTAL, "%d",  learnerConfig()->fxIncremental);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_TYPE, "%d",  proberConfig()->type);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_ACT_MASK, "%d",  proberConfig()->actMask);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_PRE_DELAY_MS, "%d",  proberConfig()->preDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_POST_DELAY_MS, "%d",  proberConfig()->postDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_GYRO_MAX, "%d",  proberConfig()->gyroMax);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_STEP_MS, "%d",  proberConfig()->steps_stepMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_OVERLAP_MS, "%d",  proberConfig()->steps_overlapMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_AMPLITUDE, "%d",  proberConfig()->steps_amp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_STEP_MS, "%d",  proberConfig()->stepramps_stepMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_RAMP_MS, "%d",  proberConfig()->stepramps_rampMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_OVERLAP_MS, "%d",  proberConfig()->stepramps_overlapMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_STEP_AMPLITUDE, "%d",  proberConfig()->stepramps_stepAmp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_RAMP_AMPLITUDE, "%d",  proberConfig()->stepramps_rampAmp);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_IMU_LOWPASS_HZ, "%d",  learnerConfig()->imuFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_LOWPASS_HZ, "%d",  learnerConfig()->fxFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ, "%d",  learnerConfig()->motorFiltHz);

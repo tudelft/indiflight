@@ -67,6 +67,7 @@
 #include "flight/indi.h"
 #include "flight/catapult.h"
 #include "flight/learner.h"
+#include "flight/learning_prober.h"
 #include "flight/throw.h"
 #include "flight/ekf.h"
 #include "flight/nn_control.h"
@@ -487,6 +488,13 @@ static const char * const lookupTablePositionAltitudeSource[] = {
     "DEFAULT", "BARO_ONLY", "GPS_ONLY"
 };
 
+#ifdef USE_LEARNER
+// order of prober_type_t
+static const char * const lookupTableProberType[] = {
+    "STEPS", "STEPRAMPS", "NOISE", "ORTHO"
+};
+#endif
+
 static const char * const lookupTableOffOnAuto[] = {
     "OFF", "ON", "AUTO"
 };
@@ -665,6 +673,9 @@ const lookupTableEntry_t lookupTables[] = {
 #ifdef USE_RX_EXPRESSLRS
     LOOKUP_TABLE_ENTRY(lookupTableFreqDomain),
     LOOKUP_TABLE_ENTRY(lookupTableSwitchMode),
+#endif
+#ifdef USE_LEARNER
+    LOOKUP_TABLE_ENTRY(lookupTableProberType),
 #endif
 };
 
@@ -1404,8 +1415,17 @@ const clivalue_t valueTable[] = {
 #endif
 
 #ifdef USE_LEARNER
-    // { PARAM_NAME_LEARNER_MODE,              VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 15 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mode) },
-    // { PARAM_NAME_LEARNER_NUM_ACT,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, MAX_SUPPORTED_MOTORS }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, numAct) },
+    // bits: 1 in flight, 2 after throw, 4 after catapult (laerner_probing_mode_t)
+    { PARAM_NAME_LEARNER_MODE_PROBING,      VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 7 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, modeProbing) },
+    // bits: 1 during flight (when not probing), 2 during probing (learner_mode_t)
+    { PARAM_NAME_LEARNER_MODE_FX,           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 3 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, modeFx) },
+    { PARAM_NAME_LEARNER_MODE_ACT,          VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 3 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, modeAct) },
+    { PARAM_NAME_LEARNER_MODE_HOVER,        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 3 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, modeHover) },
+    { PARAM_NAME_LEARNER_MIX_CONTROL_AFTER_MS, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, UINT16_MAX }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, mixControlAfterMs) },
+    { PARAM_NAME_LEARNER_INIT_FROM_PROFILE_FX,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, initFromProfileFx) },
+    { PARAM_NAME_LEARNER_INIT_FROM_PROFILE_ACT, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, initFromProfileAct) },
+    { PARAM_NAME_LEARNER_ACT_MASK,          VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, UINT16_MAX }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, actMask) },
+    { PARAM_NAME_LEARNER_FX_INCREMENTAL,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxIncremental) },
     { PARAM_NAME_LEARNER_IMU_LOWPASS_HZ,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, imuFiltHz) },
     { PARAM_NAME_LEARNER_FX_LOWPASS_HZ,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, fxFiltHz) },
     { PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ,  VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 100 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, motorFiltHz) },
@@ -1415,8 +1435,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_ZETA_ATTITUDE,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaAttitude) },
     { PARAM_NAME_LEARNER_ZETA_VELOCITY,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocity) },
     { PARAM_NAME_LEARNER_ZETA_POSITION,     VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPosition) },
-    { PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocityVert) },
-    { PARAM_NAME_LEARNER_ZETA_POSITION_VERT, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPositionVert) },
+    // 0: vertical position gains same as horizontal (modular_drone)
+    { PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaVelocityVert) },
+    { PARAM_NAME_LEARNER_ZETA_POSITION_VERT, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 150 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, zetaPositionVert) },
     { PARAM_NAME_LEARNER_ROLL_MISALIGNMENT, VAR_INT16 | MASTER_VALUE, .config.minmaxUnsigned = { -180, 180 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, rollMisalignment) },
     { PARAM_NAME_LEARNER_PITCH_MISALIGNMENT,VAR_INT16 | MASTER_VALUE, .config.minmaxUnsigned = { -180, 180 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, pitchMisalignment) },
     { PARAM_NAME_LEARNER_YAW_MISALIGNMENT,  VAR_INT16 | MASTER_VALUE, .config.minmaxUnsigned = { -180, 180 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, yawMisalignment) },
@@ -1431,6 +1452,21 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_LEARNER_HARDCODE_G1_FX,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fx) },
     { PARAM_NAME_LEARNER_HARDCODE_G1_FY,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fy) },
     { PARAM_NAME_LEARNER_HARDCODE_G1_FZ,    VAR_INT16 | MASTER_VALUE, .config.minmax = { -32000, 32000 }, PG_LEARNER_CONFIG, offsetof(learnerConfig_t, hardcodeG1Fz) },
+
+// PG_PROBER_CONFIG
+    { PARAM_NAME_PROBER_TYPE,               VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_PROBER_TYPE }, PG_PROBER_CONFIG, offsetof(proberConfig_t, type) },
+    { PARAM_NAME_PROBER_ACT_MASK,           VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, UINT16_MAX }, PG_PROBER_CONFIG, offsetof(proberConfig_t, actMask) },
+    { PARAM_NAME_PROBER_PRE_DELAY_MS,       VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 5000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, preDelayMs) },
+    { PARAM_NAME_PROBER_POST_DELAY_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 5000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, postDelayMs) },
+    { PARAM_NAME_PROBER_GYRO_MAX,           VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 2000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, gyroMax) },
+    { PARAM_NAME_PROBER_STEPS_STEP_MS,      VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, steps_stepMs) },
+    { PARAM_NAME_PROBER_STEPS_OVERLAP_MS,   VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, steps_overlapMs) },
+    { PARAM_NAME_PROBER_STEPS_AMPLITUDE,    VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, steps_amp) },
+    { PARAM_NAME_PROBER_STEPRAMPS_STEP_MS,  VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, stepramps_stepMs) },
+    { PARAM_NAME_PROBER_STEPRAMPS_RAMP_MS,  VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, stepramps_rampMs) },
+    { PARAM_NAME_PROBER_STEPRAMPS_OVERLAP_MS, VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, stepramps_overlapMs) },
+    { PARAM_NAME_PROBER_STEPRAMPS_STEP_AMPLITUDE, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, stepramps_stepAmp) },
+    { PARAM_NAME_PROBER_STEPRAMPS_RAMP_AMPLITUDE, VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_PROBER_CONFIG, offsetof(proberConfig_t, stepramps_rampAmp) },
 #endif
 
 #ifdef USE_NN_CONTROL
