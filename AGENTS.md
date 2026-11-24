@@ -63,6 +63,25 @@ To **modify** a setting (rename, change range, type or default), apply the chang
 consistently across all of these places. A retype also needs a PG version bump.
 A rename changes the CLI name, so old `diff`/`dump` files will no longer apply it.
 
+## Position control structure
+
+`flight/pos_ctl.c` holds the position profile, waypoints and the
+position -> velocity -> acceleration setpoint cascade (`updatePosCtl()`).
+The mapping from the inertial acceleration setpoint (`accSpNedFromPos`) to
+attitude/thrust/rate setpoints is selected per position profile with
+`position_attitude_mapping` and lives in its own file:
+
+- `NDI`  `flight/pos_att_ndi.c`: multirotor dynamic inversion (default).
+- `INDI` `flight/pos_att_indi.c`: incremental with yaw constraint, hybrids, untested.
+- `DF`   `flight/pos_att_df.c`: differential flatness, Tal (2022). Its craft
+  model (`PHI`, `K`, `n`) is hardcoded for the DarkO tailsitter. Default with
+  `INDI_IS_TAILSITTER` or `LEARNER_IS_TAILSITTER`.
+
+New mappings get a file `pos_att_<name>.c`, a prototype in `flight/pos_att.h`,
+a `position_attitude_mapping_t` value with a matching entry in
+`lookupTablePositionAttitudeMapping` (`cli/settings.c`), a case in
+`updatePosCtl()`, and both lists in `make/source.mk`.
+
 ## Adding or modifying a blackbox log signal
 
 Logged signals (per-loop fields, as opposed to header values) are defined only in

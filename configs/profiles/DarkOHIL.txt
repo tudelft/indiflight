@@ -436,6 +436,7 @@ set position_max_downwards_accel = 600
 set position_max_tilt = 45
 set position_yaw_p = 50
 set position_use_thrust_attenuation = 1
+set position_attitude_mapping = DF   # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 
 
 positionprofile 2
@@ -463,6 +464,7 @@ set position_max_downwards_accel = 500
 # set position_yaw_p = 44
 set position_weathervane_p = 0
 set position_use_thrust_attenuation = 1
+set position_attitude_mapping = DF   # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 
 
 ## ----- SET DEFAULT PROFILES

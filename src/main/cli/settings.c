@@ -488,6 +488,13 @@ static const char * const lookupTablePositionAltitudeSource[] = {
     "DEFAULT", "BARO_ONLY", "GPS_ONLY"
 };
 
+#ifdef USE_LOCAL_POSITION
+// order of position_attitude_mapping_t
+static const char * const lookupTablePositionAttitudeMapping[] = {
+    "NDI", "INDI", "DF"
+};
+#endif
+
 #ifdef USE_LEARNER
 // order of prober_type_t
 static const char * const lookupTableProberType[] = {
@@ -676,6 +683,9 @@ const lookupTableEntry_t lookupTables[] = {
 #endif
 #ifdef USE_LEARNER
     LOOKUP_TABLE_ENTRY(lookupTableProberType),
+#endif
+#ifdef USE_LOCAL_POSITION
+    LOOKUP_TABLE_ENTRY(lookupTablePositionAttitudeMapping),
 #endif
 };
 
@@ -1374,6 +1384,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 25, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
     { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
     { PARAM_NAME_POSITION_STICK_TAKEOVER,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, stick_takeover) },
+    { PARAM_NAME_POSITION_ATTITUDE_MAPPING,       VAR_UINT8 | PROFILE_POSITION_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_POSITION_ATTITUDE_MAPPING }, PG_POSITION_PROFILE, offsetof(positionProfile_t, attitude_mapping) },
 #endif
 
 #ifdef USE_EKF

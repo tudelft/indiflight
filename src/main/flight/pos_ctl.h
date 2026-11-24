@@ -30,6 +30,12 @@
 
 #pragma once
 
+typedef enum {
+    POSITION_ATTITUDE_MAPPING_NDI = 0,  // multirotor dynamic inversion (pos_att_ndi.c)
+    POSITION_ATTITUDE_MAPPING_INDI,     // incremental, hybrids, untested (pos_att_indi.c)
+    POSITION_ATTITUDE_MAPPING_DF,       // differential flatness, Tal (2022), tailsitter model (pos_att_df.c)
+} position_attitude_mapping_t;
+
 typedef struct positionProfile_s {
     uint8_t horz_p; // m/s/s per m * 10
     uint8_t horz_i; // m/s/s per m/s * s  * 10
@@ -49,6 +55,7 @@ typedef struct positionProfile_s {
     uint16_t weathervane_min_v; // cm/s min speed to use weathervaneing
     uint8_t use_spf_attenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
     uint8_t stick_takeover;       // bool: moving the sticks while armed aborts automatic flight (manual takeover)
+    uint8_t attitude_mapping;     // position_attitude_mapping_t: acceleration setpoint to attitude/thrust (pos_att_*.c)
     // --- inaccessible from CLI / dump files for now
     uint16_t vert_max_iterm; // cm/s
     uint16_t horz_max_iterm; // cm/s
@@ -83,6 +90,7 @@ typedef struct positionRuntime_s {
     float weathervane_min_v; // m/s min speed to use weathervaneing
     bool use_spf_attenuation;
     bool stick_takeover;
+    position_attitude_mapping_t attitude_mapping;
     bool arrest_motion; // if true, command zero velocity until it is reached
     bool arrest_z_motion_only; // if true, only command zero velocity in z direction
 } positionRuntime_t;
@@ -111,6 +119,3 @@ void updatePosCtl(timeUs_t current);
 void posGetVelSpNedFromPosSp(void);
 void posGetVelSpNedFromSticks(void);
 void posGetAccSpNed(timeUs_t current);
-void posGetAttSpNedAndSpfSpBody(timeUs_t current);
-void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current);
-void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current);
