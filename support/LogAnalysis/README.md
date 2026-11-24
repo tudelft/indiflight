@@ -42,15 +42,18 @@ On Ubuntu/Debian/WSL you may first need `sudo apt install python3-venv python3-t
 
 ```sh
 pip install indiflight_log_tools
-pip install "pyFlightPlotter @ git+https://github.com/tudelft/pyFlightPlotter"
+pip install -r requirements.txt   # pyFlightPlotter, js-version branch (also has the browser plotter for webPlotter.py)
 ```
 
 Optional extras:
 
 ```sh
 pip install "indiflight_log_tools[rerun]"                                    # for bfl2rerun
-pip install "pyFlightPlotter[video] @ git+https://github.com/tudelft/pyFlightPlotter"  # video sync (OpenCV)
+pip install "pyFlightPlotter[video] @ git+https://github.com/tudelft/pyFlightPlotter@js-version"  # video sync (OpenCV)
 ```
+
+`webPlotter.py LOG.BFL --id N` shows the same layout as `flightPlotter.py` in the
+browser.
 
 Upgrading from a version installed before 0.3.0? Run
 `pip uninstall indiflight_log_tools` first, so the old `bfl2csv`/`bfl2rerun`
