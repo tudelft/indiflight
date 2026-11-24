@@ -754,11 +754,19 @@ void getMotorCommands(timeUs_t current) {
     omegaPrevValid = rpmTelemetryActive && indiRun.useRpmDotFeedback;
 #endif
 
-    // horrible code! Fixme todo
-    // if (indiRun.bypassControl) {
-    //     // this is the problem. bypassControl gets set back to false in indiReset triggered from continuous adaptation
-    //     return;
-    // }
+#ifdef USE_LEARNER
+    // The learner excitation is an actuator command: it sets d directly and
+    // bypasses INDI, the linearization and the rpm loop. Unselected actuators
+    // are off. After learner_mix_control_after_ms the controller runs again
+    // and the excitation is added to its d instead (end of this function).
+    if (learnerQueryIsActive() && !learnRun.mixControl) {
+        for (int i = 0; i < MAXU; i++) {
+            indiRun.d[i] = learnerQueryActuatorSelected(i) ? outputFromLearningQuery[i] : 0.f;
+            indiRun.rpmControlRan[i] = false;
+        }
+        return;
+    }
+#endif
 
 
     // use INDI only when in the air, solve linearized global problem otherwise
@@ -968,19 +976,6 @@ void getMotorCommands(timeUs_t current) {
             indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
         }
 
-#ifdef USE_LEARNER
-    if (FLIGHT_MODE(LEARNER_MODE)
-            && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
-            && (learningQueryState < LEARNING_QUERY_DONE)
-            && (proberConfig()->actMask & (1 << i)) ) {
-        if (learnRun.mixControl) {
-            indiRun.u[i] += outputFromLearningQuery[i];
-        } else {
-            indiRun.u[i] = outputFromLearningQuery[i];
-        }
-    }
-#endif
-
         indiRun.u[i] = constrainf(indiRun.u[i], indiRun.actMin[i], indiRun.actMax[i]);
 
         // apply lag filter to simulate spinup dynamics
@@ -989,6 +984,14 @@ void getMotorCommands(timeUs_t current) {
 
         // thrust command -> actuator command, closed loop on rpm if enabled
         indiRun.d[i] = rpmControl(i, rpmValid);
+
+#ifdef USE_LEARNER
+        // excitation on top of control, in actuator command space (see above)
+        if (learnRun.mixControl && learnerQueryIsActive() && learnerQueryActuatorSelected(i)) {
+            float dLow = (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) ? -1.f : 0.f;
+            indiRun.d[i] = constrainf(indiRun.d[i] + outputFromLearningQuery[i], dLow, 1.f);
+        }
+#endif
     }
 }
 
