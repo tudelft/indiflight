@@ -67,6 +67,8 @@
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #ifdef USE_INDI
+#include "common/printf.h"
+#include "msp/msp_box.h"
 #include "flight/ahrs_compat.h"
 #include "flight/indi.h"
 #endif
@@ -575,6 +577,10 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"failsafePhase",         -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxSignalReceived",      -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
+#ifdef USE_INDI
+    // indiflight: boxes 32..63 (bit i = boxId 32 + i); names in the boxNames_* headers
+    ,{"flightModeFlags2",     -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)}
+#endif
 };
 
 typedef enum {
@@ -709,6 +715,9 @@ typedef struct blackboxSlowState_s {
     uint8_t failsafePhase;
     bool rxSignalReceived;
     bool rxFlightChannelsValid;
+#ifdef USE_INDI
+    uint32_t flightModeFlags2; // boxes 32..63
+#endif
 } __attribute__((__packed__)) blackboxSlowState_t; // We pack this struct so that padding doesn't interfere with memcmp()
 
 //From rc_controls.c
@@ -1573,6 +1582,10 @@ static void writeSlowFrame(void)
     values[2] = slowHistory.rxFlightChannelsValid ? 1 : 0;
     blackboxWriteTag2_3S32(values);
 
+#ifdef USE_INDI
+    blackboxWriteUnsignedVB(slowHistory.flightModeFlags2);
+#endif
+
     blackboxSlowFrameIterationTimer = 0;
 }
 
@@ -1586,6 +1599,10 @@ static void loadSlowState(blackboxSlowState_t *slow)
     slow->failsafePhase = failsafePhase();
     slow->rxSignalReceived = isRxReceivingSignal();
     slow->rxFlightChannelsValid = rxAreFlightChannelsValid();
+#ifdef USE_INDI
+    STATIC_ASSERT(CHECKBOX_ITEM_COUNT <= 64, flightModeFlags2_holds_boxes_32_to_63);
+    slow->flightModeFlags2 = (CHECKBOX_ITEM_COUNT > 32) ? rcModeActivationMask.bits[1] : 0;
+#endif
 }
 
 /**
@@ -2173,6 +2190,42 @@ STATIC_UNIT_TESTED char *blackboxGetStartDateTime(char *buf)
  * Transmit a portion of the system information headers. Call the first time with xmitState.headerIndex == 0. Returns
  * true iff transmission is complete, otherwise call again later to continue transmission.
  */
+#ifdef USE_INDI
+// indiflight: box names in boxId order (the bit order of the flightModeFlags and
+// flightModeFlags2 slow fields), so logs are self-describing. Written as several
+// header lines "boxNames_<first boxId>:<name>,<name>,..." to keep lines short.
+// Returns true when all names are written.
+static bool blackboxPrintBoxNamesChunk(void)
+{
+    static boxId_e nextBox = 0;
+    char line[64];
+    unsigned len = 0;
+    const boxId_e first = nextBox;
+    for (; nextBox < CHECKBOX_ITEM_COUNT; nextBox++) {
+        const box_t *box = findBoxByBoxId(nextBox);
+        const char *name = box ? box->boxName : "";
+        const unsigned nameLen = strlen(name);
+        if (len > 0 && len + 1 + nameLen >= sizeof(line)) {
+            break;
+        }
+        if (len > 0) {
+            line[len++] = ',';
+        }
+        memcpy(&line[len], name, nameLen);
+        len += nameLen;
+    }
+    line[len] = '\0';
+    char key[16];
+    tfp_sprintf(key, "boxNames_%u", (unsigned)first);
+    blackboxPrintfHeaderLine(key, "%s", line);
+    if (nextBox >= CHECKBOX_ITEM_COUNT) {
+        nextBox = 0;
+        return true;
+    }
+    return false;
+}
+#endif
+
 static bool blackboxWriteSysinfo(void)
 {
 #ifndef UNIT_TEST
@@ -2419,6 +2472,13 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_ATTITUDE_MAPPING, "%d",  posProfile->attitude_mapping);
+#endif
+#ifdef USE_INDI
+        BLACKBOX_PRINT_HEADER_LINE_CUSTOM(
+            if (!blackboxPrintBoxNamesChunk()) {
+                xmitState.headerIndex--; // stay on this line until all names are out
+            }
+        );
 #endif
 #ifdef USE_INDI
         // indiflight 4.4 name, upstream setting imu_process_denom

@@ -1,6 +1,5 @@
-#include "platform.h"
-
-// indiflight: generated EKF code, only built with USE_EKF
+// indiflight: generated EKF code, only built with USE_EKF (an EXTRA_FLAGS define;
+// platform.h is not included here because it poisons the stdio this file uses)
 #ifdef USE_EKF
 
 
