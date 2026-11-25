@@ -173,7 +173,7 @@
 // Indiflight parameter groups: own block 1000..1099, clear of upstream numbers
 // (upstream took 58..61, which indiflight 4.4 used). Changing a number here
 // orphans users' stored settings for that PG.
-#define PG_INDIFLIGHT_START     1000
+// indiflight block: 1000 .. 1099
 #define PG_INDI_PROFILE         1000
 #define PG_INDI_CONFIG          1001 // active INDI profile index (was systemConfig_t.indiProfileIndex)
 #define PG_POSITION_PROFILE     1002
@@ -186,7 +186,7 @@
 #define PG_GEOFENCE_CONFIG      1009
 #define PG_PROBER_CONFIG        1010
 #define PG_PITOTMETER_CONFIG    1011
-#define PG_INDIFLIGHT_END       1099
+// end of indiflight block (1099)
 
 // OSD configuration (subject to change)
 #define PG_OSD_FONT_CONFIG 2047
