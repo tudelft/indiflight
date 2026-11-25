@@ -66,10 +66,12 @@ COMMON_SRC = \
             common/encoding.c \
             common/explog_approx.c \
             common/filter.c \
+            common/filter_biquad.c \
             common/gps_conversion.c \
             common/huffman.c \
             common/huffman_table.c \
             common/maths.c \
+            common/maths_indi.c \
             common/printf.c \
             common/printf_serial.c \
             common/pwl.c \
@@ -169,12 +171,18 @@ COMMON_SRC = \
             flight/autopilot_multirotor.c \
             flight/autopilot_wing.c \
             flight/dyn_notch_filter.c \
+            flight/ekf.c \
+            flight/ekf_calc.c \
             flight/failsafe.c \
             flight/flight_plan_capture.c \
             flight/flight_plan_nav.c \
             flight/gps_rescue_multirotor.c \
             flight/gps_rescue_wing.c \
+            flight/ahrs_compat.c \
             flight/imu.c \
+            flight/indi.c \
+            flight/indi_glue.c \
+            flight/indi_init.c \
             flight/mixer.c \
             flight/mixer_init.c \
             flight/mixer_tricopter.c \
@@ -187,6 +195,10 @@ COMMON_SRC = \
             flight/position_nav.c \
             flight/pos_hold_multirotor.c \
             flight/pos_hold_wing.c \
+            flight/pos_att_df.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_ndi.c \
+            flight/pos_ctl.c \
             flight/rpm_filter.c \
             flight/servos.c \
             flight/servos_tricopter.c \
@@ -273,6 +285,7 @@ COMMON_SRC = \
             io/rcdevice.c \
             io/gps.c \
             io/ledstrip.c \
+            io/local_pos.c \
             io/pidaudio.c \
             osd/osd.c \
             osd/osd_custom_text.c \
@@ -442,8 +455,6 @@ COMMON_DEVICE_SRC = $(CMSIS_SRC) $(DEVICE_STDPERIPH_SRC)
 
 COMMON_SRC += $(CONFIG_SRC) $(PG_SRC) $(COMMON_DEVICE_SRC) $(RX_SRC)
 
-include $(MAKE_SCRIPT_DIR)/indiflight.mk
-
 ifeq ($(EXST),yes)
 TARGET_FLAGS += -DUSE_EXST
 endif
@@ -459,7 +470,9 @@ endif
 SPEED_OPTIMISED_SRC += \
             common/encoding.c \
             common/filter.c \
+            common/filter_biquad.c \
             common/maths.c \
+            common/maths_indi.c \
             common/pwl.c \
             common/sdft.c \
             common/stopwatch.c \
@@ -476,9 +489,17 @@ SPEED_OPTIMISED_SRC += \
             fc/rc_controls.c \
             fc/runtime_config.c \
             flight/dyn_notch_filter.c \
+            flight/ekf.c \
+            flight/ekf_calc.c \
             flight/imu.c \
+            flight/indi.c \
+            flight/indi_glue.c \
             flight/mixer.c \
             flight/pid.c \
+            flight/pos_att_df.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_ndi.c \
+            flight/pos_ctl.c \
             flight/rpm_filter.c \
             rx/ibus.c \
             rx/rc_stats.c \
@@ -591,6 +612,36 @@ ifneq ($(OLC_DIR),)
 INCLUDE_DIRS += $(LIB_MAIN_DIR)/$(OLC_DIR)
 SRC += $(OLC_DIR)/olc.c
 SIZE_OPTIMISED_SRC += $(OLC_DIR)/olc.c
+endif
+
+# indiflight: generated EKF code (kalman_filter_c_code_generation) uses double literals
+SRC_CFLAGS_ekf_calc.c += -Wno-double-promotion
+
+# indiflight: ActiveSetCtlAlloc (submodule lib/main/ActiveSetCtlAlloc), control allocation for INDI
+ifneq ($(findstring -DUSE_INDI,$(EXTRA_FLAGS)),)
+AS_DIR = ActiveSetCtlAlloc/src
+INCLUDE_DIRS += $(LIB_MAIN_DIR)/$(AS_DIR) \
+                $(LIB_MAIN_DIR)/$(AS_DIR)/common \
+                $(LIB_MAIN_DIR)/$(AS_DIR)/lib
+AS_SRC = \
+            $(AS_DIR)/common/solveActiveSet.c \
+            $(AS_DIR)/common/setupWLS.c \
+            $(AS_DIR)/solveActiveSet_chol.c \
+            $(AS_DIR)/solveActiveSet_qr.c \
+            $(AS_DIR)/solveActiveSet_qr_naive.c \
+            $(AS_DIR)/lib/chol_math.c \
+            $(AS_DIR)/lib/qr_updates.c \
+            $(AS_DIR)/lib/qr_wrapper.c \
+            $(AS_DIR)/lib/qr_solve/qr_solve.c \
+            $(AS_DIR)/lib/qr_solve/r8lib_min.c \
+            $(AS_DIR)/lib/sparse_math.c
+SRC += $(AS_SRC)
+SPEED_OPTIMISED_SRC += $(AS_SRC)
+OPTIONS += AS_N_U=8 AS_N_V=6 AS_SINGLE_FLOAT AS_COST_TRUNCATE AS_RECORD_COST AS_RECORD_COST_N=5
+
+# third-party lib is written against double literals; upstream promotes
+# -Wdouble-promotion to an error, so silence it only for these files
+$(foreach f,$(AS_SRC),$(eval SRC_CFLAGS_$(notdir $(f)) += -Wno-double-promotion))
 endif
 
 # libcanard (DroneCAN transport) and the Betaflight-side glue live in the
