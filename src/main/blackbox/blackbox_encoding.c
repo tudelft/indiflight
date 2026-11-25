@@ -112,6 +112,13 @@ void blackboxWriteSignedVBArray(int32_t *array, int count)
     }
 }
 
+void blackboxWriteUnsigned16VBArray(uint16_t *array, int count)
+{
+    for (int i = 0; i < count; i++) {
+        blackboxWriteUnsignedVB(array[i]);
+    }
+}
+
 void blackboxWriteSigned16VBArray(int16_t *array, int count)
 {
     for (int i = 0; i < count; i++) {

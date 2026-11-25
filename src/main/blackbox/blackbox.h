@@ -93,3 +93,9 @@ STATIC_UNIT_TESTED void blackboxAdvanceIterationTimers(void);
 extern int32_t blackboxSInterval;
 extern int32_t blackboxSlowFrameIterationTimer;
 #endif
+
+// indiflight scaling of logged signals (decoder: indiflight_log_importer.py)
+#define UNIT_FLOAT_TO_SIGNED16VB ((127 << 6) - 1) // float from -1 to +1 to VB that takes up 2 bytes max
+#define UNIT_FLOAT_TO_UNSIGNED16VB ((127 << 7) - 1) // float from 0 to +1 to VB that takes up 2 bytes max
+#define METER_TO_MM 1000
+#define METER_TO_CM 100

@@ -365,6 +365,10 @@ uint8_t getCurrentIndiProfileIndex(void);
 
 extern indiRuntime_t indiRun;
 
+// acc input of INDI (and logged as accADCafterRpm), raw acc units, FRD
+// TODO(spike): PID-rate acc pipeline with rpm notch (see item 4)
+#define INDI_ACC_INPUT(axis) (acc.accADC.v[axis])
+
 void indiController(timeUs_t current);
 bool isTouchingGround(void);
 void updateLinearization(actLin_t* lin, float k);

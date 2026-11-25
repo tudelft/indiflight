@@ -112,6 +112,7 @@
 #include "msp/msp_protocol.h"
 #include "msp/msp_protocol_v2_betaflight.h"
 #include "msp/msp_protocol_v2_common.h"
+#include "msp/msp_protocol_v2_indiflight.h"
 #include "msp/msp_serial.h"
 
 #include "osd/osd.h"
