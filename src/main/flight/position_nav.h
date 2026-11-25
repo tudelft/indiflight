@@ -32,8 +32,8 @@ typedef struct positionNavCommand_s {
     bool completed;
     bool completionSignalled;
 
-    vector3_t targetPosEfM;         // target position, metres, ENU (index by ENU_E/ENU_N/ENU_U)
-    bool includeAltitude;           // when false, ENU_U is ignored for nav, arrival, and alt coupling
+    vector3_t targetPosEfM;         // target position, metres, NED (index by NED_N/NED_E/NED_D)
+    bool includeAltitude;           // when false, NED_D is ignored for nav, arrival, and alt coupling
 
     float cruiseSpeedMps;           // maximum cruise speed (m/s)
     float acceptanceRadiusM;        // arrival zone radius (metres)
@@ -88,5 +88,5 @@ void positionNavSetAltitudeArrivalRequired(bool required);
 // and checks arrival conditions.
 void positionNavUpdate(float dt, const positionEstimate3d_t *est);
 
-// Returns the target velocity computed by the most recent update (cm/s, ENU).
+// Returns the target velocity computed by the most recent update (cm/s, NED).
 vector3_t positionNavGetTargetVelocityCmS(void);

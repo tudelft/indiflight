@@ -67,26 +67,19 @@ typedef enum {
     NED_D = 2   // +Down
 } axisNED_e;
 
-// ENU (East-North-Up): the navigation frame used by the position estimator
-// and autopilot. The position/velocity vector3_t fields are indexed by these.
+// Horizontal earth-frame (North-East) index for the 2-axis position/velocity
+// PID arrays. Matches the first two NED indices (see EF_AXIS_COUNT). The
+// position estimator, autopilot and navigation use NED (cm) throughout.
 typedef enum {
-    ENU_E = 0,  // +East
-    ENU_N = 1,  // +North
-    ENU_U = 2   // +Up
-} axisENU_e;
-
-// Horizontal earth-frame (East-North) index for the 2-axis position/velocity
-// PID arrays. Matches the first two ENU indices (see EF_AXIS_COUNT).
-typedef enum {
-    EF_EAST = 0,   // +East
-    EF_NORTH = 1   // +North
+    EF_NORTH = 0,  // +North
+    EF_EAST = 1    // +East
 } efAxis_e;
 
-// The autopilot stores into EF_AXIS_COUNT arrays by EF_EAST/EF_NORTH while
-// reading the estimate by ENU_E/ENU_N; that is only correct because the two
-// horizontal frames share index values. Lock the invariant so a future
-// reordering of either enum fails to compile rather than silently swapping axes.
-STATIC_ASSERT((int)EF_EAST == (int)ENU_E, ef_east_must_match_enu_east);
-STATIC_ASSERT((int)EF_NORTH == (int)ENU_N, ef_north_must_match_enu_north);
+// The autopilot stores into EF_AXIS_COUNT arrays by EF_NORTH/EF_EAST while
+// reading the estimate by NED_N/NED_E (and casts the 3D NED estimate to its
+// 2D horizontal part); that is only correct because the two frames share
+// index values. Lock the invariant so a reordering fails to compile.
+STATIC_ASSERT((int)EF_NORTH == (int)NED_N, ef_north_must_match_ned_north);
+STATIC_ASSERT((int)EF_EAST == (int)NED_E, ef_east_must_match_ned_east);
 
 #define GET_DIRECTION(isReversed) ((isReversed) ? -1 : 1)

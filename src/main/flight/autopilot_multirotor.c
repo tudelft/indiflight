@@ -142,8 +142,8 @@ static uint16_t altHoldCapturedHoverPwm;
 static float altitudeI = 0.0f;
 static float throttleOut = 0.0f;
 
-// (EF_EAST/EF_NORTH) is
-// defined in common/axis.h alongside the other earth-frame axis enums.
+// (EF_NORTH/EF_EAST) is
+// defined in common/axis.h alongside the other earth-frame axis enums (NED).
 
 static vector2_t targetPosition;
 static vector2_t targetVelocity;
@@ -523,7 +523,7 @@ void sticksSetTargetVelocity(void)
     const float velocityGainPitch = autopilotConfig()->maxVelocity / getMaxRcRate(PITCH);
     const float velocityGainRoll  = autopilotConfig()->maxVelocity / getMaxRcRate(ROLL);
 
-    const float stickPitch = getSetpointRate(PITCH) * velocityGainPitch;
+    const float stickPitch = -getSetpointRate(PITCH) * velocityGainPitch; // FRD: forward = nose down = negative pitch rate
     const float stickRoll  = getSetpointRate(ROLL)  * velocityGainRoll;
 
     const float headingRad = DECIDEGREES_TO_RADIANS(attitude.values.yaw);
@@ -534,7 +534,7 @@ void sticksSetTargetVelocity(void)
     targetVelocity.v[EF_EAST]  = (stickPitch * sinYaw) + (stickRoll * cosYaw);
 
 #ifdef USE_FEEDFORWARD
-    const float ffPitch = getFeedforward(PITCH) * velocityGainPitch;
+    const float ffPitch = -getFeedforward(PITCH) * velocityGainPitch; // FRD, see stickPitch
     const float ffRoll  = getFeedforward(ROLL)  * velocityGainRoll;
     targetAcceleration.v[EF_NORTH] = (ffPitch * cosYaw) - (ffRoll * sinYaw);
     targetAcceleration.v[EF_EAST]  = (ffPitch * sinYaw) + (ffRoll * cosYaw);
@@ -584,8 +584,8 @@ static bool bearingToTargetDeg(const positionEstimate3d_t *est, float *headingDe
     if (cmd == NULL || !cmd->active) {
         return false;
     }
-    const float deltaEastCm  = cmd->targetPosEfM.v[ENU_E] * 100.0f - est->position.v[ENU_E];
-    const float deltaNorthCm = cmd->targetPosEfM.v[ENU_N] * 100.0f - est->position.v[ENU_N];
+    const float deltaEastCm  = cmd->targetPosEfM.v[NED_E] * 100.0f - est->position.v[NED_E];
+    const float deltaNorthCm = cmd->targetPosEfM.v[NED_N] * 100.0f - est->position.v[NED_N];
     // Inside the acceptance radius the bearing degenerates; stop steering.
     if (sqrtf(sq(deltaEastCm) + sq(deltaNorthCm)) <= cmd->acceptanceRadiusM * 100.0f) {
         return false;
@@ -640,10 +640,9 @@ static void updateYawControl(float dt, const positionEstimate3d_t *est)
 
     apYawAttenuator = fminf(apYawAttenuator + dt / AP_YAW_RAMP_TIME_S, 1.0f);
 
-    // The yaw rate setpoint (and gyro) is CCW-positive while compass headings
-    // are CW-positive, so the heading error enters the setpoint frame negated:
-    // desired ahead of heading (a right turn) demands a negative rate.
-    float errorDeg = attitude.values.yaw * 0.1f - desiredHeadingDeg;
+    // FRD: the yaw rate setpoint (and gyro) is CW-positive like compass headings:
+    // desired ahead of heading (a right turn) demands a positive rate.
+    float errorDeg = desiredHeadingDeg - attitude.values.yaw * 0.1f;
     errorDeg = fmodf(errorDeg + 540.0f, 360.0f) - 180.0f;
 
     float yawRateDps = errorDeg * cfg->yawP * AP_YAW_P_SCALE
@@ -687,7 +686,7 @@ bool positionControl(void)
     if (forcePitchForward) {
         disableYawControl();
         autopilotAngle[AI_ROLL]  = 0.0f;
-        autopilotAngle[AI_PITCH] = 35.0f;
+        autopilotAngle[AI_PITCH] = -35.0f; // FRD: nose down
         DEBUG_SET(DEBUG_AUTOPILOT_PID, 7, 200);
         DEBUG_SET(DEBUG_AUTOPILOT_STOP, 6, 200);
         DEBUG_SET(DEBUG_AUTOPILOT_STOP, 7, 200);
@@ -732,8 +731,8 @@ bool positionControl(void)
             // Anchor to the (moving) carrot: real position feedback keeps straight
             // and curved legs from drifting, with the commanded velocity as the
             // feedforward. The carrot's lead distance produces the cruise tilt via P.
-            targetPosition.v[EF_EAST]  = navCmd->targetPosEfM.v[ENU_E] * 100.0f;
-            targetPosition.v[EF_NORTH] = navCmd->targetPosEfM.v[ENU_N] * 100.0f;
+            targetPosition.v[EF_EAST]  = navCmd->targetPosEfM.v[NED_E] * 100.0f;
+            targetPosition.v[EF_NORTH] = navCmd->targetPosEfM.v[NED_N] * 100.0f;
             ap.anchor = ANCHOR_HOLD;
         } else {
             ap.anchor = ANCHOR_OFF;  // no active command target: track velocity only
@@ -939,7 +938,7 @@ bool positionControl(void)
     bool buildupClamped = false;
     if (ap.navActive && ap.anchor == ANCHOR_OFF) {
         const float buildupMaxDeg = autopilotConfig()->velocityBuildupMaxPitch;
-        vector2_t drive = { { pidD.v[EF_EAST] + pidF.v[EF_EAST], pidD.v[EF_NORTH] + pidF.v[EF_NORTH] } };
+        vector2_t drive = { .v = { [EF_NORTH] = pidD.v[EF_NORTH] + pidF.v[EF_NORTH], [EF_EAST] = pidD.v[EF_EAST] + pidF.v[EF_EAST] } };
         const float driveMag = vector2Norm(&drive);
         if (driveMag > buildupMaxDeg && driveMag > 0.001f) {
             buildupClamped = true;
@@ -974,8 +973,10 @@ bool positionControl(void)
         vector2Scale(&angleV, &angleV, scale);
     }
 
-    autopilotAngle[AI_ROLL]  = -angleV.v[AI_ROLL];
-    autopilotAngle[AI_PITCH] =  angleV.v[AI_PITCH];
+    // NED (N, E order): dot = forward demand, cross = demand to the right of the heading.
+    // FRD angles: roll right +, pitch nose up + (so forward demand is negative pitch).
+    autopilotAngle[AI_ROLL]  =  angleV.v[AI_ROLL];
+    autopilotAngle[AI_PITCH] = -angleV.v[AI_PITCH];
 
     int statusValue = 0;
     if (ap.navActive)       statusValue += 10;

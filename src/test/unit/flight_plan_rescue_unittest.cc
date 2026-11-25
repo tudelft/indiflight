@@ -221,8 +221,8 @@ void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_
     //   x = east (lon delta), y = north (lat delta), both in cm.
     // 1 deg ~= 111319.49 m at the equator; 1e7 lat units per degree.
     const float metresPerLatUnit = 111319.49f / 1.0e7f;
-    distance->x = (to->lon - from->lon) * metresPerLatUnit * 100.0f;
-    distance->y = (to->lat - from->lat) * metresPerLatUnit * 100.0f;
+    distance->v[EF_EAST] = (to->lon - from->lon) * metresPerLatUnit * 100.0f;
+    distance->v[EF_NORTH] = (to->lat - from->lat) * metresPerLatUnit * 100.0f;
 }
 
 timeUs_t micros(void)
@@ -371,9 +371,9 @@ TEST_F(FlightPlanRescueTest, StageThenEngageDispatchesRescuePlan)
 
     ASSERT_TRUE(g_lastTarget.valid);
     // Rescue wp0: HOLD at the current GPS position (30 m east of home/origin).
-    EXPECT_NEAR(g_lastTarget.targetEfM.x, 30.0f, 0.1f);
-    EXPECT_NEAR(g_lastTarget.targetEfM.y, 0.0f, 0.1f);
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, kDefaultReturnAltM, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 30.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 0.0f, 0.1f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), kDefaultReturnAltM, 0.1f);
 }
 
 TEST_F(FlightPlanRescueTest, StageFailsWithoutHomeFix)
@@ -396,7 +396,7 @@ TEST_F(FlightPlanRescueTest, ReturnAltPerMode)
     gpsRescueConfigMutable()->altitudeMode = GPS_RESCUE_ALT_MODE_FIXED;
     ASSERT_TRUE(flightPlanNavStageRescuePlan());
     flightPlanNavEngage();
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 30.0f, 0.01f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 30.0f, 0.01f);
     flightPlanNavDisengage();
 
     // CURRENT: current + initialClimbM. In the estimator's feedback frame the
@@ -406,7 +406,7 @@ TEST_F(FlightPlanRescueTest, ReturnAltPerMode)
     gpsSol.llh.altCm = 11000;
     ASSERT_TRUE(flightPlanNavStageRescuePlan());
     flightPlanNavEngage();
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 10.0f, 0.01f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 10.0f, 0.01f);
     flightPlanNavDisengage();
 
     // MAX: home (100 m) + stubbed max (45 m) + initialClimbM (10 m) = 155 m.
@@ -415,7 +415,7 @@ TEST_F(FlightPlanRescueTest, ReturnAltPerMode)
     g_stubMaxAltitudeCm = 4500;
     ASSERT_TRUE(flightPlanNavStageRescuePlan());
     flightPlanNavEngage();
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 55.0f, 0.01f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 55.0f, 0.01f);
     flightPlanNavDisengage();
 
     // Floored at current altitude: FIXED computes 130 m but current is 140 m,
@@ -425,7 +425,7 @@ TEST_F(FlightPlanRescueTest, ReturnAltPerMode)
     gpsSol.llh.altCm = 14000;
     ASSERT_TRUE(flightPlanNavStageRescuePlan());
     flightPlanNavEngage();
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 0.0f, 0.01f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 0.0f, 0.01f);
 }
 
 TEST_F(FlightPlanRescueTest, CloseRangeReturnAltitudeUsesModestHeadroom)
@@ -438,7 +438,7 @@ TEST_F(FlightPlanRescueTest, CloseRangeReturnAltitudeUsesModestHeadroom)
     ASSERT_TRUE(flightPlanNavStageRescuePlan());
     flightPlanNavEngage();
 
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 7.5f, 0.01f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 7.5f, 0.01f);
 }
 
 // --- Staging while active / already engaged ---
@@ -459,7 +459,7 @@ TEST_F(FlightPlanRescueTest, StageWhileActiveInjectsImmediately)
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     EXPECT_EQ(g_setTargetCalls, callsBefore + 1);
     ASSERT_TRUE(g_lastTarget.valid);
-    EXPECT_NEAR(g_lastTarget.targetEfM.x, 30.0f, 0.1f); // rescue wp0, not the PG leg
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 30.0f, 0.1f); // rescue wp0, not the PG leg
 }
 
 // --- Climb-leg altitude gate ---
@@ -473,8 +473,8 @@ TEST_F(FlightPlanRescueTest, ClimbLegAltitudeGated)
     EXPECT_TRUE(g_altitudeArrivalRequired);
     ASSERT_TRUE(g_lastTarget.valid);
     // The climb leg targets the current position, not home.
-    EXPECT_NEAR(g_lastTarget.targetEfM.x, 30.0f, 0.1f);
-    EXPECT_NEAR(g_lastTarget.targetEfM.y, 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 30.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 0.0f, 0.1f);
 }
 
 // --- Heading gate ---
@@ -502,8 +502,8 @@ TEST_F(FlightPlanRescueTest, HeadingGateHoldsAndRecovers)
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     ASSERT_TRUE(g_lastTarget.valid);
     // wp1: FLYOVER home.
-    EXPECT_NEAR(g_lastTarget.targetEfM.x, 0.0f, 0.1f);
-    EXPECT_NEAR(g_lastTarget.targetEfM.y, 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 0.0f, 0.1f);
 }
 
 TEST_F(FlightPlanRescueTest, HeadingGateTimesOutToAbort)
@@ -571,13 +571,13 @@ TEST_F(FlightPlanRescueTest, FullRescueRunToLanding)
     ASSERT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
 
     // Descent establishes.
-    g_stubEstimate.velocity.v[ENU_U] = -40.0f; // cm/s
+    g_stubEstimate.velocity.v[NED_D] = -(-40.0f); // cm/s
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
 
     // Touchdown: quiet timer starts, then expires.
-    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+    g_stubEstimate.velocity.v[NED_D] = -(0.0f);
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
@@ -599,14 +599,14 @@ TEST_F(FlightPlanRescueTest, RescueDescentDrivesLandingAndDisarms)
 
     // Runs independently of the executor: alt-hold owns the throttle, this only
     // detects touchdown. Descent established.
-    g_stubEstimate.velocity.v[ENU_U] = -40.0f; // cm/s
+    g_stubEstimate.velocity.v[NED_D] = -(-40.0f); // cm/s
     flightPlanNavRescueDescent(true, g_stubMicros);
     EXPECT_TRUE(flightPlanNavIsRescueDescentActive());
     EXPECT_FALSE(flightPlanNavIsActive());
     EXPECT_EQ(g_disarmCalls, 0);
 
     // Touchdown: descent stops and the vehicle is quiet, then the timer expires.
-    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+    g_stubEstimate.velocity.v[NED_D] = -(0.0f);
     g_stubMicros += 100'000;
     flightPlanNavRescueDescent(true, g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
@@ -639,5 +639,5 @@ TEST_F(FlightPlanRescueTest, EngageWithoutStagedRunsPgMission)
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     ASSERT_TRUE(g_lastTarget.valid);
     // The PG waypoint's altitude (50 m AMSL) is nowhere near the rescue climb.
-    EXPECT_NEAR(g_lastTarget.targetEfM.z, 50.0f, 0.1f);
+    EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 50.0f, 0.1f);
 }
