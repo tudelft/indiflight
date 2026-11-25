@@ -94,6 +94,9 @@ typedef enum {
     BOXPOSCTL,     // indiflight position control, needs BOXINDI (alternative to upstream BOXPOSHOLD)
     BOXWAYPOINTS,  // only together with BOXPOSCTL
 #endif
+#ifdef USE_INDI
+    BOXRESETHOME,  // indiflight: reset GPS home, baro ground level, EKF and geofence (disarmed only)
+#endif
     CHECKBOX_ITEM_COUNT
 } boxId_e;
 

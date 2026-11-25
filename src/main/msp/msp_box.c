@@ -112,6 +112,9 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     ,{ .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 101}
     ,{ .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 102}
 #endif
+#ifdef USE_INDI
+    ,{ .boxId = BOXRESETHOME, .boxName = "RESET HOME", .permanentId = 103} // 4.4 fork: 61
+#endif
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -276,6 +279,9 @@ void initActiveBoxIds(void)
 
 #ifdef USE_INDI
     BME(BOXINDI); // without the switch (or without USE_INDI) the upstream PID runs
+#if defined(USE_GPS) || defined(USE_BARO) || defined(USE_EKF)
+    BME(BOXRESETHOME);
+#endif
 #endif
 #ifdef USE_LOCAL_POSITION
     BME(BOXPOSCTL);

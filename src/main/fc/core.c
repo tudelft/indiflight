@@ -1274,6 +1274,25 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
+#ifdef USE_INDI
+    // indiflight RESET HOME (disarmed only): GPS home, baro ground level, EKF, geofence
+    if (!ARMING_FLAG(ARMED) && IS_RC_MODE_ACTIVE(BOXRESETHOME)) {
+#ifdef USE_GPS
+        GPS_reset_home_position();
+#endif
+#ifdef USE_BARO
+        baroSetGroundLevel();
+        baro.altitude = 0; // set this now, or else the EKF won't reset properly
+#endif
+#ifdef USE_EKF
+        forceDeinitEkf(); // re-initialises on the next position measurement
+#endif
+#ifdef USE_GEOFENCE
+        geofenceInit();
+#endif
+    }
+#endif
+
 #ifdef USE_LOCAL_POSITION
     // POSITION_MODE needs INDI_MODE: pos_ctl only produces INDI setpoints
     // (attSpNedFromPos / spfSpBodyFromPos), which nothing on the PID path consumes.
