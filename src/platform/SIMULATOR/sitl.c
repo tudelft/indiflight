@@ -401,9 +401,20 @@ static void updateState(const fdm_packet* pkt)
     double t3 = +2.0 * (qw * qz + qx * qy);
     double t4 = +1.0 - 2.0 * (ysqr + qz * qz);
     zf = atan2(t3, t4) * RAD2DEG;
+#ifdef USE_FRD_NED
+    imuSetAttitudeRPY(xf, yf, zf); // FRD: pitch nose up + (upstream negated it)
+#else
     imuSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
+#endif // USE_FRD_NED
+#else
+#ifdef USE_FRD_NED
+    // the simulator quaternion is body FLU -> earth NWU (upstream's imu.c frame);
+    // conjugating with a 180 deg rotation about X gives body FRD -> earth NED.
+    // Gyro, acc and the virtual mag are converted in sensors/boardalignment.c.
+    imuSetAttitudeQuat(attQw, attQx, -attQy, -attQz);
 #else
     imuSetAttitudeQuat(attQw, attQx, attQy, attQz);
+#endif // USE_FRD_NED
 #endif
 #endif
 
