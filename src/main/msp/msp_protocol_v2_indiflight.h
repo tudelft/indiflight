@@ -24,3 +24,6 @@
 #define MSP2_SET_INDI_PROFILE               0x4003
 #define MSP2_LEARNING_CONFIG                0x4004
 #define MSP2_SET_LEARNING_CONFIG            0x4005
+// 0x4006..0x4009: MSP2_INDI_BLACKBOX_LOG_* (log download, dev/msp-log-download)
+#define MSP2_INDI_PROFILE_INDEX             0x400A  // out: u8 active INDI profile, u8 INDI_PROFILE_COUNT
+#define MSP2_SET_INDI_PROFILE_INDEX         0x400B  // in: u8 INDI profile to activate (refused while armed)

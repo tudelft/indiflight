@@ -115,6 +115,11 @@
 #include "msp/msp_protocol_v2_indiflight.h"
 #include "msp/msp_serial.h"
 
+#ifdef USE_INDI
+#include "flight/indi.h"
+#include "flight/indi_init.h"
+#endif
+
 #include "osd/osd.h"
 #include "osd/osd_elements.h"
 #include "osd/osd_warnings.h"
@@ -451,6 +456,12 @@ RAM_CODE static void writeReadEeprom(dispatchEntry_t* self)
 
     writeEEPROM();
     readEEPROM();
+
+#ifdef USE_INDI
+    // activateConfig() does not reach the INDI runtime: without this, INDI settings
+    // written over MSP would only take effect after a reboot
+    initIndiRuntime();
+#endif
 
 #ifdef USE_VTX_TABLE
     if (vtxTableNeedsInit) {
@@ -2794,7 +2805,6 @@ RAM_CODE static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDes
 
             // get/response: return "name = value"
             // for set, this confirms the new value; for get, this returns the current value
-            char buf[len + 1];
             // extract just the name (before '=' if present)
             if (eq) {
                 // trim trailing spaces from name
@@ -2804,16 +2814,26 @@ RAM_CODE static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDes
                 }
                 *nameEnd = '\0';
             }
-            const int written = cliGetSettingByName(cmdline, buf, len + 1);
-            if (written < 0 || written > (int)sbufBytesRemaining(dst)) {
+            // Format straight into the response buffer (as upstream #15708): a scratch
+            // buffer sized from the request is too small for any read, since the request
+            // is only "name" and the reply is "name = value".
+            const int written = cliGetSettingByName(cmdline, (char *)sbufPtr(dst), (int)sbufBytesRemaining(dst));
+            if (written < 0) {
                 if (!eq) {
                     return MSP_RESULT_ERROR;
                 }
                 // set succeeded but echo failed; acknowledge the set
             } else {
-                sbufWriteData(dst, buf, written);
+                sbufAdvance(dst, written);
             }
         }
+        break;
+#endif
+
+#ifdef USE_INDI
+    case MSP2_INDI_PROFILE_INDEX:
+        sbufWriteU8(dst, getCurrentIndiProfileIndex());
+        sbufWriteU8(dst, INDI_PROFILE_COUNT);
         break;
 #endif
 
@@ -4403,6 +4423,19 @@ RAM_CODE static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t
             return MSP_RESULT_ERROR;
         }
 
+        break;
+#endif
+
+#ifdef USE_INDI
+    case MSP2_SET_INDI_PROFILE_INDEX:
+        if (ARMING_FLAG(ARMED)) {
+            return MSP_RESULT_ERROR;
+        }
+        value = sbufReadU8(src);
+        if (value >= INDI_PROFILE_COUNT) {
+            return MSP_RESULT_ERROR;
+        }
+        changeIndiProfile(value);
         break;
 #endif
 
