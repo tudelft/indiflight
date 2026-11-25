@@ -13,7 +13,7 @@
 #define PG_INDI_PROFILE         1000
 #define PG_INDI_CONFIG          1001 // active INDI profile index (was systemConfig_t.indiProfileIndex)
 #define PG_POSITION_PROFILE     1002
-#define PG_POSITION_CONFIG      1003 // reserved: active position profile index
+#define PG_POS_CTL_CONFIG       1003 // active position profile index (was systemConfig_t.positionProfileIndex)
 #define PG_EKF_CONFIG           1004
 #define PG_CATAPULT_CONFIG      1005
 #define PG_THROW_CONFIG         1006

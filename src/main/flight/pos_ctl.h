@@ -1,0 +1,127 @@
+/*
+ * Multirotor position mode. PID for accel, dynamic inversion for attitude.
+ *
+ * Copyright 2023 Till Blaha (Delft University of Technology)
+ * Copyright 2024 Robin Ferede (Delft University of Technology)
+ *     Improved dynamic inversion code that maps desired accel to attitude.
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
+
+#include "common/maths_indi.h"
+#include "common/time.h"
+#include "config/config.h"
+
+#pragma once
+
+typedef enum {
+    POSITION_ATTITUDE_MAPPING_NDI = 0,  // multirotor dynamic inversion (pos_att_ndi.c)
+    POSITION_ATTITUDE_MAPPING_INDI,     // incremental, hybrids, untested (pos_att_indi.c)
+    POSITION_ATTITUDE_MAPPING_DF,       // differential flatness, Tal (2022), tailsitter model (pos_att_df.c)
+} position_attitude_mapping_t;
+
+typedef struct positionProfile_s {
+    uint8_t horz_p; // m/s/s per m * 10
+    uint8_t horz_i; // m/s/s per m/s * s  * 10
+    uint8_t horz_d; // m/s/s per m/s * 10
+    uint16_t horz_max_v; // cm/s 
+    uint16_t horz_max_a; // cm/s/s  FIXME: are box shaped constraints what we want?
+    uint8_t max_tilt;   // in automatic flight in deg (0, 180)
+    uint8_t vert_p; // m/s/s per m * 10
+    uint8_t vert_i; // m/s/s per m/s * s  * 10
+    uint8_t vert_d; // m/s/s per m/s * 10
+    uint16_t vert_max_v_up; // cm/s 
+    uint16_t vert_max_v_down; // cm/s 
+    uint16_t vert_max_a_up; // cm/s/s
+    uint16_t vert_max_a_down; // cm/s/s
+    uint8_t yaw_p; // deg/s per deg * 10
+    uint8_t weathervane_p; // deg/s per deg * 10
+    uint16_t weathervane_min_v; // cm/s min speed to use weathervaneing
+    uint8_t use_spf_attenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
+    uint8_t stick_takeover;       // bool: moving the sticks while armed aborts automatic flight (manual takeover)
+    uint8_t attitude_mapping;     // position_attitude_mapping_t: acceleration setpoint to attitude/thrust (pos_att_*.c)
+    // --- inaccessible from CLI / dump files for now
+    uint16_t vert_max_iterm; // cm/s
+    uint16_t horz_max_iterm; // cm/s
+} positionProfile_t;
+
+typedef struct positionWaypoint_s {
+    fp_vector_t location; // local cartesian NED coordinates in m
+    float tolerance; // horizontal acceptance radius in m
+    float heightTolerance; // vertical acceptance distance in m
+    float velocityLimit; // maximum waypoint velocity in m/s
+    float heading; // yaw setpoint in rad; if > 0, yaw is tracked (trackPsi), otherwise yaw is free
+} positionWaypoint_t;
+
+typedef struct positionRuntime_s {
+    float horz_p; // m/s/s per m 
+    float horz_i; // m/s/s per m/s * s
+    float horz_d; // m/s/s per m/s
+    float horz_max_v; // m/s
+    float horz_max_a; // m/s/s
+    float max_tilt;   // rad
+    float horz_max_iterm; // m/s
+    float vert_p; // m/s/s per m
+    float vert_i; // m/s/s per m/s * s
+    float vert_d; // m/s/s per m/s
+    float vert_max_v_up; // m/s 
+    float vert_max_v_down; // m/s 
+    float vert_max_a_up; // m/s/s
+    float vert_max_a_down; // m/s/s
+    float vert_max_iterm; // m/s
+    float yaw_p; // deg/s per deg
+    float weathervane_p; // deg/s per deg
+    float weathervane_min_v; // m/s min speed to use weathervaneing
+    bool use_spf_attenuation;
+    bool stick_takeover;
+    position_attitude_mapping_t attitude_mapping;
+    bool arrest_motion; // if true, command zero velocity until it is reached
+    bool arrest_z_motion_only; // if true, only command zero velocity in z direction
+} positionRuntime_t;
+
+#define POSITION_PROFILE_COUNT 3
+PG_DECLARE_ARRAY(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles);
+
+typedef struct posCtlConfig_s {
+    uint8_t profileIndex;
+} posCtlConfig_t;
+PG_DECLARE(posCtlConfig_t, posCtlConfig);
+uint8_t getCurrentPositionProfileIndex(void);
+
+void posCtlInit(void);
+
+#define DEADRECKONING_TIMEOUT_HOLD_POSITION_US  2000000  // 1 sec
+#define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 3500000  // 2.5 sec
+
+extern positionRuntime_t posRuntime;
+void initPositionRuntime();
+void changePositionProfile(uint8_t profileIndex);
+
+extern fp_vector_t accSpNedFromPos;
+extern fp_quaternion_t attSpNedFromPos;
+extern fp_vector_t spfSpBodyFromPos;
+extern fp_vector_t rateSpBodyFromPos;
+
+void resetIterms();
+void posArrestMotion();
+void posArrestZMotionOnly();
+void updatePosCtl(timeUs_t current);
+void posGetVelSpNedFromPosSp(void);
+void posGetVelSpNedFromSticks(void);
+void posGetAccSpNed(timeUs_t current);

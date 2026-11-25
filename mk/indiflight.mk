@@ -8,7 +8,12 @@ INDIFLIGHT_SRC = \
             flight/ahrs_compat.c \
             flight/indi.c \
             flight/indi_init.c \
-            flight/indi_glue.c
+            flight/indi_glue.c \
+            flight/ekf.c \
+            flight/ekf_calc.c \
+            flight/pos_ctl.c \
+            flight/pos_att_ndi.c \
+            io/local_pos.c
 
 COMMON_SRC += $(INDIFLIGHT_SRC)
 SPEED_OPTIMISED_SRC += \
@@ -16,6 +21,9 @@ SPEED_OPTIMISED_SRC += \
             common/filter_biquad.c \
             flight/indi.c \
             flight/indi_glue.c
+
+# generated EKF code (kalman_filter_c_code_generation) uses double literals
+SRC_CFLAGS_ekf_calc.c += -Wno-double-promotion
 
 ifneq ($(findstring -DUSE_INDI,$(EXTRA_FLAGS)),)
 # ActiveSetCtlAlloc (submodule lib/main/ActiveSetCtlAlloc), control allocation for INDI

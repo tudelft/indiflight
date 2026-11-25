@@ -18,5 +18,8 @@
 
 void indiflightInit(void);                       // fc/init.c, after pidInit()
 void indiflightProcessRxModes(void);             // fc/core.c processRxModes()
+#define RC_STICK_MOVEMENT_THRESHOLD 0.1f // stick movement threshold to detect stick activity
+void setSticksReference(void);
+bool haveSticksMoved(void);
 bool indiIsActive(void);                         // INDI (true) or legacy PID (false)
 void indiMixTable(timeUs_t currentTimeUs);       // replaces mixTable() when INDI is active

@@ -17,6 +17,8 @@
 #include "common/maths.h"
 #include "common/filter.h"
 
+#include "fc/rc.h"
+#include "fc/rc_controls.h"
 #include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
@@ -47,6 +49,42 @@ void indiflightProcessRxModes(void)
         DISABLE_FLIGHT_MODE(PID_MODE);
         initEscEndpoints();
     }
+
+#ifdef USE_LOCAL_POSITION
+    // TODO(spike): port indiflight's edge handling (EKF convergence gate,
+    // ARMING_DISABLED_EKF_OR_SETPOINT, waypoint rising edge/auto-off)
+    if (IS_RC_MODE_ACTIVE(BOXPOSCTL)) {
+        ENABLE_FLIGHT_MODE(POSITION_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(POSITION_MODE);
+    }
+    if (IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE)) {
+        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    }
+#endif
+}
+
+// stick activity detection (was in indiflight fc/rc.c)
+static float sticksReference[4];
+
+void setSticksReference(void)
+{
+    for (int i = 0; i < 3; i++) {
+        sticksReference[i] = getRcDeflection(i);
+    }
+    sticksReference[THROTTLE] = 1e-3f * (rcCommand[THROTTLE] - 1000.f); // [0, 1]
+}
+
+bool haveSticksMoved(void)
+{
+    for (int i = 0; i < 3; i++) {
+        if (fabsf(getRcDeflection(i) - sticksReference[i]) > RC_STICK_MOVEMENT_THRESHOLD) {
+            return true;
+        }
+    }
+    return fabsf(1e-3f * (rcCommand[THROTTLE] - 1000.f) - sticksReference[THROTTLE]) > RC_STICK_MOVEMENT_THRESHOLD;
 }
 
 bool indiIsActive(void)

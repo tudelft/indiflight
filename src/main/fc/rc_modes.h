@@ -88,6 +88,8 @@ typedef enum {
     // modeActivationConditions) do not shift. Their flags are set by hand in
     // indiflightProcessRxModes(), not via BOXID_TO_FLIGHT_MODE_MAP.
     BOXPIDCTL,
+    BOXPOSCTL,     // indiflight position control (alternative to upstream BOXPOSHOLD)
+    BOXWAYPOINTS,  // only together with BOXPOSCTL
     CHECKBOX_ITEM_COUNT
 } boxId_e;
 
