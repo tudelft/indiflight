@@ -33,7 +33,7 @@
 #include "flight/pid.h"
 #include "solveActiveSet.h"
 #include "common/maths_indi.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 
 #include "config/config.h"
 
@@ -275,12 +275,12 @@ typedef struct indiRuntime_s {
     fp_vector_t spf_fs; // sync-filterd accelerometer (specific force) in N/kg
     // ---- filters
     pt1Filter_t uLagFilter[MAXU]; // to simulate spinup
-    biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
-    biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
-    biquadFilter_t duFilter[MAXU]; // only support 2nd order butterworth second order section for now
-    biquadFilter_t servo_lagFilter[MAXU];
-    biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
-    biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
+    svfLowpassFilter_t uStateFilter[MAXU]; // 2nd order Butterworth lowpass
+    svfLowpassFilter_t omegaFilter[MAXU]; // 2nd order Butterworth lowpass
+    svfLowpassFilter_t duFilter[MAXU]; // 2nd order Butterworth lowpass
+    svfLowpassFilter_t servo_lagFilter[MAXU];
+    svfLowpassFilter_t rateFilter[3]; // 2nd order Butterworth lowpass
+    svfLowpassFilter_t spfFilter[3]; // 2nd order Butterworth lowpass
 
     // ---- closed loop rpm controller
     // INDI rpm control (Mancinelli et al., IMAV 2023, Fig. 4):
@@ -313,21 +313,21 @@ typedef struct indiRuntime_s {
     bool useMotorLeadLag; // bool: use motor lead-lag filter
     float actTimeConstTrueS[MAXU];
     float actTimeConstDesS[MAXU];
-    biquadFilter_t motorLeadLagFilter[MAXU];
+    phaseComp_t motorLeadLagFilter[MAXU];
 
     // ---- feedforward control
     float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
     bool useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
     float feedforwardFilterCoefs[3]; // feedforward coefficients for feedforward control law k, z, p (TODO: Yes its double now)
-    biquadFilter_t feedforwardFilter[3]; 
+    sos2Filter_t feedforwardFilter[3]; 
     fp_vector_t ffRateSpBody;   
 
     // ---- leadlag attitude control
     bool useAttLeadLag; // bool: use attitude lead-lag filter
     float attCoefs[5];
     float rateCoefs[5];
-    biquadFilter_t attLlFilter[3];  // attitude control filter
-    biquadFilter_t rateLlFilter[3]; // rate control filter
+    sos2Filter_t attLlFilter[3];  // attitude control filter
+    sos2Filter_t rateLlFilter[3]; // rate control filter
 
     // ---- gain scheduling
     bool useGainScheduling; // whether to use gain scheduling

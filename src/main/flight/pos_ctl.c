@@ -30,7 +30,7 @@
 #include "flight/ahrs_compat.h"
 #include "flight/ekf.h"
 #include "common/maths_indi.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 #include "fc/runtime_config.h"
 #include "fc/rc.h"
 #include "flight/indi_glue.h"
@@ -106,7 +106,7 @@ void posCtlInit(void) {
 }
 
 // filtered stick-based velocity (NED)
-static biquadFilter_t posVelFilter[3];
+static svfLowpassFilter_t posVelFilter[3];
 
 // Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
 // The plan is flown in WAYPOINT_MODE (BOXWAYPOINTS, on top of POSITION_MODE).
@@ -256,7 +256,7 @@ void initPositionRuntime(void) {
 
     // init stick velocity filters (2nd order LPF)
     for (int i = 0; i < 3; i++) {
-        biquadFilterInitLPF(&posVelFilter[i], 5.0f, 1000); // TODO: make dynamic
+        svfLowpassFilterInit(&posVelFilter[i], 5.0f, 1e-3f); // TODO: make dynamic
     }
 
     posAttInit_INDI();
@@ -503,8 +503,8 @@ void posGetVelSpNedFromSticks(void) {
     float velSpBodyY = getRcDeflection(ROLL) * posRuntime.horz_max_v;
 
     // hysteresis: enter velocity-bearing when speed > 3.0 m/s, exit when < 2.5 m/s
-    velEstNedFilt.V.X = biquadFilterApply(&posVelFilter[0], velEstNed.V.X);
-    velEstNedFilt.V.Y = biquadFilterApply(&posVelFilter[1], velEstNed.V.Y);
+    velEstNedFilt.V.X = svfLowpassFilterApply(&posVelFilter[0], velEstNed.V.X);
+    velEstNedFilt.V.Y = svfLowpassFilterApply(&posVelFilter[1], velEstNed.V.Y);
     float xy_groundspeed = VEC3_XY_LENGTH(velEstNedFilt);
     if (useVelocityBearing) {
         if (xy_groundspeed < (POSCTL_VEL_BEARING_THRESH_CMS*0.01f - 0.5f)) {

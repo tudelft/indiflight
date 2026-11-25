@@ -32,7 +32,7 @@
 #include "flight/ahrs_compat.h"
 #include "flight/ekf.h"
 #include "common/maths_indi.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"
 #include "config/config.h"

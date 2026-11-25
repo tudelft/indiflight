@@ -107,7 +107,7 @@ FAST_CODE void indiMixTable(timeUs_t currentTimeUs)
 
     if (indiRun.useMotorLeadLag) {
         for (int i = 0; i < numMotors; i++) {
-            motor_normalized[i] = constrainf(biquadFilterApply(&indiRun.motorLeadLagFilter[i], motor_normalized[i]), 0.f, 1.f);
+            motor_normalized[i] = constrainf(phaseCompApply(&indiRun.motorLeadLagFilter[i], motor_normalized[i]), 0.f, 1.f);
         }
     }
 

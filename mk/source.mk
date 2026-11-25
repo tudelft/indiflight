@@ -66,7 +66,7 @@ COMMON_SRC = \
             common/encoding.c \
             common/explog_approx.c \
             common/filter.c \
-            common/filter_biquad.c \
+            common/filter_indi.c \
             common/gps_conversion.c \
             common/huffman.c \
             common/huffman_table.c \
@@ -470,7 +470,7 @@ endif
 SPEED_OPTIMISED_SRC += \
             common/encoding.c \
             common/filter.c \
-            common/filter_biquad.c \
+            common/filter_indi.c \
             common/maths.c \
             common/maths_indi.c \
             common/pwl.c \

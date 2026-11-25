@@ -34,7 +34,7 @@
 #include "flight/ahrs_compat.h"
 #include "flight/ekf.h"
 #include "common/maths_indi.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"
 #include "config/config.h"
@@ -42,17 +42,17 @@
 
 #ifdef USE_LOCAL_POSITION
 
-static biquadFilter_t dfAccelerationFilter[3];
-static biquadFilter_t dfModelSpfFilter[3];
-// static biquadFilter_t rateSpBodyFilter[3];
+static svfLowpassFilter_t dfAccelerationFilter[3];
+static svfLowpassFilter_t dfModelSpfFilter[3];
+// static svfLowpassFilter_t rateSpBodyFilter[3];
 
 void posAttInit_DF(void) {
     for (int i = 0; i < 3; i++) {
         // biquadFilterInit(&dfAccelerationFilter[i], sqrtf(0.5f * 5.0f), 500,
         //     sqrtf(0.5f * 5.0f) / (5.0f - 0.5f), FILTER_BPF, 1.0f);
-        biquadFilterInitLPF(&dfAccelerationFilter[i], 3.0f, 1000);
-        biquadFilterInitLPF(&dfModelSpfFilter[i], 3.0f, 1000);
-//         biquadFilterInitLPF(&rateSpBodyFilter[i], 1.5f, 1000);
+        svfLowpassFilterInit(&dfAccelerationFilter[i], 3.0f, 1e-3f);
+        svfLowpassFilterInit(&dfModelSpfFilter[i], 3.0f, 1e-3f);
+//         svfLowpassFilterInit(&rateSpBodyFilter[i], 1.5f, 1e-3f);
     }
 }
 
@@ -243,8 +243,8 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
     fp_vector_t f_I_lpf;
     getSpfInertialPhi(&f_I_model, PHIRows, &AX, K, omega, n, &q, &v_I);
     for (int axis = 0; axis < 3; axis++) {
-        a_I_bpf.A[axis] = biquadFilterApply(&dfAccelerationFilter[axis], a_I.A[axis]);
-        f_I_lpf.A[axis] = biquadFilterApply(&dfModelSpfFilter[axis], f_I_model.A[axis]);
+        a_I_bpf.A[axis] = svfLowpassFilterApply(&dfAccelerationFilter[axis], a_I.A[axis]);
+        f_I_lpf.A[axis] = svfLowpassFilterApply(&dfModelSpfFilter[axis], f_I_model.A[axis]);
     }
 
     fp_vector_t f_I_r = accSpNedFromPos;
@@ -281,7 +281,7 @@ void posGetAttSpNedAndSpfSpBody_DF(timeUs_t current) {
             VEC3_CROSS(filteredRateSpBody, v_I, accSpNedFromPos)
             VEC3_SCALAR_MULT(filteredRateSpBody, (1.f / vel2));
             // for (int axis = 0; axis < 3; axis++) {
-            //     filteredRateSpBody.A[axis] = biquadFilterApply(&rateSpBodyFilter[axis], filteredRateSpBody.A[axis]);
+            //     filteredRateSpBody.A[axis] = svfLowpassFilterApply(&rateSpBodyFilter[axis], filteredRateSpBody.A[axis]);
             // }
             rateSpBodyFromPos = filteredRateSpBody;
             rotate_vector_with_quaternion(&rateSpBodyFromPos, &qinv);

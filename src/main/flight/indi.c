@@ -31,7 +31,7 @@
 
 #include "common/maths_indi.h"
 #include "common/axis.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
@@ -410,12 +410,12 @@ void getSetpoints(timeUs_t current) {
         // TODO: Need to figure out how to program this properly. Depends on what feedforward is kept.
         if (indiRun.useFeedforwardFilter) {
             // If feedforward filter is used, apply it to the reference itself
-            axis.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
-            axis.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+            axis.V.X = sos2FilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            axis.V.Y = sos2FilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
         } else {
             // Else use injection feedforward
-            indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
-            indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+            indiRun.ffRateSpBody.V.X = sos2FilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            indiRun.ffRateSpBody.V.Y = sos2FilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
         }
         float angle = VEC3_XY_LENGTH(axis);
 
@@ -633,8 +633,8 @@ void getAlphaSpBody(timeUs_t current) {
         } else {
             // indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
             // indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
-            indiRun.rateSpBody.V.X += biquadFilterApply(&indiRun.attLlFilter[0], tiltError.V.X);
-            indiRun.rateSpBody.V.Y += biquadFilterApply(&indiRun.attLlFilter[1], tiltError.V.Y);
+            indiRun.rateSpBody.V.X += sos2FilterApply(&indiRun.attLlFilter[0], tiltError.V.X);
+            indiRun.rateSpBody.V.Y += sos2FilterApply(&indiRun.attLlFilter[1], tiltError.V.Y);
         }
 
         indiRun.rateSpBody.V.X += indiRun.ffRateSpBody.V.X;
@@ -667,8 +667,8 @@ void getAlphaSpBody(timeUs_t current) {
     } else {
         // indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
         // indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
-        indiRun.rateDotSpBody.V.X = biquadFilterApply(&indiRun.rateLlFilter[0], rateErr.V.X);
-        indiRun.rateDotSpBody.V.Y = biquadFilterApply(&indiRun.rateLlFilter[1], rateErr.V.Y);
+        indiRun.rateDotSpBody.V.X = sos2FilterApply(&indiRun.rateLlFilter[0], rateErr.V.X);
+        indiRun.rateDotSpBody.V.Y = sos2FilterApply(&indiRun.rateLlFilter[1], rateErr.V.Y);
     }
     indiRun.rateDotSpBody.V.Z = indiRun.rateGains.V.Z * rateErr.V.Z;
 }
@@ -678,7 +678,7 @@ void getAlphaSpBody(timeUs_t current) {
 FAST_CODE
 #endif
 static void updateUStateFs(int i) {
-    indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
+    indiRun.uState_fs[i] = svfLowpassFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
     switch (indiRun.actType[i]) {
         case INDI_ACT_TYPE_MOTOR:
             indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
@@ -760,10 +760,10 @@ void getMotorCommands(timeUs_t current) {
         rate_prev[axis] = indiRun.rateIMU.A[axis];
 
         // filter gyro derivative
-        indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDotIMU.A[axis]);
+        indiRun.rateDot_fs.A[axis] = svfLowpassFilterApply(&indiRun.rateFilter[axis], indiRun.rateDotIMU.A[axis]);
 
         // get (filtered) accel
-        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spfIMU.A[axis]);
+        indiRun.spf_fs.A[axis] = svfLowpassFilterApply(&indiRun.spfFilter[axis], indiRun.spfIMU.A[axis]);
     }
 
 #ifdef USE_LEARNER
@@ -860,7 +860,7 @@ void getMotorCommands(timeUs_t current) {
         // N.B. this specific motor/servo assignment is enforced in indi_init for this case
         float d_eff[2];
         for (int i = 0; i < 2; i++) {
-            d_eff[i] = DEGREES_TO_RADIANS(100.f * biquadFilterApply(&indiRun.servo_lagFilter[i+2], indiRun.d[i+2]));
+            d_eff[i] = DEGREES_TO_RADIANS(100.f * svfLowpassFilterApply(&indiRun.servo_lagFilter[i+2], indiRun.d[i+2]));
 #ifdef USE_SERVO_FEEDBACK
             d_eff[i] = DEGREES_TO_RADIANS(0.01f * ((float)servo_feedback[i]) );
 #endif
@@ -1034,7 +1034,7 @@ void getMotorCommands(timeUs_t current) {
 
         // apply lag filter to simulate spinup dynamics
         indiRun.du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
-        indiRun.du_fs[i] = biquadFilterApply(&indiRun.duFilter[i], indiRun.du[i]);
+        indiRun.du_fs[i] = svfLowpassFilterApply(&indiRun.duFilter[i], indiRun.du[i]);
 
         // thrust command -> actuator command, closed loop on rpm if enabled
         indiRun.d[i] = rpmControl(i, rpmValid);
@@ -1070,7 +1070,7 @@ void indiUpdateActuatorState( float* motors, float* servos ) {
                 if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotErpm(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
                     // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
                     indiRun.omega[i] = indiRun.erpmToRads * getDshotErpm(motor);
-                    indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
+                    indiRun.omega_fs[i] = MAX(0.f, svfLowpassFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
                 } else
 #endif
                 {

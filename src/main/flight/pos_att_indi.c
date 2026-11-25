@@ -33,7 +33,7 @@
 #include "flight/ahrs_compat.h"
 #include "flight/ekf.h"
 #include "common/maths_indi.h"
-#include "common/filter_biquad.h"
+#include "common/filter_indi.h"
 #include "fc/runtime_config.h"
 #include "pg/pg_ids.h"
 #include "config/config.h"
@@ -44,20 +44,20 @@
 
 #ifdef USE_LOCAL_POSITION
 
-static biquadFilter_t indiVelFilter[3];
-static biquadFilter_t attitudeQuaternionFilter[4];
-static biquadFilter_t spfBodyFilter[4];
+static svfLowpassFilter_t indiVelFilter[3];
+static svfLowpassFilter_t attitudeQuaternionFilter[4];
+static svfLowpassFilter_t spfBodyFilter[4];
 static fp_quaternion_t filteredAttitudeQuaternion;
 static fp_vector_t filteredSpfBody;
 static bool attitudeQuaternionFilterPrimed;
 
 void posAttInit_INDI(void) {
     for (int i = 0; i < 3; i++) {
-        biquadFilterInitLPF(&indiVelFilter[i], 5.0f, 1000); // was shared with the stick velocity filter
-        biquadFilterInitLPF(&spfBodyFilter[i], 5.0f, 1000);
+        svfLowpassFilterInit(&indiVelFilter[i], 5.0f, 1e-3f); // was shared with the stick velocity filter
+        svfLowpassFilterInit(&spfBodyFilter[i], 5.0f, 1e-3f);
     }
     for (int i = 0; i < 4; i++) {
-        biquadFilterInitLPF(&attitudeQuaternionFilter[i], 5.0f, 1000);
+        svfLowpassFilterInit(&attitudeQuaternionFilter[i], 5.0f, 1e-3f);
     }
     filteredAttitudeQuaternion = (fp_quaternion_t) { .w = 1.f };
     filteredSpfBody = (fp_vector_t) { 0 };
@@ -197,10 +197,10 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
             QUAT_SCALAR_MULT(q_0, -1.f);
         }
     }
-    q_0.w = biquadFilterApply(&attitudeQuaternionFilter[0], q_0.w);
-    q_0.x = biquadFilterApply(&attitudeQuaternionFilter[1], q_0.x);
-    q_0.y = biquadFilterApply(&attitudeQuaternionFilter[2], q_0.y);
-    q_0.z = biquadFilterApply(&attitudeQuaternionFilter[3], q_0.z);
+    q_0.w = svfLowpassFilterApply(&attitudeQuaternionFilter[0], q_0.w);
+    q_0.x = svfLowpassFilterApply(&attitudeQuaternionFilter[1], q_0.x);
+    q_0.y = svfLowpassFilterApply(&attitudeQuaternionFilter[2], q_0.y);
+    q_0.z = svfLowpassFilterApply(&attitudeQuaternionFilter[3], q_0.z);
     const float quaternionNorm = sqrtf(sq(q_0.w) + sq(q_0.x) + sq(q_0.y) + sq(q_0.z));
     if (quaternionNorm > 1e-6f) {
         const float inverseQuaternionNorm = 1.f / quaternionNorm;
@@ -219,9 +219,9 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
     fp_vector_t gI = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -GRAVITYf };
 
     fp_vector_t fB_0 = indiRun.spfIMU; // TODO: filter this with LP at 5Hz
-    filteredSpfBody.V.X = biquadFilterApply(&spfBodyFilter[0], fB_0.V.X);
-    filteredSpfBody.V.Y = biquadFilterApply(&spfBodyFilter[1], fB_0.V.Y);
-    filteredSpfBody.V.Z = biquadFilterApply(&spfBodyFilter[2], fB_0.V.Z);
+    filteredSpfBody.V.X = svfLowpassFilterApply(&spfBodyFilter[0], fB_0.V.X);
+    filteredSpfBody.V.Y = svfLowpassFilterApply(&spfBodyFilter[1], fB_0.V.Y);
+    filteredSpfBody.V.Z = svfLowpassFilterApply(&spfBodyFilter[2], fB_0.V.Z);
     fp_vector_t fI_0 = filteredSpfBody;
     rotate_vector_with_quaternion(&fI_0, &q_0);
 
@@ -240,9 +240,9 @@ void posGetAttSpNedAndSpfSpBody_INDI(timeUs_t current) {
 
     fp_vector_t axB = { .V.X = 0.f, .V.Y = 0.f, .V.Z = -1.f };
     static fp_vector_t velEstNedFilt = { 0 };
-    velEstNedFilt.V.X = biquadFilterApply(&indiVelFilter[0], velEstNed.V.X);
-    velEstNedFilt.V.Y = biquadFilterApply(&indiVelFilter[1], velEstNed.V.Y);
-    velEstNedFilt.V.Z = biquadFilterApply(&indiVelFilter[2], velEstNed.V.Z);
+    velEstNedFilt.V.X = svfLowpassFilterApply(&indiVelFilter[0], velEstNed.V.X);
+    velEstNedFilt.V.Y = svfLowpassFilterApply(&indiVelFilter[1], velEstNed.V.Y);
+    velEstNedFilt.V.Z = svfLowpassFilterApply(&indiVelFilter[2], velEstNed.V.Z);
     fp_vector_t vI = velEstNedFilt; // EKF vel is used for now, will update it once airspeed is available
 
     getAttitudeThrustJacobian(JRows, PHIRows, &axB, &q_0, &filteredSpfBody, &vI);
