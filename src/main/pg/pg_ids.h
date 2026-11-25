@@ -170,6 +170,9 @@
 // TODO TBC
 #define PG_DISPLAY_PORT_FBOSD_CONFIG 566
 
+// Indiflight parameter groups (1000..1099)
+#include "pg/pg_ids_indiflight.h"
+
 // OSD configuration (subject to change)
 #define PG_OSD_FONT_CONFIG 2047
 #define PG_OSD_VIDEO_CONFIG 2046

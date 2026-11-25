@@ -57,6 +57,10 @@ typedef enum {
     DISARM_REASON_SERIAL_COMMAND    = 8,
     DISARM_REASON_LANDING           = 9,
     DISARM_REASON_CRASHFLIP         = 10,
+    // indiflight reasons in their own range, clear of future upstream ones
+    DISARM_REASON_ALLOC_FAILURE     = 64,
+    DISARM_REASON_KEYBOARD          = 65,
+    DISARM_REASON_GEOFENCE          = 66,
 #ifdef UNIT_TEST
     DISARM_REASON_SYSTEM            = 255,
 #endif

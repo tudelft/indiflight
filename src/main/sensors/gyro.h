@@ -78,6 +78,9 @@ typedef struct gyro_s {
     float scale;
     float gyroADC[XYZ_AXIS_COUNT];     // aligned, calibrated, scaled, but unfiltered data from the sensor(s)
     float gyroADCf[XYZ_AXIS_COUNT];    // filtered gyro data
+#ifdef USE_INDI
+    float gyroADCafterRpm[XYZ_AXIS_COUNT]; // downsampled + rpm-filtered only, input to INDI
+#endif
     uint8_t sampleCount;               // gyro sensor sample counter
     float sampleSum[XYZ_AXIS_COUNT];   // summed samples used for downsampling
     bool downsampleFilterEnabled;      // if true then downsample using gyro lowpass 2, otherwise use averaging

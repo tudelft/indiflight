@@ -1,0 +1,1283 @@
+/*
+ * INDI based attitude and rate controller for UAV
+ *
+ * Copyright 2023, 2024 Till Blaha (Delft University of Technology)
+ *
+ * This file is part of Indiflight.
+ *
+ * Indiflight is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Indiflight is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.
+ *
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
+
+#include <string.h>
+#include <stdbool.h>
+
+#include "platform.h"
+
+#ifdef USE_INDI
+
+#include "common/maths_indi.h"
+#include "common/axis.h"
+#include "common/filter_biquad.h"
+
+#include "sensors/gyro.h"
+#include "sensors/acceleration.h"
+#include "fc/core.h"
+#include "fc/rc.h"
+#include "fc/rc_controls.h"
+#include "rx/rx.h"
+#include "fc/runtime_config.h"
+#include "flight/ahrs_compat.h"
+#include "flight/pid.h"
+#include "flight/mixer_init.h"
+#ifdef USE_POS_CTL
+#include "flight/pos_ctl.h"
+#endif
+#ifdef USE_CATAPULT
+#include "flight/catapult.h"
+#endif
+#include "flight/rpm_filter.h"
+#include "flight/servos.h"
+#ifdef USE_THROW_TO_ARM
+#include "flight/throw.h"
+#endif
+#include "drivers/motor.h"
+#include "drivers/dshot.h"
+#include <math.h>
+#include "config/config.h"
+#include "setupWLS.h"
+#include "solveActiveSet.h"
+#ifdef USE_LEARNER
+#include "flight/learner.h"
+#include "flight/learning_prober.h"
+#endif
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+
+#ifdef USE_LOCAL_POSITION
+#include "io/local_pos.h"
+#endif
+#include "io/beeper.h"
+
+#include "pg/pg.h"
+#include "config/config.h"
+#include "config/config_reset.h"
+
+#include "indi_init.h"
+#include "indi.h"
+
+// flight modes in which the attitude loop is not rate-divided
+#define INDI_UNLIMITED_RATE_MODES (0 \
+    IF_CATAPULT(| CATAPULT_MODE) \
+    IF_LEARNER(| LEARNER_MODE))
+#ifdef USE_CATAPULT
+#define IF_CATAPULT(x) x
+#else
+#define IF_CATAPULT(x)
+#endif
+#ifdef USE_LEARNER
+#define IF_LEARNER(x) x
+#else
+#define IF_LEARNER(x)
+#endif
+
+
+#ifndef USE_ACC
+#error "Must use accelerometer (USE_ACC) to USE_INDI"
+#endif
+
+
+// version 2: rpm control fields added (indiProfile_t grew). Bump on every
+// change to indiProfile_t, or stored profiles 1..N are read shifted.
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 2);
+
+PG_REGISTER_WITH_RESET_TEMPLATE(indiConfig_t, indiConfig, PG_INDI_CONFIG, 0);
+PG_RESET_TEMPLATE(indiConfig_t, indiConfig,
+    .profileIndex = 0,
+);
+
+uint8_t getCurrentIndiProfileIndex(void)
+{
+    return indiConfig()->profileIndex;
+}
+
+FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
+
+// was in indiflight fc/core.c. Learner/catapult/position-mode branches are
+// added back with those features.
+bool isTouchingGround(void)
+{
+    // low total thrust, but high total accel: likely touching ground.
+    // breaks down for fixed wings and "3D" thrust ESCs
+    const bool gyroLow = (sq(gyro.gyroADCf[X]) + sq(gyro.gyroADCf[Y]) + sq(gyro.gyroADCf[Z])) < sq(100.f);
+    const bool accHigh = acc.accMagnitude > 0.8f;
+    bool throttleLow = rcCommand[THROTTLE] < (float)(rxConfig()->mincheck + 50);
+    throttleLow |= !ARMING_FLAG(ARMED);
+    return gyroLow && accHigh && throttleLow;
+}
+
+#define RC_SCALE_THROTTLE 0.001f
+#define RC_OFFSET_THROTTLE 1000.f
+
+#ifndef INDI_PITCH_OFFSET_SETTLING_TIME_US
+#define INDI_PITCH_OFFSET_SETTLING_TIME_US 2500000
+#endif
+#ifndef INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS
+#define INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS 8.f
+#endif
+#ifndef INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT
+#define INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT 0.5f
+#endif
+
+typedef enum {
+    PITCH_OFFSET_MODE_NONE = 0,
+    PITCH_OFFSET_MODE_ANGLE,
+    PITCH_OFFSET_MODE_HORIZON,
+} pitchOffsetMode_e;
+
+static pitchOffsetMode_e pitchOffsetMode;
+static timeUs_t pitchOffsetTransitionStart;
+static timeUs_t pitchOffsetTransitionDuration;
+static float pitchOffsetStart;
+static float pitchOffsetTarget;
+
+#ifdef INDI_IS_TAILSITTER
+static float getPitchOffset(timeUs_t current)
+{
+    if (pitchOffsetTransitionDuration == 0) {
+        return pitchOffsetTarget;
+    }
+
+    const timeDelta_t elapsed = cmpTimeUs(current, pitchOffsetTransitionStart);
+    if (cmpTimeUs(elapsed, pitchOffsetTransitionDuration) >= 0) {
+        return pitchOffsetTarget;
+    }
+
+    const float progress = (float)elapsed / (float)pitchOffsetTransitionDuration;
+    const float logisticAtStart = 1.f / (1.f + exp_approx(INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT));
+    const float logisticAtEnd = 1.f / (1.f + exp_approx(-INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * (1.f - INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT)));
+    const float logistic = 1.f / (1.f + exp_approx(-INDI_PITCH_OFFSET_LOGISTIC_STEEPNESS * (progress - INDI_PITCH_OFFSET_LOGISTIC_MIDPOINT)));
+    const float normalized = constrainf((logistic - logisticAtStart) / (logisticAtEnd - logisticAtStart), 0.f, 1.f);
+
+    return pitchOffsetStart + (pitchOffsetTarget - pitchOffsetStart) * normalized;
+}
+#endif
+
+/*
+static fp_euler_t getCurrentEulerZYX(void)
+{
+    fp_quaternion_t attitude;
+    getHoverAttitudeQuaternion(&attitude);
+    fp_euler_t euler;
+    fp_quaternionProducts_t qp;
+    quaternionProducts_of_quaternion(&qp, &attitude);
+    fp_euler_of_quaternionProducts(&euler, &qp);
+
+    return euler;
+}
+*/
+
+static fp_euler_t getCurrentEulerZXY(void)
+{
+    fp_quaternion_t attitude;
+    getHoverAttitudeQuaternion(&attitude);
+    fp_euler_t euler;
+    fp_quaternionProducts_t qp;
+    quaternionProducts_of_quaternion(&qp, &attitude);
+    fp_euler_of_quaternionProducts_ZXY(&euler, &qp);
+
+    return euler;
+    // const fp_vector_t bodyXNed = quatRotMatCol(&attitude, 0);
+    // return atan2_approx(-bodyXNed.V.Z, VEC3_XY_LENGTH(bodyXNed));
+}
+
+// refurbish this code somehow
+#if (MAXU > AS_N_U) || (MAXV > AS_N_V)
+#error "Sizes may be too much for ActiveSetCtlAlloc library"
+#endif
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+void indiController(timeUs_t current) {
+    if (flightModeFlags && !(flightModeFlags & INDI_UNLIMITED_RATE_MODES)) {
+#pragma message "LEARNER_MODE probably shouldnt be here"
+        // any flight mode active other than catapult, learner or acro (acro is all off)?
+        if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 || (indiRun.attRateDenom == 1) ) {
+            // rate limit attitude control
+            getSetpoints(current);
+            indiRun.attExecCounter = 1;
+        }
+    } else {
+        // function is cheap, let's do it an all iterations
+        getSetpoints(current);
+    }
+
+    // for any flight mode:
+    // 1. compute desired angular accelerations
+    getAlphaSpBody(current);
+
+    // allocation and INDI
+    getMotorCommands(current);
+
+#ifdef USE_LEARNER
+    // update learner.
+    // FIXME: delay setpoints used by learner by one sample to be in sync
+    updateLearner(current);
+#endif
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+void getSetpoints(timeUs_t current) {
+    indiRun.attSpNed.w = 1.f;
+    indiRun.attSpNed.x = 0.f;
+    indiRun.attSpNed.y = 0.f;
+    indiRun.attSpNed.z = 0.f;
+
+    indiRun.spfSpBody.V.X = 0.f;
+    indiRun.spfSpBody.V.Y = 0.f;
+    indiRun.spfSpBody.V.Z = 0.f;
+
+    indiRun.ffRateSpBody.V.X = 0.f;
+    indiRun.ffRateSpBody.V.Y = 0.f;
+    indiRun.ffRateSpBody.V.Z = 0.f;
+
+    indiRun.rateSpBodyCommanded.V.X = 0.f;
+    indiRun.rateSpBodyCommanded.V.Y = 0.f;
+    indiRun.rateSpBodyCommanded.V.Z = 0.f;
+
+    // indiRun.bypassControl = false;
+    indiRun.controlAttitude = true;
+    indiRun.trackAttitudeYaw = false;
+
+    // update state machines
+#ifdef USE_CATAPULT
+    runCatapultStateMachine(current);
+#endif
+#ifdef USE_LEARNER
+    runLearningQueryStateMachine(current);
+#endif
+
+    // flight mode handling for setpoints
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE)
+            && (catapultState > CATAPULT_IDLE)
+            && (catapultState < CATAPULT_DONE)) {
+        indiRun.controlAttitude = controlAttitudeFromCat;
+        indiRun.attSpNed = attSpNedFromCat;
+        indiRun.spfSpBody = spfSpBodyFromCat;
+        indiRun.rateSpBodyCommanded = rateSpBodyFromCat;
+    } else
+#endif
+#ifdef USE_THROW_TO_ARM
+    if ((throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_ARMED_AFTER_THROW)) {
+        // indiRun.bypassControl = true;
+        for (int i=0; i < indiRun.actNum; i++) {
+            indiRun.d[i] = 0.f;
+        }
+    } else
+#endif
+#ifdef USE_LOCAL_POSITION
+    if (FLIGHT_MODE(POSITION_MODE)) {
+        indiRun.attSpNed = attSpNedFromPos;
+        indiRun.trackAttitudeYaw = posSpNed.trackPsi;
+        indiRun.spfSpBody = spfSpBodyFromPos;
+        indiRun.rateSpBodyCommanded = rateSpBodyFromPos;
+#ifdef INDI_IS_TAILSITTER
+#define INDI_SIDESLIP_GAIN_POS (DEGREES_TO_RADIANS(15.f)) // deg/s per m/s/s of ay
+        // coordinate turn
+        //indiRun.rateSpBodyCommanded = coordinateTurn();
+        fp_vector_t sideslipCorrection;
+        sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN_POS);
+        VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
+#endif
+    } else
+#endif
+    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE)) {
+        // get desired attitude setpoints from sticks
+        fp_euler_t eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
+
+        const pitchOffsetMode_e currentPitchOffsetMode = FLIGHT_MODE(HORIZON_MODE)
+            ? PITCH_OFFSET_MODE_HORIZON
+            : PITCH_OFFSET_MODE_ANGLE;
+        if (currentPitchOffsetMode != pitchOffsetMode) {
+            pitchOffsetStart = eulerZXY.angles.pitch;
+            pitchOffsetTarget = currentPitchOffsetMode == PITCH_OFFSET_MODE_HORIZON ? -0.5f * M_PIf : 0.f;
+            const float angularDistance = fabsf(pitchOffsetTarget - pitchOffsetStart);
+            const float durationScale = angularDistance / (0.5f * M_PIf);
+
+            pitchOffsetMode = currentPitchOffsetMode;
+            pitchOffsetTransitionStart = current;
+            pitchOffsetTransitionDuration = INDI_PITCH_OFFSET_SETTLING_TIME_US > 0
+                ? (timeUs_t)(INDI_PITCH_OFFSET_SETTLING_TIME_US * durationScale)
+                : 0;
+            if (pitchOffsetTransitionDuration == 0) {
+                pitchOffsetStart = pitchOffsetTarget;
+            }
+        }
+        if (!ARMING_FLAG(ARMED)) {
+            pitchOffsetTarget = currentPitchOffsetMode == PITCH_OFFSET_MODE_HORIZON ? 0.5f * M_PIf : 0.f;
+            pitchOffsetStart = pitchOffsetTarget;
+            pitchOffsetTransitionDuration = 0;
+        }
+
+        // get proper yaw
+        float Psi = getYawWithoutSingularity();
+
+        // find tilt axis --> this can be done better! 
+        // Now combined XY input gives bigger tilt angle before limiting,
+        // which results in a sort of radial deadzone past the x*y=1 circle
+        float roll = getRcDeflection(ROLL);
+        float pitch = getRcDeflection(PITCH);
+        float maxTilt = indiRun.manualMaxTilt;
+        fp_quaternion_t attSpYaw;
+        fp_quaternion_t attSpYawPreFeedforward;
+
+#ifdef INDI_IS_TAILSITTER
+        // tailsitter special: first bank then pitch
+        Psi = eulerZXY.angles.yaw;
+
+        fp_quaternion_t bank_q, pitch_q;
+        fp_euler_t bank_e = { .angles = { .roll=1.333*maxTilt*roll, .pitch=0, .yaw=0 } };
+        fp_euler_t pitch_e = { .angles = { .roll=0, .pitch=maxTilt*pitch, .yaw=0 } };
+        if (currentPitchOffsetMode != PITCH_OFFSET_MODE_NONE || pitchOffsetTransitionDuration > 0) {
+            pitch_e.angles.pitch += getPitchOffset(current);
+        }
+        quaternion_of_fp_euler(&bank_q, &bank_e);
+        quaternion_of_fp_euler(&pitch_q, &pitch_e);
+        attSpYaw = chain_quaternion(&bank_q, &pitch_q);
+        attSpYawPreFeedforward = attSpYaw; // no feedforward filter on the tailsitter path
+#else
+        fp_vector_t axis = {
+            .V.X = maxTilt*roll,
+            .V.Y = maxTilt*pitch,
+            .V.Z = 0.f,
+        };
+
+        
+
+        #ifdef INJECT_ATTITUDE_SETPOINTS
+        if (FLIGHT_MODE(HORIZON_MODE)) {
+            indiRun.attSpInjectionStarted = false;
+        }
+        if (indiRun.injectAttSp) {
+            // Only inject setpoints in Angle Mode (so drone can be positioned in horizon mode)
+            if (FLIGHT_MODE(ANGLE_MODE)) {
+                if (!indiRun.attSpInjectionStarted) {
+                    set_signal_mode(indiRun.attSpInjectionType, indiRun.attSpInjectionAmplitude, indiRun.attSpInjectionDuration, indiRun.attSpInjectionDurationDown, current);
+                    indiRun.attSpInjectionStartTime = current;
+                    indiRun.attSpInjectionStarted = true;
+                }
+                float roll_signal = generate_signal(current, indiRun.attSpInjectionStartTime);
+                // Add roll signal to RC input signal
+                axis.V.X += roll_signal;
+            }
+        }
+        #endif
+
+        // Separately log axis original to maintain the original setpoint
+        fp_vector_t axisOriginal = {
+            .V.X = axis.V.X,
+            .V.Y = axis.V.Y,
+            .V.Z = 0.f,
+        };
+
+        VEC3_CONSTRAIN_XY_LENGTH(axis, maxTilt);
+        VEC3_CONSTRAIN_XY_LENGTH(axisOriginal, maxTilt);
+
+        float anglePreFeedforward = VEC3_XY_LENGTH(axisOriginal);
+        VEC3_NORMALIZE(axisOriginal);
+        quaternion_of_axis_angle(&attSpYawPreFeedforward, &axisOriginal, anglePreFeedforward);
+
+
+        // TODO: Need to figure out how to program this properly. Depends on what feedforward is kept.
+        if (indiRun.useFeedforwardFilter) {
+            // If feedforward filter is used, apply it to the reference itself
+            axis.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            axis.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+        } else {
+            // Else use injection feedforward
+            indiRun.ffRateSpBody.V.X = biquadFilterApply(&indiRun.feedforwardFilter[0], axis.V.X);
+            indiRun.ffRateSpBody.V.Y = biquadFilterApply(&indiRun.feedforwardFilter[1], axis.V.Y);
+        }
+        float angle = VEC3_XY_LENGTH(axis);
+
+        VEC3_NORMALIZE(axis);
+        quaternion_of_axis_angle(&attSpYaw, &axis, angle);
+#endif
+
+        fp_quaternion_t yawNed = {
+            .w = cos_approx(Psi/2.f),
+            .x = 0.f,
+            .y = 0.f,
+            .z = sin_approx(Psi/2.f),
+        };
+
+        // this is probaby the most expensive operation... can be half the cost if
+        // optimized for .x = 0, .y = 0, unless compiler does that for us?
+        indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        indiRun.attSpNedPreFeedforward = chain_quaternion(&yawNed, &attSpYawPreFeedforward);
+
+        switch (currentPitchOffsetMode) {
+#ifdef INDI_IS_TAILSITTER
+#define INDI_SIDESLIP_GAIN (DEGREES_TO_RADIANS(15.f)) // deg/s per m/s/s of ay
+            case PITCH_OFFSET_MODE_HORIZON:
+                // coordinate turn
+                if (indiRun.manualUseCoordinatedYaw) {
+                    indiRun.rateSpBodyCommanded = coordinateTurn();
+                    fp_vector_t sideslipCorrection;
+                    sideslipCorrection = sideslipStabilization(INDI_SIDESLIP_GAIN);
+                    VEC3_SCALAR_MULT_ADD(indiRun.rateSpBodyCommanded, 1.f, sideslipCorrection);
+                }
+                // add in manual yaw
+                indiRun.rateSpBodyCommanded.V.X += DEGREES_TO_RADIANS(getSetpointRate(YAW));
+                break;
+            case PITCH_OFFSET_MODE_ANGLE:
+            case PITCH_OFFSET_MODE_NONE:
+#endif
+            default:
+                if (indiRun.manualUseCoordinatedYaw) {
+                    fp_vector_t extrinsicYawFF = extrinsicYaw(DEGREES_TO_RADIANS(getSetpointRate(YAW)));
+                    indiRun.rateSpBodyCommanded.V.X += extrinsicYawFF.V.X;
+                    indiRun.rateSpBodyCommanded.V.Y += extrinsicYawFF.V.Y;
+                    indiRun.rateSpBodyCommanded.V.Z += extrinsicYawFF.V.Z;
+                } else {
+                    indiRun.rateSpBodyCommanded.V.Z += DEGREES_TO_RADIANS(getSetpointRate(YAW));
+                }
+                break;
+        }
+
+        // convert throttle
+        indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
+        indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
+    } else {
+        pitchOffsetMode = 0;
+        pitchOffsetTransitionDuration = 0;
+        // acro
+        indiRun.rateSpBodyCommanded.V.X = DEGREES_TO_RADIANS(getSetpointRate(ROLL));
+        indiRun.rateSpBodyCommanded.V.Y = DEGREES_TO_RADIANS(getSetpointRate(PITCH));
+        indiRun.rateSpBodyCommanded.V.Z = DEGREES_TO_RADIANS(getSetpointRate(YAW));
+
+        // convert throttle
+        indiRun.spfSpBody.V.Z = (rcCommand[THROTTLE] - RC_OFFSET_THROTTLE);
+        indiRun.spfSpBody.V.Z *= RC_SCALE_THROTTLE * (-indiRun.manualMaxUpwardsSpf);
+
+        // launch control
+        static float launchAngle = 0.f;
+        if (isLaunchControlActive()) {
+            if (ARMING_FLAG(ARMED)) {
+                launchAngle += getRcDeflection(PITCH) * 1.f / indiRun.indiFrequency;
+            } else {
+                launchAngle = 0.;
+            }
+
+            indiRun.controlAttitude = true;
+            indiRun.spfSpBody.V.Z = 0.f; // thrust
+            indiRun.rateSpBodyCommanded.V.Y = 0.f; // pitch
+
+            fp_vector_t axis = { .V.X = 0.f, .V.Y = 1.f, .V.Z = 0.f, };
+            fp_quaternion_t attSpYaw;
+            quaternion_of_axis_angle(&attSpYaw, &axis, launchAngle);
+            float Psi = getYawWithoutSingularity();
+            fp_quaternion_t yawNed = {
+                .w = cos_approx(Psi/2.f),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx(Psi/2.f),
+            };
+            indiRun.attSpNed = chain_quaternion(&yawNed, &attSpYaw);
+        } else {
+            launchAngle = 0.f;
+
+            indiRun.controlAttitude = false;
+        }
+    }
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+void getAlphaSpBody(timeUs_t current) {
+    UNUSED(current);
+
+    fp_quaternion_t attEstNed;
+    getHoverAttitudeQuaternion(&attEstNed);
+
+    fp_quaternion_t attEstNedInv = attEstNed;
+    attEstNedInv.w = -attEstNed.w;
+
+    // get rate setpoint from the pilot. If controlAttitude == true, this
+    // setpoint will be mixed with the attitude command.
+    indiRun.rateSpBody = indiRun.rateSpBodyCommanded;
+
+    //fp_quaternion_t rateSpBodyUse = indiRun.rateSpBody;
+    if (indiRun.controlAttitude) {
+        // for better readibility and logs, flip setpoint quaternion if needed
+        // the resulting quaterion is always exactly equivalent
+        if (attEstNed.w * indiRun.attSpNed.w < 0.f)
+            QUAT_SCALAR_MULT(indiRun.attSpNed, -1.f);
+
+#ifdef INDI_IS_TAILSITTER
+        indiRun.attErrBody = chain_quaternion(&attEstNedInv, &indiRun.attSpNed);
+        if (indiRun.attErrBody.w < 0.f) {
+            QUAT_SCALAR_MULT(indiRun.attErrBody, -1.f);
+        }
+
+        fp_vector_t errorRotation = { .V = {
+            .X=indiRun.attErrBody.x,
+            .Y=indiRun.attErrBody.y,
+            .Z=indiRun.attErrBody.z
+        } };
+        float tiltAxisNorm = VEC3_LENGTH(errorRotation);
+
+        float errorAngle = 2.f*acos_approx(indiRun.attErrBody.w);
+        if (tiltAxisNorm > 1e-6f) {
+            VEC3_SCALAR_MULT(errorRotation, errorAngle / tiltAxisNorm);
+        } 
+
+        indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * errorRotation.V.X;
+        indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * errorRotation.V.Y;
+        if (indiRun.trackAttitudeYaw || true)
+            indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * errorRotation.V.Z;
+#else
+        // we decompose the error quaternion into first tilt, then yaw
+        // q_e^B  =  q_yaw^B  *  q_tilt^B
+        //
+        // q_yaw = (w 0 0 z)
+        // q_tilt = (w x y 0)
+        indiRun.attErrBody = chain_quaternion(&attEstNedInv, &indiRun.attSpNed);
+
+        // --- tilt component ---
+        // get tilt as the rotation from the body z (0 0 1) to the target bodyZ 
+        // which is the cross product of (0 0 1) x targetZBody:
+        //
+        // tiltAxis = (-targetZBody.V.Y  targetZBody.V.X  0)
+        fp_vector_t targetZBody = quatRotMatCol(&indiRun.attErrBody, 2);
+        float tiltAxisNorm = hypotf(targetZBody.V.X, targetZBody.V.Y);
+
+        // get tilt axis without singularity traps at 0 and pi
+        fp_vector_t tiltAxis = { .V.Z = 0.f };
+        if (tiltAxisNorm > 1e-8f) {
+            // error = error_angle * unit_vector_rotation_axis
+            float itiltAxisNorm = 1.f / tiltAxisNorm;
+            tiltAxis.V.X = -targetZBody.V.Y * itiltAxisNorm;
+            tiltAxis.V.Y = targetZBody.V.X * itiltAxisNorm;
+        } else {
+            // just rotate around X, either almost left or right
+            tiltAxis.V.X = (-targetZBody.V.Y > 0.f) ? 1.f : -1.f;
+            tiltAxis.V.Y = 0.f;
+        }
+
+        // now we have the axis, but we still need the angle.
+        // a.dot(b) = ||a|| * ||b|| * cos(theta) 
+        //      but (0 0 1) and targetZBody are unit vectors
+        //      therefore:  (0 0 1).dot(targetZBody) = targetZBody.Z
+        //
+        // and angle is  theta = acos(targetZBody.Z)
+        // on interval 0 to pi (direction is given by tiltAxis)
+        //
+        // NOTE: some heuristic could be used here, because this is far from optimal
+        // in cases where we have high angular rate and the most efficient way
+        // to get to the setpoint is actually to continue through a flip, and
+        // not counter steer initially
+        float tiltErrorAngle = acos_approx(constrainf(targetZBody.V.Z, -1.f, 1.f));
+
+        // finalize tilt error used to generate rate setpoint
+        fp_vector_t tiltError = tiltAxis;
+        VEC3_SCALAR_MULT(tiltError, tiltErrorAngle);
+
+        // --- yaw component ---
+        // we need (only) the w component of q_yaw to get yaw error angle
+        // q_yaw^B  =  q_e^B  *  q_tilt^-B
+
+        // setup q_tilt inverse first from ax ang rotation found above
+        fp_quaternion_t q_tilt_inv;
+        quaternion_of_axis_angle(&q_tilt_inv, &tiltAxis, -tiltErrorAngle);
+
+        // get q_yaw via multiplication.
+        // TODO: we only need w and sign(z). Surely there is something faster than dense quaternion mult
+        fp_quaternion_t q_yaw = chain_quaternion(&indiRun.attErrBody, &q_tilt_inv);
+
+        q_yaw.w = constrainf(q_yaw.w, -1.f, 1.f);
+        float yawErrorAngle = 2.f*acos_approx(q_yaw.w);
+        if (yawErrorAngle > M_PIf)
+            yawErrorAngle -= 2.f*M_PIf; // make sure angleErr is [-pi, pi]
+
+        // we still have to check if the vector component is negative
+        // this inverts the error angle
+        if (q_yaw.z < 0.f)
+            yawErrorAngle = -yawErrorAngle;
+
+        
+        if (!indiRun.useAttLeadLag) {
+            // multiply with gains and mix existing rate setpoint
+            indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
+            indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+        } else {
+            // indiRun.rateSpBody.V.X += indiRun.attGainsCasc.V.X * tiltError.V.X;
+            // indiRun.rateSpBody.V.Y += indiRun.attGainsCasc.V.Y * tiltError.V.Y;
+            indiRun.rateSpBody.V.X += biquadFilterApply(&indiRun.attLlFilter[0], tiltError.V.X);
+            indiRun.rateSpBody.V.Y += biquadFilterApply(&indiRun.attLlFilter[1], tiltError.V.Y);
+        }
+
+        indiRun.rateSpBody.V.X += indiRun.ffRateSpBody.V.X;
+        indiRun.rateSpBody.V.Y += indiRun.ffRateSpBody.V.Y;
+
+        if (indiRun.trackAttitudeYaw)
+            indiRun.rateSpBody.V.Z += indiRun.attGainsCasc.V.Z * yawErrorAngle;
+        // else: just keep rateSpBody.V.Z that has been set
+#endif
+
+        // constrain to be safe
+        VEC3_CONSTRAIN_XY_LENGTH(indiRun.rateSpBody, indiRun.attMaxTiltRate);
+        indiRun.rateSpBody.V.Z = constrainf(indiRun.rateSpBody.V.Z, -indiRun.attMaxYawRate, indiRun.attMaxYawRate);
+    }
+
+    // limit to absolute max values
+    indiRun.rateSpBody.V.X = constrainf(indiRun.rateSpBody.V.X, -indiRun.maxRateSp.V.X, indiRun.maxRateSp.V.X);
+    indiRun.rateSpBody.V.Y = constrainf(indiRun.rateSpBody.V.Y, -indiRun.maxRateSp.V.Y, indiRun.maxRateSp.V.Y);
+    indiRun.rateSpBody.V.Z = constrainf(indiRun.rateSpBody.V.Z, -indiRun.maxRateSp.V.Z, indiRun.maxRateSp.V.Z);
+
+    // --- get rotation acc setpoint simply by multiplying with gains
+    // rateErr = rateSpBody - rateEstBody
+    fp_vector_t rateErr = indiRun.rateSpBody;
+    VEC3_SCALAR_MULT_ADD(rateErr, -1.0f, indiRun.rate_f);
+
+    // alphaSpBody = rateGains * rateErr
+    if (!indiRun.useAttLeadLag) {
+        indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
+        indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
+    } else {
+        // indiRun.rateDotSpBody.V.X = indiRun.rateGains.V.X * rateErr.V.X;
+        // indiRun.rateDotSpBody.V.Y = indiRun.rateGains.V.Y * rateErr.V.Y;
+        indiRun.rateDotSpBody.V.X = biquadFilterApply(&indiRun.rateLlFilter[0], rateErr.V.X);
+        indiRun.rateDotSpBody.V.Y = biquadFilterApply(&indiRun.rateLlFilter[1], rateErr.V.Y);
+    }
+    indiRun.rateDotSpBody.V.Z = indiRun.rateGains.V.Z * rateErr.V.Z;
+}
+
+// sync-filter the modelled actuator state, so it matches the filtered IMU data
+#ifdef STM32H7
+FAST_CODE
+#endif
+static void updateUStateFs(int i) {
+    indiRun.uState_fs[i] = biquadFilterApply(&indiRun.uStateFilter[i], indiRun.uState[i]);
+    switch (indiRun.actType[i]) {
+        case INDI_ACT_TYPE_MOTOR:
+            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], 0.f, 1.f);
+            break;
+        case INDI_ACT_TYPE_SERVO:
+            indiRun.uState_fs[i] = constrainf(indiRun.uState_fs[i], -1.f, 1.f);
+            break;
+        default:
+        case INDI_ACT_TYPE_OFF:
+            indiRun.uState_fs[i] = 0.f; // do nothing
+            break;
+    }
+}
+
+// INDI motor speed control, as in Mancinelli et al., IMAV 2023, Fig. 4:
+//
+//   omegaSp  = omegaMax * sqrt(u)                    (u is thrust, ~ omega^2)
+//   d        = d_f + K * (omegaSp - omega_f) / omegaMax
+//   d_f      = H_f( H_d( z^-Nd * d_applied ) )       see indiUpdateRpmCtlState
+//   omega_f  = H_f( omega_esc )
+//
+// d_f is the command that, according to the delay (N_d) and motor (tau_d)
+// models, produced the rpm we measure now; H_f is applied to both sides so
+// they stay in sync. K = 1 means the paper's constant inverse effectiveness
+// (full command <-> omegaMax). Because d_f follows what was actually applied,
+// the loop has integral action and no windup at the 0 / dMax limits.
+//
+// With indi_use_rpm_ctl = 0, K = 0, or without valid rpm telemetry, this is
+// the open loop d = lin(u).
+#ifdef STM32H7
+FAST_CODE
+#endif
+static float rpmControl(int i, bool rpmValid) {
+    float dOpenLoop = indiLinearization(&indiRun.lin[i], indiRun.u[i]);
+
+    indiRun.rpmControlRan[i] = false;
+
+    if (indiRun.actType[i] != INDI_ACT_TYPE_MOTOR) {
+        return dOpenLoop;
+    }
+
+    float omegaMax = indiRun.actMaxOmega[i];
+    indiRun.omegaSp[i] = omegaMax * sqrtf(MAX(indiRun.u[i], 0.f));
+
+    if (!indiRun.useRpmCtl || !rpmValid || (indiRun.rpmCtlGain <= 0.f) || (omegaMax < 1.f)) {
+        return dOpenLoop;
+    }
+
+    float dMax = indiLinearization(&indiRun.lin[i], indiRun.actMax[i]);
+    float dOmega = indiRun.omegaSp[i] - indiRun.rpmOmega_f[i];
+    indiRun.rpmControlRan[i] = true;
+    return constrainf(indiRun.rpmCmd_f[i] + indiRun.rpmCtlGain * dOmega / omegaMax, 0.f, dMax);
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+void getMotorCommands(timeUs_t current) {
+    UNUSED(current);
+
+    static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
+    bool rpmTelemetryActive = false;
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+    static float omega_prev[MAXU] = {0.f};
+    static bool omegaPrevValid = false; // omega_prev holds a real sample from the previous loop
+    rpmTelemetryActive = isDshotTelemetryActive();
+#endif
+    // rpm control needs real measurements, and makes no sense when disarmed
+    bool rpmValid = rpmTelemetryActive && ARMING_FLAG(ARMED);
+
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        // rate
+        indiRun.rateIMU.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
+        indiRun.rate_f.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCf[axis]);
+        indiRun.spfIMU.A[axis] = acc.accADC.v[axis] * acc.dev.acc_1G_rec /* TODO(spike): indiflight runs acc downsampling + rpm notch at PID rate (accFiltering); upstream acc runs in its own task. Also verify sign/frame. */ * GRAVITYf;
+
+        // get gyro derivative
+        indiRun.rateDotIMU.A[axis] = indiRun.indiFrequency * (indiRun.rateIMU.A[axis] - rate_prev[axis]);
+        rate_prev[axis] = indiRun.rateIMU.A[axis];
+
+        // filter gyro derivative
+        indiRun.rateDot_fs.A[axis] = biquadFilterApply(&indiRun.rateFilter[axis], indiRun.rateDotIMU.A[axis]);
+
+        // get (filtered) accel
+        indiRun.spf_fs.A[axis] = biquadFilterApply(&indiRun.spfFilter[axis], indiRun.spfIMU.A[axis]);
+    }
+
+#ifdef USE_LEARNER
+    // rotate to hover!!
+    fp_quaternion_t imu_to_hover;
+    imu_to_hover = hoverAttitude; // copy, not pointer
+    imu_to_hover.w *= -1.; // inverse
+    rotate_vector_with_quaternion(&(indiRun.rate_f), &imu_to_hover);
+    rotate_vector_with_quaternion(&(indiRun.rateDot_fs), &imu_to_hover);
+    rotate_vector_with_quaternion(&(indiRun.spf_fs), &imu_to_hover);
+#endif
+
+    // get rotation speeds and accelerations from dshot, or fallback
+    float omega_inv[MAXU] = {0}; // keep zero for servos
+    for (int i = 0; i < indiRun.actNum; i++) {
+        if (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
+            float invThresh = 0.1f * indiRun.actMaxOmega[i];
+            omega_inv[i] = (fabsf(indiRun.omega_fs[i]) > invThresh) ? 1.f / indiRun.omega_fs[i] : 1.f / invThresh;
+        }
+    }
+
+    // get motor acceleration
+    for (int i = 0; i < indiRun.actNum; i++) {
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+        if (rpmTelemetryActive && indiRun.useRpmDotFeedback && (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR)) {
+            if (!omegaPrevValid) {
+                // first sample after telemetry came up: no derivative spike
+                omega_prev[i] = indiRun.omega_fs[i];
+            }
+            indiRun.omegaDot_fs[i] = (indiRun.omega_fs[i] - omega_prev[i]) * indiRun.indiFrequency;
+            omega_prev[i] = indiRun.omega_fs[i];
+            // probably do some limiting here
+        } else
+#endif
+        {
+            indiRun.omegaDot_fs[i] = indiRun.du_fs[i] * indiRun.G2_scaler[i] * omega_inv[i];
+        }
+    }
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+    omegaPrevValid = rpmTelemetryActive && indiRun.useRpmDotFeedback;
+#endif
+
+#ifdef USE_LEARNER
+    // The learner excitation is an actuator command: it sets d directly and
+    // bypasses INDI, the linearization and the rpm loop. Unselected actuators
+    // are off. After learner_mix_control_after_ms the controller runs again
+    // and the excitation is added to its d instead (end of this function).
+    if (learnerQueryIsActive() && !learnRun.mixControl) {
+        for (int i = 0; i < MAXU; i++) {
+            indiRun.d[i] = learnerQueryActuatorSelected(i) ? outputFromLearningQuery[i] : 0.f;
+            indiRun.rpmControlRan[i] = false;
+        }
+        return;
+    }
+#endif
+
+
+    // use INDI only when in the air, solve linearized global problem otherwise
+    bool doIndi = indiRun.useIncrement && (!isTouchingGround()) && ARMING_FLAG(ARMED);
+
+    float spfz = 0.f;
+    if (indiRun.useAccelForSpfz) {
+        spfz = indiRun.spf_fs.V.Z;
+    } else {
+        // define specific force using actuator model and effectiveness
+        // this should be equivalent to direct throtte-stick-to-thrust mapping, without feedback control
+        for (int i = 0; i < indiRun.actNum; i++) {
+            spfz += indiRun.actG1[2][i] * indiRun.uState_fs[i];
+        }
+    }
+
+    // compute pseudocontrol
+    indiRun.dv[0] = 0.f;
+    indiRun.dv[1] = 0.f;
+    indiRun.dv[2] = indiRun.spfSpBody.V.Z - doIndi * spfz;
+    indiRun.dv[3] = indiRun.rateDotSpBody.V.X - doIndi * indiRun.rateDot_fs.V.X;
+    indiRun.dv[4] = indiRun.rateDotSpBody.V.Y - doIndi * indiRun.rateDot_fs.V.Y;
+    indiRun.dv[5] = indiRun.rateDotSpBody.V.Z - doIndi * indiRun.rateDot_fs.V.Z;
+
+    if (indiRun.tailsUseScheduled) {
+#ifdef USE_LOCAL_POSITION
+        // get airspeed for scheduling. for now assume no wind
+        fp_quaternion_t attEstNedInv;
+        getHoverAttitudeQuaternion(&attEstNedInv);
+        attEstNedInv.w *= -1.f;
+        fp_vector_t velEstBody = velEstNed;
+        if (isConvergedEkf()) {
+            // rotate inertial ground speed to body frame
+            rotate_vector_with_quaternion(&velEstBody, &attEstNedInv);
+        }
+#else
+        fp_vector_t velEstBody = {0};
+#endif
+        // N.B. this specific motor/servo assignment is enforced in indi_init for this case
+        float d_eff[2];
+        for (int i = 0; i < 2; i++) {
+            d_eff[i] = DEGREES_TO_RADIANS(100.f * biquadFilterApply(&indiRun.servo_lagFilter[i+2], indiRun.d[i+2]));
+#ifdef USE_SERVO_FEEDBACK
+            d_eff[i] = DEGREES_TO_RADIANS(0.01f * ((float)servo_feedback[i]) );
+#endif
+            d_eff[i] -= indiRun.tailsD0[i];
+        }
+
+        for (int motor = 0; motor < 2; motor++) {
+            float sindp = sinf(d_eff[motor]);
+
+            indiRun.actG1[0][motor] = ( indiRun.tailsCxw[motor] + indiRun.tailsCxd[motor] * sindp );
+            indiRun.actG1[1][motor] = ( indiRun.tailsCyw[motor] + 0.f                             );
+            indiRun.actG1[2][motor] = ( indiRun.tailsCzw[motor] + 0.f                             );
+            indiRun.actG1[3][motor] = ( indiRun.tailsClw[motor] + 0.f                             );
+            indiRun.actG1[4][motor] = ( indiRun.tailsCmw[motor] + indiRun.tailsCmd[motor] * sindp );
+            indiRun.actG1[5][motor] = 0.f * ( indiRun.tailsCnw[motor] + indiRun.tailsCnd[motor] * sindp );
+            for (int axis = 0; axis < 6; axis++) {
+                indiRun.actG1[axis][motor] *= indiRun.actMaxOmega2[motor];
+            }
+
+            indiRun.actG2[0][motor] = 0.f;
+            indiRun.actG2[1][motor] = 0.f;
+            indiRun.actG2[2][motor] = 0.f * indiRun.tailsCnwd[motor];
+        }
+        for (int servo = 0; servo < 2; servo++) {
+            float cosdp = cosf(d_eff[servo]);
+
+            indiRun.actG1[0][2+servo] = indiRun.tailsCxd[servo] * cosdp;
+            indiRun.actG1[1][2+servo] = 0.f;
+            indiRun.actG1[2][2+servo] = 0.f;
+            indiRun.actG1[3][2+servo] = 0.f;
+            indiRun.actG1[4][2+servo] = indiRun.tailsCmd[servo] * cosdp;
+            indiRun.actG1[5][2+servo] = indiRun.tailsCnd[servo] * cosdp;
+
+            float omega_lim = MAX(indiRun.omega[servo], 0.5f*indiRun.actHoverOmega[servo]);
+            for (int axis = 0; axis < 6; axis++) {
+                float v2;
+                v2 = velEstBody.V.Z*velEstBody.V.Z;
+                // F_hover = mass*9.81 / 2  ~ 3
+                // Vdisk2_hover = 2*F_hover / (1.225 * (5*25.4e-3/2)**2 * np.pi)
+                // w2_hover = F_hover / k
+                // sim: Mz += delta * (cdelta * w_hover**2) * (0.5*1.225*vzb**2) / (0.5*1.225*Vdisk_hover**2)
+
+                // simlifies down to 
+                // M? = delta*O^2*cdelta + q*delta*(cdelta * A/k)
+                // M? = delta*cdelta * ( O^2 + q*A/k )
+                float q, A, k;
+                q = 0.5f*SSL_AIR_DENSITY*v2;
+                k = 1.413e-6f;
+                A = sq(5*0.0254f/2)*M_PIf; // quick maths --> flight at 10m/s with props off is same as hover
+
+                indiRun.actG1[axis][2+servo] *= omega_lim * omega_lim + q*A/k;
+                indiRun.actG1[axis][2+servo] *= DEGREES_TO_RADIANS(100);
+            }
+
+            indiRun.actG2[0][2+servo] = 0.f;
+            indiRun.actG2[1][2+servo] = indiRun.tailsCmdd[servo];
+            indiRun.actG2[2][2+servo] = indiRun.tailsCndd[servo];
+        }
+// #define TAILSITTER_MINMOTOR
+#ifdef TAILSITTER_MINMOTOR
+        float minMin = 0.1f;
+        float minMax = 0.4f;
+        float motorMin = (rMat.m[2][2] <= minMin/minMax) ? minMax : minMin / rMat.m[2][2];
+        // only use if flight mode learner
+        if (FLIGHT_MODE(LEARNER_MODE)) {
+            indiRun.actMin[0] = motorMin;
+            indiRun.actMin[1] = motorMin;
+        } else {
+            indiRun.actMin[0] = 0.f;
+            indiRun.actMin[1] = 0.f;
+        }
+#endif
+    }
+
+    // add in G2 contributions G2 * omega_dot
+    for (int j=0; j < 3; j++) {
+        for (int i=0; i < indiRun.actNum; i++) {
+            if (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) {
+                indiRun.dv[j+3] += doIndi * indiRun.actG2[j][i]*indiRun.omegaDot_fs[i];
+            }
+            if (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) {
+                // need servo derivative here, fs filtered
+            }
+        }
+    }
+
+    // compute pseudoinverse pinv(G1+G2)
+    // TODO: use solver DONE
+    float G1G2[MAXU*MAXV];
+    for (int i=0; i < indiRun.actNum; i++) {
+        for (int j=0; j < MAXV; j++) {
+            G1G2[MAXV*i + j] = indiRun.actG1[j][i];
+            if (j > 2) {
+                G1G2[MAXV*i + j] += indiRun.G2_scaler[i] * omega_inv[i] * indiRun.actG2[j-3][i];
+            }
+        }
+    }
+
+    float gamma_used;
+    float A_as[(MAXU+MAXV) * MAXU];
+    float b_as[(MAXU+MAXV)];
+    float du_as[MAXU];
+    float du_min[MAXU];
+    float du_max[MAXU];
+    float du_pref[MAXU];
+
+    for (int i=0; i < indiRun.actNum; i++) {
+        du_min[i]  = indiRun.actMin[i] - doIndi * indiRun.uState_fs[i];
+        du_max[i]  = indiRun.actMax[i] - doIndi * indiRun.uState_fs[i];
+        du_pref[i] = indiRun.u_pref[i] - doIndi * indiRun.uState_fs[i];
+    }
+
+    // setup problem
+    float Wu_as[MAXU];
+    for (int i = 0; i < indiRun.actNum; i++) {
+        Wu_as[i] = indiRun.wlsWu[i]; // because not const in setupWLS_A
+    }
+
+    setupWLS_A(G1G2, indiRun.wlsWv, Wu_as, MAXV, indiRun.actNum, indiRun.wlsTheta, indiRun.wlsCondBound, A_as, &gamma_used);
+    setupWLS_b(indiRun.dv, du_pref, indiRun.wlsWv, Wu_as, MAXV, indiRun.actNum, gamma_used, b_as);
+    static int8_t Ws[MAXU];
+    static activeSetExitCode as_exit_code = AS_SUCCESS;
+
+    for (int i=0; i < indiRun.actNum; i++) {
+        du_as[i] = (du_min[i] + du_max[i]) * 0.5f;
+        // Assume warmstart is always desired and reset working set Ws only if 
+        // if NAN errors were encountered
+        if (as_exit_code >= AS_NAN_FOUND_Q) {
+            Ws[i] = 0;
+        }
+    }
+
+    // solve problem
+    int iterations;
+    int n_free;
+#ifdef AS_RECORD_COST
+    static float alloc_costs[AS_RECORD_COST_N] = {0.f};
+#else
+    static float alloc_costs[];
+#endif
+
+    as_exit_code = solveActiveSet(indiRun.wlsAlgo)(
+      A_as, b_as, du_min, du_max, du_as, Ws, indiRun.wlsMaxIter, indiRun.actNum, MAXV,
+      &iterations, &n_free, alloc_costs);
+
+    //float G1G2_inv[MAXU][MAXV];
+    // pseudoinverse or something?
+    if (as_exit_code >= AS_NAN_FOUND_Q) {
+        indiRun.nanCounter++;
+    } else {
+        if (ARMING_FLAG(ARMED)) {
+            indiRun.nanCounter = 0;
+        }
+    }
+
+    if (indiRun.nanCounter > indiRun.wlsNanLimit) {
+        disarm(DISARM_REASON_ALLOC_FAILURE);
+    }
+
+    // du = Ginv * dv and then constrain between 0 and 1
+    for (int i=0; i < indiRun.actNum; i++) {
+        // apply dgyro filters to sync with input
+        // also apply gyro filters here?
+        updateUStateFs(i);
+
+        if (as_exit_code < AS_NAN_FOUND_Q) {
+            indiRun.u[i] = doIndi*indiRun.uState_fs[i] + du_as[i];
+        }
+
+        indiRun.u[i] = constrainf(indiRun.u[i], indiRun.actMin[i], indiRun.actMax[i]);
+
+        // apply lag filter to simulate spinup dynamics
+        indiRun.du[i] = indiRun.u[i] - indiRun.uState[i]; // actual du. SHOULD be identical to du_as, when doIndi
+        indiRun.du_fs[i] = biquadFilterApply(&indiRun.duFilter[i], indiRun.du[i]);
+
+        // thrust command -> actuator command, closed loop on rpm if enabled
+        indiRun.d[i] = rpmControl(i, rpmValid);
+
+#ifdef USE_LEARNER
+        // excitation on top of control, in actuator command space (see above)
+        if (learnRun.mixControl && learnerQueryIsActive() && learnerQueryActuatorSelected(i)) {
+            float dLow = (indiRun.actType[i] == INDI_ACT_TYPE_SERVO) ? -1.f : 0.f;
+            indiRun.d[i] = constrainf(indiRun.d[i] + outputFromLearningQuery[i], dLow, 1.f);
+        }
+#endif
+    }
+}
+
+// NB: this function MUST be invoked with the actual normalized motor commands
+//     at the same rate as getMotorCommands would be called. EVEN IF NOT IN 
+//     INDI MODE. Otherwise switching to INDI may result in a super high jerk.
+void indiUpdateActuatorState( float* motors, float* servos ) {
+    int motor = 0;
+    int servo = 0;
+    for (int i = 0; i < indiRun.actNum; i++) {
+        float d, u;
+        switch (indiRun.actType[i]) {
+            case INDI_ACT_TYPE_MOTOR:
+                if (motor >= getMotorCount()) { continue; }
+                d = motors[motor];
+
+                u = indiOutputCurve( &indiRun.lin[i], d );
+                indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
+
+                // is motor, also get motor speed for control
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
+                if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotErpm(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
+                    // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
+                    indiRun.omega[i] = indiRun.erpmToRads * getDshotErpm(motor);
+                    indiRun.omega_fs[i] = MAX(0.f, biquadFilterApply(&indiRun.omegaFilter[i], indiRun.omega[i]));
+                } else
+#endif
+                {
+                    // fallback option 1: fixed omega_hover
+                    indiRun.omega[i] = indiRun.actHoverOmega[i];
+                    indiRun.omega_fs[i] = indiRun.actHoverOmega[i];
+
+                    // fallback option 2: use actLag filter. TODO
+                }
+
+                motor++;
+                break;
+            case INDI_ACT_TYPE_SERVO:
+                if (servo >= MAX_SUPPORTED_SERVOS) { continue; } // todo: fix the macro
+                d = servos[servo++];
+                u = indiOutputCurve( &indiRun.lin[i], d );
+                // do not apply filter
+                indiRun.uState[i] = u;
+                break;
+            default:
+            case INDI_ACT_TYPE_OFF:
+                d = 0.f; // do nothing
+                break;
+        }
+    }
+}
+
+// Feeds the INDI rpm loop with what the ESCs actually received this loop:
+// the final normalized motor commands, after every override (throw, learner,
+// NN/PID mode, lead-lag, disturbance injection), and 0 when disarmed. Runs
+// every loop in every mode, so d_f and omega_f are valid the moment the rpm
+// loop engages (e.g. right after a throw). Must be called after
+// indiUpdateActuatorState, which reads the ESC rpm into indiRun.omega.
+void indiUpdateRpmCtlState( const float* motors ) {
+    int motor = 0;
+    for (int i = 0; i < indiRun.actNum; i++) {
+        if (indiRun.actType[i] != INDI_ACT_TYPE_MOTOR) {
+            continue;
+        }
+        if (motor >= getMotorCount()) {
+            break;
+        }
+
+        float dApplied = ARMING_FLAG(ARMED) ? constrainf(motors[motor], 0.f, 1.f) : 0.f;
+        motor++;
+
+        // z^-Nd: ESC command processing delay
+        uint8_t idx = indiRun.rpmCmdHistIdx[i];
+        indiRun.rpmCmdHist[i][idx] = dApplied;
+        float dDelayed = indiRun.rpmCmdHist[i][(idx + (RPM_CTL_MAX_DELAY + 1) - indiRun.rpmCtlDelay) % (RPM_CTL_MAX_DELAY + 1)];
+        indiRun.rpmCmdHistIdx[i] = (idx + 1) % (RPM_CTL_MAX_DELAY + 1);
+
+        // H_tau_d: motor dynamics, then H_tau_f: same filter as the measurement
+        float dModel = pt1FilterApply(&indiRun.rpmCmdMotorModel[i], dDelayed);
+        indiRun.rpmCmd_f[i] = pt1FilterApply(&indiRun.rpmCmdFilter[i], dModel);
+
+        // H_tau_f on the ESC rpm
+        indiRun.rpmOmega_f[i] = pt1FilterApply(&indiRun.rpmOmegaFilter[i], indiRun.omega[i]);
+    }
+}
+
+// --- helpers --- //
+#ifdef STM32H7
+FAST_CODE
+#endif
+float getYawWithoutSingularity(void) {
+    // get yaw from bodyX or bodyY axis expressed in inertial space, not from
+    // eulers, which has singularity at pitch +-pi/2
+
+    // first, get bodyX and bodyY in NED from the attitude DCM
+    fp_vector_t bodyXNed, bodyYNed;
+    fp_quaternion_t qHover;
+    getHoverAttitudeQuaternion(&qHover);
+    bodyXNed = quatRotMatCol(&qHover, 0);
+    bodyYNed = quatRotMatCol(&qHover, 1);
+
+    // second, find which one projects to the longest vector in the xy plane
+    float bodyXProjLen = VEC3_XY_LENGTH(bodyXNed);
+    float bodyYProjLen = VEC3_XY_LENGTH(bodyYNed);
+
+    if (bodyXProjLen > bodyYProjLen) { // can never be close to 0 at the same time, from the geometry
+        // third, get fwd axis as a xy coordinate system aligned with
+        // either the bodyX or bodyY projection onto xy
+        bodyXNed.V.X /= bodyXProjLen;
+        bodyXNed.V.Y /= bodyXProjLen;
+    } else {
+        bodyXNed.V.X = bodyYNed.V.Y / bodyYProjLen;
+        bodyXNed.V.Y = -bodyYNed.V.X / bodyYProjLen;
+    }
+    float yaw = atan2_approx(bodyXNed.V.Y, bodyXNed.V.X);
+
+    return yaw;
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+fp_vector_t extrinsicYaw(float yaw) {
+    // todo: this local is defined twice.. make static somehow
+    fp_quaternion_t attEstNedInv;
+    getHoverAttitudeQuaternion(&attEstNedInv);
+    attEstNedInv.w *= -1.0f;
+
+    fp_vector_t yawRateSpBody = quatRotMatCol(&attEstNedInv, 2);
+    // todo: this doesnt need quatRotMatCol, it's simply the last col of the transpose of rMat
+    VEC3_SCALAR_MULT(yawRateSpBody, yaw);
+
+    return yawRateSpBody;
+}
+
+#ifdef USE_PITOT
+#include "sensors/pitotmeter.h"
+#endif
+#define INDI_TURN_COORDINATION_VEL_THRESHOLD (10.f)
+#define INDI_TURN_COORDINATION_PHI_SOFT_LIMIT (DEGREES_TO_RADIANS(70.f))
+#define INDI_TURN_COORDINATION_PHI_HARD_LIMIT (0.5f * M_PIf)
+
+#ifdef INDI_IS_TAILSITTER
+fp_vector_t coordinateTurn(void) {
+    fp_vector_t output = {0};
+
+#if defined(HIL_BUILD) || defined(MOCKUP)
+#ifndef USE_LOCAL_POSITION
+    return output;
+#endif
+    if (!isConvergedEkf()) {
+        return output;
+    }
+    float vel = VEC3_XY_LENGTH(velEstNed);
+    vel = constrainf(vel, INDI_TURN_COORDINATION_VEL_THRESHOLD, 100.f);
+#else
+    float vel = constrainf(pitot.airSpeed / 100.f, INDI_TURN_COORDINATION_VEL_THRESHOLD, 100.f); // in m/s
+#endif
+
+    // fp_euler_t eulerZYX;
+    // eulerZYX = getCurrentEulerZYX(); // roll defined on +-pi
+    float roll;
+    float omega;
+    fp_euler_t eulerZXY;
+    eulerZXY = getCurrentEulerZXY(); // pitch defined on +-pi
+    roll = eulerZXY.angles.roll;
+    // pitch = eulerZXY.angles.pitch;
+    if ((fabsf(roll) < INDI_TURN_COORDINATION_PHI_HARD_LIMIT)) {
+        roll = constrainf(roll, -INDI_TURN_COORDINATION_PHI_SOFT_LIMIT, INDI_TURN_COORDINATION_PHI_SOFT_LIMIT);
+        omega = GRAVITYf * tan_approx(roll) / vel; // level turn model
+        output = extrinsicYaw(omega);
+    }
+    return output;
+}
+#endif
+
+fp_vector_t sideslipStabilization(float gain) {
+    float ay = indiRun.spf_fs.V.Y;
+    fp_vector_t output = {0};
+    output.V.X = constrainf(-gain*ay, -DEGREES_TO_RADIANS(50.f), DEGREES_TO_RADIANS(50.f));
+
+    return output;
+}
+
+// init thrust linearization https://www.desmos.com/calculator/v9q7cxuffs
+#ifdef STM32H7
+FAST_CODE
+#endif
+void updateLinearization(actLin_t* lin, float k) {
+    lin->k = constrainf(k, 0.025f, 0.7f);
+    lin->A = 1.f / lin->k;
+    lin->B = (sq(lin->k) - 2.f*lin->k + 1.f) / (4.f*sq(lin->k));
+    lin->C = (lin->k - 1) / (2.f*lin->k);
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+float indiLinearization(actLin_t* lin, float in) {
+    if ((lin->A < 1.f) || (lin->B < 0.f))
+        // no thrust lin requested/configured or misconfigured
+        return in;
+
+    if ((in <= 0.f) || (in >= 1.f))
+        // input out of range
+        return in;
+
+    return sqrtf(lin->A*in + lin->B) + lin->C;
+}
+
+#ifdef STM32H7
+FAST_CODE
+#endif
+float indiOutputCurve(actLin_t* lin, float in) {
+    return lin->k*sq(in) + (1-lin->k)*in;
+}
+
+#endif // def USE_INDI
+
+// TODO;
+/* 
+ * 1. DONE use FLIGHT_MODE to decide rc mode
+ * 2. DONE incoorperate thrust linearization
+ * 3. DONE deal with G2
+ * 4. DONE logging of quat setpoint, quat attitude, omega setpoint, omega, alpha setpoint, alpha, motor setpoint
+ * 5. DONE use actual settings built-ins
+ * 6. NOPE rewrite with different quaternion structs
+ * 7. DONE activeSetSolve
+ * 8. DONE TO BE TESTED do not check min throttle for indi integrating, breakes down in pos_ctl
+ * 9. DONE deal with what happens if neither pos not att are selected
+ * 10. compiler macros for USE_ACC
+ * 11. DONE REMOVE OMEGA_DOT_FEEDBACK compiler macro
+ * 12. DONE REMOVE some PI compiler macros
+ * 13. DONE analyse attitude mode wrt yaw/tilt trajectory
+ * 14. DONE implement rate control and use rate config from PID
+*/

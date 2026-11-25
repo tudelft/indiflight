@@ -50,6 +50,11 @@ static FAST_CODE void GYRO_FILTER_FUNCTION_NAME(void)
     }
     
     rpmFilterRun(gyroADCfVec);
+#ifdef USE_INDI
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        gyro.gyroADCafterRpm[axis] = gyroADCfVec[axis];
+    }
+#endif
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
 #endif
