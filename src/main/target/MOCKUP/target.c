@@ -77,8 +77,6 @@ uint32_t SystemCoreClock;
 
 static struct timespec start_time;
 static double simRate = 1.0;
-static pthread_t tcpWorker, udpWorker;
-static bool workerRunning = true;
 //static udpLink_t stateLink, pwmLink;
 //static pthread_mutex_t updateLock;
 static pthread_mutex_t mainLoopLock;
@@ -240,19 +238,15 @@ void systemInit(void)
 
 void systemReset(void)
 {
+    // no worker threads in MOCKUP. The python side reloads the .so after a
+    // reset (see indiflight_mockup_interface.py), after calling mockupShutdown()
     printf("[system]Reset!\n");
-    workerRunning = false;
-    pthread_join(tcpWorker, NULL);
-    pthread_join(udpWorker, NULL);
 }
 void systemResetToBootloader(bootloaderRequestType_e requestType)
 {
     UNUSED(requestType);
 
     printf("[system]ResetToBootloader!\n");
-    workerRunning = false;
-    pthread_join(tcpWorker, NULL);
-    pthread_join(udpWorker, NULL);
     exit(0);
 }
 
@@ -490,7 +484,8 @@ static FILE *eepromFd = NULL;
 void FLASH_Unlock(void)
 {
     if (eepromFd != NULL) {
-        fprintf(stderr, "[FLASH_Unlock] eepromFd != NULL\n");
+        // normal: loadEEPROMFromFile() keeps the file open, the first write
+        // after it reuses that handle and FLASH_Lock() closes it
         return;
     }
 
@@ -532,6 +527,20 @@ void FLASH_Lock(void)
         printf("[FLASH_Lock] saved '%s'\n", EEPROM_FILENAME);
     } else {
         fprintf(stderr, "[FLASH_Lock] eeprom is not unlocked\n");
+    }
+}
+
+// Release process-level resources before the .so is dlclose()d. File
+// descriptors survive dlclose, so without this the TCP listen sockets stay
+// bound and the next instance fails with "bind port ... failed!!".
+void mockupShutdown(void)
+{
+    dyad_shutdown(); // closes all TCP serial streams
+
+    if (eepromFd != NULL) {
+        // left open by loadEEPROMFromFile() if no write happened since
+        fclose(eepromFd);
+        eepromFd = NULL;
     }
 }
 

@@ -107,6 +107,10 @@ class IndiflightSITLMockup():
 #%% loading and config
     def _loadLibAndInit(self):
         if self.lib_handle is not None:
+            # close sockets/files of this instance; dlclose does not, so the
+            # next init() would fail to bind the TCP serial ports
+            self.lib.mockupShutdown()
+
             del self.armingFlags
             del self.flightModeFlags
             del self.rcModeActivationMask
@@ -115,10 +119,11 @@ class IndiflightSITLMockup():
             dlclose = ct.CDLL(None).dlclose
             dlerror = ct.CDLL(None).dlerror
             dlclose.argtypes = [ct.c_void_p]
+            dlclose.restype = ct.c_int
             dlerror.restype = ct.c_char_p
 
-            dlclose(self.lib_handle)
-            print(f"Closing lib returned error: {dlerror()}")
+            if dlclose(self.lib_handle) != 0:
+                print(f"Closing lib failed: {dlerror()}")
 
         self.lib = ct.CDLL( self.libfile )
         self.lib_handle = self.lib._handle

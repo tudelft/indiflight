@@ -274,6 +274,7 @@ void delayMicroseconds_real(uint32_t us);
 //timeUs_t micros(void);
 
 int lockMainPID(void);
+void mockupShutdown(void); // call before dlclose() of the .so
 
 // dshot motor feedback emulation
 extern float motorOmegaValues[MAX_SUPPORTED_MOTORS];
