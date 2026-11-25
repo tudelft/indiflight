@@ -65,6 +65,9 @@ const char *armingDisableFlagNames[]= {
     "ALT_HOLD_SW",
     "POS_HOLD_SW",
     "AUTOPILOT_SW",
+#ifdef USE_EKF
+    "EKF_OR_SP",
+#endif
     "ARM_SWITCH",
 };
 STATIC_ASSERT(ARRAYLEN(armingDisableFlagNames) == ARMING_DISABLE_FLAGS_COUNT, armingDisableFlagNames_size_mismatch);

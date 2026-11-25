@@ -47,6 +47,9 @@
 #endif
 
 #include "io/gps.h"
+#ifdef USE_LOCAL_POSITION
+#include "io/local_pos.h"
+#endif
 #include "io/gps_virtual.h"
 
 #if ENABLE_DRONECAN
@@ -3032,6 +3035,9 @@ void onGpsNewData(void)
     gpsLapTimerNewGpsData();
 #endif // USE_GPS_LAP_TIMER
 
+#ifdef USE_LOCAL_POSITION
+    localPosOnGpsNewData(); // indiflight: GPS into local position / EKF, geofence
+#endif
 }
 
 // check if new data has been received since last check

@@ -174,6 +174,7 @@ COMMON_SRC = \
             flight/ekf.c \
             flight/ekf_calc.c \
             flight/failsafe.c \
+            flight/geofence.c \
             flight/flight_plan_capture.c \
             flight/flight_plan_nav.c \
             flight/gps_rescue_multirotor.c \

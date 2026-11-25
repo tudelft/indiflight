@@ -123,4 +123,31 @@ void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation
 }
 #endif
 
+#ifdef USE_GPS
+// called from onGpsNewData() (io/gps.c) with a 3D fix: GPS as local position
+// source (relative to home) and geofence update, as in the 4.4 fork
+void localPosOnGpsNewData(void)
+{
+    if (STATE(GPS_FIX_HOME)) {
+        local_pos_ned_t local;
+        local.source = LOCAL_POS_SOURCE_GPS;
+        local.time_us = micros(); // better sync with GPS here?
+        llh_to_local(&gpsSol.llh, &GPS_home_llh, &local.pos);
+        local.vel_valid = false;
+        local.vel.V.X = 0.f;
+        local.vel.V.Y = 0.f;
+        local.vel.V.Z = 0.f;
+        local.quat_valid = false;
+        local.quat.w = 1.f;
+        local.quat.x = 0.f;
+        local.quat.y = 0.f;
+        local.quat.z = 0.f;
+        setLocalPosMeas(&local);
+    }
+#ifdef USE_GEOFENCE
+    geofenceUpdate(&gpsSol.llh);
+#endif
+}
+#endif
+
 #endif

@@ -80,6 +80,9 @@
 #ifdef USE_TELEMETRY_PI
 #include "io/keyboard.h"
 #endif
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -2181,6 +2184,12 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_RATE, "%d",           currentPidProfile->tpa_low_rate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_BREAKPOINT, "%d",     currentPidProfile->tpa_low_breakpoint);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_ALWAYS, "%d",         currentPidProfile->tpa_low_always);
+#ifdef USE_GEOFENCE
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_MAX_ALTITUDE, "%d", geofenceConfig()->maxAltMeters);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_HARD_OFFSET, "%d", geofenceConfig()->hardFenceOffset);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_GRACE_COUNT, "%d", geofenceConfig()->graceCount);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_DESCEND_DELAY, "%d", geofenceConfig()->descendDelaySeconds);
+#endif
 #ifdef USE_INDI
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_GAINS, "%d,%d,%d",                indiProfile->attGains[0],
                                                                                               indiProfile->attGains[1],

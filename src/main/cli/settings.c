@@ -71,6 +71,9 @@
 #ifdef USE_EKF
 #include "flight/ekf.h"
 #endif
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+#endif
 #ifdef USE_LOCAL_POSITION
 #include "flight/pos_ctl.h"
 #endif
@@ -1499,6 +1502,13 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_EKF_MEAS_DELAY,             VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
     { PARAM_NAME_EKF_HEIGHT_SOURCE,          VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 1 },  PG_EKF_CONFIG, offsetof(ekfConfig_t, height_source) },
     { PARAM_NAME_EKF_BARO_RPM_COEFF,         VAR_INT16  | MASTER_VALUE,              .config.minmax = { -32000, 32000 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, baro_rpm_coeff) },
+#endif
+
+#ifdef USE_GEOFENCE
+    { PARAM_NAME_GEOFENCE_MAX_ALTITUDE,       VAR_INT16 | MASTER_VALUE, .config.minmax = { -30000, 30000 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, maxAltMeters) },
+    { PARAM_NAME_GEOFENCE_HARD_OFFSET,        VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 50 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, hardFenceOffset) },
+    { PARAM_NAME_GEOFENCE_GRACE_COUNT,        VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 255 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, graceCount) },
+    { PARAM_NAME_GEOFENCE_DESCEND_DELAY,      VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 255 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, descendDelaySeconds) },
 #endif
     { PARAM_NAME_TPA_LOW_RATE,            VAR_INT8  | PROFILE_VALUE, .config.minmax = { TPA_LOW_RATE_MIN, TPA_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_low_rate) },
     { PARAM_NAME_TPA_LOW_BREAKPOINT,      VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_RANGE_MIN, PWM_RANGE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_low_breakpoint) },

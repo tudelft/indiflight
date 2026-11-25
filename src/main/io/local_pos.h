@@ -63,6 +63,7 @@ extern local_pos_sp_ned_t posSpNed;
 void setLocalPosMeas(local_pos_ned_t* pos);
 void setLocalPosSp(local_pos_sp_ned_t* sp);
 void setLocalPosSpHere(void);
+void localPosOnGpsNewData(void);
 
 void llh_to_local(const gpsLocation_t* llh, const gpsLocation_t* home, fp_vector_t* ned);
 void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation_t* llh);

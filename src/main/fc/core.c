@@ -90,6 +90,9 @@
 #ifdef USE_LOCAL_POSITION
 #include "io/local_pos.h"
 #endif
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -472,6 +475,20 @@ if (crashFlipModeActive) {
         if (!isMotorProtocolEnabled()) {
             setArmingDisabled(ARMING_DISABLED_MOTOR_PROTOCOL);
         }
+
+#ifdef USE_EKF
+        // indiflight: no arming while the EKF is needed but not converged, or on a geofence error/action
+        if ((shouldBeUsedEkf() && !isConvergedEkf())
+#ifdef USE_GEOFENCE
+                || (geofenceState == GEOFENCE_STATE_ERROR)
+                || (geofenceAction != GEOFENCE_ACTION_NONE)
+#endif
+                ) {
+            setArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        }
+#endif
 
         if (!isUsingSticksForArming()) {
             if (!IS_RC_MODE_ACTIVE(BOXARM)) {
@@ -1242,10 +1259,14 @@ void processRxModes(timeUs_t currentTimeUs)
 #ifdef USE_LOCAL_POSITION
     // POSITION_MODE needs INDI_MODE: pos_ctl only produces INDI setpoints
     // (attSpNedFromPos / spfSpBodyFromPos), which nothing on the PID path consumes.
-    // TODO(spike): geofence / trajectory tracker checks from indiflight core.c
+    // TODO(spike): trajectory tracker checks from indiflight core.c
     if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && FLIGHT_MODE(INDI_MODE)) {
-        // only switch on with a converged ekf
-        if (!FLIGHT_MODE(POSITION_MODE) && isConvergedEkf()) {
+        // only switch on with a converged ekf and no geofence error/action
+        if (!FLIGHT_MODE(POSITION_MODE) && isConvergedEkf()
+#ifdef USE_GEOFENCE
+                && (geofenceState != GEOFENCE_STATE_ERROR) && (geofenceAction == GEOFENCE_ACTION_NONE)
+#endif
+                ) {
             if (ARMING_FLAG(ARMED)) {
                 setLocalPosSpHere();
             }
@@ -1254,6 +1275,9 @@ void processRxModes(timeUs_t currentTimeUs)
     } else {
         if (FLIGHT_MODE(POSITION_MODE)) {
             posSpNed.valid = false; // invalidate previous setpoint when leaving position mode
+#ifdef USE_GEOFENCE
+            geofenceClearHold();
+#endif
         }
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }

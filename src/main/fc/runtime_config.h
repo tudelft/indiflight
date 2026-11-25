@@ -69,7 +69,12 @@ typedef enum {
     ARMING_DISABLED_ALTHOLD         = (1 << 26),
     ARMING_DISABLED_POSHOLD         = (1 << 27),
     ARMING_DISABLED_AUTOPILOT       = (1 << 28),
+#ifdef USE_EKF
+    ARMING_DISABLED_EKF_OR_SETPOINT = (1 << 29), // indiflight: EKF needed but not converged, or geofence error/action
+    ARMING_DISABLED_ARM_SWITCH      = (1 << 30) // Needs to be the last element, since it's always activated if one of the others is active when arming
+#else
     ARMING_DISABLED_ARM_SWITCH      = (1 << 29) // Needs to be the last element, since it's always activated if one of the others is active when arming
+#endif
 } armingDisableFlags_e;
 
 #define ARMING_DISABLE_FLAGS_COUNT (LOG2(ARMING_DISABLED_ARM_SWITCH) + 1)

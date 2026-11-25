@@ -116,6 +116,9 @@ bool cliMode = false;
 #ifdef USE_LOCAL_POSITION
 #include "flight/pos_ctl.h"
 #endif
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+#endif
 #include "flight/position.h"
 #include "flight/servos.h"
 
@@ -2305,6 +2308,57 @@ RAM_CODE static void cliModeColor(const char *cmdName, char *cmdline)
         // values are validated
         cliPrintLinef("mode_color %u %u %u", modeIdx, funIdx, color);
     }
+}
+#endif
+
+#ifdef USE_GEOFENCE
+static void cliGeofencePrint(void) {
+    cliPrintLinefeed();
+    cliPrintLinef("# geofence");
+    cliPrintLinef("geofence clear");
+    int n = MIN(GEOFENCE_MAX_VERTICES, geofenceConfig()->numActive);
+    for (int i = 0; i < n; i++) {
+        cliPrintLinef("geofence %d %d",
+            geofenceConfig()->vertices[i].lat,
+            geofenceConfig()->vertices[i].lon
+        );
+
+    }
+}
+
+static void cliGeofence(const char *cmdName, char *cmdline)
+{
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+        cliGeofencePrint();
+        return;
+    }
+
+    ptr = cmdline;
+    if (!strncmp(ptr, "clear", 5)) {
+        memset(geofenceConfigMutable()->vertices, 0, GEOFENCE_MAX_VERTICES * sizeof(gpsLocation_t));
+        geofenceConfigMutable()->numActive = 0;
+        cliGeofencePrint();
+        return;
+    }
+
+    gpsLocation_t vertex;
+
+    vertex.lat = atoi(ptr);
+    if (!vertex.lat) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    ptr = nextArg(cmdline);
+    vertex.lon = atoi(ptr);
+    if (!vertex.lon) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    geofenceAddPoint(&vertex);
 }
 #endif
 
@@ -8152,6 +8206,10 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
         printSerial(dumpMask, &serialConfig_Copy, serialConfig(), "serial");
 
+#ifdef USE_GEOFENCE
+        cliGeofencePrint();
+#endif
+
         if (!(dumpMask & HARDWARE_ONLY)) {
 #ifndef USE_QUAD_MIXER_ONLY
             const char *mixerHeadingStr = "mixer";
@@ -8476,6 +8534,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("flash_scan", "scan flash device for errors", NULL, cliFlashVerify),
     CLI_COMMAND_DEF("flash_write", NULL, "<address> <message>", cliFlashWrite),
 #endif
+#endif
+#ifdef USE_GEOFENCE
+    CLI_COMMAND_DEF("geofence", "configure geofence vertexes in units of 1e7 deg", "[clear] | <latitude> <longitude>", cliGeofence),
 #endif
     CLI_COMMAND_DEF("get", "get variable value", "[name]", cliGet),
 #ifdef USE_GPS

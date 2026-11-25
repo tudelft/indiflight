@@ -36,6 +36,9 @@
 #ifdef USE_LOCAL_POSITION
 #include "flight/pos_ctl.h"
 #endif
+#ifdef USE_GEOFENCE
+#include "flight/geofence.h"
+#endif
 
 static FAST_DATA_ZERO_INIT float motor_normalized[MAX_SUPPORTED_MOTORS];
 static FAST_DATA_ZERO_INIT float servo_normalized[MAX_SUPPORTED_MOTORS];
@@ -45,6 +48,9 @@ void indiflightInit(void)
     initIndiRuntime();
 #ifdef USE_LOCAL_POSITION
     posCtlInit();
+#endif
+#ifdef USE_GEOFENCE
+    geofenceInit();
 #endif
 }
 
