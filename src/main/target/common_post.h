@@ -833,6 +833,12 @@ extern struct linker_symbol __fontdata_end;
 // GPS_RESCUE failsafe procedure, no rescue flight plan) and no failsafe
 // auto-landing; RX loss runs failsafe stage 1 and then DROP (disarm), see
 // flight/failsafe.c.
+// indiflight: acc is sampled in the gyro task and averaged over the PID period
+// (as in the 4.4 fork) instead of running TASK_ACCEL, see sensors/acceleration.c
+#if defined(USE_ACC) && (defined(USE_INDI) || defined(USE_EKF))
+#define USE_ACC_IN_GYRO_TASK
+#endif
+
 #ifdef USE_INDI
 #undef USE_GPS_RESCUE
 #endif

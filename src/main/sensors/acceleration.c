@@ -118,21 +118,15 @@ static inline void postProcessAccelerometer(void)
     DEBUG_SET(DEBUG_ACCELEROMETER, 4, lrintf(acc.jerkMagnitude * 1e3f));
 }
 
-void accUpdate(timeUs_t currentTimeUs)
+// processing of one acc sample in acc.accADC (raw, sensor axes)
+static inline __attribute__((always_inline)) void accProcessSample(void)
 {
-    UNUSED(currentTimeUs);
-
-    if (!acc.dev.readFn(&acc.dev)) {
-        return;
-    }
-
-    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
-        acc.accADC.v[axis] = acc.dev.ADCRaw[axis];
-    }
-
     alignAccelerometer();
     calibrateAccelerometer();
     applyAccelerationTrims(accelerationRuntime.accelerationTrims);
+#ifdef USE_ACC_IN_GYRO_TASK
+    acc.accADCunfiltered = acc.accADC;
+#endif
     postProcessAccelerometer();
 
 #ifdef USE_CRSF_ACCGYRO_TELEMETRY
@@ -155,6 +149,55 @@ void accUpdate(timeUs_t currentTimeUs)
 
     acc.isAccelUpdatedAtLeastOnce = true;
 }
+
+void accUpdate(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+
+    if (!acc.dev.readFn(&acc.dev)) {
+        return;
+    }
+
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        acc.accADC.v[axis] = acc.dev.ADCRaw[axis];
+    }
+
+    accProcessSample();
+}
+
+#ifdef USE_ACC_IN_GYRO_TASK
+// indiflight: acc is read in the gyro task, at the gyro sample rate, and averaged
+// over the PID period (as in the 4.4 fork); TASK_ACCEL is not used. Averaging the
+// raw samples before alignment is the same as after, alignment is linear.
+static FAST_DATA_ZERO_INIT float accSampleSum[XYZ_AXIS_COUNT];
+static FAST_DATA_ZERO_INIT uint16_t accSampleCount;
+
+FAST_CODE void accSampleInGyroTask(void)
+{
+    if (!acc.dev.readFn(&acc.dev)) {
+        return;
+    }
+    // HIL injection point: replace acc.dev.ADCRaw[] here (sensor axes, raw units)
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        accSampleSum[axis] += acc.dev.ADCRaw[axis];
+    }
+    accSampleCount++;
+}
+
+FAST_CODE void accUpdateFromGyroTask(void)
+{
+    if (accSampleCount == 0) {
+        return; // no new acc sample this PID period: keep the previous one
+    }
+    for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
+        acc.accADC.v[axis] = accSampleSum[axis] / accSampleCount;
+        accSampleSum[axis] = 0.0f;
+    }
+    accSampleCount = 0;
+
+    accProcessSample();
+}
+#endif
 
 #ifdef USE_CRSF_ACCGYRO_TELEMETRY
 bool accelHasDownsampledData(void)

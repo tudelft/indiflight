@@ -71,6 +71,9 @@ typedef struct acc_s {
     float accMagnitude;                     // in multiples of 1G
     float jerkMagnitude;                    // in multiples of 1G/s (measure of collision strength)
     bool isAccelUpdatedAtLeastOnce;
+#ifdef USE_ACC_IN_GYRO_TASK
+    vector3_t accADCunfiltered;             // indiflight: averaged over the PID period, aligned and trimmed, before acc_lpf
+#endif
 } acc_t;
 
 extern acc_t acc;
@@ -103,6 +106,10 @@ bool accHasBeenCalibrated(void);
 void accStartCalibration(void);
 void resetRollAndPitchTrims(rollAndPitchTrims_t *rollAndPitchTrims);
 void accUpdate(timeUs_t currentTimeUs);
+#ifdef USE_ACC_IN_GYRO_TASK
+void accSampleInGyroTask(void);   // gyro task, every gyro sample
+void accUpdateFromGyroTask(void); // filter task, once per PID loop; replaces TASK_ACCEL
+#endif
 union flightDynamicsTrims_u;
 void setAccelerationTrims(union flightDynamicsTrims_u *accelerationTrimsToUse);
 void accInitFilters(void);

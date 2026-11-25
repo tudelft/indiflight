@@ -1619,6 +1619,9 @@ FAST_CODE void taskGyroSample(timeUs_t currentTimeUs)
 {
     UNUSED(currentTimeUs);
     gyroUpdate();
+#ifdef USE_ACC_IN_GYRO_TASK
+    accSampleInGyroTask(); // indiflight: acc with the gyro, averaged over the PID period
+#endif
     if (pidUpdateCounter % activePidLoopDenom == 0) {
         pidUpdateCounter = 0;
     }
@@ -1648,6 +1651,9 @@ FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
     updateDshotTelemetry();  // decode and update Dshot telemetry
 #endif
     gyroFiltering(currentTimeUs);
+#ifdef USE_ACC_IN_GYRO_TASK
+    accUpdateFromGyroTask();
+#endif
 }
 
 // Function for loop trigger

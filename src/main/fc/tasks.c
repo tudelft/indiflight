@@ -583,8 +583,10 @@ void tasksInit(void)
 
 #if defined(USE_ACC)
     if (sensors(SENSOR_ACC) && acc.sampleRateHz) {
+#ifndef USE_ACC_IN_GYRO_TASK // indiflight: acc runs in the gyro and filter tasks instead
         setTaskEnabled(TASK_ACCEL, true);
         rescheduleTask(TASK_ACCEL, TASK_PERIOD_HZ(acc.sampleRateHz));
+#endif
         setTaskEnabled(TASK_ATTITUDE, true);
     }
 #endif

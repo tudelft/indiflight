@@ -31,6 +31,7 @@
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "sensors/acceleration.h"
+#include "sensors/gyro.h"
 #ifdef USE_EKF
 #include "flight/ekf.h"
 #endif
@@ -48,6 +49,13 @@ static FAST_DATA_ZERO_INIT float motor_normalized[MAX_SUPPORTED_MOTORS];
 
 void indiflightInit(void)
 {
+#ifdef USE_ACC_IN_GYRO_TASK
+    // acc is processed once per PID loop: acc_lpf and jerk run at that rate
+    if (gyro.targetLooptime) {
+        acc.sampleRateHz = 1e6f / gyro.targetLooptime;
+        accInitFilters();
+    }
+#endif
     initIndiRuntime();
 #ifdef USE_LOCAL_POSITION
     posCtlInit();
@@ -78,13 +86,16 @@ static float *indiServoState(void)
 #endif
 }
 
-// acc pipeline for INDI at PID rate. The fork read acc in the gyro task and
-// averaged it over the PID period; upstream reads acc in TASK_ACCEL, so this
-// holds the latest sample (TODO: acc sampling in the gyro task needs sensors/).
+// acc input of INDI at PID rate: acc sampled in the gyro task and averaged over
+// the PID period (USE_ACC_IN_GYRO_TASK), before acc_lpf, then the gyro's rpm notches
 static FAST_CODE void indiAccFiltering(void)
 {
     for (int axis = 0; axis < 3; axis++) {
+#ifdef USE_ACC_IN_GYRO_TASK
+        indiAccAfterRpm[axis] = acc.accADCunfiltered.v[axis];
+#else
         indiAccAfterRpm[axis] = acc.accADC.v[axis];
+#endif
     }
 #ifdef USE_RPM_FILTER
     rpmFilterRunAcc(indiAccAfterRpm);
