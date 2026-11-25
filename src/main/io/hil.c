@@ -27,10 +27,10 @@
 
 #include "platform.h"
 
-#if defined(HIL_BUILD)
+#if defined(HIL_BUILD) || defined(MOCKUP)
 
 #if !defined(USE_FRD_NED)
-#error "HIL_BUILD exchanges FRD body-frame data: build without USE_UPSTREAM_FRAME"
+#error "HIL_BUILD and MOCKUP exchange FRD body-frame data: build without USE_UPSTREAM_FRAME"
 #endif
 
 #include "common/maths.h"
@@ -54,6 +54,29 @@
 
 #include "pi-protocol.h"
 #include "pi-messages.h"
+
+// The alignment chain maps a raw sensor vector r to M r (sensor/board alignment,
+// then FLU -> FRD). M is a rotation, so the raw vector that yields the FRD
+// vector v is M^T v. Build M column by column by aligning the unit vectors.
+void hilRawFromFrd(const float frd[3], float raw[3], bool custom, sensor_align_e align, matrix33_t *customMatrix)
+{
+    for (int col = 0; col < 3; col++) {
+        vector3_t e = { .v = { 0, 0, 0 } };
+        e.v[col] = 1.0f;
+        if (custom) {
+            alignSensorViaMatrix(&e, customMatrix);
+        } else {
+            alignSensorViaRotation(&e, align);
+        }
+        raw[col] = e.v[0] * frd[0] + e.v[1] * frd[1] + e.v[2] * frd[2];
+    }
+}
+
+
+
+#endif // HIL_BUILD || MOCKUP
+
+#if defined(HIL_BUILD)
 
 #define HIL_INITIAL_PORT_MODE MODE_RXTX
 
@@ -206,23 +229,6 @@ void handleHil(void)
     }
 }
 
-// The alignment chain maps a raw sensor vector r to M r (sensor/board alignment,
-// then FLU -> FRD). M is a rotation, so the raw vector that yields the FRD
-// vector v is M^T v. Build M column by column by aligning the unit vectors.
-static void rawFromFrd(const float frd[3], float raw[3], bool custom, sensor_align_e align, matrix33_t *customMatrix)
-{
-    for (int col = 0; col < 3; col++) {
-        vector3_t e = { .v = { 0, 0, 0 } };
-        e.v[col] = 1.0f;
-        if (custom) {
-            alignSensorViaMatrix(&e, customMatrix);
-        } else {
-            alignSensorViaRotation(&e, align);
-        }
-        raw[col] = e.v[0] * frd[0] + e.v[1] * frd[1] + e.v[2] * frd[2];
-    }
-}
-
 static int16_t toInt16(float x)
 {
     return (int16_t)constrain(lrintf(x), INT16_MIN, INT16_MAX);
@@ -231,7 +237,7 @@ static int16_t toInt16(float x)
 void hilInjectGyroRaw(gyroDev_t *gyroDev)
 {
     float raw[3];
-    rawFromFrd(hilInput.gyro, raw, gyroDev->gyroAlign == ALIGN_CUSTOM, gyroDev->gyroAlign, &gyroDev->rotationMatrix);
+    hilRawFromFrd(hilInput.gyro, raw, gyroDev->gyroAlign == ALIGN_CUSTOM, gyroDev->gyroAlign, &gyroDev->rotationMatrix);
     for (int i = 0; i < 3; i++) {
         gyroDev->gyroADCRaw[i] = toInt16(raw[i] / gyroDev->scale);
     }
@@ -240,7 +246,7 @@ void hilInjectGyroRaw(gyroDev_t *gyroDev)
 void hilInjectAccRaw(accDev_t *accDev)
 {
     float raw[3];
-    rawFromFrd(hilInput.acc, raw, accDev->accAlign == ALIGN_CUSTOM, accDev->accAlign, &accDev->rotationMatrix);
+    hilRawFromFrd(hilInput.acc, raw, accDev->accAlign == ALIGN_CUSTOM, accDev->accAlign, &accDev->rotationMatrix);
     for (int i = 0; i < 3; i++) {
         accDev->ADCRaw[i] = toInt16(raw[i] * accDev->acc_1G);
     }

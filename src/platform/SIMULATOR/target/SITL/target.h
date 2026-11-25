@@ -74,7 +74,11 @@
 #define U_ID_2 2
 
 #undef TASK_GYROPID_DESIRED_PERIOD
+#ifdef MOCKUP
+#define TASK_GYROPID_DESIRED_PERIOD     125 // indiflight MOCKUP: one tick() = 125 us (8 kHz)
+#else
 #define TASK_GYROPID_DESIRED_PERIOD     100
+#endif
 
 #undef SCHEDULER_DELAY_LIMIT
 #define SCHEDULER_DELAY_LIMIT           1

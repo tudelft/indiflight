@@ -5450,9 +5450,19 @@ static bool cliParseArrayValue(const char *valStr, const clivalue_t *val, void *
         }
     }
 
+#ifdef USE_INDI
+    // indiflight (as the 4.4 fork): fewer elements set the leading entries only,
+    // so profiles can write e.g. 4 of the MAXU = 8 actuator values
+    if (elementCount < 1) {
+        return false;
+    }
+    const int writeCount = elementCount;
+#else
     if (elementCount != arrayLength) {
         return false;
     }
+    const int writeCount = arrayLength;
+#endif
 
     // reject trailing comma (p advanced past comma but no element followed)
     if (p > valStr && *(p - 1) == ',') {
@@ -5460,7 +5470,7 @@ static bool cliParseArrayValue(const char *valStr, const clivalue_t *val, void *
     }
 
     // validate ranges per destination type before writing
-    for (int i = 0; i < arrayLength; i++) {
+    for (int i = 0; i < writeCount; i++) {
         const int32_t sv = (int32_t)tempValues[i];
         const uint32_t uv = tempValues[i];
         switch (val->type & VALUE_TYPE_MASK) {
@@ -5483,7 +5493,7 @@ static bool cliParseArrayValue(const char *valStr, const clivalue_t *val, void *
     }
 
     // all validated — write to destination
-    for (int i = 0; i < arrayLength; i++) {
+    for (int i = 0; i < writeCount; i++) {
         switch (val->type & VALUE_TYPE_MASK) {
         case VAR_UINT8:
             ((uint8_t *)ptr)[i] = (uint8_t)tempValues[i];
@@ -9054,6 +9064,53 @@ void cliProcessConfigFile(const char *filename)
         exit(1);
     }
 }
+
+#ifdef MOCKUP
+// indiflight MOCKUP: feed the CLI one character at a time (output on stdout).
+// Lines are handled like cliProcessConfigFile(), except that 'save' writes the
+// EEPROM file and continues, and reboot-class commands are skipped.
+void mockupCliChar(char c)
+{
+    static bool initialized = false;
+    static char line[CLI_IN_BUFFER_SIZE];
+    static unsigned len = 0;
+
+    if (!initialized) {
+        cliMode = true;
+        cliInteractive = true;
+        static serialPort_t dummyPort;
+        memset(&dummyPort, 0, sizeof(dummyPort));
+        cliPort = &dummyPort;
+        bufWriterInit(&cliWriterDesc, cliWriteBuffer, sizeof(cliWriteBuffer), (bufWrite_t)stdoutBufWrite, NULL);
+        cliErrorWriter = cliWriter = &cliWriterDesc;
+        initialized = true;
+    }
+
+    if (c != '\n' && c != '\r') {
+        if (len < sizeof(line) - 1) {
+            line[len++] = c;
+        }
+        return;
+    }
+    line[len] = '\0';
+    len = 0;
+
+    if (lineIsCommand(line, "save")) {
+        if (tryPrepareSave("save")) {
+            writeEEPROM();
+        }
+        return;
+    }
+    if (lineIsCommand(line, "exit") || lineIsCommand(line, "defaults") || lineIsCommand(line, "bl") || lineIsCommand(line, "msc")) {
+        return;
+    }
+    for (size_t i = 0; line[i]; i++) {
+        processCharacter(line[i]);
+    }
+    processCharacter('\n');
+    cliWriterFlush();
+}
+#endif
 #endif // CONFIG_IN_FILE
 
 #endif // USE_CLI

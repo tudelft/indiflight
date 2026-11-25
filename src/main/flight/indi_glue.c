@@ -46,6 +46,12 @@
 
 static FAST_DATA_ZERO_INIT float motor_normalized[MAX_SUPPORTED_MOTORS];
 
+// normalized [0, 1] motor command INDI sends to the ESCs (for MOCKUP / HIL tooling)
+float indiGetMotorNormalized(int i)
+{
+    return (i >= 0 && i < MAX_SUPPORTED_MOTORS) ? motor_normalized[i] : 0.f;
+}
+
 void indiflightInit(void)
 {
     initIndiRuntime();

@@ -1,0 +1,25 @@
+mass_rel_sigma: 0.
+inertia_rel_sigma: 0.
+rotor_k_rel_sigma: 0.
+rotor_cm_rel_sigma: 0.
+rotor_tau_rel_sigma: 0.
+
+# Relative per-axis sigma for rotor position perturbation.
+# Implemented as sigma_i = abs(X_i_nominal) * rotor_pos_rel_sigma.
+rotor_pos_rel_sigma: 0.
+
+# Relative sigma for elevon cd perturbation.
+# Implemented as sigma_i = max(abs(cd_i_nominal), 1e-12) * elevon_cd_rel_sigma.
+elevon_cd_rel_sigma: 0.
+
+# Randomize sign behavior
+randomize_rotor_y_sign: false
+randomize_elevon_cd_sign: false
+
+throw:
+  # Relative sigma on throw height.
+  height_rel_sigma: 0.2
+  # Relative sigma on entire wB vector scale.
+  wb_rel_sigma: 0.2
+  # Relative sigma on entire horizontal speed vector scale.
+  vhorz_rel_sigma: 0.2

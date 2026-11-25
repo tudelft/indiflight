@@ -789,6 +789,16 @@ uf2: $(PLATFORM_SDK_STAMP) $(AUTOHYDRATE_STAMPS) validate-deps
 	$(V1) $(MAKE) $(MAKE_PARALLEL) $(TARGET_UF2)
 
 .PHONY: exe
+# indiflight MOCKUP: the SIMULATOR platform as a shared library for
+# support/simulation/PyNDIflight (src/platform/SIMULATOR/mockup.c).
+# make mockup [PROFILE=...] [EXTRA_FLAGS=...] -> obj/main/indiflight_MOCKUP.so
+MOCKUP_FLAGS ?= -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
+.PHONY: mockup
+mockup:
+	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/mockup EXTRA_FLAGS="-DMOCKUP $(MOCKUP_FLAGS) $(EXTRA_FLAGS)"
+	$(V1) mkdir -p $(ROOT)/obj/main && cp $(ROOT)/obj/mockup/$(FORKNAME)_SITL.elf $(ROOT)/obj/main/indiflight_MOCKUP.so
+	@echo "MOCKUP library: obj/main/indiflight_MOCKUP.so"
+
 exe: $(AUTOHYDRATE_STAMPS) validate-deps
 	$(V1) $(MAKE) $(MAKE_PARALLEL) $(TARGET_EXE)
 

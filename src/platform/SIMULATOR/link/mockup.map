@@ -1,0 +1,12 @@
+/* indiflight MOCKUP: exported API of the shared library (src/platform/SIMULATOR/mockup.c),
+   everything else stays local so unused platform code is garbage collected */
+{
+  global:
+    init; tick;
+    setImu; setMotorSpeed; setServoAngle; setMocap; setMocapT; setPosSetpoint;
+    getMotorOutputCommands; getServoOutputCommands;
+    mockup*;
+    processKey; disarm;
+    armingFlags; flightModeFlags;
+  local: *;
+};

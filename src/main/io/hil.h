@@ -27,9 +27,18 @@
 
 #include "platform.h"
 
-#ifdef HIL_BUILD
+#if defined(HIL_BUILD) || defined(MOCKUP)
 
 #include "drivers/accgyro/accgyro.h"
+#include "common/sensor_alignment.h"
+
+// raw sensor vector that the alignment chain (sensor/board alignment, then
+// FLU -> FRD) maps to the FRD vector frd
+void hilRawFromFrd(const float frd[3], float raw[3], bool custom, sensor_align_e align, matrix33_t *customMatrix);
+#endif
+
+#ifdef HIL_BUILD
+
 #include "drivers/dshot.h"
 
 typedef struct hilInput_s {
