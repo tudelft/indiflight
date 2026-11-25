@@ -104,6 +104,7 @@ set blackbox_disable_indi = OFF
 set blackbox_disable_learner = OFF
 set blackbox_mode = NORMAL
 set blackbox_high_resolution = ON
+set blackbox_serial_packets = OFF
 
 
 # sensor calibration / alignment

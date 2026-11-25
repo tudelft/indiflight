@@ -45,6 +45,7 @@
 #include "blackbox.h"
 #include "blackbox_io.h"
 
+#include "common/crc.h"
 #include "common/maths.h"
 
 #include "flight/pid.h"
@@ -185,6 +186,52 @@ static uint16_t bbRateMax;
 static uint32_t bbDrops;
 #endif
 
+static uint8_t packetPayload[BLACKBOX_PACKET_PAYLOAD_MAX];
+static uint16_t packetPayloadLen;
+static uint8_t packetSeq;
+static uint32_t packetDrops;
+
+static bool serialPacketsEnabled(void)
+{
+    return blackboxConfig()->serial_packets;
+}
+
+// Send the staged payload as one packet, or drop it as a whole if the TX buffer cannot take it
+static void serialPacketFlush(void)
+{
+    if (!blackboxPort || packetPayloadLen == 0) {
+        packetPayloadLen = 0;
+        return;
+    }
+
+    uint8_t packet[BLACKBOX_PACKET_OVERHEAD + BLACKBOX_PACKET_PAYLOAD_MAX];
+    const uint16_t len = packetPayloadLen;
+    packet[0] = BLACKBOX_PACKET_SYNC;
+    packet[1] = packetSeq;
+    packet[2] = len & 0xFF;
+    packet[3] = len >> 8;
+    memcpy(&packet[4], packetPayload, len);
+
+    uint16_t crc = 0xFFFF;
+    for (unsigned i = 1; i < 4u + len; i++) {
+        crc = crc16_ccitt(crc, packet[i]);
+    }
+    packet[4 + len] = crc & 0xFF;
+    packet[5 + len] = crc >> 8;
+
+    const int total = BLACKBOX_PACKET_OVERHEAD + len;
+    if (serialTxBytesFree(blackboxPort) >= (uint32_t) total) {
+        serialWriteBuf(blackboxPort, packet, total);
+    } else {
+        packetDrops++;
+#ifdef DEBUG_BB_OUTPUT
+        DEBUG_SET(DEBUG_BLACKBOX_OUTPUT, 2, packetDrops);
+#endif
+    }
+    packetSeq++;
+    packetPayloadLen = 0;
+}
+
 void blackboxWrite(uint8_t value)
 {
 #ifdef DEBUG_BB_OUTPUT
@@ -209,6 +256,13 @@ void blackboxWrite(uint8_t value)
 #endif
     case BLACKBOX_DEVICE_SERIAL:
     default:
+        if (serialPacketsEnabled()) {
+            if (packetPayloadLen == BLACKBOX_PACKET_PAYLOAD_MAX) {
+                serialPacketFlush();
+            }
+            packetPayload[packetPayloadLen++] = value;
+            break;
+        }
         {
             int txBytesFree = serialTxBytesFree(blackboxPort);
 
@@ -307,6 +361,11 @@ void blackboxDeviceFlush(void)
         break;
 #endif // USE_FLASHFS
 
+    case BLACKBOX_DEVICE_SERIAL:
+        // end the current packet so that it holds whole frames
+        serialPacketFlush();
+        break;
+
     default:
         ;
     }
@@ -322,6 +381,7 @@ bool blackboxDeviceFlushForce(void)
     switch (blackboxConfig()->device) {
     case BLACKBOX_DEVICE_SERIAL:
         // Nothing to speed up flushing on serial, as serial is continuously being drained out of its buffer
+        serialPacketFlush();
         return isSerialTransmitBufferEmpty(blackboxPort);
 
 #ifdef USE_FLASHFS
@@ -394,6 +454,8 @@ bool blackboxDeviceOpen(void)
                 return false;
             }
 
+            packetPayloadLen = 0;
+            packetSeq = 0;
             blackboxPortSharing = determinePortSharing(portConfig, FUNCTION_BLACKBOX);
             baudRateIndex = portConfig->blackbox_baudrateIndex;
 

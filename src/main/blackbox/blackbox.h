@@ -65,6 +65,7 @@ typedef struct blackboxConfig_s {
     uint8_t device;
     uint8_t mode;
     uint8_t high_resolution;
+    uint8_t serial_packets; // wrap serial output in CRC-protected packets, see blackbox_io.h
 } blackboxConfig_t;
 
 PG_DECLARE(blackboxConfig_t, blackboxConfig);

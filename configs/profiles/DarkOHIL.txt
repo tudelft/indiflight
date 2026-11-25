@@ -127,6 +127,7 @@ set blackbox_disable_pos = OFF
 set blackbox_disable_ekf = OFF
 set blackbox_disable_learner = OFF
 set blackbox_high_resolution = ON
+set blackbox_serial_packets = OFF
 set debug_mode = BARO
 
 # sensor calibration / alignment

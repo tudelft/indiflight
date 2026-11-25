@@ -38,6 +38,30 @@ typedef enum {
  */
 #define BLACKBOX_TARGET_HEADER_BUDGET_PER_ITERATION 64
 
+/*
+ * Optional packet framing for BLACKBOX_DEVICE_SERIAL (blackbox_serial_packets = ON).
+ *
+ * The plain blackbox byte stream has no integrity protection, so a lost or flipped byte silently corrupts
+ * every following P-frame. With packets enabled the stream is cut into packets, at the latest once per
+ * blackboxUpdate() so that a packet holds whole frames in the normal case. The concatenated payloads are
+ * exactly the plain log file.
+ *
+ *   offset  size  field
+ *   0       1     sync, 0xA5
+ *   1       1     seq, increments per packet (also for packets dropped for lack of TX buffer space)
+ *   2       2     len, payload length, 1..BLACKBOX_PACKET_PAYLOAD_MAX, little-endian
+ *   4       len   payload
+ *   4+len   2     crc16 CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection) over bytes 1..3+len,
+ *                 little-endian
+ *
+ * A packet that does not fit in the UART TX buffer is dropped as a whole (counted, seq still advances) so
+ * the receiver sees a seq gap and can resynchronise at the next I-frame. The packet size is 6 + len bytes,
+ * the UART TX buffer must be larger than that to ever send one.
+ */
+#define BLACKBOX_PACKET_SYNC 0xA5
+#define BLACKBOX_PACKET_PAYLOAD_MAX 240
+#define BLACKBOX_PACKET_OVERHEAD 6
+
 extern int32_t blackboxHeaderBudget;
 
 void blackboxOpen(void);
