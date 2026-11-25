@@ -279,8 +279,9 @@ STATIC_UNIT_TESTED void scaleRawSetpointToFpvCamAngle(void)
 
     float roll = rawSetpoint[ROLL];
     float yaw = rawSetpoint[YAW];
-    rawSetpoint[ROLL] = constrainf(roll * cosFactor -  yaw * sinFactor, SETPOINT_RATE_LIMIT_MIN, SETPOINT_RATE_LIMIT_MAX);
-    rawSetpoint[YAW]  = constrainf(yaw  * cosFactor + roll * sinFactor, SETPOINT_RATE_LIMIT_MIN, SETPOINT_RATE_LIMIT_MAX);
+    // FRD: yaw about the camera's (tilted up) down axis also rolls the craft to the right
+    rawSetpoint[ROLL] = constrainf(roll * cosFactor +  yaw * sinFactor, SETPOINT_RATE_LIMIT_MIN, SETPOINT_RATE_LIMIT_MAX);
+    rawSetpoint[YAW]  = constrainf(yaw  * cosFactor - roll * sinFactor, SETPOINT_RATE_LIMIT_MIN, SETPOINT_RATE_LIMIT_MAX);
 }
 
 void updateRcRefreshRate(timeUs_t currentTimeUs, bool rxReceivingSignal)
@@ -710,11 +711,16 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
     for (int axis = 0; axis < 3; axis++) {
         float rc = constrainf(rcData[axis] - rxConfig()->midrc, -500.0f, 500.0f); // -500 to 500
         float rcDeadband = 0;
+        // indiflight: rcCommand is in the FRD body frame: roll + = right,
+        // pitch + = nose up (stick back), yaw + = nose right (stick right)
         if (axis == ROLL || axis == PITCH) {
             rcDeadband = rcControlsConfig()->deadband;
+            if (axis == PITCH) {
+                rc = -rc;
+            }
         } else {
             rcDeadband  = rcControlsConfig()->yaw_deadband;
-            rc *= -GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+            rc *= GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
         }
         rcCommand[axis] = fapplyDeadband(rc, rcDeadband);
     }

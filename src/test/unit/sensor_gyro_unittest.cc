@@ -148,8 +148,9 @@ TEST(SensorGyro, Update)
     virtualGyroSet(gyroDevPtr, 15, 26, 97);
     gyroUpdate();
     EXPECT_NEAR(10 * gyroDevPtr->scale, gyro.gyroADC[X], 1e-3); // gyro.gyroADC values are scaled
-    EXPECT_NEAR(20 * gyroDevPtr->scale, gyro.gyroADC[Y], 1e-3);
-    EXPECT_NEAR(90 * gyroDevPtr->scale, gyro.gyroADC[Z], 1e-3);
+    // FRD: Y and Z are negated after sensor alignment (FLU -> FRD)
+    EXPECT_NEAR(-20 * gyroDevPtr->scale, gyro.gyroADC[Y], 1e-3);
+    EXPECT_NEAR(-90 * gyroDevPtr->scale, gyro.gyroADC[Z], 1e-3);
 }
 
 // STUBS

@@ -337,7 +337,7 @@ static float calcWingAcceleration(float throttle, float pitchAngleRadians)
 static float calcWingTpaArgument(void)
 {
     const float t = calcWingThrottle();
-    const float pitchRadians = DECIDEGREES_TO_RADIANS(attitude.values.pitch);
+    const float pitchRadians = DECIDEGREES_TO_RADIANS(-attitude.values.pitch); // wing TPA model uses nose down +
     const float rollRadians = DECIDEGREES_TO_RADIANS(attitude.values.roll);
 
     DEBUG_SET(DEBUG_TPA, 1, lrintf(attitude.values.roll)); // decidegrees
@@ -579,7 +579,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
 
 #ifdef USE_WING
     if (axis == FD_PITCH) {
-        angleTarget += (float)pidProfile->angle_pitch_offset / 10.0f;
+        angleTarget -= (float)pidProfile->angle_pitch_offset / 10.0f; // FRD: pitch + = nose up; offset keeps its upstream (nose down +) meaning
     }
 #endif // USE_WING
 
@@ -930,15 +930,16 @@ static FAST_CODE_NOINLINE float applyLaunchControl(int axis, const rollAndPitchT
 #if defined(USE_ACC)
     // If ACC is enabled and a limit angle is set, then try to limit forward tilt
     // to that angle and slow down the rate as the limit is approached to reduce overshoot
-    if ((axis == FD_PITCH) && (pidRuntime.launchControlAngleLimit > 0) && (ret > 0)) {
-        const float currentAngle = (attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f;
+    // FRD: forward tilt is nose down, i.e. negative pitch rate and angle
+    if ((axis == FD_PITCH) && (pidRuntime.launchControlAngleLimit > 0) && (ret < 0)) {
+        const float currentAngle = -(attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f; // forward tilt, positive
         if (currentAngle >= pidRuntime.launchControlAngleLimit) {
             ret = 0.0f;
         } else {
             //for the last 10 degrees scale the rate from the current input to 5 dps
             const float angleDelta = pidRuntime.launchControlAngleLimit - currentAngle;
             if (angleDelta <= LAUNCH_CONTROL_ANGLE_WINDOW) {
-                ret = scaleRangef(angleDelta, 0, LAUNCH_CONTROL_ANGLE_WINDOW, LAUNCH_CONTROL_MIN_RATE, ret);
+                ret = -scaleRangef(angleDelta, 0, LAUNCH_CONTROL_ANGLE_WINDOW, LAUNCH_CONTROL_MIN_RATE, -ret);
             }
         }
     }
@@ -1414,8 +1415,8 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
                 pidData[FD_ROLL].P = 0;
                 pidData[FD_ROLL].I = 0;
                 pidData[FD_YAW].P = 0;
-                // don't let I go negative (pitch backwards) as front motors are limited in the mixer
-                pidData[FD_PITCH].I = MAX(0.0f, pidData[FD_PITCH].I);
+                // don't let I go positive (FRD: pitch backwards) as front motors are limited in the mixer
+                pidData[FD_PITCH].I = MIN(0.0f, pidData[FD_PITCH].I);
             }
         }
 #endif

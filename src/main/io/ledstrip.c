@@ -1021,9 +1021,9 @@ static void applyLedIndicatorLayer(bool updateNow, timeUs_t *timer)
     } else if (rcCommand[ROLL] < -INDICATOR_DEADBAND) {
         quadrants |= QUADRANT_WEST;
     }
-    if (rcCommand[PITCH] > INDICATOR_DEADBAND) {
+    if (rcCommand[PITCH] < -INDICATOR_DEADBAND) { // FRD: stick forward = nose down = negative
         quadrants |= QUADRANT_NORTH;
-    } else if (rcCommand[PITCH] < -INDICATOR_DEADBAND) {
+    } else if (rcCommand[PITCH] > INDICATOR_DEADBAND) {
         quadrants |= QUADRANT_SOUTH;
     }
 

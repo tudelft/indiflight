@@ -300,7 +300,7 @@ static bool applyCrashFlipModeToMotors(void)
 
     float signPitch = getRcDeflection(FD_PITCH) < 0 ? 1 : -1;
     float signRoll = getRcDeflection(FD_ROLL) < 0 ? 1 : -1;
-    float signYaw = (getRcDeflection(FD_YAW) < 0 ? 1 : -1) * (mixerConfig()->yaw_motors_reversed ? 1 : -1);
+    float signYaw = (getRcDeflection(FD_YAW) < 0 ? 1 : -1) * (mixerConfig()->yaw_motors_reversed ? -1 : 1); // FRD
 
     float stickDeflectionLength = sqrtf(sq(stickDeflectionPitchAbs) + sq(stickDeflectionRollAbs));
 
@@ -713,7 +713,9 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
     float scaledAxisPidYaw =
         constrainf(pidData[FD_YAW].Sum, -yawPidSumLimit, yawPidSumLimit) / PID_MIXER_SCALING;
 
-    if (!mixerConfig()->yaw_motors_reversed) {
+    // FRD: positive yaw = clockwise from above, which the (props-in) mixer yaw column
+    // already encodes. Upstream (FLU, yaw + = counter-clockwise) negated here by default.
+    if (mixerConfig()->yaw_motors_reversed) {
         scaledAxisPidYaw = -scaledAxisPidYaw;
     }
 
