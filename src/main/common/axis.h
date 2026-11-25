@@ -22,25 +22,19 @@
 
 // indiflight: frame convention switch (the single place it is documented).
 //
-//   USE_FRD_NED (default): the whole firmware uses the aerospace convention,
+//   USE_FRD_NED (indiflight builds, defined by USE_INDIFLIGHT in
+//     target/common_pre.h): the whole firmware uses the aerospace convention,
 //     right handed, body frame FRD (X forward, Y right, Z down) and earth frame
 //     NED. Gyro, acc and mag are converted right after board alignment
 //     (sensors/boardalignment.c); attitude angles are roll right +, pitch nose
 //     up +, yaw = heading; rates, setpoints, PID sums and mixer columns are FRD;
 //     the position estimator / autopilot / navigation are NED.
-//   USE_UPSTREAM_FRAME: upstream Betaflight's convention (body FLU, earth NWU
-//     for the attitude, ENU for navigation), the original upstream code.
+//   otherwise: upstream Betaflight's convention (body FLU, earth NWU for the
+//     attitude, ENU for navigation), the original upstream code.
 //
-// The build defines exactly one of them: the firmware Makefile adds
-// -DUSE_FRD_NED unless EXTRA_FLAGS contains -DUSE_UPSTREAM_FRAME, the unit test
-// Makefile does the same unless UPSTREAM_FRAME=yes. Code that differs between
-// the conventions is written as
+// The unit test Makefile defines it with INDIFLIGHT=yes. Code
+// that differs between the conventions is written as
 //   #ifdef USE_FRD_NED  <FRD/NED code>  #else  <upstream code>  #endif
-#if defined(USE_FRD_NED) && defined(USE_UPSTREAM_FRAME)
-#error "define only one of USE_FRD_NED and USE_UPSTREAM_FRAME"
-#elif !defined(USE_FRD_NED) && !defined(USE_UPSTREAM_FRAME)
-#error "define USE_FRD_NED or USE_UPSTREAM_FRAME (normally done by the Makefile)"
-#endif
 
 #include "common/utils.h"
 

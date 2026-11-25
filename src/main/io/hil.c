@@ -30,7 +30,7 @@
 #if defined(HIL_BUILD) || defined(MOCKUP)
 
 #if !defined(USE_FRD_NED)
-#error "HIL_BUILD and MOCKUP exchange FRD body-frame data: build without USE_UPSTREAM_FRAME"
+#error "HIL_BUILD and MOCKUP exchange FRD body-frame data: build with USE_INDIFLIGHT"
 #endif
 
 #include "common/maths.h"

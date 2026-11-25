@@ -20,6 +20,15 @@
 
 #pragma once
 
+// indiflight: USE_INDIFLIGHT marks an indiflight build (every
+// configs/profiles/*.txt defines it). It switches the whole firmware to the
+// FRD body / NED earth convention (USE_FRD_NED, see common/axis.h) and is
+// required by every indiflight feature (checked in common_post.h). Without it
+// the tree builds stock upstream Betaflight.
+#if defined(USE_INDIFLIGHT) && !defined(USE_FRD_NED)
+#define USE_FRD_NED
+#endif
+
 /*
 
     The purpose of this file is to enable the firmware "gates" for features and drivers

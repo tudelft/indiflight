@@ -12,7 +12,7 @@
 import argparse, glob, os, re, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-FULL_FLAGS = ["USE_INDI", "USE_EKF", "USE_LOCAL_POSITION", "USE_POS_CTL", "USE_VEL_CTL",
+FULL_FLAGS = ["USE_INDIFLIGHT", "USE_INDI", "USE_EKF", "USE_LOCAL_POSITION", "USE_POS_CTL", "USE_VEL_CTL",
               "USE_TELEMETRY_PI", "USE_GPS", "USE_GEOFENCE", "USE_BARO", "USE_PITOT", "USE_DSHOT",
               "USE_SERVOS", "USE_ACTUATORS_T4", "USE_BLACKBOX", "USE_ACC", "USE_GYRO", "USE_MAG",
               "USE_FRD_NED", "USE_DSHOT_TELEMETRY", "USE_OSD", "USE_LED_STRIP", "USE_SERIALRX",

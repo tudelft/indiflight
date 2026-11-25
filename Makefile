@@ -415,12 +415,6 @@ CFLAGS     += $(ARCH_FLAGS) \
 
 CFLAGS     := $(filter-out $(CFLAGS_DISABLED), $(CFLAGS))
 
-# indiflight: frame convention switch, documented in src/main/common/axis.h.
-# FRD body / NED earth by default; EXTRA_FLAGS=-DUSE_UPSTREAM_FRAME builds upstream's.
-ifeq ($(findstring -DUSE_UPSTREAM_FRAME,$(EXTRA_FLAGS)),)
-CFLAGS     += -DUSE_FRD_NED
-endif
-
 ASFLAGS     = $(ARCH_FLAGS) \
               $(DEBUG_FLAGS) \
               -x assembler-with-cpp \
@@ -808,7 +802,7 @@ uf2: $(PLATFORM_SDK_STAMP) $(AUTOHYDRATE_STAMPS) validate-deps
 # indiflight MOCKUP: the SIMULATOR platform as a shared library for
 # support/simulation/PyNDIflight (src/platform/SIMULATOR/mockup.c).
 # make mockup [PROFILE=...] [EXTRA_FLAGS=...] -> obj/main/indiflight_MOCKUP.so
-MOCKUP_FLAGS ?= -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
+MOCKUP_FLAGS ?= -DUSE_INDIFLIGHT -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
 .PHONY: mockup
 mockup:
 	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/mockup EXTRA_FLAGS="-DMOCKUP $(MOCKUP_FLAGS) $(EXTRA_FLAGS)"

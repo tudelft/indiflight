@@ -829,6 +829,18 @@ extern struct linker_symbol __fontdata_end;
 #endif
 #endif // USE_GPS
 
+// indiflight: every indiflight feature needs the indiflight build (FRD/NED
+// frames, see USE_INDIFLIGHT in common_pre.h).
+#if !defined(USE_INDIFLIGHT) && (defined(USE_INDI) || defined(USE_EKF) \
+    || defined(USE_LOCAL_POSITION) || defined(USE_POS_CTL) || defined(USE_VEL_CTL) \
+    || defined(USE_TELEMETRY_PI) || defined(USE_GEOFENCE) || defined(USE_PITOT) \
+    || defined(USE_SERVOS_FEETECH) || defined(USE_ACTUATORS_T4) \
+    || defined(HIL_BUILD) || defined(MOCKUP) || defined(USE_TRAJECTORY_TRACKER) \
+    || defined(USE_NN_CONTROL) || defined(USE_LEARNER) || defined(USE_CATAPULT) \
+    || defined(USE_THROW_TO_ARM))
+#error "indiflight features need USE_INDIFLIGHT: add '#define USE_INDIFLIGHT' to the profile or -DUSE_INDIFLIGHT to EXTRA_FLAGS"
+#endif
+
 // indiflight: INDI builds have no upstream GPS rescue (no BOXGPSRESCUE, no
 // GPS_RESCUE failsafe procedure, no rescue flight plan) and no failsafe
 // auto-landing; RX loss runs failsafe stage 1 and then DROP (disarm), see

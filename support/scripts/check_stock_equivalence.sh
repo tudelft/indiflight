@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks that this tree, built in stock mode (-DUSE_UPSTREAM_FRAME, no indiflight
+# Checks that this tree, built in stock mode (no USE_INDIFLIGHT, no indiflight
 # feature flags), produces the same firmware as an upstream Betaflight tag.
 #
 #   support/scripts/check_stock_equivalence.sh [TAG] [CONFIG]
@@ -36,7 +36,7 @@ echo "building port (stock mode) in $ROOT" >&2
 # the revision string is "norevision" in a dirty tree, which shifts the layout
 [ -z "$(git -C "$ROOT" status --porcelain -uno)" ] || echo "warning: $ROOT has uncommitted changes, expect a revision string difference" >&2
 make -C "$ROOT" CONFIG="$CONFIG" OBJECT_DIR=obj/upf $MAKE_ARGS clean >/dev/null
-make -C "$ROOT" CONFIG="$CONFIG" OBJECT_DIR=obj/upf EXTRA_FLAGS=-DUSE_UPSTREAM_FRAME $MAKE_ARGS -j"$(nproc)" >/dev/null
+make -C "$ROOT" CONFIG="$CONFIG" OBJECT_DIR=obj/upf $MAKE_ARGS -j"$(nproc)" >/dev/null
 
 stockElf=$(ls "$STOCK_DIR"/obj/main/betaflight_*"$CONFIG".elf)
 portElf=$(ls "$ROOT"/obj/upf/betaflight_*"$CONFIG".elf)

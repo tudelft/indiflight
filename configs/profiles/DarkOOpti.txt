@@ -48,6 +48,7 @@
 #define PI_USE_PRINT_MSGS
 
 ## ----- INDIFLIGHT features
+#define USE_INDIFLIGHT       ## indiflight build: FRD/NED frames, required by everything below
 #define USE_INDI
 #define USE_EKF
 #define USE_LOCAL_POSITION
@@ -68,6 +69,12 @@
 ################################################
 # CRAFT SETTINGS (formerly known as "profile") #
 ################################################
+
+# start from the defaults (incl. the board's compiled-in defaults), so a
+# setting removed from this file is removed from the FC too. Anything not set
+# below goes back to its default (e.g. mag calibration). Type "save" after
+# pasting.
+defaults nosave
 
 ## ----- PERIPHERALS
 

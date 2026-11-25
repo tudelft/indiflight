@@ -15,13 +15,14 @@ USER_DIR = ../main
 TEST_DIR = unit
 ROOT = ../..
 # indiflight: frame convention switch, documented in src/main/common/axis.h.
-# FRD body / NED earth by default; UPSTREAM_FRAME=yes tests upstream's convention.
-ifeq ($(UPSTREAM_FRAME),yes)
-OBJECT_DIR = $(ROOT)/obj/test_upstream_frame
-FRAME_FLAGS = -DUSE_UPSTREAM_FRAME
+# Upstream convention by default (as stock CI); INDIFLIGHT=yes tests the
+# indiflight build's FRD body / NED earth convention.
+ifeq ($(INDIFLIGHT),yes)
+OBJECT_DIR = $(ROOT)/obj/test_indiflight
+FRAME_FLAGS = -DUSE_INDIFLIGHT -DUSE_FRD_NED
 else
 OBJECT_DIR = $(ROOT)/obj/test
-FRAME_FLAGS = -DUSE_FRD_NED
+FRAME_FLAGS =
 endif
 TARGET_DIR = $(USER_DIR)/target
 MAKE_SCRIPT_DIR := $(ROOT)/mk
