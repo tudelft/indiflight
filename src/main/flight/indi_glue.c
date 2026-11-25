@@ -39,6 +39,9 @@
 #ifdef USE_GEOFENCE
 #include "flight/geofence.h"
 #endif
+#ifdef USE_PITOT
+#include "sensors/pitotmeter.h"
+#endif
 
 static FAST_DATA_ZERO_INIT float motor_normalized[MAX_SUPPORTED_MOTORS];
 static FAST_DATA_ZERO_INIT float servo_normalized[MAX_SUPPORTED_MOTORS];
@@ -51,6 +54,10 @@ void indiflightInit(void)
 #endif
 #ifdef USE_GEOFENCE
     geofenceInit();
+#endif
+#ifdef USE_PITOT
+    pitotInit();
+    pitotStartCalibration();
 #endif
 }
 

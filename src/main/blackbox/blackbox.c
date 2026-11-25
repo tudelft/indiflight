@@ -83,6 +83,9 @@
 #ifdef USE_GEOFENCE
 #include "flight/geofence.h"
 #endif
+#ifdef USE_PITOT
+#include "sensors/pitotmeter.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -456,6 +459,12 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"rpmControlRan", 6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"rpmControlRan", 7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 #endif
+#ifdef USE_PITOT
+    {"pitot_pressureZero", -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"pitot_pressure",     -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"pitot_temperature",  -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB),      CONDITION(INDI)},
+    {"pitot_airSpeed",     -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+#endif
 #ifdef USE_LOCAL_POSITION
     {"pos",         0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -640,6 +649,14 @@ typedef struct blackboxMainState_s {
     int16_t rpmCmd_f[MAXU];
     uint16_t rpmOmega_f[MAXU];
     uint16_t rpmControlRan[MAXU];
+#endif
+#ifdef USE_PITOT
+    // pitot readings: pressures stored as centi-Pascals (×100) to preserve sign,
+    // temperature stored as centi-Kelvin (×100), airSpeed stored in cm/s (fits int16)
+    int32_t pitot_pressureZero;
+    int32_t pitot_pressure;
+    int16_t pitot_temperature;
+    int16_t pitot_airSpeed;
 #endif
 #ifdef USE_LOCAL_POSITION
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
@@ -1111,6 +1128,14 @@ static void writeIntraframe(void)
         blackboxWriteUnsigned16VBArray(blackboxCurrent->rpmControlRan, MAXU);
     }
 #endif
+#ifdef USE_PITOT
+    if (testBlackboxCondition(CONDITION(INDI))) {
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressureZero);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressure);
+        blackboxWriteUnsignedVB(blackboxCurrent->pitot_temperature);
+        blackboxWriteUnsignedVB(blackboxCurrent->pitot_airSpeed);
+    }
+#endif
 #ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
@@ -1439,6 +1464,14 @@ static void writeInterframe(void)
         blackboxWriteTag8_8SVB(deltas, MAXU);
     }
 #endif // USE_INDI
+#ifdef USE_PITOT
+    if (testBlackboxCondition(CONDITION(INDI))) {
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressureZero - blackboxLast->pitot_pressureZero);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressure - blackboxLast->pitot_pressure);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_temperature - blackboxLast->pitot_temperature);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_airSpeed - blackboxLast->pitot_airSpeed);
+    }
+#endif
 #ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
@@ -1898,6 +1931,17 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->rpmOmega_f[i] = lrintf(indiRun.rpmOmega_f[i]);
         blackboxCurrent->rpmControlRan[i] = indiRun.rpmControlRan[i] ? 1 : 0;
     }
+#endif
+#ifdef USE_PITOT
+    /* Scale and store pitot readings:
+     * - pressureZero and pressure: store as centi-units (×100) to keep sign and some precision
+     * - temperature: store as centi-Kelvin (×100)
+     * - airSpeed: pitot.airSpeed is already in cm/s (float), store as int16
+     */
+    blackboxCurrent->pitot_pressureZero = lrintf(pitot.pressureZero * 100.0f);
+    blackboxCurrent->pitot_pressure = lrintf(pitot.pressure * 100.0f);
+    blackboxCurrent->pitot_temperature = lrintf(pitot.temperature * 100.0f);
+    blackboxCurrent->pitot_airSpeed = lrintf(pitot.airSpeed);
 #endif
 #ifdef USE_LOCAL_POSITION
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);

@@ -63,6 +63,14 @@
 #ifdef USE_POS_CTL
 #include "flight/pos_ctl.h"
 #endif
+#ifdef USE_PITOT
+#include "sensors/pitotmeter.h"
+
+static void taskUpdatePitot(timeUs_t currentTimeUs)
+{
+    pitotUpdate(currentTimeUs);
+}
+#endif
 #ifdef USE_TELEMETRY_PI
 #include "io/keyboard.h"
 
@@ -427,6 +435,9 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #ifdef USE_POS_CTL
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, updatePosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
+#ifdef USE_PITOT
+    [TASK_PITOT] = DEFINE_TASK("PITOT", NULL, NULL, taskUpdatePitot, TASK_PERIOD_HZ(TASK_PITOT_RATE_HZ), TASK_PRIORITY_LOW),
+#endif
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
@@ -617,6 +628,9 @@ void tasksInit(void)
 #endif
 #ifdef USE_POS_CTL
     setTaskEnabled(TASK_POS_CTL, true);
+#endif
+#ifdef USE_PITOT
+    setTaskEnabled(TASK_PITOT, true);
 #endif
 #ifdef USE_TELEMETRY_PI
     setTaskEnabled(TASK_KEYBOARD, true);

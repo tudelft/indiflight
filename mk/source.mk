@@ -286,6 +286,8 @@ COMMON_SRC = \
             io/rcdevice.c \
             io/gps.c \
             io/keyboard.c \
+            drivers/pitotmeter/pitotmeter_ms4525.c \
+            sensors/pitotmeter.c \
             io/ledstrip.c \
             io/local_pos.c \
             io/pidaudio.c \
