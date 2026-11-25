@@ -687,7 +687,7 @@ if (isMotorProtocolDshot()) {
         if (featureIsEnabled(FEATURE_GPS)) {
             GPS_reset_home_position();
             canUseGPSHeading = false; // block use of GPS Heading in position hold after each arm, until quad can set IMU to GPS COG
-            if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueConfig()->minSats) {
+            if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueMinSats()) {
                 beeper(BEEPER_ARMING_GPS_FIX);
             } else {
                 beeper(BEEPER_ARMING_GPS_NO_FIX);
@@ -769,7 +769,11 @@ static void updateMagHold(void)
             dif += 360;
         if (dif >= +180)
             dif -= 360;
+#ifdef USE_FRD_NED
         dif *= GET_DIRECTION(rcControlsConfig()->yaw_control_reversed); // FRD: rcCommand[YAW] + = clockwise
+#else
+        dif *= -GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+#endif // USE_FRD_NED
         if (isUpright()) {
             rcCommand[YAW] -= dif * currentPidProfile->pid[PID_MAG].P / 30;    // 18 deg
         }

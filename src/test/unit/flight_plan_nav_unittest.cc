@@ -228,8 +228,13 @@ void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_
     //   x = east (lon delta), y = north (lat delta), both in cm.
     // 1 deg ~= 111319.49 m at the equator; 1e7 lat units per degree.
     const float metresPerLatUnit = 111319.49f / 1.0e7f;
+#ifdef USE_FRD_NED
     distance->v[EF_EAST] = (to->lon - from->lon) * metresPerLatUnit * 100.0f;
     distance->v[EF_NORTH] = (to->lat - from->lat) * metresPerLatUnit * 100.0f;
+#else
+    distance->x = (to->lon - from->lon) * metresPerLatUnit * 100.0f;
+    distance->y = (to->lat - from->lat) * metresPerLatUnit * 100.0f;
+#endif // USE_FRD_NED
 }
 
 timeUs_t micros(void)
@@ -392,9 +397,15 @@ TEST_F(FlightPlanNavTest, EngageSetsFirstWaypointTarget)
     EXPECT_EQ(flightPlanNavGetCurrentIndex(), 0);
     EXPECT_EQ(g_setTargetCalls, 1);
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 10.0f, 0.1f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 20.0f, 0.1f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), -50.0f, 0.01f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 10.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, 20.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, -50.0f, 0.01f);
+#endif // USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.cruiseSpeedMps, 3.0f, 0.01f);
     EXPECT_NEAR(g_lastTarget.acceptanceRadiusM, 5.0f, 0.01f);
     EXPECT_TRUE(g_lastTarget.includeAltitude);
@@ -484,8 +495,13 @@ TEST_F(FlightPlanNavTest, HoldWithZeroDurationAdvancesImmediately)
 TEST_F(FlightPlanNavTest, TakeoffDispatchClimbsInPlace)
 {
     // Vehicle at (40 E, 30 N) m; TAKEOFF waypoint 100 m away horizontally.
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = 4000.0f;
     g_stubEstimate.position.v[NED_N] = 3000.0f;
+#else
+    g_stubEstimate.position.x = 4000.0f;
+    g_stubEstimate.position.y = 3000.0f;
+#endif // USE_FRD_NED
     const int32_t unitsFor100m = (int32_t)((100.0f / 111319.49f) * 1.0e7f);
     addWaypoint(unitsFor100m, unitsFor100m, 15000, WAYPOINT_TYPE_TAKEOFF);
 
@@ -494,9 +510,15 @@ TEST_F(FlightPlanNavTest, TakeoffDispatchClimbsInPlace)
     // Target is the current position at the waypoint altitude, with the
     // station-keeping radius and the climb gated on altitude arrival.
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 40.0f, 0.01f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 30.0f, 0.01f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 50.0f, 0.01f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 40.0f, 0.01f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, 30.0f, 0.01f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 50.0f, 0.01f);
+#endif // USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.acceptanceRadiusM, 2.0f, 0.01f);
     EXPECT_TRUE(g_altitudeArrivalRequired);
 }
@@ -581,7 +603,11 @@ protected:
 
     float distanceFromCentre() const
     {
+#ifdef USE_FRD_NED
         return sqrtf(sq(g_lastTarget.targetEfM.v[NED_E] - kCentreE) + sq(g_lastTarget.targetEfM.v[NED_N] - kCentreN));
+#else
+        return sqrtf(sq(g_lastTarget.targetEfM.x - kCentreE) + sq(g_lastTarget.targetEfM.y - kCentreN));
+#endif // USE_FRD_NED
     }
 };
 
@@ -589,8 +615,13 @@ TEST_F(FlightPlanNavPatternTest, OrbitIssuesNonCompletingCarrotCommand)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
     // Vehicle slightly east of the centre: carrot starts at azimuth 0.
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
 
     // Arrival alone must not start the pattern; the update loop starts it
@@ -604,9 +635,15 @@ TEST_F(FlightPlanNavPatternTest, OrbitIssuesNonCompletingCarrotCommand)
     EXPECT_EQ(g_lastTarget.completionSpeedMps, 0.0f);
     EXPECT_EQ(g_lastTarget.callback, nullptr);
     EXPECT_NEAR(g_lastTarget.cruiseSpeedMps, 3.0f, 0.01f);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], kCentreE + kRadiusM, 0.05f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], kCentreN, 0.05f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), kCentreU, 0.01f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, kCentreE + kRadiusM, 0.05f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, kCentreN, 0.05f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, kCentreU, 0.01f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavPatternTest, OrbitCarrotStartsAtVehicleAzimuth)
@@ -614,28 +651,48 @@ TEST_F(FlightPlanNavPatternTest, OrbitCarrotStartsAtVehicleAzimuth)
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
     // Vehicle west of the centre: the first carrot must be on the west side
     // of the ring (no dash across the circle).
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE - 2.0f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = (kCentreE - 2.0f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
     flightPlanNavUpdate(g_stubMicros);
 
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], kCentreE - kRadiusM, 0.05f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], kCentreN, 0.05f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, kCentreE - kRadiusM, 0.05f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, kCentreN, 0.05f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavPatternTest, OrbitStartDeferredUntilArrivalBrakingSettles)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
     g_stubEstimate.velocity.v[NED_E] = 400.0f;  // still carrying 4 m/s of leg momentum
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+    g_stubEstimate.velocity.x = 400.0f;  // still carrying 4 m/s of leg momentum
+#endif // USE_FRD_NED
     triggerReached();
 
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_setTargetCalls, 1);      // too fast: no carrot command yet
 
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_E] = 0.0f;    // braking has parked the vehicle
+#else
+    g_stubEstimate.velocity.x = 0.0f;    // braking has parked the vehicle
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_setTargetCalls, 2);
@@ -645,9 +702,15 @@ TEST_F(FlightPlanNavPatternTest, OrbitStartDeferredUntilArrivalBrakingSettles)
 TEST_F(FlightPlanNavPatternTest, OrbitStartTimeoutOverridesSettleGate)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
     g_stubEstimate.velocity.v[NED_E] = 400.0f;  // never settles (e.g. holding against wind)
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+    g_stubEstimate.velocity.x = 400.0f;  // never settles (e.g. holding against wind)
+#endif // USE_FRD_NED
     triggerReached();
 
     g_stubMicros += 2'000'000;
@@ -662,8 +725,13 @@ TEST_F(FlightPlanNavPatternTest, OrbitStartTimeoutOverridesSettleGate)
 TEST_F(FlightPlanNavPatternTest, OrbitCarrotTracksCircleAroundHoldPoint)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
     flightPlanNavUpdate(g_stubMicros);   // settled: pattern starts
 
@@ -675,9 +743,15 @@ TEST_F(FlightPlanNavPatternTest, OrbitCarrotTracksCircleAroundHoldPoint)
 
         EXPECT_EQ(g_moveTargetCalls, step);
         EXPECT_NEAR(distanceFromCentre(), kRadiusM, 0.01f);
+#ifdef USE_FRD_NED
         EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), kCentreU, 0.01f);
         const float azimuth = atan2f(g_lastTarget.targetEfM.v[NED_N] - kCentreN,
                                      g_lastTarget.targetEfM.v[NED_E] - kCentreE);
+#else
+        EXPECT_NEAR(g_lastTarget.targetEfM.z, kCentreU, 0.01f);
+        const float azimuth = atan2f(g_lastTarget.targetEfM.y - kCentreN,
+                                     g_lastTarget.targetEfM.x - kCentreE);
+#endif // USE_FRD_NED
         EXPECT_NEAR(azimuth, step * 0.25f, 0.05f);
         EXPECT_GT(azimuth, previousAzimuth);
         previousAzimuth = azimuth;
@@ -688,8 +762,13 @@ TEST_F(FlightPlanNavPatternTest, OrbitCarrotTracksCircleAroundHoldPoint)
 TEST_F(FlightPlanNavPatternTest, Figure8CarrotBoundedAndRecrossesCentre)
 {
     engageHoldPattern(WAYPOINT_PATTERN_FIGURE8, 400 /* 40 s */);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = kCentreE * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = kCentreE * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
     flightPlanNavUpdate(g_stubMicros);   // settled: pattern starts
 
@@ -722,8 +801,13 @@ TEST_F(FlightPlanNavPatternTest, Figure8CarrotBoundedAndRecrossesCentre)
 TEST_F(FlightPlanNavPatternTest, PatternCommandReissuedAfterWipedNavCommand)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
     flightPlanNavUpdate(g_stubMicros);   // settled: pattern starts
     ASSERT_EQ(g_setTargetCalls, 2);
@@ -743,8 +827,13 @@ TEST_F(FlightPlanNavPatternTest, PatternCommandReissuedAfterWipedNavCommand)
 TEST_F(FlightPlanNavPatternTest, PatternClearedOnAdvance)
 {
     engageHoldPattern(WAYPOINT_PATTERN_ORBIT, 20 /* 2.0 s */);
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = (kCentreE + 1.5f) * 100.0f;
     g_stubEstimate.position.v[NED_N] = kCentreN * 100.0f;
+#else
+    g_stubEstimate.position.x = (kCentreE + 1.5f) * 100.0f;
+    g_stubEstimate.position.y = kCentreN * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
     flightPlanNavUpdate(g_stubMicros);   // settled: pattern starts
 
@@ -837,11 +926,19 @@ TEST_F(FlightPlanNavTest, GeometryAccessorsReflectActiveTarget)
     ASSERT_TRUE(g_lastTarget.valid);
 
     // Vehicle at origin, altitude aligned with the target (-50 m ENU up).
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = 0.0f;      // east cm
     g_stubEstimate.position.v[NED_N] = 0.0f;      // north cm
     g_stubEstimate.position.v[NED_D] = 5000.0f;   // down cm (matches target, 50 m below origin)
     g_stubEstimate.velocity.v[NED_E] = 500.0f;    // 5 m/s east
     g_stubEstimate.velocity.v[NED_N] = 0.0f;
+#else
+    g_stubEstimate.position.v[0] = 0.0f;      // east cm
+    g_stubEstimate.position.v[1] = 0.0f;      // north cm
+    g_stubEstimate.position.v[2] = -5000.0f;  // up cm (matches target z)
+    g_stubEstimate.velocity.v[0] = 500.0f;    // 5 m/s east
+    g_stubEstimate.velocity.v[1] = 0.0f;
+#endif // USE_FRD_NED
 
     EXPECT_NEAR(flightPlanNavGetDistanceToWaypointM(), 22.36f, 0.1f);
     // atan2(E=10, N=20) = 26.57 deg CW from north -> 266 deci-degrees.
@@ -962,13 +1059,22 @@ TEST_F(FlightPlanNavTest, InjectedPlanReplacesMissionAndRunsToTermination)
     EXPECT_EQ(g_setTargetCalls, callsBefore + 1);
     EXPECT_FLOAT_EQ(g_yawRateLimitDps, 0.0f);
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 10.0f, 0.1f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 20.0f, 0.1f); // 120 m AMSL - 100 m origin
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 10.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 20.0f, 0.1f); // 120 m AMSL - 100 m origin
+#endif // USE_FRD_NED
 
     // The injected plan advances past the PG waypoint count (1 positional wp).
     // The FLYOVER return leg keeps the arrival-radius gate, so the craft has to
     // reach the waypoint (10 m east) for it to count.
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = 10.0f * 100.0f;
+#else
+    g_stubEstimate.position.v[ENU_E] = 10.0f * 100.0f;
+#endif // USE_FRD_NED
     arriveAtWaypoint();
     EXPECT_EQ(flightPlanNavGetCurrentIndex(), 1);
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
@@ -1010,7 +1116,11 @@ TEST_F(FlightPlanNavTest, EngageAfterInjectRevertsToPgPlan)
     EXPECT_FALSE(flightPlanNavIsInjectedPlanActive());
     EXPECT_EQ(flightPlanNavGetCurrentIndex(), 0);
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 50.0f, 0.1f); // PG waypoint: 150 m AMSL - 100 m origin
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 50.0f, 0.1f); // PG waypoint: 150 m AMSL - 100 m origin
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavTest, ReachedListenerSuppressedWhileInjected)
@@ -1059,17 +1169,29 @@ TEST_F(FlightPlanNavTest, LandWaypointArrivalDescendsAtTheWaypoint)
     ASSERT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
 
     // Arrival gate trips short of the waypoint, 30 m up.
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = 8.5f * 100.0f;
     g_stubEstimate.position.v[NED_N] = 19.0f * 100.0f;
     g_stubEstimate.position.v[NED_D] = -(30.0f * 100.0f);
+#else
+    g_stubEstimate.position.v[ENU_E] = 8.5f * 100.0f;
+    g_stubEstimate.position.v[ENU_N] = 19.0f * 100.0f;
+    g_stubEstimate.position.v[ENU_U] = 30.0f * 100.0f;
+#endif // USE_FRD_NED
     triggerReached();
 
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
     ASSERT_TRUE(g_lastTarget.valid);
     // Descent anchors at the waypoint, not the current position.
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 10.0f, 0.1f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 20.0f, 0.1f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 30.0f - 200.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 10.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, 20.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 30.0f - 200.0f, 0.1f);
+#endif // USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.cruiseSpeedMps, 0.5f, 0.01f);
 }
 
@@ -1084,13 +1206,21 @@ TEST_F(FlightPlanNavTest, LandWaypointTouchdownDisarmsAndCompletes)
     const int dispatchesBeforeTouchdown = g_setTargetCalls;
 
     // Descent establishes (above 25% of the commanded rate).
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(-40.0f); // cm/s
+#else
+    g_stubEstimate.velocity.v[ENU_U] = -40.0f; // cm/s
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
 
     // Touchdown: quiet timer starts.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(0.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
@@ -1120,13 +1250,22 @@ TEST_F(FlightPlanNavTest, LandWaypointWithDurationLoitersThenDescends)
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_HOLDING);
 
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_D] = -(30.0f * 100.0f);
+#else
+    g_stubEstimate.position.v[ENU_U] = 30.0f * 100.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 1'500'000; // 2.5 s: loiter expired, descend at the waypoint
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 10.0f, 0.1f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 30.0f - 200.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 10.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 30.0f - 200.0f, 0.1f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavTest, LandLoiterExpiryWithLostTargetRedispatchesLeg)
@@ -1150,8 +1289,13 @@ TEST_F(FlightPlanNavTest, LandLoiterExpiryWithLostTargetRedispatchesLeg)
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     EXPECT_EQ(g_setTargetCalls, callsBefore + 1);
     ASSERT_TRUE(g_lastTarget.valid);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 10.0f, 0.1f); // the LAND leg again, not a descent
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), -50.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 10.0f, 0.1f); // the LAND leg again, not a descent
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, -50.0f, 0.1f);
+#endif // USE_FRD_NED
 }
 
 // --- Safety behaviour ---
@@ -1203,7 +1347,11 @@ TEST_F(FlightPlanNavSafetyTest, ProgressResetsStallWindow)
 
     // Move 100 m toward the target just before the stall window expires.
     g_stubMicros += 29'000'000;
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_N] = 100.0f * 100.0f; // cm
+#else
+    g_stubEstimate.position.v[ENU_N] = 100.0f * 100.0f; // cm
+#endif // USE_FRD_NED
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
 
@@ -1218,7 +1366,11 @@ TEST_F(FlightPlanNavSafetyTest, MovingAwayPastMarginAbortsAsFlyaway)
     engageDistantLeg();
 
     // The ~2.2 km leg gives the capped 100 m flyaway margin; drift just past it.
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_N] = -105.0f * 100.0f; // cm
+#else
+    g_stubEstimate.position.v[ENU_N] = -105.0f * 100.0f; // cm
+#endif // USE_FRD_NED
     flightPlanNavUpdate(g_stubMicros + 10'000);
 
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_ABORTED);
@@ -1289,17 +1441,29 @@ TEST_F(FlightPlanNavSafetyTest, GeofenceBreachWithLandActionStartsLanding)
     engageDistantLeg();
 
     GPS_distanceToHome = 150;
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_E] = 12.0f * 100.0f; // cm
     g_stubEstimate.position.v[NED_N] = 34.0f * 100.0f;
     g_stubEstimate.position.v[NED_D] = -(30.0f * 100.0f); // 30 m up
+#else
+    g_stubEstimate.position.v[ENU_E] = 12.0f * 100.0f; // cm
+    g_stubEstimate.position.v[ENU_N] = 34.0f * 100.0f;
+    g_stubEstimate.position.v[ENU_U] = 30.0f * 100.0f; // 30 m up
+#endif // USE_FRD_NED
     flightPlanNavUpdate(g_stubMicros + 10'000);
 
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
     ASSERT_TRUE(g_lastTarget.valid);
     // Landing target: current position, far below current altitude.
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 12.0f, 0.1f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 34.0f, 0.1f);
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 30.0f - 200.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 12.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, 34.0f, 0.1f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 30.0f - 200.0f, 0.1f);
+#endif // USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.cruiseSpeedMps, 0.5f, 0.01f);
     EXPECT_FALSE(flightPlanNavIsInjectedPlanActive());
 }
@@ -1338,7 +1502,11 @@ TEST_F(FlightPlanNavSafetyTest, GeofenceBreachWithRthActionInjectsReturnPlan)
     const int callsBeforeBreach = g_setTargetCalls;
 
     GPS_distanceToHome = 150;
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_N] = 150.0f * 100.0f; // 150 m out, en route
+#else
+    g_stubEstimate.position.v[ENU_N] = 150.0f * 100.0f; // 150 m out, en route
+#endif // USE_FRD_NED
     flightPlanNavUpdate(g_stubMicros + 10'000);
 
     // The return plan replaces the mission: fly to home at the rescue return
@@ -1348,9 +1516,15 @@ TEST_F(FlightPlanNavSafetyTest, GeofenceBreachWithRthActionInjectsReturnPlan)
     EXPECT_TRUE(flightPlanNavIsInjectedPlanActive());
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     EXPECT_EQ(g_setTargetCalls, callsBeforeBreach + 1);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastDispatchTargetEfM.v[NED_E], 0.0f, 0.1f);
     EXPECT_NEAR(g_lastDispatchTargetEfM.v[NED_N], 0.0f, 0.1f);
     EXPECT_NEAR((-g_lastDispatchTargetEfM.v[NED_D]), 30.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastDispatchTargetEfM.x, 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastDispatchTargetEfM.y, 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastDispatchTargetEfM.z, 30.0f, 0.1f);
+#endif // USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.cruiseSpeedMps, 7.5f, 0.01f);
 
     // Still outside the fence on the way home: no re-injection.
@@ -1361,12 +1535,21 @@ TEST_F(FlightPlanNavSafetyTest, GeofenceBreachWithRthActionInjectsReturnPlan)
     // Reach home: the pass-through leg advances through the carrot gate and
     // dispatches the plan's LAND leg to home; its arrival descends there.
     GPS_distanceToHome = 0;
+#ifdef USE_FRD_NED
     g_stubEstimate.position.v[NED_N] = 0.0f;
+#else
+    g_stubEstimate.position.v[ENU_N] = 0.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 100'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastDispatchTargetEfM.v[NED_E], 0.0f, 0.1f);
     EXPECT_NEAR(g_lastDispatchTargetEfM.v[NED_N], 0.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastDispatchTargetEfM.x, 0.0f, 0.1f);
+    EXPECT_NEAR(g_lastDispatchTargetEfM.y, 0.0f, 0.1f);
+#endif // USE_FRD_NED
 
     triggerReached();  // the LAND leg is a precise point target: its callback advances it
     EXPECT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
@@ -1391,7 +1574,11 @@ TEST_F(FlightPlanNavSafetyTest, GeofenceRthAboveReturnAltReturnsAtCurrentAltitud
     // Never descend en route: the plan returns at the current GPS altitude,
     // which in the estimator's feedback frame is its reading at engage (the
     // stub reads 0 while GPS says 150 m AMSL — a mid-flight engagement).
+#ifdef USE_FRD_NED
     EXPECT_NEAR((-g_lastTarget.targetEfM.v[NED_D]), 0.0f, 0.1f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.z, 0.0f, 0.1f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavSafetyTest, LandingTouchdownDisarms)
@@ -1405,13 +1592,21 @@ TEST_F(FlightPlanNavSafetyTest, LandingTouchdownDisarms)
     ASSERT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
 
     // Descent establishes (well above the 25% of commanded rate threshold).
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(-40.0f); // cm/s
+#else
+    g_stubEstimate.velocity.v[ENU_U] = -40.0f; // cm/s
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
     EXPECT_EQ(g_disarmCalls, 0);
 
     // Touchdown: vertical velocity inside the quiet threshold.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(0.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros); // starts the quiet timer
     EXPECT_EQ(g_disarmCalls, 0);
@@ -1477,20 +1672,36 @@ TEST_F(FlightPlanNavSafetyTest, LandingQuietTimerResetsIfDescentResumes)
     flightPlanNavUpdate(g_stubMicros + 10'000);
     ASSERT_EQ(flightPlanNavGetState(), FP_NAV_LANDING);
 
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(-40.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = -40.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 1'000'000;
     flightPlanNavUpdate(g_stubMicros);
 
     // Brief quiet period, then descent resumes (e.g. drifted off a bush).
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(0.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 500'000;
     flightPlanNavUpdate(g_stubMicros);
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(-40.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = -40.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 500'000;
     flightPlanNavUpdate(g_stubMicros);
 
     // New quiet period must run the full detection time again.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_D] = -(0.0f);
+#else
+    g_stubEstimate.velocity.v[ENU_U] = 0.0f;
+#endif // USE_FRD_NED
     g_stubMicros += 600'000;
     flightPlanNavUpdate(g_stubMicros); // quiet timer restarts here
     EXPECT_EQ(g_disarmCalls, 0);
@@ -1515,8 +1726,13 @@ protected:
                     (int32_t)lrintf(eastM * kUnitsPerMetre), altCm, type);
     }
     void setCraftMetres(float eastM, float northM) {
+#ifdef USE_FRD_NED
         g_stubEstimate.position.v[NED_E] = eastM * 100.0f;
         g_stubEstimate.position.v[NED_N] = northM * 100.0f;
+#else
+        g_stubEstimate.position.v[ENU_E] = eastM * 100.0f;
+        g_stubEstimate.position.v[ENU_N] = northM * 100.0f;
+#endif // USE_FRD_NED
     }
     void step(uint32_t us = 100'000) {
         g_stubMicros += us;
@@ -1546,8 +1762,13 @@ TEST_F(FlightPlanNavCarrotTest, CarrotTracksLegLineNotCraftCrossTrack)
     // the far waypoint.
     ASSERT_EQ(flightPlanNavGetState(), FP_NAV_TARGETING);
     ASSERT_EQ(flightPlanNavGetCurrentIndex(), 0);
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_E], 0.0f, 0.5f);
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], 50.0f, 5.0f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.x, 0.0f, 0.5f);
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, 50.0f, 5.0f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavCarrotTest, StraightThroughFlybyAdvancesAtWideGate)
@@ -1699,39 +1920,71 @@ TEST_F(FlightPlanNavCarrotTest, OverspeedGovernorHoldsCarrotWithHysteresis)
     for (int i = 0; i < 3; i++) {
         step();
     }
+#ifdef USE_FRD_NED
     const float marchingN = g_lastTarget.targetEfM.v[NED_N];
+#else
+    const float marchingN = g_lastTarget.targetEfM.y;
+#endif // USE_FRD_NED
     EXPECT_GT(marchingN, 0.05f);
 
     // Craft carries 15 m/s against the 10 m/s cruise profile (tailwind /
     // catch-up): the governor holds the carrot so braking authority returns.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_N] = 1500.0f;
+#else
+    g_stubEstimate.velocity.v[ENU_N] = 1500.0f;
+#endif // USE_FRD_NED
     for (int i = 0; i < 20; i++) {
         step();   // speed filter converges, carrot speed slews to a stop
     }
+#ifdef USE_FRD_NED
     const float heldN = g_lastTarget.targetEfM.v[NED_N];
+#else
+    const float heldN = g_lastTarget.targetEfM.y;
+#endif // USE_FRD_NED
     EXPECT_LT(heldN, 5.5f);   // held by the governor, not parked on the lead cap
     for (int i = 0; i < 10; i++) {
         step();
     }
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], heldN, 0.01f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, heldN, 0.01f);
+#endif // USE_FRD_NED
 
     // Speed drops into the hysteresis band (10.9 m/s: below the 11.5 entry,
     // above the 10.75 release). A single-threshold governor resumes marching
     // here and chatters cruise/freeze at fix rate; the hold must stick.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_N] = 1090.0f;
+#else
+    g_stubEstimate.velocity.v[ENU_N] = 1090.0f;
+#endif // USE_FRD_NED
     for (int i = 0; i < 20; i++) {
         step();
     }
+#ifdef USE_FRD_NED
     EXPECT_NEAR(g_lastTarget.targetEfM.v[NED_N], heldN, 0.01f);
+#else
+    EXPECT_NEAR(g_lastTarget.targetEfM.y, heldN, 0.01f);
+#endif // USE_FRD_NED
 
     // Fully back on profile (craft moving gently up the leg so the lead window
     // opens ahead): the carrot marches again.
+#ifdef USE_FRD_NED
     g_stubEstimate.velocity.v[NED_N] = 200.0f;
+#else
+    g_stubEstimate.velocity.v[ENU_N] = 200.0f;
+#endif // USE_FRD_NED
     for (int i = 0; i < 20; i++) {
         setCraftMetres(0.0f, (i + 1) * 0.2f);
         step();
     }
+#ifdef USE_FRD_NED
     EXPECT_GT(g_lastTarget.targetEfM.v[NED_N], heldN + 0.5f);
+#else
+    EXPECT_GT(g_lastTarget.targetEfM.y, heldN + 0.5f);
+#endif // USE_FRD_NED
 }
 
 TEST_F(FlightPlanNavCarrotTest, ChaseLagCompensationCrossesGateNearCornerSpeed)
@@ -1754,13 +2007,23 @@ TEST_F(FlightPlanNavCarrotTest, ChaseLagCompensationCrossesGateNearCornerSpeed)
     float crossingSpeedMps = -1.0f;
     float maxSpeedMps = 0.0f;
     for (int i = 0; i < 1500 && crossingSpeedMps < 0.0f; i++) {
+#ifdef USE_FRD_NED
         const float velE = (g_lastTarget.targetEfM.v[NED_E] - craftE) / tauS;
         const float velN = (g_lastTarget.targetEfM.v[NED_N] - craftN) / tauS;
+#else
+        const float velE = (g_lastTarget.targetEfM.x - craftE) / tauS;
+        const float velN = (g_lastTarget.targetEfM.y - craftN) / tauS;
+#endif // USE_FRD_NED
         craftE += velE * dt;
         craftN += velN * dt;
         setCraftMetres(craftE, craftN);
+#ifdef USE_FRD_NED
         g_stubEstimate.velocity.v[NED_E] = velE * 100.0f;
         g_stubEstimate.velocity.v[NED_N] = velN * 100.0f;
+#else
+        g_stubEstimate.velocity.v[ENU_E] = velE * 100.0f;
+        g_stubEstimate.velocity.v[ENU_N] = velN * 100.0f;
+#endif // USE_FRD_NED
         const float speedMps = sqrtf(velE * velE + velN * velN);
         maxSpeedMps = fmaxf(maxSpeedMps, speedMps);
         step();

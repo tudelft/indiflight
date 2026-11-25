@@ -376,7 +376,11 @@ static int32_t getSensorValue(uint8_t sensor)
         break;
 
     case EX_PITCH_ANGLE:
+#ifdef USE_FRD_NED
         return -attitude.values.pitch; // keep upstream wire sign (FRD pitch is nose up +)
+#else
+        return attitude.values.pitch;
+#endif // USE_FRD_NED
         break;
 
     case EX_HEADING:
@@ -429,11 +433,19 @@ static int32_t getSensorValue(uint8_t sensor)
     break;
 
     case EX_GFORCE_Y:
+#ifdef USE_FRD_NED
        return (int16_t)(((float)-acc.accADC.y / acc.dev.acc_1G) * 1000); // FRD -> upstream FLU wire axes
+#else
+       return (int16_t)(((float)acc.accADC.y / acc.dev.acc_1G) * 1000);
+#endif // USE_FRD_NED
     break;
 
     case EX_GFORCE_Z:
+#ifdef USE_FRD_NED
         return (int16_t)(((float)-acc.accADC.z / acc.dev.acc_1G) * 1000); // FRD -> upstream FLU wire axes
+#else
+        return (int16_t)(((float)acc.accADC.z / acc.dev.acc_1G) * 1000);
+#endif // USE_FRD_NED
     break;
 #endif
 

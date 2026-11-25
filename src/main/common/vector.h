@@ -43,8 +43,15 @@ typedef union vector3_u {
     };
 } vector3_t;
 
+#ifdef USE_FRD_NED
 // Earth-frame vectors use a plain vector3_t indexed by the axisNED_e
 // enum in common/axis.h, which names the frame, axis, and sign at each call site.
+#else
+// Earth-frame vectors use a plain vector3_t indexed by the axisNWU_e / axisENU_e
+// enums in common/axis.h, which name the frame, axis, and sign at each call site.
+// (The former vectorNED_t struct was removed: its .ef.N/.E/.D members claimed an
+// NED frame while rMat actually produces NWU, which caused a sign inversion.)
+#endif // USE_FRD_NED
 
 typedef struct matrix33_s {
     float m[3][3];

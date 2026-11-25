@@ -702,7 +702,9 @@ static const OSD_Entry cmsx_menuProfileOtherEntries[] = {
 #ifdef USE_LAUNCH_CONTROL
     {"LAUNCH CONTROL", OME_Submenu, cmsMenuChange, &cmsx_menuLaunchControl },
 #endif
+#ifndef USE_INDI // ndiflight: motor_output_limit does not exist in INDI builds (neither PID nor INDI uses it)
     { "MTR OUT LIM %",OME_UINT8, NULL, &(OSD_UINT8_t) { &cmsx_motorOutputLimit, MOTOR_OUTPUT_LIMIT_PERCENT_MIN,  MOTOR_OUTPUT_LIMIT_PERCENT_MAX,  1} },
+#endif
 
     { "AUTO CELL CNT", OME_INT8, NULL, &(OSD_INT8_t) { &cmsx_autoProfileCellCount, AUTO_PROFILE_CELL_COUNT_CHANGE, MAX_AUTO_DETECT_CELL_COUNT, 1} },
 

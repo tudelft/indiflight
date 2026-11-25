@@ -181,8 +181,12 @@ static void frSkyHubWriteByteInternal(const char data)
 static void sendAccel(void)
 {
     for (unsigned i = 0; i < 3; i++) {
+#ifdef USE_FRD_NED
         const float fluSign = (i == X) ? 1.0f : -1.0f; // FRD -> upstream FLU wire axes
         frSkyHubWriteFrame(ID_ACC_X + i, ((int16_t)(fluSign * acc.accADC.v[i] * acc.dev.acc_1G_rec) * 1000));
+#else
+        frSkyHubWriteFrame(ID_ACC_X + i, ((int16_t)(acc.accADC.v[i] * acc.dev.acc_1G_rec) * 1000));
+#endif // USE_FRD_NED
     }
 }
 #endif

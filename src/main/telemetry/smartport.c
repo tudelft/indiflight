@@ -732,7 +732,11 @@ void processSmartPortTelemetry(smartPortPayload_t *payload, volatile bool *clear
                 break;
 #if defined(USE_ACC)
             case FSSP_DATAID_PITCH      :
+#ifdef USE_FRD_NED
                 smartPortSendPackage(id, -attitude.values.pitch); // given in 10*deg; keep upstream wire sign (FRD pitch is nose up +)
+#else
+                smartPortSendPackage(id, attitude.values.pitch); // given in 10*deg
+#endif // USE_FRD_NED
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ROLL       :
@@ -744,11 +748,19 @@ void processSmartPortTelemetry(smartPortPayload_t *payload, volatile bool *clear
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCY       :
+#ifdef USE_FRD_NED
                 smartPortSendPackage(id, lrintf(-100 * acc.accADC.y * acc.dev.acc_1G_rec)); // FRD -> upstream FLU wire axes
+#else
+                smartPortSendPackage(id, lrintf(100 * acc.accADC.y * acc.dev.acc_1G_rec));
+#endif // USE_FRD_NED
                 *clearToSend = false;
                 break;
             case FSSP_DATAID_ACCZ       :
+#ifdef USE_FRD_NED
                 smartPortSendPackage(id, lrintf(-100 * acc.accADC.z * acc.dev.acc_1G_rec)); // FRD -> upstream FLU wire axes
+#else
+                smartPortSendPackage(id, lrintf(100 * acc.accADC.z * acc.dev.acc_1G_rec));
+#endif // USE_FRD_NED
                 *clearToSend = false;
                 break;
 #endif

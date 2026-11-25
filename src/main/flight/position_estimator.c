@@ -173,11 +173,19 @@ typedef struct {
 
 enum { CAL_Z_BARO = 0, CAL_Z_GPS, CAL_Z_RF, CAL_Z_COUNT };
 
+#ifdef USE_FRD_NED
 // Independent 1-D Kalman filters, one per NED axis (North, East, Down).
 // Altitude measurements (baro, GPS, rangefinder) enter kfDown negated.
+#else
+// Independent 1-D Kalman filters, one per ENU axis (East, North, Up).
+#endif // USE_FRD_NED
 static positionKalman_t kfEast;
 static positionKalman_t kfNorth;
+#ifdef USE_FRD_NED
 static positionKalman_t kfDown;
+#else
+static positionKalman_t kfUp;
+#endif // USE_FRD_NED
 
 static positionEstimate3d_t estimate;
 
@@ -231,7 +239,11 @@ void positionEstimatorInit(void)
 #endif
     kalmanInit(&kfEast, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, qaccelXY);
     kalmanInit(&kfNorth, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, qaccelXY);
+#ifdef USE_FRD_NED
     kalmanInit(&kfDown, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_Z);
+#else
+    kalmanInit(&kfUp, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_Z);
+#endif // USE_FRD_NED
     estimate.position = (vector3_t){{0, 0, 0}};
     estimate.velocity = (vector3_t){{0, 0, 0}};
     estimate.trustXY = 0.0f;
@@ -267,10 +279,17 @@ void positionEstimatorEnableXY(bool enable)
     if (enable && !xyEnabled) {
         kalmanInit(&kfEast, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, qaccelXY);
         kalmanInit(&kfNorth, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, qaccelXY);
+#ifdef USE_FRD_NED
         estimate.position.v[NED_E] = 0.0f;
         estimate.position.v[NED_N] = 0.0f;
         estimate.velocity.v[NED_E] = 0.0f;
         estimate.velocity.v[NED_N] = 0.0f;
+#else
+        estimate.position.v[ENU_E] = 0.0f;
+        estimate.position.v[ENU_N] = 0.0f;
+        estimate.velocity.v[ENU_E] = 0.0f;
+        estimate.velocity.v[ENU_N] = 0.0f;
+#endif // USE_FRD_NED
         lastXYMeasurementUs = 0;
         estimate.isValidXY = false;
 #ifdef USE_GPS
@@ -288,14 +307,20 @@ void positionEstimatorEnableXY(bool enable)
     xyEnabled = enable;
 }
 
+#ifdef USE_FRD_NED
 // Compute earth-frame linear acceleration from IMU (gravity removed), in cm/s^2 NED
 STATIC_UNIT_TESTED void getLinearAccelNED(float *accelNorth, float *accelEast, float *accelDown)
+#else
+// Compute earth-frame linear acceleration from IMU (gravity removed), in cm/s^2 ENU
+STATIC_UNIT_TESTED void getLinearAccelENU(float *accelEast, float *accelNorth, float *accelUp)
+#endif // USE_FRD_NED
 {
     const float accScale = acc.dev.acc_1G_rec;
     vector3_t accBF = {{ acc.accADC.x * accScale,
                          acc.accADC.y * accScale,
                          acc.accADC.z * accScale }};
 
+#ifdef USE_FRD_NED
     // rMat rotates body FRD -> earth NED (imu.c).
     vector3_t accEF_NED;
     matrixVectorMul(&accEF_NED, &rMat, &accBF);
@@ -304,6 +329,18 @@ STATIC_UNIT_TESTED void getLinearAccelNED(float *accelNorth, float *accelEast, f
     *accelNorth = accEF_NED.v[NED_N] * GRAVITY_CMSS;
     *accelEast  = accEF_NED.v[NED_E] * GRAVITY_CMSS;
     *accelDown  = (accEF_NED.v[NED_D] + 1.0f) * GRAVITY_CMSS;
+#else
+    // rMat rotates body -> earth NWU (North-West-Up); this is the same convention
+    // used throughout imu.c (imuComputeRotationMatrix, attitude extraction, mag fusion).
+    vector3_t accEF_NWU;
+    matrixVectorMul(&accEF_NWU, &rMat, &accBF);
+
+    // NWU -> ENU named outputs. Indexing by NWU_W makes the East = -West sign
+    // explicit; gravity (a steady +1 g on NWU_U) is removed from Up.
+    *accelEast  = -accEF_NWU.v[NWU_W] * GRAVITY_CMSS;
+    *accelNorth =  accEF_NWU.v[NWU_N] * GRAVITY_CMSS;
+    *accelUp    = (accEF_NWU.v[NWU_U] - 1.0f) * GRAVITY_CMSS;
+#endif // USE_FRD_NED
 }
 
 #ifdef USE_GPS
@@ -385,7 +422,11 @@ static void feedGPSMeasurements(timeUs_t nowUs)
         kalmanUpdatePosition(&kfEast, gpsDistCm.v[EF_EAST], rPos);
         kalmanUpdatePosition(&kfNorth, gpsDistCm.v[EF_NORTH], rPos);
 
+#ifdef USE_FRD_NED
         // GPS velocity (NED from UBX)
+#else
+        // GPS velocity (NED from UBX) -> ENU
+#endif // USE_FRD_NED
         const float rVel = gpsR(R_GPS_VEL_BASE, xyDop);
         kalmanUpdateVelocity(&kfEast, (float)gpsSol.velned.velE, rVel);
         kalmanUpdateVelocity(&kfNorth, (float)gpsSol.velned.velN, rVel);
@@ -407,7 +448,11 @@ static void feedGPSMeasurements(timeUs_t nowUs)
         const float gpsAltR = gpsR(R_GPS_ALT_BASE, altDop) * (1.0f + baroPreference * 2.0f);
 
         const float gpsRelativeAltCm = gpsSol.llh.altCm - gpsAltOffsetCm;
+#ifdef USE_FRD_NED
         kalmanUpdatePosition(&kfDown, -gpsRelativeAltCm, gpsAltR);
+#else
+        kalmanUpdatePosition(&kfUp, gpsRelativeAltCm, gpsAltR);
+#endif // USE_FRD_NED
         lastZMeasurementUs = nowUs;
 
         zCal[CAL_Z_GPS].rawReading = gpsSol.llh.altCm;
@@ -444,7 +489,11 @@ static void feedBaroMeasurements(timeUs_t nowUs)
     const float baroPreference = constrainf(positionConfig()->altitude_prefer_baro * 0.01f, 0.01f, 1.0f);
     const float baroR = R_BARO_ALT / baroPreference;
 
+#ifdef USE_FRD_NED
     kalmanUpdatePosition(&kfDown, -(baroAltCm - baroAltOffsetCm), baroR);
+#else
+    kalmanUpdatePosition(&kfUp, baroAltCm - baroAltOffsetCm, baroR);
+#endif // USE_FRD_NED
     lastZMeasurementUs = nowUs;
 
     zCal[CAL_Z_BARO].rawReading = baroAltCm;
@@ -480,7 +529,11 @@ static void feedRangefinderMeasurements(timeUs_t nowUs)
         rfR *= 0.25f;  // even lower noise -> stronger pull
     }
 
+#ifdef USE_FRD_NED
     kalmanUpdatePosition(&kfDown, -(altCm - rangefinderAltOffsetCm), rfR);
+#else
+    kalmanUpdatePosition(&kfUp, altCm - rangefinderAltOffsetCm, rfR);
+#endif // USE_FRD_NED
     lastZMeasurementUs = nowUs;
 
     zCal[CAL_Z_RF].rawReading = altCm;
@@ -549,7 +602,11 @@ static void feedOpticalFlowMeasurements(timeUs_t nowUs)
     const float velRight   = flowRight   * cosRoll;
     const float velForward = flowForward * cosPitch;
 
+#ifdef USE_FRD_NED
     // Rotate from body heading frame to the NED earth frame.
+#else
+    // Rotate from body heading frame to ENU earth frame.
+#endif // USE_FRD_NED
     const float yawRad = DECIDEGREES_TO_RADIANS(attitude.values.yaw);
     const float cosYaw = cos_approx(yawRad);
     const float sinYaw = sin_approx(yawRad);
@@ -596,13 +653,22 @@ void positionEstimatorUpdate(void)
     }
 
     // Compute earth-frame linear acceleration from IMU
+#ifdef USE_FRD_NED
     float accelNorth, accelEast, accelDown;
     getLinearAccelNED(&accelNorth, &accelEast, &accelDown);
+#else
+    float accelEast, accelNorth, accelUp;
+    getLinearAccelENU(&accelEast, &accelNorth, &accelUp);
+#endif // USE_FRD_NED
 
     // Z-axis: always runs (for altitude hold, OSD, vario).
     // While disarmed, predict with zero acceleration so covariance continues to evolve
     // and incoming baro/rangefinder updates remain responsive.
+#ifdef USE_FRD_NED
     kalmanPredict(&kfDown, dt, ARMING_FLAG(ARMED) ? accelDown : 0.0f);
+#else
+    kalmanPredict(&kfUp, dt, ARMING_FLAG(ARMED) ? accelUp : 0.0f);
+#endif // USE_FRD_NED
 
     // XY axes: only when a consumer is active
     if (xyEnabled && ARMING_FLAG(ARMED)) {
@@ -617,8 +683,13 @@ void positionEstimatorUpdate(void)
     feedOpticalFlowMeasurements(nowUs);
 
     // Calibrate drifting sensor offsets against KF estimate anchored by non-drifting sources
+#ifdef USE_FRD_NED
     crossCalibrateOffsets(zCal, CAL_Z_COUNT, -kalmanGetPosition(&kfDown)); // altitude
+#else
+    crossCalibrateOffsets(zCal, CAL_Z_COUNT, kalmanGetPosition(&kfUp));
+#endif // USE_FRD_NED
 
+#ifdef USE_FRD_NED
     // Extract state into the unified estimate (NED)
     estimate.position.v[NED_N] = kalmanGetPosition(&kfNorth);
     estimate.position.v[NED_E] = kalmanGetPosition(&kfEast);
@@ -627,6 +698,16 @@ void positionEstimatorUpdate(void)
     estimate.velocity.v[NED_N] = kalmanGetVelocity(&kfNorth);
     estimate.velocity.v[NED_E] = kalmanGetVelocity(&kfEast);
     estimate.velocity.v[NED_D] = kalmanGetVelocity(&kfDown);
+#else
+    // Extract state into the unified estimate (kfEast/kfNorth/kfUp are the East/North/Up filters)
+    estimate.position.v[ENU_E] = kalmanGetPosition(&kfEast);
+    estimate.position.v[ENU_N] = kalmanGetPosition(&kfNorth);
+    estimate.position.v[ENU_U] = kalmanGetPosition(&kfUp);
+
+    estimate.velocity.v[ENU_E] = kalmanGetVelocity(&kfEast);
+    estimate.velocity.v[ENU_N] = kalmanGetVelocity(&kfNorth);
+    estimate.velocity.v[ENU_U] = kalmanGetVelocity(&kfUp);
+#endif // USE_FRD_NED
 
     // Validity: based on recent measurement updates
     if (xyEnabled) {
@@ -642,7 +723,11 @@ void positionEstimatorUpdate(void)
     // Map variance to 0-1: trust = 1 / (1 + variance/scale)
     const float xyVar = (kalmanGetPositionVariance(&kfEast) + kalmanGetPositionVariance(&kfNorth)) * 0.5f;
     estimate.trustXY = 1.0f / (1.0f + xyVar / 10000.0f);
+#ifdef USE_FRD_NED
     estimate.trustZ = 1.0f / (1.0f + kalmanGetPositionVariance(&kfDown) / 10000.0f);
+#else
+    estimate.trustZ = 1.0f / (1.0f + kalmanGetPositionVariance(&kfUp) / 10000.0f);
+#endif // USE_FRD_NED
 }
 
 const positionEstimate3d_t *positionEstimatorGetEstimate(void)
@@ -652,12 +737,20 @@ const positionEstimate3d_t *positionEstimatorGetEstimate(void)
 
 float positionEstimatorGetAltitudeCm(void)
 {
+#ifdef USE_FRD_NED
     return -estimate.position.v[NED_D]; // altitude = -Down
+#else
+    return estimate.position.v[ENU_U];
+#endif // USE_FRD_NED
 }
 
 float positionEstimatorGetAltitudeDerivative(void)
 {
+#ifdef USE_FRD_NED
     return -estimate.velocity.v[NED_D]; // climb rate = -Down velocity
+#else
+    return estimate.velocity.v[ENU_U];
+#endif // USE_FRD_NED
 }
 
 bool positionEstimatorIsValidXY(void)
@@ -699,9 +792,15 @@ bool positionEstimatorIsHeadingRequired(void)
 
 void positionEstimatorResetZ(void)
 {
+#ifdef USE_FRD_NED
     kalmanInit(&kfDown, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_Z);
     estimate.position.v[NED_D] = 0.0f;
     estimate.velocity.v[NED_D] = 0.0f;
+#else
+    kalmanInit(&kfUp, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_Z);
+    estimate.position.v[ENU_U] = 0.0f;
+    estimate.velocity.v[ENU_U] = 0.0f;
+#endif // USE_FRD_NED
     estimate.isValidZ = false;
     lastZMeasurementUs = 0;
 #ifdef USE_GPS
@@ -725,10 +824,17 @@ void positionEstimatorResetXY(void)
 {
     kalmanInit(&kfEast, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_XY);
     kalmanInit(&kfNorth, 0.0f, 0.0f, INITIAL_POS_VAR, INITIAL_VEL_VAR, Q_ACCEL_XY);
+#ifdef USE_FRD_NED
     estimate.position.v[NED_E] = 0.0f;
     estimate.position.v[NED_N] = 0.0f;
     estimate.velocity.v[NED_E] = 0.0f;
     estimate.velocity.v[NED_N] = 0.0f;
+#else
+    estimate.position.v[ENU_E] = 0.0f;
+    estimate.position.v[ENU_N] = 0.0f;
+    estimate.velocity.v[ENU_E] = 0.0f;
+    estimate.velocity.v[ENU_N] = 0.0f;
+#endif // USE_FRD_NED
     estimate.isValidXY = false;
     lastXYMeasurementUs = 0;
 #ifdef USE_GPS

@@ -242,7 +242,7 @@ void initIndiRuntimeParameters(void) {
                 indiRun.actMax[i] = 0.f; // hardcode for safety!
                 break;
             case INDI_ACT_TYPE_MOTOR: {
-                unsigned int tmp = MIN(currentPidProfile->motor_output_limit, p->actMax[i]);
+                unsigned int tmp = p->actMax[i]; // motor_output_limit does not exist in INDI builds
                 indiRun.actMin[i] = 0.f; // hardcode for safety!
                 indiRun.actMax[i] = constrainu(tmp, 0, 100) * 0.01f;
                 break;

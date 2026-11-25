@@ -331,11 +331,19 @@ void processRcStickPositions(void)
         bool shouldApplyRollAndPitchTrimDelta = false;
         switch (rcSticks) {
         case THR_HI + YAW_CE + PIT_HI + ROL_CE:
+#ifdef USE_FRD_NED
             accelerometerTrimsDelta.values.pitch = -1; // FRD: trim nose down (pitch is nose up +)
+#else
+            accelerometerTrimsDelta.values.pitch = 1;
+#endif // USE_FRD_NED
             shouldApplyRollAndPitchTrimDelta = true;
             break;
         case THR_HI + YAW_CE + PIT_LO + ROL_CE:
+#ifdef USE_FRD_NED
             accelerometerTrimsDelta.values.pitch = 1;
+#else
+            accelerometerTrimsDelta.values.pitch = -1;
+#endif // USE_FRD_NED
             shouldApplyRollAndPitchTrimDelta = true;
             break;
         case THR_HI + YAW_CE + PIT_CE + ROL_HI:

@@ -191,7 +191,11 @@ void opticalflowProcess(void) {
         const uint8_t sampleDelay = (uint8_t)constrain((int)opticalflow.dev.gyroSampleDelay, 1, MAX_GYRO_SAMPLE_DELAY);
         gyroSampleIndex = (gyroSampleIndex + 1) % sampleDelay;
         rollRate[gyroSampleIndex] = (float)gyroGetFilteredDownsampled(X);
+#ifdef USE_FRD_NED
         pitchRate[gyroSampleIndex] = (float)gyroGetFilteredDownsampled(Y); // FRD gyro Y already has the sign upstream negated FLU Y to
+#else
+        pitchRate[gyroSampleIndex] = -(float)gyroGetFilteredDownsampled(Y);
+#endif // USE_FRD_NED
         delayedGyroSampleIndex = (gyroSampleIndex + 1) % sampleDelay;
         vector2_t delayedGyroRaw = {{
             rollRate[delayedGyroSampleIndex],

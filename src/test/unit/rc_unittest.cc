@@ -96,9 +96,14 @@ static const float TEST_YAW_INPUT = 50.0f;
 static void expectRawSetpointMatchesAngle(int angleDegrees)
 {
     const float angleRad = DEGREES_TO_RADIANS(angleDegrees);
+#ifdef USE_FRD_NED
     // FRD: yaw + = clockwise, so the sin terms have the opposite sign vs upstream (FLU)
     const float expectedRoll = TEST_ROLL_INPUT * cosf(angleRad) + TEST_YAW_INPUT * sinf(angleRad);
     const float expectedYaw = TEST_YAW_INPUT * cosf(angleRad) - TEST_ROLL_INPUT * sinf(angleRad);
+#else
+    const float expectedRoll = TEST_ROLL_INPUT * cosf(angleRad) - TEST_YAW_INPUT * sinf(angleRad);
+    const float expectedYaw = TEST_YAW_INPUT * cosf(angleRad) + TEST_ROLL_INPUT * sinf(angleRad);
+#endif // USE_FRD_NED
 
     EXPECT_NEAR(expectedRoll, rawSetpoint[ROLL], SETPOINT_TOLERANCE);
     EXPECT_NEAR(expectedYaw, rawSetpoint[YAW], SETPOINT_TOLERANCE);

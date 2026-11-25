@@ -399,6 +399,12 @@ CFLAGS     += $(ARCH_FLAGS) \
 
 CFLAGS     := $(filter-out $(CFLAGS_DISABLED), $(CFLAGS))
 
+# indiflight: frame convention switch, documented in src/main/common/axis.h.
+# FRD body / NED earth by default; EXTRA_FLAGS=-DUSE_UPSTREAM_FRAME builds upstream's.
+ifeq ($(findstring -DUSE_UPSTREAM_FRAME,$(EXTRA_FLAGS)),)
+CFLAGS     += -DUSE_FRD_NED
+endif
+
 ASFLAGS     = $(ARCH_FLAGS) \
               $(DEBUG_FLAGS) \
               -x assembler-with-cpp \

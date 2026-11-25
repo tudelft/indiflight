@@ -66,9 +66,17 @@ static void posHoldCheckSticks(void)
 static bool sensorsOk(void)
 {
     // Optical flow position hold is heading-agnostic: the same yaw is used
+#ifdef USE_FRD_NED
     // to project flow into NED and to rotate the correction back to body
+#else
+    // to project flow into ENU and to rotate the correction back to body
+#endif // USE_FRD_NED
     // frame, so a heading error cancels. GPS-assisted hold is not: GPS
+#ifdef USE_FRD_NED
     // provides absolute NED measurements and a bad yaw in the body-frame
+#else
+    // provides absolute ENU measurements and a bad yaw in the body-frame
+#endif // USE_FRD_NED
     // correction rotation will cause a flyaway.
     // Use the runtime GPS state (fix present + config allows GPS) rather than
     // the configured source alone, so AUTO mode with no GPS hardware correctly

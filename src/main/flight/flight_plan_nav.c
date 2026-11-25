@@ -190,7 +190,7 @@ static struct {
     bool patternPending;        // waiting for the arrival braking to settle
     bool patternActive;
     uint8_t patternType;        // waypointPattern_e
-    vector3_t patternCentreM;   // hold point, NED metres
+    vector3_t patternCentreM;   // hold point, ENU metres
     float patternPhaseRad;
     float patternSpeedMps;      // carrot path speed
     float patternCruiseMps;     // chase speed cap (the leg's cruise)
@@ -212,12 +212,12 @@ static struct {
     // corner so the profile is continuous (only engage/retry re-anchor it).
     bool      legIsPassGate;    // current leg uses carrot leg-line tracking
     bool      legValid;         // the leg line is anchored
-    vector3_t legTargetNedM;    // the point this leg flies to (N,E,D metres)
+    vector3_t legTargetEnuM;    // the point this leg flies to (E,N,U metres)
     float     legCruiseMps;     // this leg's cruise cap
-    vector2_t legStartNedM;     // anchor of the leg line (.x = N, .y = E metres)
+    vector2_t legStartEnuM;     // anchor of the leg line (E,N metres)
     float     legProgressM;     // carrot distance travelled along the leg
     float     carrotSpeedMps;   // slewed carrot speed
-    vector2_t carrotPrevNedM;   // last commanded carrot; the next leg anchors here
+    vector2_t carrotPrevEnuM;   // last commanded carrot; the next leg anchors here
     bool      carrotPrevValid;
     bool      inPreTurn;        // blending the nose onto the next leg (excluded from the heading-fault check)
     float     alongFiltM;       // PT1-filtered along-track position; shapes the carrot floor and trapezoid
@@ -269,7 +269,9 @@ static const waypoint_t *nextPositionalWaypoint(uint8_t from)
     return NULL;
 }
 
-static bool computeTargetNedM(const waypoint_t *wp, vector3_t *out)
+// indiflight: with USE_FRD_NED the *Enu* / enuCm names (kept from upstream to keep
+// merges small) hold NED values: index NED_N/NED_E/NED_D, local 2D .x = North, .y = East.
+static bool computeTargetEnuM(const waypoint_t *wp, vector3_t *out)
 {
     gpsLocation_t origin;
     if (!positionEstimatorGetGpsOrigin(&origin)) {
@@ -282,17 +284,28 @@ static bool computeTargetNedM(const waypoint_t *wp, vector3_t *out)
         .altCm = wp->altitude,
     };
 
-    vector2_t nedCm;
-    GPS_distance2d(&origin, &wpLoc, &nedCm);
+    vector2_t enuCm;
+    GPS_distance2d(&origin, &wpLoc, &enuCm);
 
-    // nedCm is a 2-axis horizontal earth-frame vector (efAxis_e); out is 3-axis NED.
-    out->v[NED_N] = nedCm.v[EF_NORTH] * 0.01f;
-    out->v[NED_E] = nedCm.v[EF_EAST] * 0.01f;
+#ifdef USE_FRD_NED
+    // enuCm is a 2-axis horizontal earth-frame vector (efAxis_e); out is 3-axis NED.
+    out->v[NED_N] = enuCm.v[EF_NORTH] * 0.01f;
+    out->v[NED_E] = enuCm.v[EF_EAST] * 0.01f;
+#else
+    // enuCm is a 2-axis horizontal earth-frame vector (efAxis_e); out is 3-axis ENU.
+    out->v[ENU_E] = enuCm.v[EF_EAST] * 0.01f;
+    out->v[ENU_N] = enuCm.v[EF_NORTH] * 0.01f;
+#endif // USE_FRD_NED
     // Waypoint altitude is AMSL (GPS frame); the estimator's Z is zeroed to
     // whichever source armed it first (baro or GPS). zBiasM is the frame
+#ifdef USE_FRD_NED
     // offset between the two, which aligns the target altitude with the feedback altitude.
     // NED: Down = -altitude.
     out->v[NED_D] = -((wp->altitude - origin.altCm) * 0.01f + fp.zBiasM);
+#else
+    // offset between the two, which aligns the target Up with the feedback Up.
+    out->v[ENU_U] = (wp->altitude - origin.altCm) * 0.01f + fp.zBiasM;
+#endif // USE_FRD_NED
     return true;
 }
 
@@ -341,7 +354,11 @@ static bool dispatchWaypoint(void)
         return false;
     }
 
+#ifdef USE_FRD_NED
     // Apply the staged altitude override before computing the NED target.
+#else
+    // Apply the staged altitude override before computing the ENU target.
+#endif // USE_FRD_NED
     // The override sticks for the whole leg — cleared in advanceToNext() once
     // we move on — so a retry from FP_NAV_IDLE (estimator origin not ready
     // yet) or a delay-expiry re-dispatch (cruise restore) both keep the
@@ -351,8 +368,8 @@ static bool dispatchWaypoint(void)
         effective.altitude = fp.altOverrideCm;
     }
 
-    vector3_t targetNedM;
-    if (!computeTargetNedM(&effective, &targetNedM)) {
+    vector3_t targetEnuM;
+    if (!computeTargetEnuM(&effective, &targetEnuM)) {
         // No GPS origin captured yet — stay IDLE and let flightPlanNavUpdate()
         // retry once the estimator has locked in.
         fp.state = FP_NAV_IDLE;
@@ -364,8 +381,13 @@ static bool dispatchWaypoint(void)
     // waypoint's altitude.
     if (effective.type == WAYPOINT_TYPE_TAKEOFF) {
         const positionEstimate3d_t *est = positionEstimatorGetEstimate();
-        targetNedM.v[NED_E] = est->position.v[NED_E] * 0.01f;
-        targetNedM.v[NED_N] = est->position.v[NED_N] * 0.01f;
+#ifdef USE_FRD_NED
+        targetEnuM.v[NED_E] = est->position.v[NED_E] * 0.01f;
+        targetEnuM.v[NED_N] = est->position.v[NED_N] * 0.01f;
+#else
+        targetEnuM.v[ENU_E] = est->position.v[ENU_E] * 0.01f;
+        targetEnuM.v[ENU_N] = est->position.v[ENU_N] * 0.01f;
+#endif // USE_FRD_NED
     }
 
     const autopilotConfig_t *cfg = autopilotConfig();
@@ -380,17 +402,27 @@ static bool dispatchWaypoint(void)
     }
 
     // DELAY: clamp cruise so traversal-time ≈ delay-seconds, scaled by the
-    // *remaining* leg (current position → target). targetNedM is origin →
+    // *remaining* leg (current position → target). targetEnuM is origin →
+#ifdef USE_FRD_NED
     // target, so subtracting the current NED estimate gives the leg vector
+#else
+    // target, so subtracting the current ENU estimate gives the leg vector
+#endif // USE_FRD_NED
     // the position controller is actually going to drive. Skip when the
     // remaining leg is effectively zero to avoid div-by-near-zero.
     if (fp.delayActive) {
         const float delaySec = fp.delayDurationDs * 0.1f;
         const positionEstimate3d_t *est = positionEstimatorGetEstimate();
         const vector3_t legVec = {.v = {
-            [NED_E] = targetNedM.v[NED_E] - est->position.v[NED_E] * 0.01f,
-            [NED_N] = targetNedM.v[NED_N] - est->position.v[NED_N] * 0.01f,
-            [NED_D] = targetNedM.v[NED_D] - est->position.v[NED_D] * 0.01f,
+#ifdef USE_FRD_NED
+            [NED_E] = targetEnuM.v[NED_E] - est->position.v[NED_E] * 0.01f,
+            [NED_N] = targetEnuM.v[NED_N] - est->position.v[NED_N] * 0.01f,
+            [NED_D] = targetEnuM.v[NED_D] - est->position.v[NED_D] * 0.01f,
+#else
+            [ENU_E] = targetEnuM.v[ENU_E] - est->position.v[ENU_E] * 0.01f,
+            [ENU_N] = targetEnuM.v[ENU_N] - est->position.v[ENU_N] * 0.01f,
+            [ENU_U] = targetEnuM.v[ENU_U] - est->position.v[ENU_U] * 0.01f,
+#endif // USE_FRD_NED
         }};
         const float legLenM = vector3Norm(&legVec);
         if (delaySec > 0.0f && legLenM > 0.1f) {
@@ -411,7 +443,7 @@ static bool dispatchWaypoint(void)
     fp.patternActive = false;
     fp.legIsPassGate = passGate;
     fp.legValid = false;               // re-anchor the leg line on the next update
-    fp.legTargetNedM = targetNedM;
+    fp.legTargetEnuM = targetEnuM;
     fp.legCruiseMps = cruiseMps;
     fp.inPreTurn = false;
     if (!passGate) {
@@ -427,12 +459,12 @@ static bool dispatchWaypoint(void)
         // there is no callback, and no internal accel/decel: the carrot's
         // trapezoid owns the speed profile. carrotSpeed carries across the
         // corner — only engage/retry reset it.
-        positionNavSetTargetEf(&targetNedM, cruiseMps, FP_CARROT_NO_ARRIVAL_M,
+        positionNavSetTargetEf(&targetEnuM, cruiseMps, FP_CARROT_NO_ARRIVAL_M,
                                FP_COMPLETION_ANY_MPS, true, NULL, NULL);
         positionNavSetAccelLimits(0.0f, 0.0f);
         positionNavSetAltitudeArrivalRequired(false);
     } else {
-        positionNavSetTargetEf(&targetNedM, cruiseMps, arrivalRadiusM,
+        positionNavSetTargetEf(&targetEnuM, cruiseMps, arrivalRadiusM,
                                FP_COMPLETION_ANY_MPS, true, onWaypointReached, NULL);
         positionNavSetAccelLimits(0.0f, FP_APPROACH_DECEL_MPS2);
         // En-route waypoints advance on horizontal arrival; a vehicle that cannot
@@ -462,31 +494,43 @@ static void abortMission(flightPlanAbortReason_e reason)
     positionNavClearTarget();
 }
 
-static void navTargetDeltaNedM(const positionEstimate3d_t *est, vector3_t *deltaM)
+static void navTargetDeltaEnuM(const positionEstimate3d_t *est, vector3_t *deltaM)
 {
     const positionNavCommand_t *cmd = positionNavGetActiveCommand();
+#ifdef USE_FRD_NED
     deltaM->v[NED_E] = cmd->targetPosEfM.v[NED_E] - est->position.v[NED_E] * 0.01f;
     deltaM->v[NED_N] = cmd->targetPosEfM.v[NED_N] - est->position.v[NED_N] * 0.01f;
     deltaM->v[NED_D] = cmd->includeAltitude ? cmd->targetPosEfM.v[NED_D] - est->position.v[NED_D] * 0.01f : 0.0f;
+#else
+    deltaM->v[ENU_E] = cmd->targetPosEfM.v[ENU_E] - est->position.v[ENU_E] * 0.01f;
+    deltaM->v[ENU_N] = cmd->targetPosEfM.v[ENU_N] - est->position.v[ENU_N] * 0.01f;
+    deltaM->v[ENU_U] = cmd->includeAltitude ? cmd->targetPosEfM.v[ENU_U] - est->position.v[ENU_U] * 0.01f : 0.0f;
+#endif // USE_FRD_NED
 }
 
 static float distanceToNavTargetM(const positionEstimate3d_t *est)
 {
     vector3_t deltaM;
-    navTargetDeltaNedM(est, &deltaM);
+    navTargetDeltaEnuM(est, &deltaM);
     return vector3Norm(&deltaM);
 }
 
 // Delta to the actual waypoint for OSD/CLI readouts. On a carrot leg the nav
 // target is the leading carrot, so report the leg's true waypoint instead.
-static void navWaypointDeltaNedM(const positionEstimate3d_t *est, vector3_t *deltaM)
+static void navWaypointDeltaEnuM(const positionEstimate3d_t *est, vector3_t *deltaM)
 {
     if (fp.legIsPassGate) {
-        deltaM->v[NED_E] = fp.legTargetNedM.v[NED_E] - est->position.v[NED_E] * 0.01f;
-        deltaM->v[NED_N] = fp.legTargetNedM.v[NED_N] - est->position.v[NED_N] * 0.01f;
-        deltaM->v[NED_D] = fp.legTargetNedM.v[NED_D] - est->position.v[NED_D] * 0.01f;
+#ifdef USE_FRD_NED
+        deltaM->v[NED_E] = fp.legTargetEnuM.v[NED_E] - est->position.v[NED_E] * 0.01f;
+        deltaM->v[NED_N] = fp.legTargetEnuM.v[NED_N] - est->position.v[NED_N] * 0.01f;
+        deltaM->v[NED_D] = fp.legTargetEnuM.v[NED_D] - est->position.v[NED_D] * 0.01f;
+#else
+        deltaM->v[ENU_E] = fp.legTargetEnuM.v[ENU_E] - est->position.v[ENU_E] * 0.01f;
+        deltaM->v[ENU_N] = fp.legTargetEnuM.v[ENU_N] - est->position.v[ENU_N] * 0.01f;
+        deltaM->v[ENU_U] = fp.legTargetEnuM.v[ENU_U] - est->position.v[ENU_U] * 0.01f;
+#endif // USE_FRD_NED
     } else {
-        navTargetDeltaNedM(est, deltaM);
+        navTargetDeltaEnuM(est, deltaM);
     }
 }
 
@@ -549,8 +593,12 @@ static bool checkHeadingFault(float dtS, const positionEstimate3d_t *est)
     }
 
     vector3_t deltaM;
-    navTargetDeltaNedM(est, &deltaM);
+    navTargetDeltaEnuM(est, &deltaM);
+#ifdef USE_FRD_NED
     const float bearingDeg = RADIANS_TO_DEGREES(atan2_approx(deltaM.v[NED_E], deltaM.v[NED_N]));
+#else
+    const float bearingDeg = RADIANS_TO_DEGREES(atan2_approx(deltaM.v[ENU_E], deltaM.v[ENU_N]));
+#endif // USE_FRD_NED
     const float headingDeg = attitude.values.yaw * 0.1f;
     const float yawErrDeg = wrapDeg180f(headingDeg - bearingDeg);
     const float cogVsHeadingDeg = fabsf(wrapDeg180f(headingDeg - gpsSol.groundCourse * 0.1f));
@@ -578,9 +626,14 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     const float leadTimeS           = cfg->navCarrotLeadTime * 0.1f;
     const float leadMaxM            = cfg->navCarrotLeadMax * 0.01f;
 
+#ifdef USE_FRD_NED
     // local horizontal geometry: .x = North, .y = East (NED order)
     const vector2_t craft = { .x = est->position.v[NED_N] * 0.01f, .y = est->position.v[NED_E] * 0.01f };
-    const vector2_t wp    = { .x = fp.legTargetNedM.v[NED_N], .y = fp.legTargetNedM.v[NED_E] };
+    const vector2_t wp    = { .x = fp.legTargetEnuM.v[NED_N], .y = fp.legTargetEnuM.v[NED_E] };
+#else
+    const vector2_t craft = { .x = est->position.v[ENU_E] * 0.01f, .y = est->position.v[ENU_N] * 0.01f };
+    const vector2_t wp    = { .x = fp.legTargetEnuM.v[ENU_E], .y = fp.legTargetEnuM.v[ENU_N] };
+#endif // USE_FRD_NED
     const vector2_t toWp  = { .x = wp.x - craft.x, .y = wp.y - craft.y };
     const float distM = vector2Norm(&toWp);
 
@@ -590,11 +643,16 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     bool haveNext = false;
     const waypoint_t *nextWp = nextPositionalWaypoint(fp.currentIndex + 1);
     if (nextWp != NULL) {
-        vector3_t nextNedM;
+        vector3_t nextEnuM;
         waypoint_t effNext = *nextWp;
-        if (computeTargetNedM(&effNext, &nextNedM)) {
-            next.x = nextNedM.v[NED_N];
-            next.y = nextNedM.v[NED_E];
+        if (computeTargetEnuM(&effNext, &nextEnuM)) {
+#ifdef USE_FRD_NED
+            next.x = nextEnuM.v[NED_N];
+            next.y = nextEnuM.v[NED_E];
+#else
+            next.x = nextEnuM.v[ENU_E];
+            next.y = nextEnuM.v[ENU_N];
+#endif // USE_FRD_NED
             haveNext = true;
         }
     }
@@ -604,7 +662,7 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     // delta-v at every gate — a shallow bend at cruise runs no wider than a
     // hairpin at the floor. The gate radius scales with it for the same reason.
     float cornerSpeedMps = fp.legCruiseMps;
-    const vector2_t inFrom = fp.legValid ? fp.legStartNedM : craft;
+    const vector2_t inFrom = fp.legValid ? fp.legStartEnuM : craft;
     if (haveNext) {
         const vector2_t inVec  = { .x = wp.x - inFrom.x, .y = wp.y - inFrom.y };
         const vector2_t outVec = { .x = next.x - wp.x,   .y = next.y - wp.y };
@@ -636,12 +694,12 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     // lateral corridor — without it the craft overruns the carrot and yaws back.
     bool overran = false;
     if (fp.legValid) {
-        const vector2_t inVec = { .x = wp.x - fp.legStartNedM.x, .y = wp.y - fp.legStartNedM.y };
+        const vector2_t inVec = { .x = wp.x - fp.legStartEnuM.x, .y = wp.y - fp.legStartEnuM.y };
         const float inLen = vector2Norm(&inVec);
         if (inLen > 1.0f) {
             const float ux = inVec.x / inLen, uy = inVec.y / inLen;
-            const float along   = (craft.x - fp.legStartNedM.x) * ux + (craft.y - fp.legStartNedM.y) * uy;
-            const float lateral = fabsf((craft.y - fp.legStartNedM.y) * ux - (craft.x - fp.legStartNedM.x) * uy);
+            const float along   = (craft.x - fp.legStartEnuM.x) * ux + (craft.y - fp.legStartEnuM.y) * uy;
+            const float lateral = fabsf((craft.y - fp.legStartEnuM.y) * ux - (craft.x - fp.legStartEnuM.x) * uy);
             overran = along > inLen && lateral < FP_OVERRUN_LAT_M;
         }
     }
@@ -656,7 +714,7 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     if (distM < arriveM || overran) {
         // Gate crossed: the next leg anchors on this waypoint so the drawn
         // wp->wp line and the position target stay continuous through the corner.
-        fp.carrotPrevNedM = wp;
+        fp.carrotPrevEnuM = wp;
         fp.carrotPrevValid = true;
         onWaypointReached(NULL);   // fires the reached listener and advances/dispatches
         return;
@@ -666,22 +724,26 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     // (normally the waypoint just passed) so the flown line is the drawn wp->wp
     // line; engage/retry clear carrotPrevValid to anchor on the craft instead.
     if (!fp.legValid) {
-        fp.legStartNedM = fp.carrotPrevValid ? fp.carrotPrevNedM : craft;
+        fp.legStartEnuM = fp.carrotPrevValid ? fp.carrotPrevEnuM : craft;
         fp.legProgressM = 0.0f;
         fp.legValid = true;
         fp.measFiltValid = false;   // new leg, new along-track frame: re-seed the filters
     }
 
-    const vector2_t legVec = { .x = wp.x - fp.legStartNedM.x, .y = wp.y - fp.legStartNedM.y };
+    const vector2_t legVec = { .x = wp.x - fp.legStartEnuM.x, .y = wp.y - fp.legStartEnuM.y };
     const float legLenM = vector2Norm(&legVec);
     vector2_t legDir = { .x = 1.0f, .y = 0.0f };
     if (legLenM > 1.0f) {
         legDir.x = legVec.x / legLenM;
         legDir.y = legVec.y / legLenM;
     }
-    const float craftAlongM = (craft.x - fp.legStartNedM.x) * legDir.x + (craft.y - fp.legStartNedM.y) * legDir.y;
+    const float craftAlongM = (craft.x - fp.legStartEnuM.x) * legDir.x + (craft.y - fp.legStartEnuM.y) * legDir.y;
 
+#ifdef USE_FRD_NED
     const float horizSpeedMps = sqrtf(sq(est->velocity.v[NED_E]) + sq(est->velocity.v[NED_N])) * 0.01f;
+#else
+    const float horizSpeedMps = sqrtf(sq(est->velocity.v[ENU_E]) + sq(est->velocity.v[ENU_N])) * 0.01f;
+#endif // USE_FRD_NED
     if (!fp.measFiltValid || dtS <= 0.0f) {
         fp.alongFiltM = craftAlongM;
         fp.speedFiltMps = horizSpeedMps;
@@ -727,7 +789,11 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     }
 
     const float headingDeg = attitude.values.yaw * 0.1f;
+#ifdef USE_FRD_NED
     const float legBearingDeg = RADIANS_TO_DEGREES(atan2_approx(legDir.y, legDir.x));
+#else
+    const float legBearingDeg = RADIANS_TO_DEGREES(atan2_approx(legDir.x, legDir.y));
+#endif // USE_FRD_NED
     const float legErrDeg = wrapDeg180f(headingDeg - legBearingDeg);
 
     // Pre-turn: through the approach zone (ending a few metres before the gate, so
@@ -742,7 +808,11 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
         const float t = 1.0f - constrainf((remainingRawM - 5.0f) / fmaxf(preturnM - 5.0f, 1.0f), 0.0f, 1.0f);
         const vector2_t nextLeg = { .x = next.x - wp.x, .y = next.y - wp.y };
         if (t > 0.0f && vector2Norm(&nextLeg) > 1.0f) {
+#ifdef USE_FRD_NED
             const float nextBearingDeg = RADIANS_TO_DEGREES(atan2_approx(nextLeg.y, nextLeg.x));
+#else
+            const float nextBearingDeg = RADIANS_TO_DEGREES(atan2_approx(nextLeg.x, nextLeg.y));
+#endif // USE_FRD_NED
             noseBearingDeg = legBearingDeg + t * wrapDeg180f(nextBearingDeg - legBearingDeg);
             fp.inPreTurn = true;
         }
@@ -790,12 +860,23 @@ static void updateLegCarrot(float dtS, timeUs_t currentTimeUs, const positionEst
     }
 
     vector3_t carrot = {.v = {
-        [NED_N] = fp.legStartNedM.x + legDir.x * fp.legProgressM,
-        [NED_E] = fp.legStartNedM.y + legDir.y * fp.legProgressM,
-        [NED_D] = fp.legTargetNedM.v[NED_D],   // altitude tracks the waypoint, as the point path does
+#ifdef USE_FRD_NED
+        [NED_N] = fp.legStartEnuM.x + legDir.x * fp.legProgressM,
+        [NED_E] = fp.legStartEnuM.y + legDir.y * fp.legProgressM,
+        [NED_D] = fp.legTargetEnuM.v[NED_D],   // altitude tracks the waypoint, as the point path does
+#else
+        [ENU_E] = fp.legStartEnuM.x + legDir.x * fp.legProgressM,
+        [ENU_N] = fp.legStartEnuM.y + legDir.y * fp.legProgressM,
+        [ENU_U] = fp.legTargetEnuM.v[ENU_U],   // altitude tracks the waypoint, as the point path does
+#endif // USE_FRD_NED
     }};
-    fp.carrotPrevNedM.x = carrot.v[NED_N];
-    fp.carrotPrevNedM.y = carrot.v[NED_E];
+#ifdef USE_FRD_NED
+    fp.carrotPrevEnuM.x = carrot.v[NED_N];
+    fp.carrotPrevEnuM.y = carrot.v[NED_E];
+#else
+    fp.carrotPrevEnuM.x = carrot.v[ENU_E];
+    fp.carrotPrevEnuM.y = carrot.v[ENU_N];
+#endif // USE_FRD_NED
     fp.carrotPrevValid = true;
     positionNavMoveTargetEf(&carrot);
 }
@@ -818,9 +899,15 @@ static void startLanding(timeUs_t currentTimeUs, float targetEastM, float target
 {
     const positionEstimate3d_t *est = positionEstimatorGetEstimate();
     const vector3_t targetM = {.v = {
+#ifdef USE_FRD_NED
         [NED_E] = targetEastM,
         [NED_N] = targetNorthM,
         [NED_D] = est->position.v[NED_D] * 0.01f + FP_LANDING_TARGET_DEPTH_M, // below the craft
+#else
+        [ENU_E] = targetEastM,
+        [ENU_N] = targetNorthM,
+        [ENU_U] = est->position.v[ENU_U] * 0.01f - FP_LANDING_TARGET_DEPTH_M,
+#endif // USE_FRD_NED
     }};
 
     const float descentMps = MAX(FP_LANDING_MIN_RATE_MPS, landingDescentRateCmS() * 0.01f);
@@ -835,7 +922,11 @@ static void startLanding(timeUs_t currentTimeUs, float targetEastM, float target
 static void updateLanding(timeUs_t currentTimeUs)
 {
     const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
     const float verticalVelocityCmS = -est->velocity.v[NED_D]; // climb rate, up positive
+#else
+    const float verticalVelocityCmS = est->velocity.v[ENU_U];
+#endif // USE_FRD_NED
     const float commandedDescentCmS = MAX(FP_LANDING_MIN_RATE_MPS * 100.0f, landingDescentRateCmS());
 
     if (!fp.landingDescentEstablished
@@ -878,7 +969,11 @@ static void startLandingAtNavTarget(timeUs_t currentTimeUs)
         return;
     }
     const positionNavCommand_t *cmd = positionNavGetActiveCommand();
+#ifdef USE_FRD_NED
     startLanding(currentTimeUs, cmd->targetPosEfM.v[NED_E], cmd->targetPosEfM.v[NED_N]);
+#else
+    startLanding(currentTimeUs, cmd->targetPosEfM.v[ENU_E], cmd->targetPosEfM.v[ENU_N]);
+#endif // USE_FRD_NED
 }
 
 // Geofence RTH response: [fly home at return altitude, land at home]. Return
@@ -912,7 +1007,11 @@ static void injectReturnHomePlan(timeUs_t currentTimeUs)
 
     if (!flightPlanNavInjectPlan(plan, ARRAYLEN(plan))) {
         const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
         startLanding(currentTimeUs, est->position.v[NED_E] * 0.01f, est->position.v[NED_N] * 0.01f);
+#else
+        startLanding(currentTimeUs, est->position.v[ENU_E] * 0.01f, est->position.v[ENU_N] * 0.01f);
+#endif // USE_FRD_NED
     }
 }
 
@@ -1071,20 +1170,38 @@ static void checkGeofence(timeUs_t currentTimeUs)
         injectReturnHomePlan(currentTimeUs);
     } else {
         const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
         startLanding(currentTimeUs, est->position.v[NED_E] * 0.01f, est->position.v[NED_N] * 0.01f);
+#else
+        startLanding(currentTimeUs, est->position.v[ENU_E] * 0.01f, est->position.v[ENU_N] * 0.01f);
+#endif // USE_FRD_NED
     }
 }
 
 static void patternCarrot(float phaseRad, float radiusM, vector3_t *out)
 {
+#ifdef USE_FRD_NED
     out->v[NED_D] = fp.patternCentreM.v[NED_D];
+#else
+    out->v[ENU_U] = fp.patternCentreM.v[ENU_U];
+#endif // USE_FRD_NED
     if (fp.patternType == WAYPOINT_PATTERN_FIGURE8) {
         // Lemniscate of Gerono — crosses the centre twice per cycle
+#ifdef USE_FRD_NED
         out->v[NED_E] = fp.patternCentreM.v[NED_E] + radiusM * sin_approx(phaseRad);
         out->v[NED_N] = fp.patternCentreM.v[NED_N] + radiusM * sin_approx(phaseRad) * cos_approx(phaseRad);
+#else
+        out->v[ENU_E] = fp.patternCentreM.v[ENU_E] + radiusM * sin_approx(phaseRad);
+        out->v[ENU_N] = fp.patternCentreM.v[ENU_N] + radiusM * sin_approx(phaseRad) * cos_approx(phaseRad);
+#endif // USE_FRD_NED
     } else {
+#ifdef USE_FRD_NED
         out->v[NED_E] = fp.patternCentreM.v[NED_E] + radiusM * cos_approx(phaseRad);
         out->v[NED_N] = fp.patternCentreM.v[NED_N] + radiusM * sin_approx(phaseRad);
+#else
+        out->v[ENU_E] = fp.patternCentreM.v[ENU_E] + radiusM * cos_approx(phaseRad);
+        out->v[ENU_N] = fp.patternCentreM.v[ENU_N] + radiusM * sin_approx(phaseRad);
+#endif // USE_FRD_NED
     }
 }
 
@@ -1118,8 +1235,13 @@ static void startHoldPattern(const waypoint_t *wp)
         // Start the carrot at the vehicle's azimuth from the centre so the
         // first move is outward onto the ring, not a dash across it
         const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
         fp.patternPhaseRad = atan2_approx(est->position.v[NED_N] * 0.01f - fp.patternCentreM.v[NED_N],
                                           est->position.v[NED_E] * 0.01f - fp.patternCentreM.v[NED_E]);
+#else
+        fp.patternPhaseRad = atan2_approx(est->position.v[ENU_N] * 0.01f - fp.patternCentreM.v[ENU_N],
+                                          est->position.v[ENU_E] * 0.01f - fp.patternCentreM.v[ENU_E]);
+#endif // USE_FRD_NED
     }
     fp.patternLastUpdateUs = micros();
     fp.patternActive = true;
@@ -1515,7 +1637,11 @@ void flightPlanNavUpdate(timeUs_t currentTimeUs)
                 fp.patternPending = false;
             } else {
                 const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
                 const float hSpeedMps = sqrtf(sq(est->velocity.v[NED_E]) + sq(est->velocity.v[NED_N])) * 0.01f;
+#else
+                const float hSpeedMps = sqrtf(sq(est->velocity.v[ENU_E]) + sq(est->velocity.v[ENU_N])) * 0.01f;
+#endif // USE_FRD_NED
                 if (hSpeedMps < FP_PATTERN_START_SPEED_MPS
                     || cmpTimeUs(currentTimeUs, fp.holdStartUs) >= (timeDelta_t)FP_PATTERN_START_TIMEOUT_US) {
                     fp.patternPending = false;
@@ -1564,7 +1690,7 @@ float flightPlanNavGetDistanceToWaypointM(void)
         return -1.0f;
     }
     vector3_t deltaM;
-    navWaypointDeltaNedM(positionEstimatorGetEstimate(), &deltaM);
+    navWaypointDeltaEnuM(positionEstimatorGetEstimate(), &deltaM);
     return vector3Norm(&deltaM);
 }
 
@@ -1574,10 +1700,18 @@ int32_t flightPlanNavGetBearingToWaypointDeciDeg(void)
         return -1;
     }
     vector3_t deltaM;
-    navWaypointDeltaNedM(positionEstimatorGetEstimate(), &deltaM);
+    navWaypointDeltaEnuM(positionEstimatorGetEstimate(), &deltaM);
+#ifdef USE_FRD_NED
     // Compass bearing: 0 = north, growing clockwise. NED east/north maps to
+#else
+    // Compass bearing: 0 = north, growing clockwise. ENU east/north maps to
+#endif // USE_FRD_NED
     // atan2(E, N); wrap into [0, 3600) deci-degrees.
+#ifdef USE_FRD_NED
     int32_t deciDeg = lrintf(atan2_approx(deltaM.v[NED_E], deltaM.v[NED_N]) * (1800.0f / M_PIf));
+#else
+    int32_t deciDeg = lrintf(atan2_approx(deltaM.v[ENU_E], deltaM.v[ENU_N]) * (1800.0f / M_PIf));
+#endif // USE_FRD_NED
     deciDeg %= 3600;
     if (deciDeg < 0) {
         deciDeg += 3600;
@@ -1591,15 +1725,23 @@ uint16_t flightPlanNavGetEtaSeconds(void)
         return 0;
     }
     const positionEstimate3d_t *est = positionEstimatorGetEstimate();
+#ifdef USE_FRD_NED
     const float speedMps = sqrtf(sq(est->velocity.v[NED_E]) + sq(est->velocity.v[NED_N])) * 0.01f;
+#else
+    const float speedMps = sqrtf(sq(est->velocity.v[ENU_E]) + sq(est->velocity.v[ENU_N])) * 0.01f;
+#endif // USE_FRD_NED
     if (speedMps < 0.5f) {
         return 0;
     }
     // Horizontal groundspeed only reaches the waypoint's horizontal offset, so
     // divide by the 2D distance; the 3D slant would overstate ETA on climbs.
     vector3_t deltaM;
-    navWaypointDeltaNedM(est, &deltaM);
+    navWaypointDeltaEnuM(est, &deltaM);
+#ifdef USE_FRD_NED
     const float distance2dM = sqrtf(sq(deltaM.v[NED_E]) + sq(deltaM.v[NED_N]));
+#else
+    const float distance2dM = sqrtf(sq(deltaM.v[ENU_E]) + sq(deltaM.v[ENU_N]));
+#endif // USE_FRD_NED
     const float etaS = distance2dM / speedMps;
     return (etaS >= (float)UINT16_MAX) ? UINT16_MAX : (uint16_t)lrintf(etaS);
 }

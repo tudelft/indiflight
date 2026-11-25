@@ -1338,7 +1338,9 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_D_MAX_ADVANCE,     VAR_UINT8 | PROFILE_VALUE,  .config.minmaxUnsigned = { 0, 200 }, PG_PID_PROFILE, offsetof(pidProfile_t, d_max_advance) },
 #endif
 
+#ifndef USE_INDI // ndiflight: motor_output_limit does not exist in INDI builds (neither PID nor INDI uses it)
     { PARAM_NAME_MOTOR_OUTPUT_LIMIT, VAR_UINT8 | PROFILE_VALUE,  .config.minmaxUnsigned = { MOTOR_OUTPUT_LIMIT_PERCENT_MIN, MOTOR_OUTPUT_LIMIT_PERCENT_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, motor_output_limit) },
+#endif
     { "auto_profile_cell_count",     VAR_INT8 | PROFILE_VALUE,  .config.minmax = { AUTO_PROFILE_CELL_COUNT_CHANGE, MAX_AUTO_DETECT_CELL_COUNT }, PG_PID_PROFILE, offsetof(pidProfile_t, auto_profile_cell_count) },
 
 #ifdef USE_LAUNCH_CONTROL

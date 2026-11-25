@@ -434,8 +434,13 @@ void crsfFrameMag(sbuf_t *dst)
     sbufWriteU8(dst, CRSF_FRAME_MAG_PAYLOAD_SIZE + CRSF_FRAME_LENGTH_TYPE_CRC);
     sbufWriteU8(dst, CRSF_FRAMETYPE_MAG);
     sbufWriteU16BigEndian(dst, (int16_t)(mag.magADC.v[X] * 3.0f));
+#ifdef USE_FRD_NED
     sbufWriteU16BigEndian(dst, (int16_t)(-mag.magADC.v[Y] * 3.0f)); // FRD -> upstream FLU wire axes
     sbufWriteU16BigEndian(dst, (int16_t)(-mag.magADC.v[Z] * 3.0f));
+#else
+    sbufWriteU16BigEndian(dst, (int16_t)(mag.magADC.v[Y] * 3.0f));
+    sbufWriteU16BigEndian(dst, (int16_t)(mag.magADC.v[Z] * 3.0f));
+#endif // USE_FRD_NED
 }
 #endif
 
@@ -596,7 +601,11 @@ static void crsfFrameAttitude(sbuf_t *dst)
 {
     sbufWriteU8(dst, CRSF_FRAME_ATTITUDE_PAYLOAD_SIZE + CRSF_FRAME_LENGTH_TYPE_CRC);
     sbufWriteU8(dst, CRSF_FRAMETYPE_ATTITUDE);
+#ifdef USE_FRD_NED
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(-attitude.values.pitch)); // keep upstream wire sign (FRD pitch is nose up +)
+#else
+    sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.pitch));
+#endif // USE_FRD_NED
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.roll));
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.yaw));
 }
@@ -644,7 +653,7 @@ static void crsfFrameFlightMode(sbuf_t *dst)
         // ! = arming disabled
         // ? = GPS rescue disabled
         bool isGpsRescueDisabled = false;
-#ifdef USE_GPS
+#ifdef USE_GPS_RESCUE // indiflight: was USE_GPS; INDI builds compile GPS rescue out
         isGpsRescueDisabled = featureIsEnabled(FEATURE_GPS) && gpsRescueIsConfigured() && gpsSol.numSat < gpsRescueConfig()->minSats && !STATE(GPS_FIX);
 #endif
         sbufWriteU8(dst, isArmingDisabled() ? '!' : isGpsRescueDisabled ? '?' : '*');

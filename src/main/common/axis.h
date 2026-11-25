@@ -20,6 +20,28 @@
 
 #pragma once
 
+// indiflight: frame convention switch (the single place it is documented).
+//
+//   USE_FRD_NED (default): the whole firmware uses the aerospace convention,
+//     right handed, body frame FRD (X forward, Y right, Z down) and earth frame
+//     NED. Gyro, acc and mag are converted right after board alignment
+//     (sensors/boardalignment.c); attitude angles are roll right +, pitch nose
+//     up +, yaw = heading; rates, setpoints, PID sums and mixer columns are FRD;
+//     the position estimator / autopilot / navigation are NED.
+//   USE_UPSTREAM_FRAME: upstream Betaflight's convention (body FLU, earth NWU
+//     for the attitude, ENU for navigation), the original upstream code.
+//
+// The build defines exactly one of them: the firmware Makefile adds
+// -DUSE_FRD_NED unless EXTRA_FLAGS contains -DUSE_UPSTREAM_FRAME, the unit test
+// Makefile does the same unless UPSTREAM_FRAME=yes. Code that differs between
+// the conventions is written as
+//   #ifdef USE_FRD_NED  <FRD/NED code>  #else  <upstream code>  #endif
+#if defined(USE_FRD_NED) && defined(USE_UPSTREAM_FRAME)
+#error "define only one of USE_FRD_NED and USE_UPSTREAM_FRAME"
+#elif !defined(USE_FRD_NED) && !defined(USE_UPSTREAM_FRAME)
+#error "define USE_FRD_NED or USE_UPSTREAM_FRAME (normally done by the Makefile)"
+#endif
+
 #include "common/utils.h"
 
 typedef enum {
@@ -47,19 +69,12 @@ typedef enum {
 #define RP_AXIS_COUNT 2
 #define EF_AXIS_COUNT 2
 
-// Earth-frame axis indices.
-//
-// These names encode three things at every call site: the frame, the axis,
-// and the positive direction. Indexing a vector with e.g. NED_E makes it
-// obvious that the value is East-positive, so the sign of any conversion is
-// visible in the code rather than carried in a reader's head.
+#ifdef USE_FRD_NED
+// Earth-frame axis indices (frame, axis and positive direction in the name).
 // Do NOT reintroduce bare .x/.y for earth-frame quantities.
-//
-// indiflight: the whole firmware uses the aerospace convention, body frame
-// FRD (X forward, Y right, Z down; sensors are converted right after board
-// alignment) and earth frame NED.
 
-// NED (North-East-Down): the body->earth frame produced by rMat in imu.c.
+// NED (North-East-Down): the body (FRD) -> earth frame produced by rMat in imu.c,
+// and the frame of the position estimator, autopilot and navigation (cm / m).
 // matrixVectorMul(&v, &rMat, &bodyVec) yields a vector indexed by these.
 typedef enum {
     NED_N = 0,  // +North
@@ -68,8 +83,7 @@ typedef enum {
 } axisNED_e;
 
 // Horizontal earth-frame (North-East) index for the 2-axis position/velocity
-// PID arrays. Matches the first two NED indices (see EF_AXIS_COUNT). The
-// position estimator, autopilot and navigation use NED (cm) throughout.
+// PID arrays. Matches the first two NED indices (see EF_AXIS_COUNT).
 typedef enum {
     EF_NORTH = 0,  // +North
     EF_EAST = 1    // +East
@@ -81,5 +95,48 @@ typedef enum {
 // index values. Lock the invariant so a reordering fails to compile.
 STATIC_ASSERT((int)EF_NORTH == (int)NED_N, ef_north_must_match_ned_north);
 STATIC_ASSERT((int)EF_EAST == (int)NED_E, ef_east_must_match_ned_east);
+
+#else // upstream frame
+// Earth-frame axis indices.
+//
+// These names encode three things at every call site: the frame, the axis,
+// and the positive direction. Indexing a vector with e.g. NWU_W makes it
+// obvious that the value is West-positive, so the sign of any North/East/Up
+// conversion is visible in the code rather than carried in a reader's head.
+// Do NOT reintroduce bare .x/.y for earth-frame quantities - the inability to
+// tell which axis (and which sign) .x meant was the root cause of the
+// getLinearAccelENU East-West inversion.
+
+// NWU (North-West-Up): the body->earth frame produced by rMat in imu.c.
+// matrixVectorMul(&v, &rMat, &bodyVec) yields a vector indexed by these.
+typedef enum {
+    NWU_N = 0,  // +North
+    NWU_W = 1,  // +West
+    NWU_U = 2   // +Up
+} axisNWU_e;
+
+// ENU (East-North-Up): the navigation frame used by the position estimator
+// and autopilot. The position/velocity vector3_t fields are indexed by these.
+typedef enum {
+    ENU_E = 0,  // +East
+    ENU_N = 1,  // +North
+    ENU_U = 2   // +Up
+} axisENU_e;
+
+// Horizontal earth-frame (East-North) index for the 2-axis position/velocity
+// PID arrays. Matches the first two ENU indices (see EF_AXIS_COUNT).
+typedef enum {
+    EF_EAST = 0,   // +East
+    EF_NORTH = 1   // +North
+} efAxis_e;
+
+// The autopilot stores into EF_AXIS_COUNT arrays by EF_EAST/EF_NORTH while
+// reading the estimate by ENU_E/ENU_N; that is only correct because the two
+// horizontal frames share index values. Lock the invariant so a future
+// reordering of either enum fails to compile rather than silently swapping axes.
+STATIC_ASSERT((int)EF_EAST == (int)ENU_E, ef_east_must_match_enu_east);
+STATIC_ASSERT((int)EF_NORTH == (int)ENU_N, ef_north_must_match_enu_north);
+
+#endif // USE_FRD_NED
 
 #define GET_DIRECTION(isReversed) ((isReversed) ? -1 : 1)
