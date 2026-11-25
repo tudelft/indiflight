@@ -49,7 +49,7 @@ disasm() {
     # between builds, their names and sizes are compared with the symbols.
     # Lines with the build date/time and git revisions are dropped as well.
     $OBJDUMP -d --no-show-raw-insn "$1" \
-        | sed -E 's/^ *[0-9a-f]+:\t//; s/\<(0x)?[0-9a-f]{5,8}\>/ADDR/g' | tail -n +4 \
+        | sed -E 's/^ *[0-9a-f]+:\t//; s/\<(0x)?[0-9a-f]{5,8}\>/ADDR/g; s/\<[0-9a-f]{1,8} </ADDR </g' | tail -n +4 \
         | awk '/_veneer>:$/ { skip = 1 } skip && /^$/ { skip = 0; next } !skip' \
         | grep -v -E "[0-9]{2}:[0-9]{2}:[0-9]{2}|$REVS"
 }
