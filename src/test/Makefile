@@ -14,7 +14,15 @@
 USER_DIR = ../main
 TEST_DIR = unit
 ROOT = ../..
+# indiflight: frame convention switch, documented in src/main/common/axis.h.
+# FRD body / NED earth by default; UPSTREAM_FRAME=yes tests upstream's convention.
+ifeq ($(UPSTREAM_FRAME),yes)
+OBJECT_DIR = $(ROOT)/obj/test_upstream_frame
+FRAME_FLAGS = -DUSE_UPSTREAM_FRAME
+else
 OBJECT_DIR = $(ROOT)/obj/test
+FRAME_FLAGS = -DUSE_FRD_NED
+endif
 TARGET_DIR = $(USER_DIR)/target
 MAKE_SCRIPT_DIR := $(ROOT)/mk
 
@@ -761,6 +769,7 @@ COMMON_FLAGS = \
 	-Wall -Wextra  \
 	$(OPTIMIZE) \
 	-DUNIT_TEST \
+	$(FRAME_FLAGS) \
 	-isystem $(GTEST_DIR)/inc \
 	-MMD -MP \
 	-pipe

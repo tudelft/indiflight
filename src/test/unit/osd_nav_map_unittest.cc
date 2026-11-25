@@ -102,15 +102,27 @@ protected:
 
 TEST_F(OsdNavMapTest, TrailRecorderGatesAppendsByDistance)
 {
+#ifdef USE_FRD_NED
     vector2_t pos = { .v = { [EF_EAST] = 0.0f, [EF_NORTH] = 0.0f } };
+#else
+    vector2_t pos = { .x = 0.0f, .y = 0.0f };
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ(1u, navTrailCount());
 
+#ifdef USE_FRD_NED
     pos.v[EF_EAST] = 300.0f;    // 3 m: inside the 5 m spacing, not recorded
+#else
+    pos.x = 300.0f;    // 3 m: inside the 5 m spacing, not recorded
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ(1u, navTrailCount());
 
+#ifdef USE_FRD_NED
     pos.v[EF_EAST] = 600.0f;    // 6 m from the last stored point: recorded
+#else
+    pos.x = 600.0f;    // 6 m from the last stored point: recorded
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ(2u, navTrailCount());
     EXPECT_EQ(6, navTrailPointAt(1)->eastM);
@@ -120,21 +132,37 @@ TEST_F(OsdNavMapTest, TrailCompactionDoublesSpacingWhenFull)
 {
     // fill the ring: every point 5 m apart is exactly at the spacing gate
     for (int i = 0; i < NAV_TRAIL_CAPACITY; i++) {
+#ifdef USE_FRD_NED
         const vector2_t pos = { .v = { [EF_EAST] = i * 500.0f, [EF_NORTH] = 0.0f } };
+#else
+        const vector2_t pos = { .x = i * 500.0f, .y = 0.0f };
+#endif // USE_FRD_NED
         navTrailIngestPosition(&pos);
     }
     ASSERT_EQ((unsigned)NAV_TRAIL_CAPACITY, navTrailCount());
 
     // one more point: the trail halves and the spacing doubles to 10 m
+#ifdef USE_FRD_NED
     vector2_t pos = { .v = { [EF_EAST] = NAV_TRAIL_CAPACITY * 500.0f, [EF_NORTH] = 0.0f } };
+#else
+    vector2_t pos = { .x = NAV_TRAIL_CAPACITY * 500.0f, .y = 0.0f };
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ((unsigned)(NAV_TRAIL_CAPACITY / 2 + 1), navTrailCount());
 
     const unsigned countBefore = navTrailCount();
+#ifdef USE_FRD_NED
     pos.v[EF_EAST] += 500.0f;   // 5 m: below the doubled spacing, ignored
+#else
+    pos.x += 500.0f;   // 5 m: below the doubled spacing, ignored
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ(countBefore, navTrailCount());
+#ifdef USE_FRD_NED
     pos.v[EF_EAST] += 500.0f;   // 10 m from the last stored point: recorded
+#else
+    pos.x += 500.0f;   // 10 m from the last stored point: recorded
+#endif // USE_FRD_NED
     navTrailIngestPosition(&pos);
     EXPECT_EQ(countBefore + 1, navTrailCount());
 }
@@ -174,7 +202,11 @@ TEST_F(OsdNavMapTest, TrailGlitchBeyondRangeDoesNotWipeTheTrail)
 {
     // lay down a normal line
     for (int i = 0; i < 5; i++) {
+#ifdef USE_FRD_NED
         const vector2_t pos = { .v = { [EF_EAST] = i * 600.0f, [EF_NORTH] = 0.0f } };
+#else
+        const vector2_t pos = { .x = i * 600.0f, .y = 0.0f };
+#endif // USE_FRD_NED
         navTrailIngestPosition(&pos);
     }
     ASSERT_EQ(5u, navTrailCount());
@@ -183,7 +215,11 @@ TEST_F(OsdNavMapTest, TrailGlitchBeyondRangeDoesNotWipeTheTrail)
     // fix this stored a fresh clamped point every call and decimation chewed
     // the real trail away; now it clamps to one point at the edge and the gate
     // sees zero movement after that
+#ifdef USE_FRD_NED
     const vector2_t glitch = { .v = { [EF_EAST] = 5000000.0f, [EF_NORTH] = 5000000.0f } };   // 50 km, past the int16 metre range
+#else
+    const vector2_t glitch = { .x = 5000000.0f, .y = 5000000.0f };   // 50 km, past the int16 metre range
+#endif // USE_FRD_NED
     for (int i = 0; i < 300; i++) {
         navTrailIngestPosition(&glitch);
     }
@@ -468,7 +504,11 @@ TEST_F(OsdNavMapRenderTest, TrailSwitchbackKeepsBothCrossingsOfAColumn)
         { -40.0f, -40.0f },                        // south edge, east -> west
     };
     for (auto &p : pts) {
+#ifdef USE_FRD_NED
         const vector2_t v = { .v = { [EF_EAST] = p[0] * 100.0f, [EF_NORTH] = p[1] * 100.0f } };
+#else
+        const vector2_t v = { .x = p[0] * 100.0f, .y = p[1] * 100.0f };
+#endif // USE_FRD_NED
         navTrailIngestPosition(&v);
     }
     setCraftEnuM(-40, -40);   // craft on the last point so there's no stray tail
@@ -513,8 +553,13 @@ extern "C" {
     // matches the firmware conversion: 1e-7 degree steps to cm
     void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_t *distance)
     {
+#ifdef USE_FRD_NED
         distance->v[EF_EAST] = (to->lon - from->lon) * EARTH_ANGLE_TO_CM;
         distance->v[EF_NORTH] = (to->lat - from->lat) * EARTH_ANGLE_TO_CM;
+#else
+        distance->x = (to->lon - from->lon) * EARTH_ANGLE_TO_CM;
+        distance->y = (to->lat - from->lat) * EARTH_ANGLE_TO_CM;
+#endif // USE_FRD_NED
     }
 
     // renderer support stubs (the real ones live in osd_elements.c)

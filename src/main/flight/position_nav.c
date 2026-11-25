@@ -144,17 +144,33 @@ void positionNavUpdate(float dt, const positionEstimate3d_t *est)
         return;
     }
 
+#ifdef USE_FRD_NED
     const float posNorthM = est->position.v[NED_N] * 0.01f;
     const float posEastM  = est->position.v[NED_E] * 0.01f;
     const float posDownM    = est->position.v[NED_D] * 0.01f;
+#else
+    const float posEastM  = est->position.v[ENU_E] * 0.01f;
+    const float posNorthM = est->position.v[ENU_N] * 0.01f;
+    const float posUpM    = est->position.v[ENU_U] * 0.01f;
+#endif // USE_FRD_NED
 
     vector3_t errorEfM = {.v = {
+#ifdef USE_FRD_NED
         [NED_N] = cmd.targetPosEfM.v[NED_N] - posNorthM,
         [NED_E] = cmd.targetPosEfM.v[NED_E] - posEastM,
         [NED_D] = cmd.includeAltitude ? (cmd.targetPosEfM.v[NED_D] - posDownM) : 0.0f
+#else
+        [ENU_E] = cmd.targetPosEfM.v[ENU_E] - posEastM,
+        [ENU_N] = cmd.targetPosEfM.v[ENU_N] - posNorthM,
+        [ENU_U] = cmd.includeAltitude ? (cmd.targetPosEfM.v[ENU_U] - posUpM) : 0.0f
+#endif // USE_FRD_NED
     }};
 
+#ifdef USE_FRD_NED
     const float horizDistM = sqrtf(sq(errorEfM.v[NED_E]) + sq(errorEfM.v[NED_N]));
+#else
+    const float horizDistM = sqrtf(sq(errorEfM.v[ENU_E]) + sq(errorEfM.v[ENU_N]));
+#endif // USE_FRD_NED
     const float distanceM = cmd.includeAltitude ? vector3Norm(&errorEfM) : horizDistM;
 
     vector3_t dirEf;
@@ -187,11 +203,21 @@ void positionNavUpdate(float dt, const positionEstimate3d_t *est)
 
     previousTargetVelMps = targetVelMps;
 
+#ifdef USE_FRD_NED
     vector3Scale(&currentTargetVelCmS, &targetVelMps, 100.0f);  // m/s -> cm/s, NED
+#else
+    vector3Scale(&currentTargetVelCmS, &targetVelMps, 100.0f);  // m/s -> cm/s, ENU
+#endif // USE_FRD_NED
 
+#ifdef USE_FRD_NED
     const float horizSpeedMps = sqrtf(sq(est->velocity.v[NED_E]) + sq(est->velocity.v[NED_N])) * 0.01f;
     const float absVzMps = fabsf(est->velocity.v[NED_D] * 0.01f);
     const float absErrZM = fabsf(cmd.targetPosEfM.v[NED_D] - posDownM);
+#else
+    const float horizSpeedMps = sqrtf(sq(est->velocity.v[ENU_E]) + sq(est->velocity.v[ENU_N])) * 0.01f;
+    const float absVzMps = fabsf(est->velocity.v[ENU_U] * 0.01f);
+    const float absErrZM = fabsf(cmd.targetPosEfM.v[ENU_U] - posUpM);
+#endif // USE_FRD_NED
 
     if (!withinAcceptanceRadius) {
         if (horizDistM <= cmd.acceptanceRadiusM) {

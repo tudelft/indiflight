@@ -28,7 +28,11 @@
 // multi-pass mechanism the artificial horizon and stick overlay use), so a
 // full map costs mapRows passes per OSD frame.
 //
+#ifdef USE_FRD_NED
 // All map geometry is local North/East (efAxis_e) centimetres relative to home (home is the
+#else
+// All map geometry is local ENU centimetres relative to home (home is the
+#endif // USE_FRD_NED
 // origin); waypoints are converted from their stored absolute coordinates
 // once per frame.
 
@@ -136,11 +140,20 @@ static void waypointEnuCm(const waypoint_t *wp, vector2_t *posCm)
     GPS_distance2d(&GPS_home_llh, &loc, posCm);
 }
 
+#ifdef USE_FRD_NED
 // rotate a home-relative NED-horizontal position (efAxis_e) into screen space (x right, y up)
+#else
+// rotate a home-relative ENU position into screen space (x right, y up)
+#endif // USE_FRD_NED
 static void worldToView(const vector2_t *posCm, float *viewX, float *viewY)
 {
+#ifdef USE_FRD_NED
     const float relEast = posCm->v[EF_EAST] - frame.centerEastCm;
     const float relNorth = posCm->v[EF_NORTH] - frame.centerNorthCm;
+#else
+    const float relEast = posCm->x - frame.centerEastCm;
+    const float relNorth = posCm->y - frame.centerNorthCm;
+#endif // USE_FRD_NED
     if (frame.rotated) {
         *viewX = relEast * frame.cosRot - relNorth * frame.sinRot;
         *viewY = relEast * frame.sinRot + relNorth * frame.cosRot;
@@ -275,7 +288,11 @@ static void plotTrail(const vector2_t *craftCm, bool positionValid)
     bool prevValid = false;
     for (unsigned i = 0; i < count; i++) {
         const navTrailPoint_t *pt = navTrailPointAt(i);
+#ifdef USE_FRD_NED
         const vector2_t cur = { .v = { [EF_NORTH] = pt->northM * 100.0f, [EF_EAST] = pt->eastM * 100.0f } };
+#else
+        const vector2_t cur = { .x = pt->eastM * 100.0f, .y = pt->northM * 100.0f };
+#endif // USE_FRD_NED
         if (prevValid) {
             plotWorldLine(&prev, &cur);
         }
@@ -308,7 +325,11 @@ static void plotRangeRing(uint32_t scaleM)
     static const float tickEast[4]  = { 0.0f, 1.0f, 0.0f, -1.0f };
     static const float tickNorth[4] = { 1.0f, 0.0f, -1.0f, 0.0f };
     for (int i = 0; i < 4; i++) {   // ticks at the circle's compass points
+#ifdef USE_FRD_NED
         const vector2_t p = { .v = { [EF_NORTH] = tickNorth[i] * radiusCm, [EF_EAST] = tickEast[i] * radiusCm } };
+#else
+        const vector2_t p = { .x = tickEast[i] * radiusCm, .y = tickNorth[i] * radiusCm };
+#endif // USE_FRD_NED
         float vx, vy, cF, rF;
         worldToView(&p, &vx, &vy);
         viewToCellF(vx, vy, &cF, &rF);
@@ -472,8 +493,13 @@ static void prepareFrame(void)
 
     // view centre
     if (cfg->centre == OSD_NAV_MAP_CENTRE_CRAFT) {
+#ifdef USE_FRD_NED
         frame.centerEastCm = craft.v[EF_EAST];
         frame.centerNorthCm = craft.v[EF_NORTH];
+#else
+        frame.centerEastCm = craft.x;
+        frame.centerNorthCm = craft.y;
+#endif // USE_FRD_NED
     } else {
         frame.centerEastCm = 0.0f;
         frame.centerNorthCm = 0.0f;

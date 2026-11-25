@@ -746,7 +746,11 @@ static void updateMagHold(void)
             dif += 360;
         if (dif >= +180)
             dif -= 360;
+#ifdef USE_FRD_NED
         dif *= GET_DIRECTION(rcControlsConfig()->yaw_control_reversed); // FRD: rcCommand[YAW] + = clockwise
+#else
+        dif *= -GET_DIRECTION(rcControlsConfig()->yaw_control_reversed);
+#endif // USE_FRD_NED
         if (isUpright()) {
             rcCommand[YAW] -= dif * currentPidProfile->pid[PID_MAG].P / 30;    // 18 deg
         }

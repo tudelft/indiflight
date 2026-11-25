@@ -212,7 +212,11 @@ TEST(TelemetryCrsfTest, TestAttitude)
     EXPECT_EQ(0, yaw);
     EXPECT_EQ(crfsCrc(frame, frameLen), frame[9]);
 
+#ifdef USE_FRD_NED
     attitude.values.pitch = -678; // decidegrees == 1.183333232852155 rad; FRD nose up +, the wire keeps the upstream (nose down +) sign
+#else
+    attitude.values.pitch = 678; // decidegrees == 1.183333232852155 rad
+#endif // USE_FRD_NED
     attitude.values.roll = 1495; // 2.609267231731523 rad
     attitude.values.yaw = -1799; //3.139847324337799 rad
     frameLen = getCrsfFrame(frame, CRSF_FRAMETYPE_ATTITUDE);

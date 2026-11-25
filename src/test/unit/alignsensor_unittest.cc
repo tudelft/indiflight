@@ -110,6 +110,7 @@ static void alignSensorViaMatrixFromRotation(vector3_t *dest, sensor_align_e ali
     buildRotationMatrixFromAngles(&sensorRotationMatrix, &sensorAlignment);
 
     alignSensorViaMatrix(dest, &sensorRotationMatrix);
+#ifdef USE_FRD_NED
 
     // indiflight: alignSensorViaMatrix() ends with the FLU -> FRD body frame
     // conversion. Undo it to compare against the (upstream, FLU) alignment rotation.
@@ -132,6 +133,7 @@ TEST(AlignSensorTest, OutputIsFrd)
     EXPECT_NEAR(1, w.x, TOL);
     EXPECT_NEAR(-2, w.y, TOL);
     EXPECT_NEAR(-3, w.z, TOL);
+#endif // USE_FRD_NED
 }
 
 static void testCW(sensor_align_e rotation, int32_t angle)

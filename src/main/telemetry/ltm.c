@@ -204,7 +204,11 @@ static void ltm_sframe(void)
 static void ltm_aframe(void)
 {
     ltm_initialise_packet('A');
+#ifdef USE_FRD_NED
     ltm_serialise_16(DECIDEGREES_TO_DEGREES(-attitude.values.pitch)); // keep upstream wire sign (FRD pitch is nose up +)
+#else
+    ltm_serialise_16(DECIDEGREES_TO_DEGREES(attitude.values.pitch));
+#endif // USE_FRD_NED
     ltm_serialise_16(DECIDEGREES_TO_DEGREES(attitude.values.roll));
     ltm_serialise_16(DECIDEGREES_TO_DEGREES(attitude.values.yaw));
     ltm_finalise();

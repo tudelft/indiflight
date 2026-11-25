@@ -843,7 +843,11 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
     const int maxRoll = osdConfig()->ahMaxRoll * 10;
     const int ahSign = osdConfig()->ahInvert ? -1 : 1;
     const int rollAngle = constrain(attitude.values.roll * ahSign, -maxRoll, maxRoll);
+#ifdef USE_FRD_NED
     int pitchAngle = constrain(-attitude.values.pitch * ahSign, -maxPitch, maxPitch); // FRD: pitch is nose up +, horizon math uses nose down +
+#else
+    int pitchAngle = constrain(attitude.values.pitch * ahSign, -maxPitch, maxPitch);
+#endif // USE_FRD_NED
     // Convert pitchAngle to y compensation value
     // (maxPitch / 25) divisor matches previous settings of fixed divisor of 8 and fixed max AHI pitch angle of 20.0 degrees
     if (maxPitch > 0) {
@@ -875,9 +879,14 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
 static void osdElementUpDownReference(osdElementParms_t *element)
 {
 // Up/Down reference feature displays reference points on the OSD at Zenith and Nadir
+#ifdef USE_FRD_NED
     // Earth-down in the upstream FLU body frame, built from the earth-Down row (NED_D)
     // of rMat (earth-down per FRD body axis); Y and Z flipped to keep the FLU math below.
     const float earthUpinBodyFrame[3] = {rMat.m[NED_D][X], -rMat.m[NED_D][Y], -rMat.m[NED_D][Z]};
+#else
+    // The earth-Up row (NWU_U) of rMat is earth-up expressed per body axis; negate to point down.
+    const float earthUpinBodyFrame[3] = {-rMat.m[NWU_U][X], -rMat.m[NWU_U][Y], -rMat.m[NWU_U][Z]};
+#endif // USE_FRD_NED
 
     if (fabsf(earthUpinBodyFrame[2]) < SINE_25_DEG && fabsf(earthUpinBodyFrame[1]) < SINE_25_DEG) {
         float thetaB; // pitch from body frame to zenith/nadir
@@ -885,7 +894,11 @@ static void osdElementUpDownReference(osdElementParms_t *element)
         char *symbol[2] = {"U", "D"}; // character buffer
         int direction;
 
+#ifdef USE_FRD_NED
         if (attitude.values.pitch < 0.0f){ //nose down
+#else
+        if (attitude.values.pitch > 0.0f){ //nose down
+#endif // USE_FRD_NED
             thetaB = -earthUpinBodyFrame[2]; // get pitch w/re to nadir (use small angle approx for sine)
             psiB = -earthUpinBodyFrame[1]; // calculate the yaw w/re to nadir (use small angle approx for sine)
             direction = DOWN;
@@ -1010,7 +1023,11 @@ static void osdBackgroundCraftName(osdElementParms_t *element)
 static void osdElementCrashFlipArrow(osdElementParms_t *element)
 {
     int rollAngle = attitude.values.roll / 10;
+#ifdef USE_FRD_NED
     const int pitchAngle = -attitude.values.pitch / 10; // FRD: pitch is nose up +, arrow logic uses nose down +
+#else
+    const int pitchAngle = attitude.values.pitch / 10;
+#endif // USE_FRD_NED
     if (abs(rollAngle) > 90) {
         rollAngle = (rollAngle < 0 ? -180 : 180) - rollAngle;
     }

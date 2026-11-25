@@ -2992,7 +2992,11 @@ static void GPS_calculateDistanceAndDirectionToHome(void)
     }
 }
 
+#ifdef USE_FRD_NED
 // return distance vector in local, cartesian NED (North, East) coordinates, indexed by efAxis_e
+#else
+// return distance vector in local, cartesian ENU coordinates
+#endif // USE_FRD_NED
 // note that parameter order is from, to
 void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_t *distance)
 {
@@ -3006,9 +3010,14 @@ void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_
         deltaLon += deg180;
         deltaLon += deg180;
     }
+#ifdef USE_FRD_NED
     // NED horizontal order (efAxis_e)
     distance->v[EF_NORTH] = (float)(to->lat - from->lat) * EARTH_ANGLE_TO_CM;  // North-South distance, positive North
     distance->v[EF_EAST] = deltaLon * GPS_cosLat * EARTH_ANGLE_TO_CM; // East-West distance, positive East
+#else
+    distance->x = deltaLon * GPS_cosLat * EARTH_ANGLE_TO_CM; // East-West distance, positive East
+    distance->y = (float)(to->lat - from->lat) * EARTH_ANGLE_TO_CM;  // North-South distance, positive North
+#endif // USE_FRD_NED
 }
 
 void onGpsNewData(void)

@@ -889,7 +889,11 @@ static void mavlinkSendAttitude(void)
         // roll Roll angle (rad)
         DECIDEGREES_TO_RADIANS(attitude.values.roll),
         // pitch Pitch angle (rad)
+#ifdef USE_FRD_NED
         DECIDEGREES_TO_RADIANS(attitude.values.pitch), // FRD/NED: already aerospace (nose up +)
+#else
+        DECIDEGREES_TO_RADIANS(-attitude.values.pitch),
+#endif // USE_FRD_NED
         // yaw Yaw angle (rad)
         DECIDEGREES_TO_RADIANS(attitude.values.yaw),
         // rollspeed Roll angular speed (rad/s)
