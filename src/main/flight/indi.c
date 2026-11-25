@@ -365,7 +365,7 @@ void getSetpoints(timeUs_t current) {
         Psi = eulerZXY.angles.yaw;
 
         fp_quaternion_t bank_q, pitch_q;
-        fp_euler_t bank_e = { .angles = { .roll=1.333*maxTilt*roll, .pitch=0, .yaw=0 } };
+        fp_euler_t bank_e = { .angles = { .roll=1.333f*maxTilt*roll, .pitch=0, .yaw=0 } };
         fp_euler_t pitch_e = { .angles = { .roll=0, .pitch=maxTilt*pitch, .yaw=0 } };
         if (currentPitchOffsetMode != PITCH_OFFSET_MODE_NONE || pitchOffsetTransitionDuration > 0) {
             pitch_e.angles.pitch += getPitchOffset(current);

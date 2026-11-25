@@ -143,6 +143,9 @@ typedef enum {
 #ifdef USE_TELEMETRY_PI
     TASK_KEYBOARD, // indiflight keyboard commands over pi-protocol
 #endif
+#ifdef HIL_BUILD
+    TASK_HIL,      // indiflight hardware in the loop input
+#endif
 #ifdef USE_MAG
     TASK_COMPASS,
 #endif
