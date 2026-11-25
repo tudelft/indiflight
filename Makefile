@@ -19,6 +19,22 @@
 TARGET    ?=
 CONFIG    ?=
 
+# indiflight: BOARD=<configs/boards/X.txt> picks the upstream CONFIG (its
+# "#define CONFIG=..." line); PROFILE=<configs/profiles/X.txt> adds the
+# profile's "#define" lines as build flags (empty-valued, so they may repeat
+# defines of the target config). The profile's "set" lines are CLI settings.
+BOARD     ?=
+PROFILE   ?=
+ifneq ($(BOARD),)
+CONFIG    := $(shell sed -n 's/^\#define CONFIG=//p' configs/boards/$(BOARD).txt)
+BOARD_FLAGS := $(shell grep '^\#define' configs/boards/$(BOARD).txt | grep -v 'CONFIG=' | awk '{print "-D"$$2"="}')
+override EXTRA_FLAGS += $(BOARD_FLAGS)
+endif
+ifneq ($(PROFILE),)
+PROFILE_FLAGS := $(shell grep '^\#define' configs/profiles/$(PROFILE).txt | awk '{print "-D"$$2"="}')
+override EXTRA_FLAGS += $(PROFILE_FLAGS)
+endif
+
 # Compile-time options
 OPTIONS   ?=
 

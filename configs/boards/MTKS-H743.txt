@@ -1,0 +1,12 @@
+# indiflight board overlay for the Mateksys H743 (make BOARD=MTKS-H743 PROFILE=<profile>).
+#
+# In the 4.4 fork this file held the unified-target resources, defaults and the
+# build flags. Upstream 2026 has all of that in the board config
+# src/config/configs/MTKS/MATEKH743/config.h (CONFIG=MATEKH743), so only the
+# CONFIG remains. "#define" lines below are extra build flags, "set" lines CLI settings.
+#
+# Sensor alignment: the fork set gyro_1/2_sensor_align = CW180 to get FRD data.
+# The port converts FLU -> FRD in code (sensors/boardalignment.c), and the
+# upstream default (GYRO_1_ALIGN CW0_DEG_FLIP, GYRO_2_ALIGN CW90_DEG_FLIP) gives
+# exactly the fork's result. Sensor alignment is no CLI setting in 2026.
+#define CONFIG=MATEKH743
