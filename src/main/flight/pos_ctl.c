@@ -174,8 +174,8 @@ static bool isWaypointReached(unsigned int index)
 static void updateWaypointMode(void)
 {
     static bool waypointModePrev = false;
-    const bool positionMode = FLIGHT_MODE(POSITION_MODE);
-    const bool waypointMode = positionMode && FLIGHT_MODE(WAYPOINT_MODE)
+    const bool positionMode = INDIFLIGHT_MODE(POSITION_MODE);
+    const bool waypointMode = positionMode && INDIFLIGHT_MODE(WAYPOINT_MODE)
         && (POSITION_WAYPOINT_COUNT > 0);
 
     if (!positionMode) {
@@ -215,7 +215,7 @@ static void updateWaypointMode(void)
         waypointRunActive = false;
         waypointResumable = false;
         waypointModePrev = false; // not a falling edge, don't arrest motion
-        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+        DISABLE_INDIFLIGHT_MODE(WAYPOINT_MODE);
     }
 }
 
@@ -313,7 +313,7 @@ void updatePosCtl(timeUs_t current) {
         manual_takeover = false;
         setSticksReference();
     } else if (!manual_takeover && ARMING_FLAG(ARMED) && posRuntime.stick_takeover
-            && !FLIGHT_MODE(WAYPOINT_MODE) && haveSticksMoved()) {
+            && !INDIFLIGHT_MODE(WAYPOINT_MODE) && haveSticksMoved()) {
         // stick takeover is never allowed in waypoint mode
         manual_takeover = true;
         posSpNed.valid = false;
@@ -353,7 +353,7 @@ void updatePosCtl(timeUs_t current) {
         posSpNed.trackPsi = false;
 
         // latch reactivation until new arming cycle or non-position mode
-        latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE);
+        latch_descend = ARMING_FLAG(ARMED) && INDIFLIGHT_MODE(POSITION_MODE);
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
 #ifdef USE_GEOFENCE
                 || (geofenceAction == GEOFENCE_ACTION_HOLD)
@@ -393,7 +393,7 @@ void updatePosCtl(timeUs_t current) {
         }
     } else {
         // not deadreckoning for too long, setpoint valid. lets fly
-        if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | GPS_RESCUE_MODE)) ) {
+        if ( (!ARMING_FLAG(ARMED)) || (!INDIFLIGHT_MODE(POSITION_MODE | GPS_RESCUE_MODE)) ) {
             resetIterms();
         }
 

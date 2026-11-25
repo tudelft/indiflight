@@ -65,14 +65,14 @@ const char *armingDisableFlagNames[]= {
     "ALT_HOLD_SW",
     "POS_HOLD_SW",
     "AUTOPILOT_SW",
-#ifdef USE_EKF
-    "EKF_OR_SP",
-#endif
     "ARM_SWITCH",
 };
 STATIC_ASSERT(ARRAYLEN(armingDisableFlagNames) == ARMING_DISABLE_FLAGS_COUNT, armingDisableFlagNames_size_mismatch);
 
 static armingDisableFlags_e armingDisableFlags = 0;
+#ifdef USE_INDI
+static uint32_t indiflightArmingDisableFlags = 0; // indiflight reasons, see runtime_config.h
+#endif
 
 void setArmingDisabled(armingDisableFlags_e flag)
 {
@@ -86,6 +86,9 @@ void unsetArmingDisabled(armingDisableFlags_e flag)
 
 bool isArmingDisabled(void)
 {
+#ifdef USE_INDI
+    return armingDisableFlags || indiflightArmingDisableFlags;
+#endif
     return armingDisableFlags;
 }
 
@@ -152,3 +155,55 @@ uint32_t sensorsMask(void)
 {
     return enabledSensors;
 }
+
+#ifdef USE_INDI
+// indiflight flags, see runtime_config.h
+static const char *indiflightArmingDisableFlagNames[] = {
+    "EKF_OR_SP",
+};
+STATIC_ASSERT(ARRAYLEN(indiflightArmingDisableFlagNames) == INDIFLIGHT_ARMING_DISABLE_FLAGS_COUNT, indiflightArmingDisableFlagNames_size_mismatch);
+
+void setIndiflightArmingDisabled(indiflightArmingDisableFlags_e flag)
+{
+    indiflightArmingDisableFlags |= flag;
+}
+
+void unsetIndiflightArmingDisabled(indiflightArmingDisableFlags_e flag)
+{
+    indiflightArmingDisableFlags &= ~flag;
+}
+
+uint32_t getIndiflightArmingDisableFlags(void)
+{
+    return indiflightArmingDisableFlags;
+}
+
+const char *getIndiflightArmingDisableFlagName(indiflightArmingDisableFlags_e flag)
+{
+    if (!flag) {
+        return "NONE";
+    }
+    unsigned idx = ffs(flag & -flag) - 1;
+    return idx < ARRAYLEN(indiflightArmingDisableFlagNames) ? indiflightArmingDisableFlagNames[idx] : "UNKNOWN";
+}
+
+uint32_t indiflightModeFlags = 0;
+
+void enableIndiflightMode(indiflightModeFlags_e mask)
+{
+    const uint32_t oldVal = indiflightModeFlags;
+    indiflightModeFlags |= mask;
+    if (indiflightModeFlags != oldVal) {
+        beeperConfirmationBeeps(1);
+    }
+}
+
+void disableIndiflightMode(indiflightModeFlags_e mask)
+{
+    const uint32_t oldVal = indiflightModeFlags;
+    indiflightModeFlags &= ~mask;
+    if (indiflightModeFlags != oldVal) {
+        beeperConfirmationBeeps(1);
+    }
+}
+#endif

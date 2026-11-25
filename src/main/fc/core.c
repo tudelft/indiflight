@@ -490,9 +490,9 @@ if (crashFlipModeActive) {
                 || (geofenceAction != GEOFENCE_ACTION_NONE)
 #endif
                 ) {
-            setArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+            setIndiflightArmingDisabled(INDIFLIGHT_ARMING_DISABLED_EKF_OR_SETPOINT);
         } else {
-            unsetArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+            unsetIndiflightArmingDisabled(INDIFLIGHT_ARMING_DISABLED_EKF_OR_SETPOINT);
         }
 #endif
 
@@ -506,13 +506,15 @@ if (crashFlipModeActive) {
 
             /* Ignore ARMING_DISABLED_CALIBRATING if we are going to calibrate gyro on first arm */
             bool ignoreGyro = armingConfig()->gyro_cal_on_first_arm
-                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_CALIBRATING));
+                && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_CALIBRATING))
+                && !INDIFLIGHT_ARMING_DISABLE_FLAGS();
 
             /* Ignore ARMING_DISABLED_THROTTLE (once arm switch is on) if we are in 3D mode */
             bool ignoreThrottle = featureIsEnabled(FEATURE_3D)
                  && !IS_RC_MODE_ACTIVE(BOX3D)
                  && !flight3DConfig()->switched_mode3d
-                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_THROTTLE));
+                 && !(getArmingDisableFlags() & ~(ARMING_DISABLED_ARM_SWITCH | ARMING_DISABLED_THROTTLE))
+                 && !INDIFLIGHT_ARMING_DISABLE_FLAGS();
 
             // If arming is disabled and the ARM switch is on
             if (isArmingDisabled()
@@ -712,6 +714,12 @@ if (isMotorProtocolDshot()) {
        resetTryingToArm();
         if (!isFirstArmingGyroCalibrationRunning()) {
             int armingDisabledReason = ffs(getArmingDisableFlags());
+#ifdef USE_INDI
+            // indiflight reasons beep after the upstream ones
+            if (!armingDisabledReason && getIndiflightArmingDisableFlags()) {
+                armingDisabledReason = ARMING_DISABLE_FLAGS_COUNT + ffs(getIndiflightArmingDisableFlags());
+            }
+#endif
             if (lastArmingDisabledReason != armingDisabledReason) {
                 lastArmingDisabledReason = armingDisabledReason;
 
@@ -1210,9 +1218,9 @@ void processRxModes(timeUs_t currentTimeUs)
     //   POS_HOLD are kept off, since nothing on the INDI path consumes their output.
     // Set here, before ALT_HOLD / POS_HOLD, which test it.
     if (IS_RC_MODE_ACTIVE(BOXINDI)) {
-        ENABLE_FLIGHT_MODE(INDI_MODE);
+        ENABLE_INDIFLIGHT_MODE(INDI_MODE);
     } else {
-        DISABLE_FLIGHT_MODE(INDI_MODE);
+        DISABLE_INDIFLIGHT_MODE(INDI_MODE);
     }
 #endif
 
@@ -1223,7 +1231,7 @@ void processRxModes(timeUs_t currentTimeUs)
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
 #ifdef USE_INDI
         // and not with INDI, which uses indiflight POSITION_MODE instead
-        && !FLIGHT_MODE(INDI_MODE)
+        && !INDIFLIGHT_MODE(INDI_MODE)
 #endif
         // and either the alt_hold switch is activated, or are in failsafe landing mode,
         // or an autopilot mission needs altitude control, or a switch-rescue fallback descent
@@ -1249,7 +1257,7 @@ void processRxModes(timeUs_t currentTimeUs)
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
 #ifdef USE_INDI
         // and not with INDI, which uses indiflight POSITION_MODE instead
-        && !FLIGHT_MODE(INDI_MODE)
+        && !INDIFLIGHT_MODE(INDI_MODE)
 #endif
         // and either the pos_hold switch is activated, or are in failsafe landing mode,
         // or an autopilot mission needs the position controller
@@ -1270,9 +1278,9 @@ void processRxModes(timeUs_t currentTimeUs)
     // POSITION_MODE needs INDI_MODE: pos_ctl only produces INDI setpoints
     // (attSpNedFromPos / spfSpBodyFromPos), which nothing on the PID path consumes.
     // TODO(spike): trajectory tracker checks from indiflight core.c
-    if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && FLIGHT_MODE(INDI_MODE)) {
+    if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && INDIFLIGHT_MODE(INDI_MODE)) {
         // only switch on with a converged ekf and no geofence error/action
-        if (!FLIGHT_MODE(POSITION_MODE) && isConvergedEkf()
+        if (!INDIFLIGHT_MODE(POSITION_MODE) && isConvergedEkf()
 #ifdef USE_GEOFENCE
                 && (geofenceState != GEOFENCE_STATE_ERROR) && (geofenceAction == GEOFENCE_ACTION_NONE)
 #endif
@@ -1280,24 +1288,24 @@ void processRxModes(timeUs_t currentTimeUs)
             if (ARMING_FLAG(ARMED)) {
                 setLocalPosSpHere();
             }
-            ENABLE_FLIGHT_MODE(POSITION_MODE);
+            ENABLE_INDIFLIGHT_MODE(POSITION_MODE);
         }
     } else {
-        if (FLIGHT_MODE(POSITION_MODE)) {
+        if (INDIFLIGHT_MODE(POSITION_MODE)) {
             posSpNed.valid = false; // invalidate previous setpoint when leaving position mode
 #ifdef USE_GEOFENCE
             geofenceClearHold();
 #endif
         }
-        DISABLE_FLIGHT_MODE(POSITION_MODE);
+        DISABLE_INDIFLIGHT_MODE(POSITION_MODE);
     }
 
     if (!isConvergedEkf()) {
         if (!ARMING_FLAG(ARMED)) {
             posSpNed.valid = false;
-            DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+            DISABLE_INDIFLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
         }
-        if (ARMING_FLAG(ARMED) && !FLIGHT_MODE(POSITION_MODE)) {
+        if (ARMING_FLAG(ARMED) && !INDIFLIGHT_MODE(POSITION_MODE)) {
             posSpNed.valid = false; // invalidate setpoint even when flying, because not in position mode
         }
     }
@@ -1307,11 +1315,11 @@ void processRxModes(timeUs_t currentTimeUs)
     // switches it off when the plan is finished; it then stays off until the
     // switch is cycled (or POSITION_MODE is re-entered).
     static bool waypointRequestedPrev = false;
-    const bool waypointRequested = IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE);
+    const bool waypointRequested = IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && INDIFLIGHT_MODE(POSITION_MODE);
     if (!waypointRequested) {
-        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+        DISABLE_INDIFLIGHT_MODE(WAYPOINT_MODE);
     } else if (!waypointRequestedPrev) {
-        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
+        ENABLE_INDIFLIGHT_MODE(WAYPOINT_MODE);
     }
     waypointRequestedPrev = waypointRequested;
 #endif

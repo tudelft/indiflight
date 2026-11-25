@@ -205,6 +205,15 @@ void renderOsdWarning(char *warningText, bool *blinking, uint8_t *displayAttr)
             if (flags != ARMING_DISABLED_ARM_SWITCH) {
                 flags &= ~ARMING_DISABLED_ARM_SWITCH;
             }
+#ifdef USE_INDI
+            // indiflight reasons are shown when no upstream reason (besides ARM_SWITCH) is set
+            const uint32_t indiflightFlags = getIndiflightArmingDisableFlags();
+            if ((flags & ~ARMING_DISABLED_ARM_SWITCH) == 0 && indiflightFlags) {
+                tfp_sprintf(warningText, "%s", getIndiflightArmingDisableFlagName(indiflightFlags & -indiflightFlags));
+                *displayAttr = DISPLAYPORT_SEVERITY_WARNING;
+                return;
+            }
+#endif
 
             // Rotate to the next arming disabled reason after a 0.5 second time delay
             // or if the current flag is no longer set or if just starting

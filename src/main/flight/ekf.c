@@ -308,7 +308,7 @@ void updateEkf(timeUs_t currentTimeUs) {
 #endif
 
     // --- check if ekf will be used by control/ahrs
-    ekf_should_use = FLIGHT_MODE(POSITION_MODE);
+    ekf_should_use = INDIFLIGHT_MODE(POSITION_MODE);
 #ifdef USE_NN_CONTROL
     ekf_should_use |= FLIGHT_MODE(NN_MODE);
 #endif

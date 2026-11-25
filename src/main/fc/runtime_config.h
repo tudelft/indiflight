@@ -69,12 +69,7 @@ typedef enum {
     ARMING_DISABLED_ALTHOLD         = (1 << 26),
     ARMING_DISABLED_POSHOLD         = (1 << 27),
     ARMING_DISABLED_AUTOPILOT       = (1 << 28),
-#ifdef USE_EKF
-    ARMING_DISABLED_EKF_OR_SETPOINT = (1 << 29), // indiflight: EKF needed but not converged, or geofence error/action
-    ARMING_DISABLED_ARM_SWITCH      = (1 << 30) // Needs to be the last element, since it's always activated if one of the others is active when arming
-#else
     ARMING_DISABLED_ARM_SWITCH      = (1 << 29) // Needs to be the last element, since it's always activated if one of the others is active when arming
-#endif
 } armingDisableFlags_e;
 
 #define ARMING_DISABLE_FLAGS_COUNT (LOG2(ARMING_DISABLED_ARM_SWITCH) + 1)
@@ -84,6 +79,26 @@ void unsetArmingDisabled(armingDisableFlags_e flag);
 bool isArmingDisabled(void);
 armingDisableFlags_e getArmingDisableFlags(void);
 const char *getArmingDisableFlagName(armingDisableFlags_e flag);
+
+#ifdef USE_INDI
+// indiflight arming-disable reasons, in their own word so the upstream bits
+// (and ARM_SWITCH) stay where upstream has them. isArmingDisabled() includes
+// them; MSP_STATUS(_EX) appends the word at the end (docs/indiflight_msp.md).
+typedef enum {
+    INDIFLIGHT_ARMING_DISABLED_EKF_OR_SETPOINT = (1 << 0), // EKF needed but not converged, or geofence error/action
+    // reserved for the learner/throw/catapult/NN ports: WAITING_FOR_THROW, THROW_NOT_READY,
+    // CATAPULT_NOT_READY, NN_MODE
+} indiflightArmingDisableFlags_e;
+#define INDIFLIGHT_ARMING_DISABLE_FLAGS_COUNT 1
+
+void setIndiflightArmingDisabled(indiflightArmingDisableFlags_e flag);
+void unsetIndiflightArmingDisabled(indiflightArmingDisableFlags_e flag);
+uint32_t getIndiflightArmingDisableFlags(void);
+const char *getIndiflightArmingDisableFlagName(indiflightArmingDisableFlags_e flag);
+#define INDIFLIGHT_ARMING_DISABLE_FLAGS() getIndiflightArmingDisableFlags()
+#else
+#define INDIFLIGHT_ARMING_DISABLE_FLAGS() 0
+#endif
 
 typedef enum {
     ANGLE_MODE      = (1 << 0),
@@ -98,10 +113,7 @@ typedef enum {
 //    RANGEFINDER_MODE= (1 << 9),
     FAILSAFE_MODE   = (1 << 10),
     GPS_RESCUE_MODE = (1 << 11),
-    AUTOPILOT_MODE  = (1 << 12), // GPS waypoint tracking
-    INDI_MODE       = (1 << 13), // indiflight: INDI controller instead of PID
-    POSITION_MODE   = (1 << 14), // indiflight position control, only together with INDI_MODE
-    WAYPOINT_MODE   = (1 << 15)  // indiflight, only together with POSITION_MODE. flightModeFlags (uint16_t) is now full
+    AUTOPILOT_MODE  = (1 << 12)  // GPS waypoint tracking
 } flightModeFlags_e;
 
 extern uint16_t flightModeFlags;
@@ -109,6 +121,25 @@ extern uint16_t flightModeFlags;
 #define DISABLE_FLIGHT_MODE(mask) disableFlightMode(mask)
 #define ENABLE_FLIGHT_MODE(mask) enableFlightMode(mask)
 #define FLIGHT_MODE(mask) (flightModeFlags & (mask))
+
+#ifdef USE_INDI
+// indiflight flight modes, in their own word so flightModeFlags stays upstream's.
+// Set in processRxModes() (fc/core.c); MSP_STATUS(_EX) appends the word at the end.
+typedef enum {
+    INDI_MODE       = (1 << 0), // INDI controller instead of PID
+    POSITION_MODE   = (1 << 1), // position control, only together with INDI_MODE
+    WAYPOINT_MODE   = (1 << 2), // only together with POSITION_MODE
+    // reserved for later ports: LEARNER_MODE (1 << 3), CATAPULT_MODE (1 << 4), NN_MODE (1 << 5)
+} indiflightModeFlags_e;
+
+extern uint32_t indiflightModeFlags;
+
+#define INDIFLIGHT_MODE(mask) (indiflightModeFlags & (mask))
+#define ENABLE_INDIFLIGHT_MODE(mask) enableIndiflightMode(mask)
+#define DISABLE_INDIFLIGHT_MODE(mask) disableIndiflightMode(mask)
+void enableIndiflightMode(indiflightModeFlags_e mask);
+void disableIndiflightMode(indiflightModeFlags_e mask);
+#endif
 
 // macro to initialize map from boxId_e to log2(flightModeFlags). Keep it in sync with flightModeFlags_e enum.
 // [BOXARM] is left unpopulated

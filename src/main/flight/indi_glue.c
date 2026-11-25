@@ -124,7 +124,7 @@ bool haveSticksMoved(void)
 
 bool indiIsActive(void)
 {
-    return FLIGHT_MODE(INDI_MODE);
+    return INDIFLIGHT_MODE(INDI_MODE);
 }
 
 // INDI output -> upstream motor[] (motor protocol units). Replaces mixTable().

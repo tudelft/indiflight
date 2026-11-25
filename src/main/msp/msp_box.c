@@ -416,6 +416,16 @@ bool getBoxIdState(boxId_e boxid)
         return ARMING_FLAG(ARMED);
     } else if (boxid <= BOXID_FLIGHTMODE_LAST) {
         return FLIGHT_MODE(1 << boxIdToFlightModeMap[boxid]);
+#ifdef USE_INDI
+    } else if (boxid == BOXINDI) {
+        return INDIFLIGHT_MODE(INDI_MODE); // indiflight boxes report the engaged mode, not the switch
+#endif
+#ifdef USE_LOCAL_POSITION
+    } else if (boxid == BOXPOSCTL) {
+        return INDIFLIGHT_MODE(POSITION_MODE);
+    } else if (boxid == BOXWAYPOINTS) {
+        return INDIFLIGHT_MODE(WAYPOINT_MODE);
+#endif
     } else {
         return IS_RC_MODE_ACTIVE(boxid);
     }

@@ -6436,6 +6436,14 @@ RAM_CODE static void cliStatus(const char *cmdName, char *cmdline)
         flags &= ~flag;
         cliPrintf(" %s", getArmingDisableFlagName(flag));
     }
+#ifdef USE_INDI
+    uint32_t indiflightFlags = getIndiflightArmingDisableFlags();
+    while (indiflightFlags) {
+        const indiflightArmingDisableFlags_e flag = 1 << (ffs(indiflightFlags) - 1);
+        indiflightFlags &= ~flag;
+        cliPrintf(" %s", getIndiflightArmingDisableFlagName(flag));
+    }
+#endif
     cliPrintLinefeed();
 }
 
@@ -6812,6 +6820,15 @@ RAM_CODE static void cliEnv(const char *cmdName, char *cmdline)
             cliPrintf("%s", getArmingDisableFlagName(flag));
             first = false;
         }
+#ifdef USE_INDI
+        uint32_t indiflightFlags = getIndiflightArmingDisableFlags();
+        while (indiflightFlags) {
+            const indiflightArmingDisableFlags_e flag = 1 << (ffs(indiflightFlags) - 1);
+            indiflightFlags &= ~flag;
+            cliPrintf("%s%s", first ? "" : " ", getIndiflightArmingDisableFlagName(flag));
+            first = false;
+        }
+#endif
         cliPrintLinefeed();
     }
 

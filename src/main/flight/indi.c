@@ -127,7 +127,7 @@ bool isTouchingGround(void)
     const bool accHigh = acc.accMagnitude > 0.8f;
     bool throttleLow = true;
 #ifdef USE_LOCAL_POSITION
-    if (FLIGHT_MODE(POSITION_MODE)) {
+    if (INDIFLIGHT_MODE(POSITION_MODE)) {
         throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
         throttleLow &= (sq(velEstNed.V.X) + sq(velEstNed.V.Y) + sq(velEstNed.V.Z)) < sq(3.f);
     } else
@@ -224,8 +224,9 @@ static fp_euler_t getCurrentEulerZXY(void)
 FAST_CODE
 #endif
 void indiController(timeUs_t current) {
-    const uint16_t modesOtherThanIndi = flightModeFlags & ~INDI_MODE;
-    if (modesOtherThanIndi && !(modesOtherThanIndi & INDI_UNLIMITED_RATE_MODES)) {
+    // any flight mode other than acro (upstream modes, or indiflight modes besides INDI itself)
+    const uint32_t modesOtherThanIndi = flightModeFlags | (indiflightModeFlags & ~INDI_MODE);
+    if (modesOtherThanIndi && !(indiflightModeFlags & INDI_UNLIMITED_RATE_MODES)) {
 #pragma message "LEARNER_MODE probably shouldnt be here"
         // any flight mode active other than catapult, learner or acro (acro is all off)?
         if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 || (indiRun.attRateDenom == 1) ) {
@@ -305,7 +306,7 @@ void getSetpoints(timeUs_t current) {
     } else
 #endif
 #ifdef USE_LOCAL_POSITION
-    if (FLIGHT_MODE(POSITION_MODE)) {
+    if (INDIFLIGHT_MODE(POSITION_MODE)) {
         indiRun.attSpNed = attSpNedFromPos;
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;

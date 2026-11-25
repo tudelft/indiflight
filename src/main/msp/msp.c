@@ -1218,6 +1218,12 @@ RAM_CODE static bool mspProcessOutCommand(mspDescriptor_t srcDesc, int16_t cmdMS
         // Added in API version 1.48
         sbufWriteU8(dst, BATTERY_PROFILE_COUNT);
         sbufWriteU8(dst, getCurrentBatteryProfileIndex());
+#ifdef USE_INDI
+        // indiflight extension, appended so older readers ignore it (docs/indiflight_msp.md)
+        sbufWriteU8(dst, INDIFLIGHT_ARMING_DISABLE_FLAGS_COUNT);
+        sbufWriteU32(dst, getIndiflightArmingDisableFlags());
+        sbufWriteU32(dst, indiflightModeFlags);
+#endif
         break;
     }
 
