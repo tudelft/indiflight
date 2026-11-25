@@ -34,6 +34,10 @@ payloads are exactly the plain `.bbl` log.
 
 ## Pi side
 
+`bbstream/` has a C implementation (library + command line program) that decodes the stream with the unmodified
+blackbox-tools parser, see `bbstream/README.md`. The ideas below are the background; `blackbox_packets.py` stays
+as the small reference for the packet format.
+
 `blackbox_packets.py` is a reference receiver: `PacketParser.feed(bytes)` yields `(seq, payload, lost)`.
 It resyncs on the sync byte after a bad CRC or a false sync. Ideas for the rest:
 
