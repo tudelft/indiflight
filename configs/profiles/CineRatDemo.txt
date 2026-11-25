@@ -2,7 +2,7 @@
 # serial function bits remapped (TELEMETRY_PI 18->23, ACTUATORS_T4 20->24, HIL 19->25),
 # ahrs_process_denom -> imu_process_denom, acc_offset -> acc_calibration, dshot_idle_value -> motor_idle,
 # motor_output_limit / gps_rescue_* dropped (gone with USE_INDI), settings of features
-# that are not ported commented out ("# not in this port"), uROS removed.
+# that are not ported commented out ("# not in this port").
 # This file contains build flags and configuration for the CineRat 3inch drone
 
 ###############
