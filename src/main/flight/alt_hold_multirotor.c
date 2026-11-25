@@ -160,12 +160,12 @@ static void altHoldUpdate(void)
     if (positionNavHasActiveTarget()) {
         const positionNavCommand_t *navCmd = positionNavGetActiveCommand();
         if (navCmd->includeAltitude) {
-            targetAltitudeCm = navCmd->targetPosEfM.z * 100.0f;
+            targetAltitudeCm = -navCmd->targetPosEfM.v[NED_D] * 100.0f; // NED: altitude = -Down
             if (positionNavTargetReached()) {
                 altHold.targetAltitudeCm = targetAltitudeCm; // store target altitude so Alt Hold does not revert to pre-nav target altitude on the next cycle.
             targetAltitudeVelocity = 0.0f;
             } else {
-                 targetAltitudeVelocity = positionNavGetTargetVelocityCmS().z; 
+                 targetAltitudeVelocity = -positionNavGetTargetVelocityCmS().v[NED_D]; // climb rate = -Down
             }
         }
     }

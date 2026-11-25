@@ -20,8 +20,8 @@ extern "C" {
 #include "flight/position_estimator.h"
 
 // STATIC_UNIT_TESTED in position_estimator.c — gravity-removed earth-frame
-// linear acceleration in ENU (cm/s^2).
-void getLinearAccelENU(float *accelEast, float *accelNorth, float *accelUp);
+// linear acceleration in NED (cm/s^2).
+void getLinearAccelNED(float *accelNorth, float *accelEast, float *accelDown);
 
 #include "io/gps.h"
 
@@ -68,8 +68,8 @@ bool gpsHasNewData(uint16_t *gpsStamp)
 void GPS_distance2d(const gpsLocation_t *from, const gpsLocation_t *to, vector2_t *dest)
 {
     // Simplified (no Earth-scale projection): return integer-unit deltas so sign tests work.
-    dest->x = (float)(to->lon - from->lon);
-    dest->y = (float)(to->lat - from->lat);
+    dest->v[EF_EAST] = (float)(to->lon - from->lon);
+    dest->v[EF_NORTH] = (float)(to->lat - from->lat);
 }
 }
 
@@ -91,11 +91,11 @@ protected:
         memset(debug, 0, sizeof(debug));
 
         // Identity rotation and 1G reciprocal scale so zero accel stays zero.
-        rMat.m[NWU_N][X] = 1.0f;
-        rMat.m[NWU_W][Y] = 1.0f;
-        rMat.m[NWU_U][Z] = 1.0f;
+        rMat.m[NED_N][X] = 1.0f;
+        rMat.m[NED_E][Y] = 1.0f;
+        rMat.m[NED_D][Z] = 1.0f;
         acc.dev.acc_1G_rec = 1.0f;
-        acc.accADC.z = 1.0f;
+        acc.accADC.z = -1.0f; // FRD: level reads -1 G on Z
 
         enabledSensors = SENSOR_GPS | SENSOR_BARO | SENSOR_RANGEFINDER;
         rfHealthy = true;
@@ -155,13 +155,13 @@ TEST_F(PositionEstimatorTest, GPSPositionEastOfArmIsPositive)
     // Let the Kalman filter converge toward the GPS position measurement.
     stepEstimator(30);
 
-    // position is ENU; index by ENU_E so "East" is explicit rather than ".x".
-    EXPECT_GT(positionEstimatorGetEstimate()->position.v[ENU_E], 0.0f);
+    // position is NED; index by NED_E so "East" is explicit rather than ".x".
+    EXPECT_GT(positionEstimatorGetEstimate()->position.v[NED_E], 0.0f);
 }
 
 // Build rMat from roll/pitch/yaw using the exact quaternion + rotation-matrix
 // formulas from imu.c (imuComputeQuaternionFromRPY + imuComputeRotationMatrix),
-// so the matrix carries the firmware's body->earth NWU (North-West-Up) convention.
+// so the matrix carries the firmware's body FRD -> earth NED convention.
 // Yaw follows the attitude/compass convention: 0 = North, +90 = East increases the
 // reported heading, so a craft heading East is built with yawDeg = -90.
 static void setRMatFromEuler(float rollDeg, float pitchDeg, float yawDeg)
@@ -183,45 +183,45 @@ static void setRMatFromEuler(float rollDeg, float pitchDeg, float yawDeg)
     const float xy = q1 * q2, xz = q1 * q3, yz = q2 * q3;
     const float wx = q0 * q1, wy = q0 * q2, wz = q0 * q3;
 
-    rMat.m[NWU_N][X] = 1.0f - 2.0f * yy - 2.0f * zz;
-    rMat.m[NWU_N][Y] = 2.0f * (xy - wz);
-    rMat.m[NWU_N][Z] = 2.0f * (xz + wy);
-    rMat.m[NWU_W][X] = 2.0f * (xy + wz);
-    rMat.m[NWU_W][Y] = 1.0f - 2.0f * xx - 2.0f * zz;
-    rMat.m[NWU_W][Z] = 2.0f * (yz - wx);
-    rMat.m[NWU_U][X] = 2.0f * (xz - wy);
-    rMat.m[NWU_U][Y] = 2.0f * (yz + wx);
-    rMat.m[NWU_U][Z] = 1.0f - 2.0f * xx - 2.0f * yy;
+    rMat.m[NED_N][X] = 1.0f - 2.0f * yy - 2.0f * zz;
+    rMat.m[NED_N][Y] = 2.0f * (xy - wz);
+    rMat.m[NED_N][Z] = 2.0f * (xz + wy);
+    rMat.m[NED_E][X] = 2.0f * (xy + wz);
+    rMat.m[NED_E][Y] = 1.0f - 2.0f * xx - 2.0f * zz;
+    rMat.m[NED_E][Z] = 2.0f * (yz - wx);
+    rMat.m[NED_D][X] = 2.0f * (xz - wy);
+    rMat.m[NED_D][Y] = 2.0f * (yz + wx);
+    rMat.m[NED_D][Z] = 1.0f - 2.0f * xx - 2.0f * yy;
 }
 
 // Regression test for the East-West / magnitude bug discussed in #15321 and #15339.
-// getLinearAccelENU must use matrixVectorMul (body->earth NWU) with East = -West;
+// getLinearAccelNED must use matrixVectorMul (body FRD -> earth NED);
 // the previously-used matrixTrnVectorMul applied the inverse rotation, giving the
 // wrong magnitude and a spurious North term.
 //
 // Scenario: heading East, 30 deg right roll, 0.5 g of forward (East) thrust.
 // Gravity projects onto body Y and Z because of the roll, so accBF = (0.5, 0.5, 0.866).
-// In the correct NWU formulation the gravity cross-terms cancel exactly, leaving
+// In the correct NED formulation the gravity cross-terms cancel exactly, leaving
 // the full 0.5 g of thrust on East and nothing on North or Up.
-TEST_F(PositionEstimatorTest, EastThrustProducesEastAccelENU)
+TEST_F(PositionEstimatorTest, EastThrustProducesEastAccelNED)
 {
     constexpr float GRAVITY_CMSS = 980.665f;
 
     // rMat produced via imuComputeRotationMatrix's convention for heading East + 30 deg roll.
-    setRMatFromEuler(30.0f, 0.0f, -90.0f);
+    setRMatFromEuler(30.0f, 0.0f, 90.0f); // NED: heading East = +90 deg about Down
 
     // Forward (East) thrust of 0.5 g; gravity projects onto body Y and Z due to the roll.
     acc.dev.acc_1G_rec = 1.0f;
     acc.accADC.x = 0.5f;
-    acc.accADC.y = 0.5f;    // sin(30) * 1g
-    acc.accADC.z = 0.866f;  // cos(30) * 1g
+    acc.accADC.y = -0.5f;    // FRD: -sin(30) * 1g
+    acc.accADC.z = -0.866f;  // FRD: -cos(30) * 1g
 
-    float accelEast, accelNorth, accelUp;
-    getLinearAccelENU(&accelEast, &accelNorth, &accelUp);
+    float accelEast, accelNorth, accelDown;
+    getLinearAccelNED(&accelNorth, &accelEast, &accelDown);
 
     EXPECT_NEAR(accelEast,  0.5f * GRAVITY_CMSS, 0.01f * GRAVITY_CMSS);
     EXPECT_NEAR(accelNorth, 0.0f,                0.01f * GRAVITY_CMSS);
-    EXPECT_NEAR(accelUp,    0.0f,                0.01f * GRAVITY_CMSS);
+    EXPECT_NEAR(accelDown,  0.0f,                0.01f * GRAVITY_CMSS);
 }
 
 // Integration counterpart: with the same attitude/thrust, the IMU prediction alone
@@ -231,17 +231,17 @@ TEST_F(PositionEstimatorTest, EastThrustProducesPositiveEastVelocity)
     // Run a couple of steps so XY fusion is established with the arm at origin.
     stepEstimator(2);
 
-    setRMatFromEuler(30.0f, 0.0f, -90.0f);
+    setRMatFromEuler(30.0f, 0.0f, 90.0f); // NED: heading East = +90 deg about Down
 
     acc.accADC.x = 0.5f;
-    acc.accADC.y = 0.5f;    // sin(30) * 1g
-    acc.accADC.z = 0.866f;  // cos(30) * 1g
+    acc.accADC.y = -0.5f;    // FRD: -sin(30) * 1g
+    acc.accADC.z = -0.866f;  // FRD: -cos(30) * 1g
 
     // GPS position and velocity remain zero so any non-zero velocity estimate is
     // driven purely by the IMU prediction.
     stepEstimator(100);
 
-    // velocity is ENU; index by ENU_E so "East" is explicit rather than ".x".
-    EXPECT_GT(positionEstimatorGetEstimate()->velocity.v[ENU_E], 0.0f);
+    // velocity is NED; index by NED_E so "East" is explicit rather than ".x".
+    EXPECT_GT(positionEstimatorGetEstimate()->velocity.v[NED_E], 0.0f);
 }
 

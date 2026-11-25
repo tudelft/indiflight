@@ -970,7 +970,7 @@ TEST(pidControllerTest, testLaunchControl)
     EXPECT_NEAR(44.84,  pidData[FD_YAW].P,   calculateTolerance(44.84));
     EXPECT_FLOAT_EQ(0, pidData[FD_YAW].I);
 
-    // test PITCHONLY mode - expect P/I only on pitch; I cannot go negative
+    // test PITCHONLY mode - expect P/I only on pitch; I cannot go positive (FRD: pitch backwards)
     unitLaunchControlMode = LAUNCH_CONTROL_MODE_PITCHONLY;
     resetTest();
     unitLaunchControlActive = true;
@@ -979,23 +979,23 @@ TEST(pidControllerTest, testLaunchControl)
 
     pidController(pidProfile, currentTestTime());
 
-    // first test that pitch I is prevented from going negative
+    // first test that pitch I is prevented from going positive
     gyro.gyroADCf[FD_ROLL] = 0;
-    gyro.gyroADCf[FD_PITCH] = 20;
+    gyro.gyroADCf[FD_PITCH] = -20;
     gyro.gyroADCf[FD_YAW] = 0;
     pidController(pidProfile, currentTestTime());
 
     EXPECT_FLOAT_EQ(0, pidData[FD_PITCH].I);
 
     gyro.gyroADCf[FD_ROLL] = 20;
-    gyro.gyroADCf[FD_PITCH] = -20;
+    gyro.gyroADCf[FD_PITCH] = 20;
     gyro.gyroADCf[FD_YAW] = 20;
     pidController(pidProfile, currentTestTime());
 
     EXPECT_FLOAT_EQ(0, pidData[FD_ROLL].P);
     EXPECT_FLOAT_EQ(0, pidData[FD_ROLL].I);
-    EXPECT_NEAR(37.15, pidData[FD_PITCH].P, calculateTolerance(37.15));
-    EXPECT_NEAR(1.56,  pidData[FD_PITCH].I, calculateTolerance(1.56));
+    EXPECT_NEAR(-37.15, pidData[FD_PITCH].P, calculateTolerance(-37.15));
+    EXPECT_NEAR(-1.56,  pidData[FD_PITCH].I, calculateTolerance(-1.56));
     EXPECT_FLOAT_EQ(0, pidData[FD_YAW].P);
     EXPECT_FLOAT_EQ(0, pidData[FD_YAW].I);
 

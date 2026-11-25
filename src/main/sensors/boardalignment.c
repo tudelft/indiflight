@@ -82,6 +82,17 @@ static void alignBoard(vector3_t *vec)
     applyRotationMatrix(vec, &boardRotation);
 }
 
+// indiflight: the sensor/board alignment above produces the upstream Betaflight
+// body frame FLU (X forward, Y left, Z up). Convert it to the aerospace body frame
+// FRD (X forward, Y right, Z down) here, the single place where gyro, acc and mag
+// enter the firmware, so every consumer sees FRD while the align_* settings keep
+// their upstream meaning.
+static inline void alignFluToFrd(vector3_t *vec)
+{
+    vec->y = -vec->y;
+    vec->z = -vec->z;
+}
+
 FAST_CODE_NOINLINE void alignSensorViaMatrix(vector3_t *dest, matrix33_t *sensorRotationMatrix)
 {
     applyRotationMatrix(dest, sensorRotationMatrix);
@@ -89,6 +100,8 @@ FAST_CODE_NOINLINE void alignSensorViaMatrix(vector3_t *dest, matrix33_t *sensor
     if (!standardBoardAlignment) {
         alignBoard(dest);
     }
+
+    alignFluToFrd(dest);
 }
 
 void alignSensorViaRotation(vector3_t *dest, sensor_align_e rotation)
@@ -142,4 +155,6 @@ void alignSensorViaRotation(vector3_t *dest, sensor_align_e rotation)
     if (!standardBoardAlignment) {
         alignBoard(dest);
     }
+
+    alignFluToFrd(dest);
 }

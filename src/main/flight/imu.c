@@ -99,15 +99,16 @@ static imuRuntimeConfig_t imuRuntimeConfig;
 
 matrix33_t rMat;
 // Horizontal earth-frame heading vectors in imu.c (north_ef, cog_ef, heading_ef,
-// mag2d_ef) are vector2_t in the NWU ground plane: index NWU_N and NWU_W only.
-// NWU_U (==2) would read past a 2-element vector - do not use it on these.
+// mag2d_ef) are vector2_t in the NED ground plane: index NED_N and NED_E only.
+// NED_D (==2) would read past a 2-element vector - do not use it on these.
+// A 2D cross product (N, E order) of these is a rotation about earth Down.
 static vector2_t north_ef;
 
 #if defined(USE_ACC)
 STATIC_UNIT_TESTED bool attitudeIsEstablished = false;
 #endif // USE_ACC
 
-// quaternion of sensor frame relative to earth frame
+// quaternion of the FRD body frame relative to the NED earth frame
 STATIC_UNIT_TESTED quaternion_t q = QUATERNION_INITIALIZE;
 STATIC_UNIT_TESTED quaternionProducts qP = QUATERNION_PRODUCTS_INITIALIZE;
 // headfree quaternions
@@ -115,6 +116,7 @@ quaternion_t headfree = QUATERNION_INITIALIZE;
 quaternion_t offset = QUATERNION_INITIALIZE;
 
 // absolute angle inclination in multiple of 0.1 degree    180 deg = 1800
+// aerospace convention: roll right positive, pitch nose up positive, yaw = heading (clockwise from North)
 attitudeEulerAngles_t attitude = EULER_INITIALIZE;
 quaternion_t imuAttitudeQuaternion = QUATERNION_INITIALIZE;
 
@@ -153,21 +155,20 @@ STATIC_UNIT_TESTED void imuComputeRotationMatrix(void)
 {
     imuQuaternionComputeProducts(&q, &qP);
 
-    // rMat is the body->earth rotation: earthVec = rMat * bodyVec, with earth in
-    // NWU. The row selects the earth axis (NWU_N/NWU_W/NWU_U), the column selects
-    // the body axis (X/Y/Z). NWU_N/W/U and X/Y/Z share index values 0/1/2, so the
-    // named form denotes the same storage as the old m[0..2][0..2] literals.
-    rMat.m[NWU_N][X] = 1.0f - 2.0f * qP.yy - 2.0f * qP.zz;
-    rMat.m[NWU_N][Y] = 2.0f * (qP.xy + -qP.wz);
-    rMat.m[NWU_N][Z] = 2.0f * (qP.xz - -qP.wy);
+    // rMat is the body->earth rotation: earthVec = rMat * bodyVec, body FRD,
+    // earth NED. The row selects the earth axis (NED_N/NED_E/NED_D), the column
+    // selects the body axis (X/Y/Z).
+    rMat.m[NED_N][X] = 1.0f - 2.0f * qP.yy - 2.0f * qP.zz;
+    rMat.m[NED_N][Y] = 2.0f * (qP.xy + -qP.wz);
+    rMat.m[NED_N][Z] = 2.0f * (qP.xz - -qP.wy);
 
-    rMat.m[NWU_W][X] = 2.0f * (qP.xy - -qP.wz);
-    rMat.m[NWU_W][Y] = 1.0f - 2.0f * qP.xx - 2.0f * qP.zz;
-    rMat.m[NWU_W][Z] = 2.0f * (qP.yz + -qP.wx);
+    rMat.m[NED_E][X] = 2.0f * (qP.xy - -qP.wz);
+    rMat.m[NED_E][Y] = 1.0f - 2.0f * qP.xx - 2.0f * qP.zz;
+    rMat.m[NED_E][Z] = 2.0f * (qP.yz + -qP.wx);
 
-    rMat.m[NWU_U][X] = 2.0f * (qP.xz + -qP.wy);
-    rMat.m[NWU_U][Y] = 2.0f * (qP.yz - -qP.wx);
-    rMat.m[NWU_U][Z] = 1.0f - 2.0f * qP.xx - 2.0f * qP.yy;
+    rMat.m[NED_D][X] = 2.0f * (qP.xz + -qP.wy);
+    rMat.m[NED_D][Y] = 2.0f * (qP.yz - -qP.wx);
+    rMat.m[NED_D][Z] = 1.0f - 2.0f * qP.xx - 2.0f * qP.yy;
 
 #if ENABLE_SIMULATOR && !defined(USE_IMU_CALC) && !defined(SET_IMU_FROM_EULER) && !ENABLE_GAZEBO_BRIDGE
     // Legacy simulator bridges (X-Plane, RealFlight) send a quaternion with
@@ -176,8 +177,8 @@ STATIC_UNIT_TESTED void imuComputeRotationMatrix(void)
     // rotation (vector consumers like the position estimator see phantom
     // earth-frame accelerations at combined pitch and heading). The Gazebo
     // bridge instead corrects the quaternion itself on receive (sitl.c).
-    rMat.m[NWU_W][X] = -2.0f * (qP.xy - -qP.wz);
-    rMat.m[NWU_U][X] = -2.0f * (qP.xz + -qP.wy);
+    rMat.m[NED_E][X] = -2.0f * (qP.xy - -qP.wz);
+    rMat.m[NED_D][X] = -2.0f * (qP.xz + -qP.wy);
 #endif
 }
 
@@ -193,10 +194,9 @@ void imuConfigure(uint16_t throttle_correction_angle, uint8_t throttle_correctio
     imuRuntimeConfig.imuDcmKi = imuConfig()->imu_dcm_ki / 10000.0f;
     // magnetic declination has negative sign (positive clockwise when seen from top)
     const float imuMagneticDeclinationRad = DEGREES_TO_RADIANS(imuConfig()->mag_declination / 10.0f);
-    // north_ef: magnetic-north reference in the horizontal earth frame (NWU).
-    // v[NWU_N] = cos(declination), v[NWU_W] = -sin(declination).
-    sincosf_approx(imuMagneticDeclinationRad, &north_ef.v[NWU_W], &north_ef.v[NWU_N]);
-    north_ef.v[NWU_W] = -north_ef.v[NWU_W];
+    // north_ef: magnetic-north reference in the horizontal earth frame (NED).
+    // v[NED_N] = cos(declination), v[NED_E] = sin(declination).
+    sincosf_approx(imuMagneticDeclinationRad, &north_ef.v[NED_E], &north_ef.v[NED_N]);
 
     smallAngleCosZ = cos_approx(degreesToRadians(imuConfig()->small_angle));
 
@@ -240,8 +240,9 @@ static float invSqrt(float x)
 
 // g[xyz] - gyro reading, in rad/s
 // useAcc, a[xyz] - accelerometer reading, direction only, normalized internally
-// headingErrMag - heading error (in earth frame) derived from magnetometter, rad/s around Z axis (* dcmKpGain)
-// headingErrCog - heading error (in earth frame) derived from CourseOverGround, rad/s around Z axis (* dcmKpGain)
+// g[xyz], a[xyz] are in the FRD body frame (a reads -1 G on Z when level)
+// headingErrMag - heading error (in earth frame) derived from magnetometter, rad/s around earth Down axis (* dcmKpGain)
+// headingErrCog - heading error (in earth frame) derived from CourseOverGround, rad/s around earth Down axis (* dcmKpGain)
 // dcmKpGain - gain applied to all error sources
 STATIC_UNIT_TESTED void imuMahonyAHRSupdate(float dt,
                                 float gx, float gy, float gz,
@@ -257,11 +258,11 @@ STATIC_UNIT_TESTED void imuMahonyAHRSupdate(float dt,
     float ex = 0, ey = 0, ez = 0;
 
     // Add error from magnetometer and Cog
-    // The earth-Up row (NWU_U) of rMat is earth-up expressed in the body frame,
-    // so it rotates the earth-Z heading error onto the body axes.
-    ex += rMat.m[NWU_U][X] * (headingErrCog + headingErrMag);
-    ey += rMat.m[NWU_U][Y] * (headingErrCog + headingErrMag);
-    ez += rMat.m[NWU_U][Z] * (headingErrCog + headingErrMag);
+    // The earth-Down row (NED_D) of rMat is earth-down expressed in the body frame,
+    // so it rotates the earth-Down heading error onto the body axes.
+    ex += rMat.m[NED_D][X] * (headingErrCog + headingErrMag);
+    ey += rMat.m[NED_D][Y] * (headingErrCog + headingErrMag);
+    ez += rMat.m[NED_D][Z] * (headingErrCog + headingErrMag);
 
     // Use measured acceleration vector
     float recipAccNorm = sq(ax) + sq(ay) + sq(az);
@@ -273,11 +274,12 @@ STATIC_UNIT_TESTED void imuMahonyAHRSupdate(float dt,
         ay *= recipAccNorm;
         az *= recipAccNorm;
 
-        // Error is sum of cross product between estimated direction and measured direction of gravity.
-        // The earth-Up row (NWU_U) is the estimated gravity/up direction in the body frame.
-        ex += (ay * rMat.m[NWU_U][Z] - az * rMat.m[NWU_U][Y]);
-        ey += (az * rMat.m[NWU_U][X] - ax * rMat.m[NWU_U][Z]);
-        ez += (ax * rMat.m[NWU_U][Y] - ay * rMat.m[NWU_U][X]);
+        // Error is sum of cross product between measured and estimated direction of the specific force.
+        // The earth-Down row (NED_D) is gravity in the body frame; a level acc measures its negative.
+        // e = a x (-rMat[NED_D])
+        ex += (az * rMat.m[NED_D][Y] - ay * rMat.m[NED_D][Z]);
+        ey += (ax * rMat.m[NED_D][Z] - az * rMat.m[NED_D][X]);
+        ez += (ay * rMat.m[NED_D][X] - ax * rMat.m[NED_D][Y]);
     }
 
     // Compute and apply integral feedback if enabled
@@ -338,12 +340,12 @@ STATIC_UNIT_TESTED void imuUpdateEulerAngles(void)
 
        attitude.values.roll = lrintf(atan2_approx((+2.0f * (buffer.wx + buffer.yz)), (+1.0f - 2.0f * (buffer.xx + buffer.yy))) * (1800.0f / M_PIf));
        attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(+2.0f * (buffer.wy - buffer.xz))) * (1800.0f / M_PIf));
-       attitude.values.yaw = lrintf((-atan2_approx((+2.0f * (buffer.wz + buffer.xy)), (+1.0f - 2.0f * (buffer.yy + buffer.zz))) * (1800.0f / M_PIf)));
+       attitude.values.yaw = lrintf((atan2_approx((+2.0f * (buffer.wz + buffer.xy)), (+1.0f - 2.0f * (buffer.yy + buffer.zz))) * (1800.0f / M_PIf)));
        imuAttitudeQuaternion = headfree;
     } else {
-       attitude.values.roll = lrintf(atan2_approx(rMat.m[NWU_U][Y], rMat.m[NWU_U][Z]) * (1800.0f / M_PIf));
-       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(-rMat.m[NWU_U][X])) * (1800.0f / M_PIf));
-       attitude.values.yaw = lrintf((-atan2_approx(rMat.m[NWU_W][X], rMat.m[NWU_N][X]) * (1800.0f / M_PIf)));
+       attitude.values.roll = lrintf(atan2_approx(rMat.m[NED_D][Y], rMat.m[NED_D][Z]) * (1800.0f / M_PIf));
+       attitude.values.pitch = lrintf(((0.5f * M_PIf) - acos_approx(-rMat.m[NED_D][X])) * (1800.0f / M_PIf));
+       attitude.values.yaw = lrintf((atan2_approx(rMat.m[NED_E][X], rMat.m[NED_N][X]) * (1800.0f / M_PIf)));
        imuAttitudeQuaternion = q; //using current q quaternion  for blackbox log
     }
 
@@ -459,7 +461,7 @@ static float imuCalcGroundspeedGain(float dt)
     // In position hold the pilot may fly backwards.
     float pitchSuppression = 1.0f;
     if (!isWing) {
-        const float pitchFactor = attitude.values.pitch * 0.1f / 10.0f; // negative is backwards
+        const float pitchFactor = -attitude.values.pitch * 0.1f / 10.0f; // nose down (negative pitch) is forwards
         pitchSuppression = fminf(pitchFactor , 5.0f); // 1.0 at 10 degrees, 5.0 at 50 degrees or more
         pitchSuppression = (pitchSuppression >= 0) ? pitchSuppression : 0.0f; // zero if flat or pitched backwards
     }
@@ -489,19 +491,18 @@ static float imuCalcGroundspeedGain(float dt)
 // *** Calculate heading error derived from IMU heading vs GPS heading ***
 // assumes that quad/plane is flying forward (gain factors attenuate situations when this is not true)
 // courseOverGround - in rad, 0 = north, clockwise
-// return value rotation around earth Z axis, pointing in directipon of smaller error, [rad/s]
+// return value rotation around earth Down axis, pointing in directipon of smaller error, [rad/s]
 STATIC_UNIT_TESTED float imuCalcCourseErr(float courseOverGround)
 {
-    // Compute COG heading unit vector in the horizontal earth frame (NWU) from
-    // scalar GPS CourseOverGround. North is v[NWU_N]; the sin/cos argument is
-    // anticlockwise so the orthogonal component lands on West (v[NWU_W]). (|cog_ef| == 1.0)
+    // Compute COG heading unit vector in the horizontal earth frame (NED) from
+    // scalar GPS CourseOverGround (clockwise from North). (|cog_ef| == 1.0)
     float sin, cos;
-    sincosf_approx(-courseOverGround, &sin, &cos);
-    const vector2_t cog_ef = {.v = {[NWU_N] = cos, [NWU_W] = sin}};
+    sincosf_approx(courseOverGround, &sin, &cos);
+    const vector2_t cog_ef = {.v = {[NED_N] = cos, [NED_E] = sin}};
 
     // Compute and normalise craft earth-frame heading vector from the body X axis
-    // (first column of rMat): row NWU_N is North, row NWU_W is West.
-    vector2_t heading_ef = {.v = {[NWU_N] = rMat.m[NWU_N][X], [NWU_W] = rMat.m[NWU_W][X]}};
+    // (first column of rMat): row NED_N is North, row NED_E is East.
+    vector2_t heading_ef = {.v = {[NED_N] = rMat.m[NED_N][X], [NED_E] = rMat.m[NED_E][X]}};
     vector2Normalize(&heading_ef, &heading_ef); // XY only, normalised to magnitude 1.0
 
     // cross (vector product) = |heading| * |cog| * sin(angle) = 1 * 1 * sin(angle)
@@ -518,7 +519,7 @@ STATIC_UNIT_TESTED float imuCalcCourseErr(float courseOverGround)
     // max when aligned, zero at 90 degrees of vector difference, negative for error > 90 degrees
     const float dot = vector2Dot(&heading_ef, &cog_ef);
 
-    // error around Z axis in Earth frame
+    // error around Down axis in Earth frame
     // for error angles less than 90 degrees (dot > 0), use cross value to compute ez_ef
     //   over 90 deg, use sign(cross)
     // when well aligned, return ~ 0 (sin(error)), for error >= 90 degrees, return +-1.0
@@ -540,13 +541,13 @@ static void imuDebug_GPS_RESCUE_HEADING(void)
         matrixVectorMul(&mag_ef, &rMat, &mag_bf); // BF->EF true north
 
         matrix33_t rMatZTrans;
-        yawToRotationMatrixZ(&rMatZTrans, -atan2_approx(rMat.m[NWU_W][X], rMat.m[NWU_N][X]));
+        yawToRotationMatrixZ(&rMatZTrans, -atan2_approx(rMat.m[NED_E][X], rMat.m[NED_N][X])); // undo heading (about Down)
 
         vector3_t mag_ef_yawed;
         matrixVectorMul(&mag_ef_yawed, &rMatZTrans, &mag_ef); // EF->EF yawed
 
         // Magnetic yaw is the angle between true north and the X axis of the body frame
-        int16_t magYaw = lrintf((atan2_approx(mag_ef_yawed.v[NWU_W], mag_ef_yawed.v[NWU_N]) * (1800.0f / M_PIf)));
+        int16_t magYaw = lrintf((-atan2_approx(mag_ef_yawed.v[NED_E], mag_ef_yawed.v[NED_N]) * (1800.0f / M_PIf)));
         if (magYaw < 0) {
             magYaw += 3600;
         }
@@ -560,7 +561,7 @@ static void imuDebug_GPS_RESCUE_HEADING(void)
 
 #ifdef USE_MAG
 // Calculate heading error derived from magnetometer
-// return value rotation around earth Z axis, pointing in directipon of smaller error, [rad/s]
+// return value rotation around earth Down axis, pointing in directipon of smaller error, [rad/s]
 STATIC_UNIT_TESTED float imuCalcMagErr(void)
 {
     // Use measured magnetic field vector
@@ -576,7 +577,7 @@ STATIC_UNIT_TESTED float imuCalcMagErr(void)
 
         // For magnetometer correction we make an assumption that magnetic field is perpendicular to gravity (ignore Z-component in EF).
         // This way magnetic field will only affect heading and wont mess roll/pitch angles
-        vector2_t mag2d_ef = {.v = {[NWU_N] = mag_ef.v[NWU_N], [NWU_W] = mag_ef.v[NWU_W]}};
+        vector2_t mag2d_ef = {.v = {[NED_N] = mag_ef.v[NED_N], [NED_E] = mag_ef.v[NED_E]}};
         // mag2d_ef - measured mag field vector in EF (2D ground plane projection)
         // north_ef - reference mag field vector heading due North in EF (2D ground plane projection).
         //              Adjusted for magnetic declination (in imuConfigure)
@@ -836,15 +837,15 @@ void imuUpdateAttitude(timeUs_t currentTimeUs)
 #endif // USE_ACC
 
 // Angle in between the nose axis of the craft and the horizontal plane in ground reference.
-// Positive angle - nose down, negative angle - nose up.
+// Positive angle - nose up, negative angle - nose down (aerospace convention).
 float getSinPitchAngle(void)
 {
-    return -rMat.m[NWU_U][X];
+    return -rMat.m[NED_D][X];
 }
 
 float getCosTiltAngle(void)
 {
-    return rMat.m[NWU_U][Z];
+    return rMat.m[NED_D][Z];
 }
 
 void getQuaternion(quaternion_t *quat)

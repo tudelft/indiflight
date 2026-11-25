@@ -753,7 +753,7 @@ void getMotorCommands(timeUs_t current) {
         // rate
         indiRun.rateIMU.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[axis]);
         indiRun.rate_f.A[axis] = DEGREES_TO_RADIANS(gyro.gyroADCf[axis]);
-        indiRun.spfIMU.A[axis] = acc.accADC.v[axis] * acc.dev.acc_1G_rec /* TODO(spike): indiflight runs acc downsampling + rpm notch at PID rate (accFiltering); upstream acc runs in its own task. Also verify sign/frame. */ * GRAVITYf;
+        indiRun.spfIMU.A[axis] = acc.accADC.v[axis] * acc.dev.acc_1G_rec /* TODO(spike): indiflight runs acc downsampling + rpm notch at PID rate (accFiltering); upstream acc runs in its own task. acc is FRD (sensors converted after alignment). */ * GRAVITYf;
 
         // get gyro derivative
         indiRun.rateDotIMU.A[axis] = indiRun.indiFrequency * (indiRun.rateIMU.A[axis] - rate_prev[axis]);

@@ -20,7 +20,7 @@
  */
 
 // Breadcrumb trail recorder for the OSD navigation map: keeps a decimated
-// polyline of flown positions, in local ENU metres relative to home. Points
+// polyline of flown positions, in local metres (East, North) relative to home. Points
 // are laid down by distance flown, not by time — hovering adds nothing, so
 // the stored line is the geometry of the flight, not its duration.
 
@@ -89,7 +89,7 @@ static void pushTrailPoint(int16_t eastM, int16_t northM)
     trailCount++;
 }
 
-// Feed one position (local ENU cm relative to home) through the distance
+// Feed one position (local NED-horizontal cm, efAxis_e, relative to home) through the distance
 // gate. Split out so unit tests can drive it without GPS plumbing.
 STATIC_UNIT_TESTED void navTrailIngestPosition(const vector2_t *posCm)
 {
@@ -98,8 +98,8 @@ STATIC_UNIT_TESTED void navTrailIngestPosition(const vector2_t *posCm)
     // point is already clamped, so dx/dy blow up, the gate fires every tick,
     // and the buffer fills with the same clamped point until decimation has
     // eaten the real trail
-    const int16_t eastM = constrain(lrintf(posCm->x / 100.0f), INT16_MIN, INT16_MAX);
-    const int16_t northM = constrain(lrintf(posCm->y / 100.0f), INT16_MIN, INT16_MAX);
+    const int16_t eastM = constrain(lrintf(posCm->v[EF_EAST] / 100.0f), INT16_MIN, INT16_MAX);
+    const int16_t northM = constrain(lrintf(posCm->v[EF_NORTH] / 100.0f), INT16_MIN, INT16_MAX);
 
     if (trailCount == 0) {
         pushTrailPoint(eastM, northM);

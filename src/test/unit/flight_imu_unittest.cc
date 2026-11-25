@@ -109,15 +109,15 @@ TEST(FlightImuTest, TestCalculateRotationMatrix)
 
     imuComputeRotationMatrix();
 
-    EXPECT_FLOAT_EQ(1.0f, rMat.m[NWU_N][X]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_N][Y]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_N][Z]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_W][X]);
-    EXPECT_FLOAT_EQ(1.0f, rMat.m[NWU_W][Y]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_W][Z]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_U][X]);
-    EXPECT_FLOAT_EQ(0.0f, rMat.m[NWU_U][Y]);
-    EXPECT_FLOAT_EQ(1.0f, rMat.m[NWU_U][Z]);
+    EXPECT_FLOAT_EQ(1.0f, rMat.m[NED_N][X]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_N][Y]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_N][Z]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_E][X]);
+    EXPECT_FLOAT_EQ(1.0f, rMat.m[NED_E][Y]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_E][Z]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_D][X]);
+    EXPECT_FLOAT_EQ(0.0f, rMat.m[NED_D][Y]);
+    EXPECT_FLOAT_EQ(1.0f, rMat.m[NED_D][Z]);
 
     // 90 degrees around Z axis
     q.w = sqrt2over2;
@@ -127,15 +127,15 @@ TEST(FlightImuTest, TestCalculateRotationMatrix)
 
     imuComputeRotationMatrix();
 
-    EXPECT_NEAR(0.0f, rMat.m[NWU_N][X], TOL);
-    EXPECT_NEAR(-1.0f, rMat.m[NWU_N][Y], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_N][Z], TOL);
-    EXPECT_NEAR(1.0f, rMat.m[NWU_W][X], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_W][Y], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_W][Z], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_U][X], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_U][Y], TOL);
-    EXPECT_NEAR(1.0f, rMat.m[NWU_U][Z], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_N][X], TOL);
+    EXPECT_NEAR(-1.0f, rMat.m[NED_N][Y], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_N][Z], TOL);
+    EXPECT_NEAR(1.0f, rMat.m[NED_E][X], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_E][Y], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_E][Z], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_D][X], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_D][Y], TOL);
+    EXPECT_NEAR(1.0f, rMat.m[NED_D][Z], TOL);
 
     // 60 degrees around X axis
     q.w = 0.866f;
@@ -145,15 +145,15 @@ TEST(FlightImuTest, TestCalculateRotationMatrix)
 
     imuComputeRotationMatrix();
 
-    EXPECT_NEAR(1.0f, rMat.m[NWU_N][X], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_N][Y], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_N][Z], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_W][X], TOL);
-    EXPECT_NEAR(0.5f, rMat.m[NWU_W][Y], TOL);
-    EXPECT_NEAR(-0.866f, rMat.m[NWU_W][Z], TOL);
-    EXPECT_NEAR(0.0f, rMat.m[NWU_U][X], TOL);
-    EXPECT_NEAR(0.866f, rMat.m[NWU_U][Y], TOL);
-    EXPECT_NEAR(0.5f, rMat.m[NWU_U][Z], TOL);
+    EXPECT_NEAR(1.0f, rMat.m[NED_N][X], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_N][Y], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_N][Z], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_E][X], TOL);
+    EXPECT_NEAR(0.5f, rMat.m[NED_E][Y], TOL);
+    EXPECT_NEAR(-0.866f, rMat.m[NED_E][Z], TOL);
+    EXPECT_NEAR(0.0f, rMat.m[NED_D][X], TOL);
+    EXPECT_NEAR(0.866f, rMat.m[NED_D][Y], TOL);
+    EXPECT_NEAR(0.5f, rMat.m[NED_D][Z], TOL);
 }
 
 TEST(FlightImuTest, TestUpdateEulerAngles)
@@ -167,18 +167,46 @@ TEST(FlightImuTest, TestUpdateEulerAngles)
     EXPECT_EQ(0, attitude.values.pitch);
     EXPECT_EQ(0, attitude.values.yaw);
 
-    // 45 degree yaw
+    // 45 degree yaw (FRD body -> NED: nose points North-East, heading 45 deg)
     memset(&rMat, 0.0, sizeof(float) * 9);
-    rMat.m[NWU_N][X] = sqrt2over2;
-    rMat.m[NWU_N][Y] = sqrt2over2;
-    rMat.m[NWU_W][X] = -sqrt2over2;
-    rMat.m[NWU_W][Y] = sqrt2over2;
+    rMat.m[NED_N][X] = sqrt2over2;
+    rMat.m[NED_N][Y] = -sqrt2over2;
+    rMat.m[NED_E][X] = sqrt2over2;
+    rMat.m[NED_E][Y] = sqrt2over2;
 
     imuUpdateEulerAngles();
 
     EXPECT_EQ(0, attitude.values.roll);
     EXPECT_EQ(0, attitude.values.pitch);
     EXPECT_EQ(450, attitude.values.yaw);
+
+    // 30 degree nose up (rotation about body Y = right): pitch positive
+    memset(&rMat, 0.0, sizeof(float) * 9);
+    rMat.m[NED_N][X] = 0.8660254f;
+    rMat.m[NED_N][Z] = 0.5f;
+    rMat.m[NED_E][Y] = 1.0f;
+    rMat.m[NED_D][X] = -0.5f;
+    rMat.m[NED_D][Z] = 0.8660254f;
+
+    imuUpdateEulerAngles();
+
+    EXPECT_EQ(0, attitude.values.roll);
+    EXPECT_NEAR(300, attitude.values.pitch, 2);
+    EXPECT_EQ(0, attitude.values.yaw);
+
+    // 30 degree right roll (rotation about body X = forward): roll positive
+    memset(&rMat, 0.0, sizeof(float) * 9);
+    rMat.m[NED_N][X] = 1.0f;
+    rMat.m[NED_E][Y] = 0.8660254f;
+    rMat.m[NED_E][Z] = -0.5f;
+    rMat.m[NED_D][Y] = 0.5f;
+    rMat.m[NED_D][Z] = 0.8660254f;
+
+    imuUpdateEulerAngles();
+
+    EXPECT_NEAR(300, attitude.values.roll, 2);
+    EXPECT_EQ(0, attitude.values.pitch);
+    EXPECT_EQ(0, attitude.values.yaw);
 }
 
 TEST(FlightImuTest, TestSmallAngle)
@@ -201,10 +229,10 @@ TEST(FlightImuTest, TestSmallAngle)
     EXPECT_FALSE(isUpright());
 
     // given
-    rMat.m[NWU_N][X] = r1;
-    rMat.m[NWU_N][Z] = r2;
-    rMat.m[NWU_U][X] = -r2;
-    rMat.m[NWU_U][Z] = r1;
+    rMat.m[NED_N][X] = r1;
+    rMat.m[NED_N][Z] = r2;
+    rMat.m[NED_D][X] = -r2;
+    rMat.m[NED_D][Z] = r1;
 
     // when
     imuComputeRotationMatrix();
@@ -332,9 +360,9 @@ TEST_P(YawTest, TestCogAlign)
 {
     cogGain = 1.0;
     cogDeg = GetParam();
-    const float rollDeg = 30;    // 30deg pitch forward
-    setOrientationAA(rollDeg, {{0, 1, 0}});
-    vector3_t expect = {{0, rollDeg, wrap(cogDeg)}};
+    const float pitchDeg = -30;    // 30deg pitch forward (FRD: nose down is negative)
+    setOrientationAA(pitchDeg, {{0, 1, 0}});
+    vector3_t expect = {{0, pitchDeg, wrap(cogDeg)}};
     // integrate IMU. about 25s is enough in worst case
     float alignTime = imuIntegrate(80, &expect);
 
@@ -354,12 +382,13 @@ TEST_P(YawTest, TestMagAlign)
     float initialAngle = GetParam();
 
     // level, rotate to param heading
-    quaternion_from_axis_angle(&q, -DEGREES_TO_RADIANS(initialAngle), 0, 0, 1);
+    // NED: positive rotation about Down is clockwise, i.e. heading +initialAngle
+    quaternion_from_axis_angle(&q, DEGREES_TO_RADIANS(initialAngle), 0, 0, 1);
     imuComputeRotationMatrix();
 
     vector3_t expect = {{0, 0, 0}};    // expect zero yaw
 
-    vector3_t magBF = {{1, 0, .5}};    // use arbitrary Z component, point north
+    vector3_t magBF = {{1, 0, -.5}};    // use arbitrary Z component (FRD), point north
 
     mag.magADC = magBF;
 
@@ -376,6 +405,22 @@ TEST_P(YawTest, TestMagAlign)
     if (alignTime >= 0) {
         printf("[          ] Aligned from %.f deg in %.2fs\n", initialAngle, alignTime);
     }
+}
+
+// indiflight: FRD body / NED earth. A level accelerometer reads -1 G on Z.
+TEST_F(MahonyFixture, TestAccAlignFrd)
+{
+    useAcc = true;
+    dcmKp = 2.5;
+    // specific force of a craft pitched 20 deg nose up, rolled 10 deg right
+    const float theta = DEGREES_TO_RADIANS(20), phi = DEGREES_TO_RADIANS(10);
+    acc = {{ sinf(theta), -cosf(theta) * sinf(phi), -cosf(theta) * cosf(phi) }};
+    vector3_t expect = {{10, 20, 0}};
+    imuIntegrate(30, &expect);
+    imuUpdateEulerAngles();
+    EXPECT_NEAR_DEG(attitude.values.roll / 10.0, expect.x, .5);
+    EXPECT_NEAR_DEG(attitude.values.pitch / 10.0, expect.y, .5);
+    EXPECT_NEAR(getCosTiltAngle(), cosf(theta) * cosf(phi), 0.01);
 }
 
 INSTANTIATE_TEST_SUITE_P(

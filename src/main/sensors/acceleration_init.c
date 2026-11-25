@@ -453,10 +453,10 @@ void performAccelerometerCalibration(rollAndPitchTrims_t *rollAndPitchTrims)
     }
 
     if (isOnFinalAccelerationCalibrationCycle()) {
-        // Calculate average, shift Z down by acc_1G and store values in EEPROM at end of calibration
+        // Calculate average, shift Z up by acc_1G (FRD) and store values in EEPROM at end of calibration
         accelerationRuntime.accelerationTrims->raw[X] = (a[X] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES;
         accelerationRuntime.accelerationTrims->raw[Y] = (a[Y] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES;
-        accelerationRuntime.accelerationTrims->raw[Z] = (a[Z] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES - acc.dev.acc_1G;
+        accelerationRuntime.accelerationTrims->raw[Z] = (a[Z] + (CALIBRATING_ACC_CYCLES / 2)) / CALIBRATING_ACC_CYCLES + acc.dev.acc_1G; // FRD: level reads -1 G on Z
 
         resetRollAndPitchTrims(rollAndPitchTrims);
         setConfigCalibrationCompleted();
@@ -506,12 +506,12 @@ void performInflightAccelerationCalibration(rollAndPitchTrims_t *rollAndPitchTri
         }
         InflightcalibratingA--;
     }
-    // Calculate average, shift Z down by acc_1G and store values in EEPROM at end of calibration
+    // Calculate average, shift Z up by acc_1G (FRD) and store values in EEPROM at end of calibration
     if (AccInflightCalibrationSavetoEEProm) {      // the aircraft is landed, disarmed and the combo has been done again
         AccInflightCalibrationSavetoEEProm = false;
         accelerationRuntime.accelerationTrims->raw[X] = b[X] / 50;
         accelerationRuntime.accelerationTrims->raw[Y] = b[Y] / 50;
-        accelerationRuntime.accelerationTrims->raw[Z] = b[Z] / 50 - acc.dev.acc_1G;    // for nunchuck 200=1G
+        accelerationRuntime.accelerationTrims->raw[Z] = b[Z] / 50 + acc.dev.acc_1G;    // for nunchuck 200=1G; FRD: level reads -1 G on Z
 
         resetRollAndPitchTrims(rollAndPitchTrims);
         setConfigCalibrationCompleted();
