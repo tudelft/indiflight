@@ -708,6 +708,28 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 #endif
 };
 
+#ifdef UNIT_TEST
+// Length of the "Field I name:..." header line (without "H " and newline) if
+// every row of blackboxMainFields[] were logged. Decoders cap header lines.
+size_t blackboxMainFieldNameLineLength(void)
+{
+    size_t len = strlen("Field I name:");
+    for (unsigned i = 0; i < ARRAYLEN(blackboxMainFields); i++) {
+        len += strlen(blackboxMainFields[i].name) + (i > 0 ? 1 : 0); // comma
+        const int8_t index = blackboxMainFields[i].fieldNameIndex;
+        if (index != -1) {
+            len += 2 + (index >= 100 ? 3 : index >= 10 ? 2 : 1); // "[%d]"
+        }
+    }
+    return len;
+}
+
+unsigned blackboxMainFieldCount(void)
+{
+    return ARRAYLEN(blackboxMainFields);
+}
+#endif
+
 #ifdef USE_GPS
 // GPS position/vel frame
 static const blackboxConditionalFieldDefinition_t blackboxGpsGFields[] = {
