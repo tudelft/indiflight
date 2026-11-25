@@ -60,6 +60,9 @@
 #include "flight/pid.h"
 #include "flight/position.h"
 #include "flight/pos_hold.h"
+#ifdef USE_POS_CTL
+#include "flight/pos_ctl.h"
+#endif
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -412,6 +415,9 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #ifdef USE_POSITION_HOLD
     [TASK_POSHOLD] = DEFINE_TASK("POSHOLD", NULL, NULL, updatePosHold, TASK_PERIOD_HZ(POSHOLD_TASK_RATE_HZ), TASK_PRIORITY_LOW),
 #endif
+#ifdef USE_POS_CTL
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, updatePosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
+#endif
 
 #ifdef USE_MAG
     [TASK_COMPASS] = DEFINE_TASK("COMPASS", NULL, NULL, taskUpdateMag, TASK_PERIOD_HZ(TASK_COMPASS_RATE_HZ), TASK_PRIORITY_LOW),
@@ -596,6 +602,9 @@ void tasksInit(void)
 
 #ifdef USE_POSITION_HOLD
     setTaskEnabled(TASK_POSHOLD, featureIsEnabled(FEATURE_GPS) || sensors(SENSOR_OPTICALFLOW));
+#endif
+#ifdef USE_POS_CTL
+    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_MAG

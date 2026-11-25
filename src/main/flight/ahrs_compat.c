@@ -15,6 +15,9 @@
 #ifdef USE_INDI
 
 #include "flight/ahrs_compat.h"
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
 
 // TODO(spike): verify frame conventions against indiflight's ahrs.c on
 // hardware. Indiflight's Mahony uses the same q layout as Betaflight's imu.c,
@@ -22,6 +25,13 @@
 // instead (see report), so all upstream consumers see it too.
 void getAttitudeQuaternion(fp_quaternion_t *q)
 {
+#ifdef USE_EKF
+    // imu.c only runs at the attitude task rate; INDI needs the EKF at loop rate
+    if (shouldBeUsedEkf() && isConvergedEkf()) {
+        *q = qEkf;
+        return;
+    }
+#endif
     quaternion_t qImu;
     getQuaternion(&qImu);
     q->w = qImu.w;

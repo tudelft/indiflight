@@ -28,6 +28,12 @@
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #include "flight/indi_glue.h"
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+#ifdef USE_LOCAL_POSITION
+#include "flight/pos_ctl.h"
+#endif
 
 static FAST_DATA_ZERO_INIT float motor_normalized[MAX_SUPPORTED_MOTORS];
 static FAST_DATA_ZERO_INIT float servo_normalized[MAX_SUPPORTED_MOTORS];
@@ -35,6 +41,20 @@ static FAST_DATA_ZERO_INIT float servo_normalized[MAX_SUPPORTED_MOTORS];
 void indiflightInit(void)
 {
     initIndiRuntime();
+#ifdef USE_LOCAL_POSITION
+    posCtlInit();
+#endif
+}
+
+// runs in the PID task before the controller, so INDI sees this loop's estimate.
+// TODO(spike): indiflight runs the EKF as its own REALTIME task (IMU->FILTER->EKF->AHRS->INNER LOOP)
+FAST_CODE void indiflightPreController(timeUs_t currentTimeUs)
+{
+#ifdef USE_EKF
+    updateEkf(currentTimeUs);
+#else
+    UNUSED(currentTimeUs);
+#endif
 }
 
 void indiflightProcessRxModes(void)

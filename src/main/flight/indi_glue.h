@@ -17,6 +17,7 @@
 #include "common/time.h"
 
 void indiflightInit(void);                       // fc/init.c, after pidInit()
+void indiflightPreController(timeUs_t currentTimeUs); // fc/core.c, before the controller
 void indiflightProcessRxModes(void);             // fc/core.c processRxModes()
 #define RC_STICK_MOVEMENT_THRESHOLD 0.1f // stick movement threshold to detect stick activity
 void setSticksReference(void);

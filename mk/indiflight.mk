@@ -13,6 +13,8 @@ INDIFLIGHT_SRC = \
             flight/ekf_calc.c \
             flight/pos_ctl.c \
             flight/pos_att_ndi.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_df.c \
             io/local_pos.c
 
 COMMON_SRC += $(INDIFLIGHT_SRC)
@@ -20,7 +22,13 @@ SPEED_OPTIMISED_SRC += \
             common/maths_indi.c \
             common/filter_biquad.c \
             flight/indi.c \
-            flight/indi_glue.c
+            flight/indi_glue.c \
+            flight/ekf.c \
+            flight/ekf_calc.c \
+            flight/pos_ctl.c \
+            flight/pos_att_ndi.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_df.c
 
 # generated EKF code (kalman_filter_c_code_generation) uses double literals
 SRC_CFLAGS_ekf_calc.c += -Wno-double-promotion

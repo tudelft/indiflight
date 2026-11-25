@@ -134,6 +134,9 @@ typedef enum {
 #ifdef USE_POSITION_HOLD
     TASK_POSHOLD,
 #endif
+#ifdef USE_POS_CTL
+    TASK_POS_CTL,  // indiflight position control
+#endif
 #ifdef USE_MAG
     TASK_COMPASS,
 #endif

@@ -39,6 +39,9 @@
 
 #include "flight/gps_rescue.h"
 #include "flight/imu.h"
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "fc/rc.h"
@@ -769,6 +772,13 @@ static void imuCalculateEstimatedAttitude(timeUs_t currentTimeUs)
                         useAcc, acc.accADC.x, acc.accADC.y, acc.accADC.z,
                         magErr, cogErr,
                         imuCalcKpGain(currentTimeUs, useAcc, gyroAverage));
+
+#ifdef USE_EKF
+    // indiflight: converged EKF overrides the attitude (Mahony then continues from it)
+    if (ekfAttitudeOverride(&q)) {
+        imuComputeRotationMatrix();
+    }
+#endif
 
     imuUpdateEulerAngles();
 }

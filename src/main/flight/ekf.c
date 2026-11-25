@@ -73,6 +73,19 @@ PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig,
 ); 
 
 fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
+
+bool ekfAttitudeOverride(void *imuQuaternion)
+{
+    if (!(shouldBeUsedEkf() && isConvergedEkf())) {
+        return false;
+    }
+    quaternion_t *q = imuQuaternion;
+    q->w = qEkf.w;
+    q->x = qEkf.x;
+    q->y = qEkf.y;
+    q->z = qEkf.z;
+    return true;
+}
 fp_vector_t posEstNed = {0};
 fp_vector_t velEstNed = {0};
 

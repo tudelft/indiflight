@@ -1319,6 +1319,7 @@ static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
     uint32_t startTime = 0;
     if (debugMode == DEBUG_PIDLOOP) {startTime = micros();}
 #ifdef USE_INDI
+    indiflightPreController(currentTimeUs);
     if (indiIsActive()) {
         indiController(currentTimeUs);
     } else
