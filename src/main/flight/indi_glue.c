@@ -28,6 +28,8 @@
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #include "flight/indi_glue.h"
+#include "flight/rpm_filter.h"
+#include "sensors/acceleration.h"
 #ifdef USE_EKF
 #include "flight/ekf.h"
 #endif
@@ -48,8 +50,24 @@ void indiflightInit(void)
 
 // runs in the PID task before the controller, so INDI sees this loop's estimate.
 // TODO(spike): indiflight runs the EKF as its own REALTIME task (IMU->FILTER->EKF->AHRS->INNER LOOP)
+FAST_DATA_ZERO_INIT float indiAccAfterRpm[3];
+
+// acc pipeline for INDI at PID rate. The fork read acc in the gyro task and
+// averaged it over the PID period; upstream reads acc in TASK_ACCEL, so this
+// holds the latest sample (TODO: acc sampling in the gyro task needs sensors/).
+static FAST_CODE void indiAccFiltering(void)
+{
+    for (int axis = 0; axis < 3; axis++) {
+        indiAccAfterRpm[axis] = acc.accADC.v[axis];
+    }
+#ifdef USE_RPM_FILTER
+    rpmFilterRunAcc(indiAccAfterRpm);
+#endif
+}
+
 FAST_CODE void indiflightPreController(timeUs_t currentTimeUs)
 {
+    indiAccFiltering();
 #ifdef USE_EKF
     updateEkf(currentTimeUs);
 #else

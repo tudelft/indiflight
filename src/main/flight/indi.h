@@ -365,9 +365,10 @@ uint8_t getCurrentIndiProfileIndex(void);
 
 extern indiRuntime_t indiRun;
 
-// acc input of INDI (and logged as accADCafterRpm), raw acc units, FRD
-// TODO(spike): PID-rate acc pipeline with rpm notch (see item 4)
-#define INDI_ACC_INPUT(axis) (acc.accADC.v[axis])
+// acc input of INDI (and logged as accADCafterRpm), raw acc units, FRD:
+// latest acc sample, rpm filtered with the gyro notches, once per PID loop
+extern float indiAccAfterRpm[3];
+#define INDI_ACC_INPUT(axis) (indiAccAfterRpm[axis])
 
 void indiController(timeUs_t current);
 bool isTouchingGround(void);

@@ -117,15 +117,25 @@ uint8_t getCurrentIndiProfileIndex(void)
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
-// was in indiflight fc/core.c. Learner/catapult/position-mode branches are
-// added back with those features.
+// was in indiflight fc/core.c. The learner/catapult branches come with those
+// features; GPS rescue is not used with INDI.
 bool isTouchingGround(void)
 {
     // low total thrust, but high total accel: likely touching ground.
     // breaks down for fixed wings and "3D" thrust ESCs
     const bool gyroLow = (sq(gyro.gyroADCf[X]) + sq(gyro.gyroADCf[Y]) + sq(gyro.gyroADCf[Z])) < sq(100.f);
     const bool accHigh = acc.accMagnitude > 0.8f;
-    bool throttleLow = rcCommand[THROTTLE] < (float)(rxConfig()->mincheck + 50);
+    bool throttleLow = true;
+#ifdef USE_LOCAL_POSITION
+    if (FLIGHT_MODE(POSITION_MODE)) {
+        throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow &= (sq(velEstNed.V.X) + sq(velEstNed.V.Y) + sq(velEstNed.V.Z)) < sq(3.f);
+    } else
+#endif
+    {
+        // human pilot, get RC throttle
+        throttleLow = rcCommand[THROTTLE] < (float)(rxConfig()->mincheck + 50);
+    }
     throttleLow |= !ARMING_FLAG(ARMED);
     return gyroLow && accHigh && throttleLow;
 }

@@ -344,9 +344,9 @@ void updateEkf(timeUs_t currentTimeUs) {
 
 	// PREDICTION STEP
     // FRD frame's, which we have now everywhere in INDIFlight
-	ekf_U[0] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADC.v[0];
-	ekf_U[1] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADC.v[1];
-	ekf_U[2] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADC.v[2];
+	ekf_U[0] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * INDI_ACC_INPUT(0);
+	ekf_U[1] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * INDI_ACC_INPUT(1);
+	ekf_U[2] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * INDI_ACC_INPUT(2);
 	ekf_U[3] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[0] );
 	ekf_U[4] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[1] );
 	ekf_U[5] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[2] );

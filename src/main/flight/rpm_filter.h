@@ -28,3 +28,6 @@
 
 void rpmFilterInit(const rpmFilterConfig_t *config, const timeUs_t looptimeUs);
 void rpmFilterRun(float input[3]);
+#ifdef USE_INDI
+void rpmFilterRunAcc(float input[3]); // indiflight: acc with the gyro notch coefficients
+#endif

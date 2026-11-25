@@ -164,4 +164,29 @@ FAST_CODE void rpmFilterRun(float input[3])
     rpmFilterApply(input);
 }
 
+#ifdef USE_INDI
+// indiflight: INDI needs identical filtering on gyro and acc. Own notch states,
+// but the coefficients of the gyro notches (updated by rpmFilterRun() in the
+// same loop), so the acc input of INDI sees exactly the gyro's rpm filter.
+static FAST_DATA_ZERO_INIT rpmNotch_t accNotch[MAX_SUPPORTED_MOTORS][RPM_FILTER_HARMONICS_MAX];
+
+FAST_CODE void rpmFilterRunAcc(float input[3])
+{
+    for (int i = 0; i < rpmFilter.numHarmonics; i++) {
+        if (rpmFilter.weights[i] <= 0.0f) {
+            continue;
+        }
+        for (int motor = 0; motor < getMotorCount(); motor++) {
+            rpmNotch_t *notch = &accNotch[motor][i];
+            const rpmNotch_t *gyroNotch = &rpmFilter.notch[motor][i];
+            notch->f = gyroNotch->f;
+            notch->a1 = gyroNotch->a1;
+            notch->a2 = gyroNotch->a2;
+            notch->wq = gyroNotch->wq;
+            rpmNotchApply(notch, input);
+        }
+    }
+}
+#endif
+
 #endif // USE_RPM_FILTER
