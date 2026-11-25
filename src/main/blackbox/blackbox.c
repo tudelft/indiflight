@@ -69,6 +69,12 @@
 #ifdef USE_INDI
 #include "flight/indi.h"
 #endif
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+#ifdef USE_LOCAL_POSITION
+#include "flight/pos_ctl.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1502,6 +1508,9 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_INDI
     const indiProfile_t *indiProfile = indiProfiles(getCurrentIndiProfileIndex());
 #endif
+#ifdef USE_LOCAL_POSITION
+    const positionProfile_t *posProfile = positionProfiles(getCurrentPositionProfileIndex());
+#endif
     switch (xmitState.headerIndex) {
         BLACKBOX_PRINT_HEADER_LINE("Firmware type", "%s",                   "Betaflight");
         BLACKBOX_PRINT_HEADER_LINE("Firmware revision", "%s %s (%s) %s",    FC_FIRMWARE_NAME, FC_VERSION_STRING, shortGitRevision, targetName);
@@ -1698,6 +1707,58 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actTimeConstDesMs[2],
                                                                                               indiProfile->actTimeConstDesMs[3]);
 #endif // USE_INDI
+#ifdef USE_LOCAL_POSITION
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_D, "%d",  posProfile->horz_d);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED, "%d",  posProfile->horz_max_v);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL, "%d",  posProfile->horz_max_a);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_TILT, "%d",  posProfile->max_tilt);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_P, "%d",  posProfile->vert_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_I, "%d",  posProfile->vert_i);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_VERTICAL_D, "%d",  posProfile->vert_d);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_UPWARDS_SPEED, "%d",  posProfile->vert_max_v_up);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED, "%d",  posProfile->vert_max_v_down);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL, "%d",  posProfile->vert_max_a_up);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL, "%d",  posProfile->vert_max_v_down);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_YAW_P, "%d",  posProfile->yaw_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_P, "%d",  posProfile->weathervane_p);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_ATTITUDE_MAPPING, "%d",  posProfile->attitude_mapping);
+#endif
+#ifdef USE_INDI
+        // indiflight 4.4 name, upstream setting imu_process_denom
+        BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  imuConfig()->imu_process_denom);
+#endif
+#ifdef USE_EKF
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_QUAT_MEASUREMENT, "%d",       ekfConfig()->use_quat_measurement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT, "%d",      ekfConfig()->use_for_manual_flight);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_SOURCE, "%d",                ekfConfig()->meas_source);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",       ekfConfig()->proc_noise_acc[0],
+                                                                                    ekfConfig()->proc_noise_acc[1],
+                                                                                    ekfConfig()->proc_noise_acc[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO, "%d,%d,%d",      ekfConfig()->proc_noise_gyro[0],
+                                                                                    ekfConfig()->proc_noise_gyro[1],
+                                                                                    ekfConfig()->proc_noise_gyro[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS, "%d,%d,%d",  ekfConfig()->proc_noise_acc_bias[0],
+                                                                                    ekfConfig()->proc_noise_acc_bias[1],
+                                                                                    ekfConfig()->proc_noise_acc_bias[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS, "%d,%d,%d", ekfConfig()->proc_noise_gyro_bias[0],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[1],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_POSITION, "%d,%d,%d",  ekfConfig()->meas_noise_position[0],
+                                                                                    ekfConfig()->meas_noise_position[1],
+                                                                                    ekfConfig()->meas_noise_position[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_QUAT, "%d,%d,%d,%d",   ekfConfig()->meas_noise_quat[0],
+                                                                                    ekfConfig()->meas_noise_quat[1],
+                                                                                    ekfConfig()->meas_noise_quat[2],
+                                                                                    ekfConfig()->meas_noise_quat[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",                 ekfConfig()->meas_delay);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_HEIGHT_SOURCE, "%d",              ekfConfig()->height_source);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_BARO_RPM_COEFF, "%d",             ekfConfig()->baro_rpm_coeff);
+#endif
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_MIXER_TYPE, "%s",             lookupTableMixerType[mixerConfig()->mixer_type]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_THRESHOLD, "%d",   currentPidProfile->ez_landing_threshold);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_LIMIT, "%d",       currentPidProfile->ez_landing_limit);

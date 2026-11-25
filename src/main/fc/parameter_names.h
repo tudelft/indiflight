@@ -129,6 +129,50 @@
 #define PARAM_NAME_INDI_INPUT_DIST_AMPLITUDE "indi_input_dist_amplitude"
 #define PARAM_NAME_INDI_APPLY_DIST_TO_MOTOR "indi_apply_dist_to_motor"
 #endif // USE_INDI
+
+#ifdef USE_LOCAL_POSITION
+#define PARAM_NAME_POSITION_HORIZONTAL_P "position_horizontal_p"
+#define PARAM_NAME_POSITION_HORIZONTAL_I "position_horizontal_i"
+#define PARAM_NAME_POSITION_HORIZONTAL_D "position_horizontal_d"
+#define PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED "position_max_horizontal_speed"
+#define PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL "position_max_horizontal_accel"
+#define PARAM_NAME_POSITION_MAX_TILT "position_max_tilt"
+#define PARAM_NAME_POSITION_VERTICAL_P "position_vertical_p"
+#define PARAM_NAME_POSITION_VERTICAL_I "position_vertical_i"
+#define PARAM_NAME_POSITION_VERTICAL_D "position_vertical_d"
+#define PARAM_NAME_POSITION_MAX_UPWARDS_SPEED "position_max_upwards_speed"
+#define PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED "position_max_downwards_speed"
+#define PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL "position_max_upwards_accel"
+#define PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL "position_max_downwards_accel"
+#define PARAM_NAME_POSITION_YAW_P "position_yaw_p"
+#define PARAM_NAME_POSITION_WEATHERVANE_P "position_weathervane_p"
+#define PARAM_NAME_POSITION_WEATHERVANE_MIN_V "position_weathervane_min_v"
+#define PARAM_NAME_POSITION_THRUST_ATTENUATION "position_use_thrust_attenuation"
+#define PARAM_NAME_POSITION_STICK_TAKEOVER "position_stick_takeover"
+#define PARAM_NAME_POSITION_ATTITUDE_MAPPING "position_attitude_mapping"
+#endif
+
+#ifdef USE_EKF
+#define PARAM_NAME_EKF_USE_QUAT_MEASUREMENT "ekf_use_quat"
+#define PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT "ekf_use_for_manual_flight"
+#define PARAM_NAME_EKF_MEAS_SOURCE          "ekf_meas_source"
+#define PARAM_NAME_EKF_PROC_NOISE_ACC       "ekf_proc_noise_acc"
+#define PARAM_NAME_EKF_PROC_NOISE_GYRO      "ekf_proc_noise_gyro"
+#define PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS  "ekf_proc_noise_acc_bias"
+#define PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS "ekf_proc_noise_gyro_bias"
+#define PARAM_NAME_EKF_MEAS_NOISE_POSITION  "ekf_meas_noise_position"
+#define PARAM_NAME_EKF_MEAS_NOISE_QUAT      "ekf_meas_noise_quat"
+#define PARAM_NAME_EKF_MEAS_DELAY           "ekf_meas_delay"
+#define PARAM_NAME_EKF_HEIGHT_SOURCE        "ekf_height_source"
+#define PARAM_NAME_EKF_BARO_RPM_COEFF       "ekf_baro_rpm_coeff"
+#endif
+
+#ifdef USE_GEOFENCE
+#define PARAM_NAME_GEOFENCE_MAX_ALTITUDE  "geofence_max_altitude"
+#define PARAM_NAME_GEOFENCE_HARD_OFFSET   "geofence_hard_offset"
+#define PARAM_NAME_GEOFENCE_GRACE_COUNT   "geofence_grace_count"
+#define PARAM_NAME_GEOFENCE_DESCEND_DELAY "geofence_descend_delay"
+#endif
 #define PARAM_NAME_TPA_MODE "tpa_mode"
 #define PARAM_NAME_TPA_CURVE_TYPE "tpa_curve_type"
 #define PARAM_NAME_TPA_CURVE_STALL_THROTTLE "tpa_curve_stall_throttle"

@@ -113,6 +113,9 @@ bool cliMode = false;
 #include "flight/indi.h"
 #include "flight/indi_init.h"
 #endif
+#ifdef USE_LOCAL_POSITION
+#include "flight/pos_ctl.h"
+#endif
 #include "flight/position.h"
 #include "flight/servos.h"
 
@@ -205,6 +208,9 @@ static int8_t rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
 static int8_t batteryProfileIndexToUse = CURRENT_PROFILE_INDEX;
 #ifdef USE_INDI
 static int8_t indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#endif
+#ifdef USE_LOCAL_POSITION
+static int8_t positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 #endif
 
 #ifdef USE_CLI_BATCH
@@ -867,6 +873,12 @@ static uint8_t getIndiProfileIndexToUse(void)
     return indiProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentIndiProfileIndex() : indiProfileIndexToUse;
 }
 #endif
+#ifdef USE_LOCAL_POSITION
+static uint8_t getPositionProfileIndexToUse(void)
+{
+    return positionProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentPositionProfileIndex() : positionProfileIndexToUse;
+}
+#endif
 
 static uint16_t getValueOffset(const clivalue_t *value)
 {
@@ -883,6 +895,10 @@ static uint16_t getValueOffset(const clivalue_t *value)
 #ifdef USE_INDI
     case PROFILE_INDI_VALUE:
         return value->offset + sizeof(indiProfile_t) * getIndiProfileIndexToUse();
+#endif
+#ifdef USE_LOCAL_POSITION
+    case PROFILE_POSITION_VALUE:
+        return value->offset + sizeof(positionProfile_t) * getPositionProfileIndexToUse();
 #endif
     }
     return 0;
@@ -5004,6 +5020,37 @@ static void cliDumpIndiProfile(const char *cmdName, uint8_t profileIndex, dumpFl
     indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
 }
 #endif
+#ifdef USE_LOCAL_POSITION
+// Prints or switches the active position profile.
+static void cliPositionProfile(const char *cmdName, char *cmdline)
+{
+    if (isEmpty(cmdline)) {
+        cliPrintLinef("positionprofile %d", getPositionProfileIndexToUse());
+    } else {
+        const int i = atoi(cmdline);
+        if (i >= 0 && i < POSITION_PROFILE_COUNT) {
+            changePositionProfile(i);
+            cliPositionProfile(cmdName, "");
+        } else {
+            cliPrintErrorLinef(cmdName, "POSITION PROFILE OUTSIDE OF [0..%d]", POSITION_PROFILE_COUNT - 1);
+        }
+    }
+}
+
+static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
+{
+    if (profileIndex >= POSITION_PROFILE_COUNT) {
+        return;
+    }
+    positionProfileIndexToUse = profileIndex;
+    cliPrintLinefeed();
+    cliPositionProfile(cmdName, "");
+    char profileStr[20];
+    tfp_sprintf(profileStr, "positionprofile %d", profileIndex);
+    dumpAllValues(cmdName, PROFILE_POSITION_VALUE, dumpMask, profileStr);
+    positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
+}
+#endif
 
 #ifdef USE_CLI_BATCH
 static void cliPrintCommandBatchWarning(const char *cmdName, const char *warning)
@@ -5216,6 +5263,12 @@ RAM_CODE STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
 #ifdef USE_INDI
             case PROFILE_INDI_VALUE:
                 cliIndiProfile(cmdName, "");
+
+                break;
+#endif
+#ifdef USE_LOCAL_POSITION
+            case PROFILE_POSITION_VALUE:
+                cliPositionProfile(cmdName, "");
 
                 break;
 #endif
@@ -8203,6 +8256,13 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                 // TODO(spike): use a backup copy like systemConfig_Copy for diff against defaults
                 indiProfileIndexToUse = getCurrentIndiProfileIndex();
 #endif
+#ifdef USE_LOCAL_POSITION
+                for (uint32_t positionIndex = 0; positionIndex < POSITION_PROFILE_COUNT; positionIndex++) {
+                    cliDumpPositionProfile(cmdName, positionIndex, dumpMask);
+                }
+                // TODO(spike): use a backup copy like systemConfig_Copy for diff against defaults
+                positionProfileIndexToUse = getCurrentPositionProfileIndex();
+#endif
 
                 if (!(dumpMask & BARE)) {
                     cliPrintHashLine("restore original rateprofile selection");
@@ -8218,6 +8278,11 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
                     cliIndiProfile(cmdName, "");
 #endif
+#ifdef USE_LOCAL_POSITION
+                    cliPrintHashLine("restore original position profile selection");
+
+                    cliPositionProfile(cmdName, "");
+#endif
 
                     cliPrintHashLine("save configuration");
                     cliPrint("save");
@@ -8231,6 +8296,9 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 #ifdef USE_INDI
                 indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
 #endif
+#ifdef USE_LOCAL_POSITION
+                positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#endif
             } else {
                 cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
 
@@ -8239,6 +8307,9 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                 cliDumpBatteryProfile(cmdName, systemConfig_Copy.activeBatteryProfile, dumpMask);
 #ifdef USE_INDI
                 cliDumpIndiProfile(cmdName, getCurrentIndiProfileIndex(), dumpMask);
+#endif
+#ifdef USE_LOCAL_POSITION
+                cliDumpPositionProfile(cmdName, getCurrentPositionProfileIndex(), dumpMask);
 #endif
             }
         }
@@ -8447,6 +8518,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("battery_profile", "change battery profile", "[<index>]", cliBatteryProfile),
 #ifdef USE_INDI
     CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
+#endif
+#ifdef USE_LOCAL_POSITION
+    CLI_COMMAND_DEF("positionprofile", "change position profile", "[<index>]", cliPositionProfile),
 #endif
     CLI_COMMAND_DEF("profile", "change profile", "[<index>]", cliProfile),
     CLI_COMMAND_DEF("rateprofile", "change rate profile", "[<index>]", cliRateProfile),

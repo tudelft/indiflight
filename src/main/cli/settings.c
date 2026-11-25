@@ -68,6 +68,12 @@
 #ifdef USE_INDI
 #include "flight/indi.h"
 #endif
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+#ifdef USE_LOCAL_POSITION
+#include "flight/pos_ctl.h"
+#endif
 
 #include "io/beeper.h"
 #include "io/dashboard.h"
@@ -583,6 +589,13 @@ static const char * const lookupTableTransponderProvider[] = {
 };
 #endif
 
+#ifdef USE_LOCAL_POSITION
+// order of position_attitude_mapping_t
+static const char * const lookupTablePositionAttitudeMapping[] = {
+    "NDI", "INDI", "DF"
+};
+#endif
+
 #define LOOKUP_TABLE_ENTRY(name) { name, ARRAYLEN(name) }
 
 const lookupTableEntry_t lookupTables[] = {
@@ -728,6 +741,9 @@ const lookupTableEntry_t lookupTables[] = {
 #endif // USE_WING
 #ifdef USE_TRANSPONDER
     LOOKUP_TABLE_ENTRY(lookupTableTransponderProvider),
+#endif
+#ifdef USE_LOCAL_POSITION
+    LOOKUP_TABLE_ENTRY(lookupTablePositionAttitudeMapping),
 #endif
 };
 
@@ -1436,6 +1452,44 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_INDI_INJECT_INPUT_DIST,                VAR_UINT8 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_PROFILE, offsetof(indiProfile_t, injectInputDist) },
     { PARAM_NAME_INDI_INPUT_DIST_AMPLITUDE,             VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 100 }, PG_INDI_PROFILE, offsetof(indiProfile_t, inputDistAmplitude) },
     { PARAM_NAME_INDI_APPLY_DIST_TO_MOTOR,              VAR_UINT8 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = MAXU, PG_INDI_PROFILE, offsetof(indiProfile_t, applyDistToMotor) },
+#endif
+
+
+#ifdef USE_LOCAL_POSITION
+    { PARAM_NAME_POSITION_HORIZONTAL_P,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_p) },
+    { PARAM_NAME_POSITION_HORIZONTAL_I,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_i) },
+    { PARAM_NAME_POSITION_HORIZONTAL_D,           VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_d) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_SPEED,   VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_v) },
+    { PARAM_NAME_POSITION_MAX_HORIZONTAL_ACCEL,   VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1  }, PG_POSITION_PROFILE, offsetof(positionProfile_t, horz_max_a) },
+    { PARAM_NAME_POSITION_MAX_TILT,               VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 180 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, max_tilt) },
+    { PARAM_NAME_POSITION_VERTICAL_P,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 10, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_p) },
+    { PARAM_NAME_POSITION_VERTICAL_I,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_i) },
+    { PARAM_NAME_POSITION_VERTICAL_D,             VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 12, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_d) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_SPEED,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_SPEED,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 50, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_v_down) },
+    { PARAM_NAME_POSITION_MAX_UPWARDS_ACCEL,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_up) },
+    { PARAM_NAME_POSITION_MAX_DOWNWARDS_ACCEL,    VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 250, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, vert_max_a_down) },
+    { PARAM_NAME_POSITION_YAW_P,                  VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 5, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, yaw_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_P,          VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, ( 1 << 8 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_p) },
+    { PARAM_NAME_POSITION_WEATHERVANE_MIN_V,      VAR_UINT16 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 25, ( 1 << 16 ) - 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, weathervane_min_v) },
+    { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
+    { PARAM_NAME_POSITION_STICK_TAKEOVER,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, stick_takeover) },
+    { PARAM_NAME_POSITION_ATTITUDE_MAPPING,       VAR_UINT8 | PROFILE_POSITION_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_POSITION_ATTITUDE_MAPPING }, PG_POSITION_PROFILE, offsetof(positionProfile_t, attitude_mapping) },
+#endif
+
+#ifdef USE_EKF
+    { PARAM_NAME_EKF_USE_QUAT_MEASUREMENT,   VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = {0, 1},    PG_EKF_CONFIG, offsetof(ekfConfig_t, use_quat_measurement) },
+    { PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT,  VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = {0, 1},    PG_EKF_CONFIG, offsetof(ekfConfig_t, use_for_manual_flight) },
+    { PARAM_NAME_EKF_MEAS_SOURCE,            VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 255 },PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_source) },
+    { PARAM_NAME_EKF_PROC_NOISE_ACC,         VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc) },
+    { PARAM_NAME_EKF_PROC_NOISE_GYRO,        VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro) },
+    { PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS,    VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_acc_bias) },
+    { PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS,   VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, proc_noise_gyro_bias) },
+    { PARAM_NAME_EKF_MEAS_NOISE_POSITION,    VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3,           PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_position) },
+    { PARAM_NAME_EKF_MEAS_NOISE_QUAT,        VAR_UINT32 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 4,           PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_noise_quat) },
+    { PARAM_NAME_EKF_MEAS_DELAY,             VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 20 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, meas_delay) },
+    { PARAM_NAME_EKF_HEIGHT_SOURCE,          VAR_UINT8  | MASTER_VALUE,              .config.minmaxUnsigned = { 0, 1 },  PG_EKF_CONFIG, offsetof(ekfConfig_t, height_source) },
+    { PARAM_NAME_EKF_BARO_RPM_COEFF,         VAR_INT16  | MASTER_VALUE,              .config.minmax = { -32000, 32000 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, baro_rpm_coeff) },
 #endif
     { PARAM_NAME_TPA_LOW_RATE,            VAR_INT8  | PROFILE_VALUE, .config.minmax = { TPA_LOW_RATE_MIN, TPA_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_low_rate) },
     { PARAM_NAME_TPA_LOW_BREAKPOINT,      VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_RANGE_MIN, PWM_RANGE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_low_breakpoint) },
