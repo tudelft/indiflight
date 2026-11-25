@@ -1221,9 +1221,28 @@ RAM_CODE static bool mspProcessOutCommand(mspDescriptor_t srcDesc, int16_t cmdMS
     }
 
     case MSP_RAW_IMU: {
+#if defined(USE_ACC) && defined(USE_FRD_NED)
+        // indiflight: same acc scaling as the indiflight 4.4 fork (and upstream 4.4),
+        // which its configurator and tools expect ("hack scale due to choice of units
+        // for sensor data in multiwii")
+        uint8_t accScale;
+        if (acc.dev.acc_1G > 512 * 4) {
+            accScale = 8;
+        } else if (acc.dev.acc_1G > 512 * 2) {
+            accScale = 4;
+        } else if (acc.dev.acc_1G >= 512) {
+            accScale = 2;
+        } else {
+            accScale = 1;
+        }
+#endif
         for (int i = 0; i < 3; i++) {
 #if defined(USE_ACC)
+#ifdef USE_FRD_NED
+            sbufWriteU16(dst, lrintf(acc.accADC.v[i] / accScale));
+#else
             sbufWriteU16(dst, lrintf(acc.accADC.v[i]));
+#endif // USE_FRD_NED
 #else
             sbufWriteU16(dst, 0);
 #endif

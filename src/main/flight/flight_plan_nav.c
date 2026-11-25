@@ -190,11 +190,7 @@ static struct {
     bool patternPending;        // waiting for the arrival braking to settle
     bool patternActive;
     uint8_t patternType;        // waypointPattern_e
-#ifdef USE_FRD_NED
-    vector3_t patternCentreM;   // hold point, NED metres
-#else
     vector3_t patternCentreM;   // hold point, ENU metres
-#endif // USE_FRD_NED
     float patternPhaseRad;
     float patternSpeedMps;      // carrot path speed
     float patternCruiseMps;     // chase speed cap (the leg's cruise)
@@ -216,17 +212,9 @@ static struct {
     // corner so the profile is continuous (only engage/retry re-anchor it).
     bool      legIsPassGate;    // current leg uses carrot leg-line tracking
     bool      legValid;         // the leg line is anchored
-#ifdef USE_FRD_NED
-    vector3_t legTargetEnuM;    // the point this leg flies to (N,E,D metres)
-#else
     vector3_t legTargetEnuM;    // the point this leg flies to (E,N,U metres)
-#endif // USE_FRD_NED
     float     legCruiseMps;     // this leg's cruise cap
-#ifdef USE_FRD_NED
-    vector2_t legStartEnuM;     // anchor of the leg line (.x = N, .y = E metres)
-#else
     vector2_t legStartEnuM;     // anchor of the leg line (E,N metres)
-#endif // USE_FRD_NED
     float     legProgressM;     // carrot distance travelled along the leg
     float     carrotSpeedMps;   // slewed carrot speed
     vector2_t carrotPrevEnuM;   // last commanded carrot; the next leg anchors here

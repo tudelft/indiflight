@@ -35,13 +35,8 @@
 // All values in local ENU (East-North-Up) centimeters, zeroed at arm point.
 #endif // USE_FRD_NED
 typedef struct positionEstimate3d_s {
-#ifdef USE_FRD_NED
-    vector3_t position;        // cm, NED
-    vector3_t velocity;        // cm/s, NED
-#else
     vector3_t position;        // cm, ENU
     vector3_t velocity;        // cm/s, ENU
-#endif // USE_FRD_NED
     float trustXY;             // 0-1, derived from KF XY covariance
     float trustZ;              // 0-1, derived from KF Z covariance
     bool isValidXY;            // true if at least one XY measurement source active

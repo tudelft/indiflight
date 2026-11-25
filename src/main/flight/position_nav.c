@@ -203,11 +203,7 @@ void positionNavUpdate(float dt, const positionEstimate3d_t *est)
 
     previousTargetVelMps = targetVelMps;
 
-#ifdef USE_FRD_NED
-    vector3Scale(&currentTargetVelCmS, &targetVelMps, 100.0f);  // m/s -> cm/s, NED
-#else
     vector3Scale(&currentTargetVelCmS, &targetVelMps, 100.0f);  // m/s -> cm/s, ENU
-#endif // USE_FRD_NED
 
 #ifdef USE_FRD_NED
     const float horizSpeedMps = sqrtf(sq(est->velocity.v[NED_E]) + sq(est->velocity.v[NED_N])) * 0.01f;
