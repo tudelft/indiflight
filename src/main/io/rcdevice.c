@@ -521,7 +521,7 @@ void runcamDeviceSendAttitude(runcamDevice_t *device)
 {
     uint16_t buf[3];
     buf[0] = attitude.values.roll;
-    buf[1] = attitude.values.pitch;
+    buf[1] = -attitude.values.pitch; // keep upstream wire sign (FRD pitch is nose up +)
     buf[2] = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
     runcamDeviceSendPacket(device, RCDEVICE_PROTOCOL_COMMAND_REQUEST_FC_ATTITUDE, (uint8_t *)buf, sizeof(buf));
 }

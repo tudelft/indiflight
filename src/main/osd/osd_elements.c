@@ -843,7 +843,7 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
     const int maxRoll = osdConfig()->ahMaxRoll * 10;
     const int ahSign = osdConfig()->ahInvert ? -1 : 1;
     const int rollAngle = constrain(attitude.values.roll * ahSign, -maxRoll, maxRoll);
-    int pitchAngle = constrain(attitude.values.pitch * ahSign, -maxPitch, maxPitch);
+    int pitchAngle = constrain(-attitude.values.pitch * ahSign, -maxPitch, maxPitch); // FRD: pitch is nose up +, horizon math uses nose down +
     // Convert pitchAngle to y compensation value
     // (maxPitch / 25) divisor matches previous settings of fixed divisor of 8 and fixed max AHI pitch angle of 20.0 degrees
     if (maxPitch > 0) {
@@ -1010,7 +1010,7 @@ static void osdBackgroundCraftName(osdElementParms_t *element)
 static void osdElementCrashFlipArrow(osdElementParms_t *element)
 {
     int rollAngle = attitude.values.roll / 10;
-    const int pitchAngle = attitude.values.pitch / 10;
+    const int pitchAngle = -attitude.values.pitch / 10; // FRD: pitch is nose up +, arrow logic uses nose down +
     if (abs(rollAngle) > 90) {
         rollAngle = (rollAngle < 0 ? -180 : 180) - rollAngle;
     }
