@@ -584,7 +584,12 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
 #ifdef USE_WING
     if (axis == FD_PITCH) {
 #ifdef USE_FRD_NED
-        angleTarget -= (float)pidProfile->angle_pitch_offset / 10.0f; // FRD: pitch + = nose up; offset keeps its upstream (nose down +) meaning
+        // angle_pitch_offset keeps its upstream meaning, so existing wing tunes
+        // and upstream documentation stay valid: a positive value is added to
+        // upstream's angle target, whose pitch is nose down +. In FRD the angle
+        // target (and attitude.values.pitch) is nose up +, so the same offset is
+        // subtracted: angle_pitch_offset = +50 still means 5 deg nose DOWN.
+        angleTarget -= (float)pidProfile->angle_pitch_offset / 10.0f;
 #else
         angleTarget += (float)pidProfile->angle_pitch_offset / 10.0f;
 #endif // USE_FRD_NED
