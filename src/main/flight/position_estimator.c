@@ -295,16 +295,14 @@ STATIC_UNIT_TESTED void getLinearAccelENU(float *accelEast, float *accelNorth, f
                          acc.accADC.y * accScale,
                          acc.accADC.z * accScale }};
 
-    // rMat rotates body -> earth NWU (North-West-Up); this is the same convention
-    // used throughout imu.c (imuComputeRotationMatrix, attitude extraction, mag fusion).
-    vector3_t accEF_NWU;
-    matrixVectorMul(&accEF_NWU, &rMat, &accBF);
+    // rMat rotates body FRD -> earth NED (imu.c).
+    vector3_t accEF_NED;
+    matrixVectorMul(&accEF_NED, &rMat, &accBF);
 
-    // NWU -> ENU named outputs. Indexing by NWU_W makes the East = -West sign
-    // explicit; gravity (a steady +1 g on NWU_U) is removed from Up.
-    *accelEast  = -accEF_NWU.v[NWU_W] * GRAVITY_CMSS;
-    *accelNorth =  accEF_NWU.v[NWU_N] * GRAVITY_CMSS;
-    *accelUp    = (accEF_NWU.v[NWU_U] - 1.0f) * GRAVITY_CMSS;
+    // NED -> ENU named outputs; gravity (a steady -1 g specific force on NED_D) is removed.
+    *accelEast  =  accEF_NED.v[NED_E] * GRAVITY_CMSS;
+    *accelNorth =  accEF_NED.v[NED_N] * GRAVITY_CMSS;
+    *accelUp    = (-accEF_NED.v[NED_D] - 1.0f) * GRAVITY_CMSS;
 }
 
 #ifdef USE_GPS

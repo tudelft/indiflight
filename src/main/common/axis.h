@@ -50,20 +50,22 @@ typedef enum {
 // Earth-frame axis indices.
 //
 // These names encode three things at every call site: the frame, the axis,
-// and the positive direction. Indexing a vector with e.g. NWU_W makes it
-// obvious that the value is West-positive, so the sign of any North/East/Up
-// conversion is visible in the code rather than carried in a reader's head.
-// Do NOT reintroduce bare .x/.y for earth-frame quantities - the inability to
-// tell which axis (and which sign) .x meant was the root cause of the
-// getLinearAccelENU East-West inversion.
+// and the positive direction. Indexing a vector with e.g. NED_E makes it
+// obvious that the value is East-positive, so the sign of any conversion is
+// visible in the code rather than carried in a reader's head.
+// Do NOT reintroduce bare .x/.y for earth-frame quantities.
+//
+// indiflight: the whole firmware uses the aerospace convention, body frame
+// FRD (X forward, Y right, Z down; sensors are converted right after board
+// alignment) and earth frame NED.
 
-// NWU (North-West-Up): the body->earth frame produced by rMat in imu.c.
+// NED (North-East-Down): the body->earth frame produced by rMat in imu.c.
 // matrixVectorMul(&v, &rMat, &bodyVec) yields a vector indexed by these.
 typedef enum {
-    NWU_N = 0,  // +North
-    NWU_W = 1,  // +West
-    NWU_U = 2   // +Up
-} axisNWU_e;
+    NED_N = 0,  // +North
+    NED_E = 1,  // +East
+    NED_D = 2   // +Down
+} axisNED_e;
 
 // ENU (East-North-Up): the navigation frame used by the position estimator
 // and autopilot. The position/velocity vector3_t fields are indexed by these.

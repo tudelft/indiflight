@@ -19,10 +19,8 @@
 #include "flight/ekf.h"
 #endif
 
-// TODO(spike): verify frame conventions against indiflight's ahrs.c on
-// hardware. Indiflight's Mahony uses the same q layout as Betaflight's imu.c,
-// so this is a plain copy for now. EKF attitude should be fed into imu.c
-// instead (see report), so all upstream consumers see it too.
+// imu.c (and the EKF) hold the FRD body -> NED earth quaternion, the same
+// convention as indiflight's ahrs.c, so this is a plain copy.
 void getAttitudeQuaternion(fp_quaternion_t *q)
 {
 #ifdef USE_EKF

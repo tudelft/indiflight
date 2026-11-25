@@ -71,8 +71,8 @@ extern fp_vector_t posEstNed;
 extern fp_vector_t velEstNed;
 extern fp_quaternion_t qEkf;
 
-// copies the EKF attitude into an upstream imu.c quaternion if it should be used
-// TODO(spike): verify EKF (NED/FRD) vs imu.c quaternion convention
+// copies the EKF attitude into an upstream imu.c quaternion if it should be used.
+// Both are the FRD body -> NED earth rotation (w, x, y, z), so this is a plain copy.
 struct quaternion_u;
 bool ekfAttitudeOverride(void *imuQuaternion);
 

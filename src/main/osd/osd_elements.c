@@ -875,8 +875,9 @@ static void osdElementArtificialHorizon(osdElementParms_t *element)
 static void osdElementUpDownReference(osdElementParms_t *element)
 {
 // Up/Down reference feature displays reference points on the OSD at Zenith and Nadir
-    // The earth-Up row (NWU_U) of rMat is earth-up expressed per body axis; negate to point down.
-    const float earthUpinBodyFrame[3] = {-rMat.m[NWU_U][X], -rMat.m[NWU_U][Y], -rMat.m[NWU_U][Z]};
+    // Earth-down in the upstream FLU body frame, built from the earth-Down row (NED_D)
+    // of rMat (earth-down per FRD body axis); Y and Z flipped to keep the FLU math below.
+    const float earthUpinBodyFrame[3] = {rMat.m[NED_D][X], -rMat.m[NED_D][Y], -rMat.m[NED_D][Z]};
 
     if (fabsf(earthUpinBodyFrame[2]) < SINE_25_DEG && fabsf(earthUpinBodyFrame[1]) < SINE_25_DEG) {
         float thetaB; // pitch from body frame to zenith/nadir
@@ -884,7 +885,7 @@ static void osdElementUpDownReference(osdElementParms_t *element)
         char *symbol[2] = {"U", "D"}; // character buffer
         int direction;
 
-        if (attitude.values.pitch > 0.0f){ //nose down
+        if (attitude.values.pitch < 0.0f){ //nose down
             thetaB = -earthUpinBodyFrame[2]; // get pitch w/re to nadir (use small angle approx for sine)
             psiB = -earthUpinBodyFrame[1]; // calculate the yaw w/re to nadir (use small angle approx for sine)
             direction = DOWN;

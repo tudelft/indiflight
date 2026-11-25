@@ -110,6 +110,28 @@ static void alignSensorViaMatrixFromRotation(vector3_t *dest, sensor_align_e ali
     buildRotationMatrixFromAngles(&sensorRotationMatrix, &sensorAlignment);
 
     alignSensorViaMatrix(dest, &sensorRotationMatrix);
+
+    // indiflight: alignSensorViaMatrix() ends with the FLU -> FRD body frame
+    // conversion. Undo it to compare against the (upstream, FLU) alignment rotation.
+    dest->y = -dest->y;
+    dest->z = -dest->z;
+}
+
+TEST(AlignSensorTest, OutputIsFrd)
+{
+    // sensor at CW0: FLU in -> FRD out (Y and Z negated), for both code paths
+    vector3_t v = {{1, 2, 3}};
+    alignSensorViaRotation(&v, CW0_DEG);
+    EXPECT_NEAR(1, v.x, TOL);
+    EXPECT_NEAR(-2, v.y, TOL);
+    EXPECT_NEAR(-3, v.z, TOL);
+
+    matrix33_t identity = {{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
+    vector3_t w = {{1, 2, 3}};
+    alignSensorViaMatrix(&w, &identity);
+    EXPECT_NEAR(1, w.x, TOL);
+    EXPECT_NEAR(-2, w.y, TOL);
+    EXPECT_NEAR(-3, w.z, TOL);
 }
 
 static void testCW(sensor_align_e rotation, int32_t angle)
