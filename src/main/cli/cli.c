@@ -109,6 +109,10 @@ bool cliMode = false;
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
+#ifdef USE_INDI
+#include "flight/indi.h"
+#include "flight/indi_init.h"
+#endif
 #include "flight/position.h"
 #include "flight/servos.h"
 
@@ -199,6 +203,9 @@ static bool configIsInCopy = false;
 static int8_t pidProfileIndexToUse = CURRENT_PROFILE_INDEX;
 static int8_t rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
 static int8_t batteryProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#ifdef USE_INDI
+static int8_t indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#endif
 
 #ifdef USE_CLI_BATCH
 static bool commandBatchActive = false;
@@ -854,6 +861,13 @@ static uint8_t getBatteryProfileIndexToUse(void)
     return batteryProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentBatteryProfileIndex() : batteryProfileIndexToUse;
 }
 
+#ifdef USE_INDI
+static uint8_t getIndiProfileIndexToUse(void)
+{
+    return indiProfileIndexToUse == CURRENT_PROFILE_INDEX ? getCurrentIndiProfileIndex() : indiProfileIndexToUse;
+}
+#endif
+
 static uint16_t getValueOffset(const clivalue_t *value)
 {
     switch (value->type & VALUE_SECTION_MASK) {
@@ -866,6 +880,10 @@ static uint16_t getValueOffset(const clivalue_t *value)
         return value->offset + sizeof(controlRateConfig_t) * getRateProfileIndexToUse();
     case PROFILE_BATTERY_VALUE:
         return value->offset + sizeof(batteryProfile_t) * getBatteryProfileIndexToUse();
+#ifdef USE_INDI
+    case PROFILE_INDI_VALUE:
+        return value->offset + sizeof(indiProfile_t) * getIndiProfileIndexToUse();
+#endif
     }
     return 0;
 }
@@ -4955,6 +4973,38 @@ static void cliDumpBatteryProfile(const char *cmdName, uint8_t profileIndex, dum
     batteryProfileIndexToUse = CURRENT_PROFILE_INDEX;
 }
 
+#ifdef USE_INDI
+// Prints or switches the active INDI profile.
+static void cliIndiProfile(const char *cmdName, char *cmdline)
+{
+    if (isEmpty(cmdline)) {
+        cliPrintLinef("indiprofile %d", getIndiProfileIndexToUse());
+    } else {
+        const int i = atoi(cmdline);
+        if (i >= 0 && i < INDI_PROFILE_COUNT) {
+            changeIndiProfile(i);
+            cliIndiProfile(cmdName, "");
+        } else {
+            cliPrintErrorLinef(cmdName, "INDI PROFILE OUTSIDE OF [0..%d]", INDI_PROFILE_COUNT - 1);
+        }
+    }
+}
+
+static void cliDumpIndiProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
+{
+    if (profileIndex >= INDI_PROFILE_COUNT) {
+        return;
+    }
+    indiProfileIndexToUse = profileIndex;
+    cliPrintLinefeed();
+    cliIndiProfile(cmdName, "");
+    char profileStr[20];
+    tfp_sprintf(profileStr, "indiprofile %d", profileIndex);
+    dumpAllValues(cmdName, PROFILE_INDI_VALUE, dumpMask, profileStr);
+    indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+}
+#endif
+
 #ifdef USE_CLI_BATCH
 static void cliPrintCommandBatchWarning(const char *cmdName, const char *warning)
 {
@@ -5163,6 +5213,12 @@ RAM_CODE STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
                 cliBatteryProfile(cmdName, "");
 
                 break;
+#ifdef USE_INDI
+            case PROFILE_INDI_VALUE:
+                cliIndiProfile(cmdName, "");
+
+                break;
+#endif
             default:
 
                 break;
@@ -8140,6 +8196,14 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
                 batteryProfileIndexToUse = systemConfig_Copy.activeBatteryProfile;
 
+#ifdef USE_INDI
+                for (uint32_t indiIndex = 0; indiIndex < INDI_PROFILE_COUNT; indiIndex++) {
+                    cliDumpIndiProfile(cmdName, indiIndex, dumpMask);
+                }
+                // TODO(spike): use a backup copy like systemConfig_Copy for diff against defaults
+                indiProfileIndexToUse = getCurrentIndiProfileIndex();
+#endif
+
                 if (!(dumpMask & BARE)) {
                     cliPrintHashLine("restore original rateprofile selection");
 
@@ -8148,6 +8212,12 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                     cliPrintHashLine("restore original battery_profile selection");
 
                     cliBatteryProfile(cmdName, "");
+
+#ifdef USE_INDI
+                    cliPrintHashLine("restore original indiprofile selection");
+
+                    cliIndiProfile(cmdName, "");
+#endif
 
                     cliPrintHashLine("save configuration");
                     cliPrint("save");
@@ -8158,12 +8228,18 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
                 rateProfileIndexToUse = CURRENT_PROFILE_INDEX;
                 batteryProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#ifdef USE_INDI
+                indiProfileIndexToUse = CURRENT_PROFILE_INDEX;
+#endif
             } else {
                 cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
 
                 cliDumpRateProfile(cmdName, systemConfig_Copy.activeRateProfile, dumpMask);
 
                 cliDumpBatteryProfile(cmdName, systemConfig_Copy.activeBatteryProfile, dumpMask);
+#ifdef USE_INDI
+                cliDumpIndiProfile(cmdName, getCurrentIndiProfileIndex(), dumpMask);
+#endif
             }
         }
     } else if (dumpMask & DUMP_PROFILE) {
@@ -8369,6 +8445,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("play_sound", NULL, "[<index>]", cliPlaySound),
 #endif
     CLI_COMMAND_DEF("battery_profile", "change battery profile", "[<index>]", cliBatteryProfile),
+#ifdef USE_INDI
+    CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
+#endif
     CLI_COMMAND_DEF("profile", "change profile", "[<index>]", cliProfile),
     CLI_COMMAND_DEF("rateprofile", "change rate profile", "[<index>]", cliRateProfile),
 #ifdef USE_RC_SMOOTHING_FILTER

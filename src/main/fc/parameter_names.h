@@ -328,3 +328,5 @@
 #define PARAM_NAME_TRANSPONDER_PROVIDER "transponder_provider"
 #define PARAM_NAME_TRANSPONDER_DATA "transponder_data"
 #endif
+
+#include "fc/parameter_names_indiflight.h"
