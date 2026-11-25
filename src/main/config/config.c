@@ -262,9 +262,14 @@ static void validateAndFixConfig(void)
         }
 #endif
 
+#ifdef USE_INDI
+        // indiflight: motor_output_limit does not exist in INDI builds (neither PID nor INDI uses it); pin it to 100
+        pidProfilesMutable(i)->motor_output_limit = 100;
+#else
         if (pidProfilesMutable(i)->motor_output_limit > 100 || pidProfilesMutable(i)->motor_output_limit == 0) {
             pidProfilesMutable(i)->motor_output_limit = 100;
         }
+#endif
 
         if (pidProfilesMutable(i)->auto_profile_cell_count > MAX_AUTO_DETECT_CELL_COUNT || pidProfilesMutable(i)->auto_profile_cell_count < AUTO_PROFILE_CELL_COUNT_CHANGE) {
             pidProfilesMutable(i)->auto_profile_cell_count = AUTO_PROFILE_CELL_COUNT_STAY;
@@ -380,7 +385,11 @@ static void validateAndFixConfig(void)
             failsafeConfigMutable()->failsafe_procedure = FAILSAFE_PROCEDURE_DROP_IT;
         }
 #endif
-        if (failsafeConfig()->failsafe_procedure >= FAILSAFE_PROCEDURE_COUNT) {
+        if (failsafeConfig()->failsafe_procedure >= FAILSAFE_PROCEDURE_COUNT
+#ifdef USE_INDI
+            || true // indiflight: DROP_IT is the only failsafe procedure in INDI builds
+#endif
+            ) {
             failsafeConfigMutable()->failsafe_procedure = FAILSAFE_PROCEDURE_DROP_IT;
         }
 

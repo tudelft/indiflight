@@ -468,9 +468,11 @@ bool mixerIsTricopter(void)
 void initEscEndpoints(void)
 {
     float motorOutputLimit = 1.0f;
+#ifndef USE_INDI // ndiflight: motor_output_limit does not exist in INDI builds (neither PID nor INDI uses it)
     if (currentPidProfile->motor_output_limit < 100) {
         motorOutputLimit = currentPidProfile->motor_output_limit / 100.0f;
     }
+#endif
     motorInitEndpoints(motorConfig(), motorOutputLimit, &mixerRuntime.motorOutputLow, &mixerRuntime.motorOutputHigh, &mixerRuntime.disarmMotorOutput, &mixerRuntime.deadbandMotor3dHigh, &mixerRuntime.deadbandMotor3dLow);
 }
 

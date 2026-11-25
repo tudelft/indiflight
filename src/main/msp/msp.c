@@ -3531,7 +3531,11 @@ RAM_CODE static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t
         }
         if (sbufBytesRemaining(src) >= 3) {
             // Added in MSP API 1.43
+#ifdef USE_INDI
+            sbufReadU8(src); // indiflight: motor_output_limit does not exist in INDI builds (neither PID nor INDI uses it) (byte kept, write ignored, reads 100)
+#else
             currentPidProfile->motor_output_limit = sbufReadU8(src);
+#endif
             currentPidProfile->auto_profile_cell_count = sbufReadU8(src);
 #if defined(USE_DYN_IDLE)
             currentPidProfile->dyn_idle_min_rpm = sbufReadU8(src);
