@@ -94,8 +94,8 @@ typedef enum {
     FAILSAFE_MODE   = (1 << 10),
     GPS_RESCUE_MODE = (1 << 11),
     AUTOPILOT_MODE  = (1 << 12), // GPS waypoint tracking
-    PID_MODE        = (1 << 13), // indiflight: legacy PID instead of INDI
-    POSITION_MODE   = (1 << 14), // indiflight position control
+    INDI_MODE       = (1 << 13), // indiflight: INDI controller instead of PID
+    POSITION_MODE   = (1 << 14), // indiflight position control, only together with INDI_MODE
     WAYPOINT_MODE   = (1 << 15)  // indiflight, only together with POSITION_MODE. flightModeFlags (uint16_t) is now full
 } flightModeFlags_e;
 

@@ -57,35 +57,6 @@ FAST_CODE void indiflightPreController(timeUs_t currentTimeUs)
 #endif
 }
 
-void indiflightProcessRxModes(void)
-{
-    // legacy PIDs. motor_output_limit only applies to PID
-    if (IS_RC_MODE_ACTIVE(BOXPIDCTL)) {
-        if (!FLIGHT_MODE(PID_MODE)) {
-            ENABLE_FLIGHT_MODE(PID_MODE);
-            initEscEndpoints();
-        }
-    } else if (FLIGHT_MODE(PID_MODE)) {
-        DISABLE_FLIGHT_MODE(PID_MODE);
-        initEscEndpoints();
-    }
-
-#ifdef USE_LOCAL_POSITION
-    // TODO(spike): port indiflight's edge handling (EKF convergence gate,
-    // ARMING_DISABLED_EKF_OR_SETPOINT, waypoint rising edge/auto-off)
-    if (IS_RC_MODE_ACTIVE(BOXPOSCTL)) {
-        ENABLE_FLIGHT_MODE(POSITION_MODE);
-    } else {
-        DISABLE_FLIGHT_MODE(POSITION_MODE);
-    }
-    if (IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE)) {
-        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
-    } else {
-        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
-    }
-#endif
-}
-
 // stick activity detection (was in indiflight fc/rc.c)
 static float sticksReference[4];
 
@@ -109,7 +80,7 @@ bool haveSticksMoved(void)
 
 bool indiIsActive(void)
 {
-    return !FLIGHT_MODE(PID_MODE);
+    return FLIGHT_MODE(INDI_MODE);
 }
 
 // INDI output -> upstream motor[] (motor protocol units). Replaces mixTable().
@@ -148,6 +119,20 @@ FAST_CODE void indiMixTable(timeUs_t currentTimeUs)
             ? scaleRangef(motor_normalized[i], 0.f, 1.f, mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh)
             : motor_disarmed[i];
     }
+}
+
+// PID path: feed the upstream motor outputs back into INDI's actuator state
+FAST_CODE void indiTrackMotorOutput(void)
+{
+    const int numMotors = mixerRuntime.motorCount;
+    for (int i = 0; i < numMotors; i++) {
+        motor_normalized[i] = constrainf(scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f);
+    }
+    for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
+        servo_normalized[i] = 0.f; // TODO(spike): upstream servo[] -> normalized
+    }
+    indiUpdateActuatorState(motor_normalized, servo_normalized);
+    indiUpdateRpmCtlState(motor_normalized);
 }
 
 #endif // USE_INDI

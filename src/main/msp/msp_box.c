@@ -105,7 +105,7 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXAUTOPILOT, .boxName = "AUTOPILOT", .permanentId = 56},
     { .boxId = BOXWPCAPTURE, .boxName = "WP CAPTURE", .permanentId = 57},
     // indiflight: permanentIds from 100 up, clear of upstream (indiflight 4.4 used 55..62)
-    { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 100},
+    { .boxId = BOXINDI, .boxName = "INDI", .permanentId = 100}, // 100 was LEGACY PIDs in the spike only, never released
     { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 101},
     { .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 102},
 };
@@ -271,7 +271,7 @@ void initActiveBoxIds(void)
     BME(BOXFAILSAFE);
 
 #ifdef USE_INDI
-    BME(BOXPIDCTL); // without USE_INDI, PID is always active
+    BME(BOXINDI); // without the switch (or without USE_INDI) the upstream PID runs
 #endif
 #ifdef USE_LOCAL_POSITION
     BME(BOXPOSCTL);

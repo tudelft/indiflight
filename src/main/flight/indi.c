@@ -214,7 +214,8 @@ static fp_euler_t getCurrentEulerZXY(void)
 FAST_CODE
 #endif
 void indiController(timeUs_t current) {
-    if (flightModeFlags && !(flightModeFlags & INDI_UNLIMITED_RATE_MODES)) {
+    const uint16_t modesOtherThanIndi = flightModeFlags & ~INDI_MODE;
+    if (modesOtherThanIndi && !(modesOtherThanIndi & INDI_UNLIMITED_RATE_MODES)) {
 #pragma message "LEARNER_MODE probably shouldnt be here"
         // any flight mode active other than catapult, learner or acro (acro is all off)?
         if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 || (indiRun.attRateDenom == 1) ) {

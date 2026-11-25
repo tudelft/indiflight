@@ -86,9 +86,9 @@ typedef enum {
     BOXWPCAPTURE,
     // indiflight boxes: appended, so upstream boxId_e indices (stored in
     // modeActivationConditions) do not shift. Their flags are set by hand in
-    // indiflightProcessRxModes(), not via BOXID_TO_FLIGHT_MODE_MAP.
-    BOXPIDCTL,
-    BOXPOSCTL,     // indiflight position control (alternative to upstream BOXPOSHOLD)
+    // processRxModes() (fc/core.c), not via BOXID_TO_FLIGHT_MODE_MAP.
+    BOXINDI,       // indiflight INDI controller instead of upstream PID (PID is the default)
+    BOXPOSCTL,     // indiflight position control, needs BOXINDI (alternative to upstream BOXPOSHOLD)
     BOXWAYPOINTS,  // only together with BOXPOSCTL
     CHECKBOX_ITEM_COUNT
 } boxId_e;

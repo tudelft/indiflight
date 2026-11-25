@@ -84,6 +84,12 @@
 #include "flight/indi.h"
 #include "flight/indi_glue.h"
 #endif
+#ifdef USE_EKF
+#include "flight/ekf.h"
+#endif
+#ifdef USE_LOCAL_POSITION
+#include "io/local_pos.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1208,6 +1214,59 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
+#ifdef USE_INDI
+    // INDI replaces the upstream PID controller and mixer while the switch is on.
+    // Can be toggled in flight, like indiflight's former LEGACY PIDs switch.
+    if (IS_RC_MODE_ACTIVE(BOXINDI)) {
+        ENABLE_FLIGHT_MODE(INDI_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(INDI_MODE);
+    }
+#endif
+
+#ifdef USE_LOCAL_POSITION
+    // POSITION_MODE needs INDI_MODE: pos_ctl only produces INDI setpoints
+    // (attSpNedFromPos / spfSpBodyFromPos), which nothing on the PID path consumes.
+    // TODO(spike): geofence / trajectory tracker checks from indiflight core.c
+    if (IS_RC_MODE_ACTIVE(BOXPOSCTL) && FLIGHT_MODE(INDI_MODE)) {
+        // only switch on with a converged ekf
+        if (!FLIGHT_MODE(POSITION_MODE) && isConvergedEkf()) {
+            if (ARMING_FLAG(ARMED)) {
+                setLocalPosSpHere();
+            }
+            ENABLE_FLIGHT_MODE(POSITION_MODE);
+        }
+    } else {
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            posSpNed.valid = false; // invalidate previous setpoint when leaving position mode
+        }
+        DISABLE_FLIGHT_MODE(POSITION_MODE);
+    }
+
+    if (!isConvergedEkf()) {
+        if (!ARMING_FLAG(ARMED)) {
+            posSpNed.valid = false;
+            DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+        }
+        if (ARMING_FLAG(ARMED) && !FLIGHT_MODE(POSITION_MODE)) {
+            posSpNed.valid = false; // invalidate setpoint even when flying, because not in position mode
+        }
+    }
+
+    // WAYPOINT_MODE runs on top of POSITION_MODE and is never active without it.
+    // It engages on the rising edge of (BOXWAYPOINTS && POSITION_MODE). pos_ctl
+    // switches it off when the plan is finished; it then stays off until the
+    // switch is cycled (or POSITION_MODE is re-entered).
+    static bool waypointRequestedPrev = false;
+    const bool waypointRequested = IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE);
+    if (!waypointRequested) {
+        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    } else if (!waypointRequestedPrev) {
+        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    }
+    waypointRequestedPrev = waypointRequested;
+#endif
+
     if (IS_RC_MODE_ACTIVE(BOXHORIZON) && canUseHorizonMode && sensors(SENSOR_ACC)) {
         DISABLE_FLIGHT_MODE(ANGLE_MODE);
         if (!FLIGHT_MODE(HORIZON_MODE)) {
@@ -1265,10 +1324,6 @@ void processRxModes(timeUs_t currentTimeUs)
             }
         }
     }
-#endif
-
-#ifdef USE_INDI
-    indiflightProcessRxModes();
 #endif
 
     if (IS_RC_MODE_ACTIVE(BOXPASSTHRU)) {
@@ -1431,7 +1486,14 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
         indiMixTable(currentTimeUs);
     } else
 #endif
-    mixTable(currentTimeUs);
+    {
+        mixTable(currentTimeUs);
+#ifdef USE_INDI
+        // keep INDI's actuator state in sync with the PID outputs (no effect on them),
+        // so switching INDI on in flight starts from the right state
+        indiTrackMotorOutput();
+#endif
+    }
 
 #ifdef USE_SERVOS
     // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
