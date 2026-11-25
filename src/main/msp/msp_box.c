@@ -103,11 +103,15 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXLAPTIMERRESET, .boxName = "LAP TIMER RESET", .permanentId = 54},
     { .boxId = BOXCHIRP, .boxName = "CHIRP", .permanentId = 55},
     { .boxId = BOXAUTOPILOT, .boxName = "AUTOPILOT", .permanentId = 56},
-    { .boxId = BOXWPCAPTURE, .boxName = "WP CAPTURE", .permanentId = 57},
+    { .boxId = BOXWPCAPTURE, .boxName = "WP CAPTURE", .permanentId = 57}
     // indiflight: permanentIds from 100 up, clear of upstream (indiflight 4.4 used 55..62)
-    { .boxId = BOXINDI, .boxName = "INDI", .permanentId = 100}, // 100 was LEGACY PIDs in the spike only, never released
-    { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 101},
-    { .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 102},
+#ifdef USE_INDI
+    ,{ .boxId = BOXINDI, .boxName = "INDI", .permanentId = 100} // 100 was LEGACY PIDs in the spike only, never released
+#endif
+#ifdef USE_LOCAL_POSITION
+    ,{ .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 101}
+    ,{ .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 102}
+#endif
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index

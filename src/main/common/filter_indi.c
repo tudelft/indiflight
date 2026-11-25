@@ -12,6 +12,9 @@
 
 #include "platform.h"
 
+// indiflight-only code: compiled out of stock builds
+#if defined(USE_INDI) || defined(USE_LOCAL_POSITION)
+
 #include "common/filter_indi.h"
 
 void sos2FilterInit(sos2Filter_t *filter, float b0, float b1, float b2, float a1, float a2)
@@ -68,3 +71,5 @@ void svfLowpassFilterSetState(svfLowpassFilter_t *filter, float value)
     filter->ic1 = 0.0f;
     filter->ic2 = value;
 }
+
+#endif

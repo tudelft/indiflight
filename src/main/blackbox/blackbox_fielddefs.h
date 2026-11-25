@@ -76,9 +76,15 @@ typedef enum {
     FLIGHT_LOG_FIELD_CONDITION_DEBUG_LOG,
     FLIGHT_LOG_FIELD_CONDITION_ATTITUDE,
     // indiflight
+#ifdef USE_INDI
     FLIGHT_LOG_FIELD_CONDITION_INDI,
+#endif
+#ifdef USE_LOCAL_POSITION
     FLIGHT_LOG_FIELD_CONDITION_POS,
+#endif
+#ifdef USE_EKF
     FLIGHT_LOG_FIELD_CONDITION_EKF,
+#endif
 
     FLIGHT_LOG_FIELD_CONDITION_NEVER,
 
@@ -104,9 +110,15 @@ typedef enum { // no more than 32
     FLIGHT_LOG_FIELD_SELECT_GYROUNFILT,
     FLIGHT_LOG_FIELD_SELECT_SERVO,
     // indiflight. Bit indices differ from the 4.4 fork (13..16), set them by name
+#ifdef USE_INDI
     FLIGHT_LOG_FIELD_SELECT_INDI,
+#endif
+#ifdef USE_LOCAL_POSITION
     FLIGHT_LOG_FIELD_SELECT_POS,
+#endif
+#ifdef USE_EKF
     FLIGHT_LOG_FIELD_SELECT_EKF,
+#endif
     FLIGHT_LOG_FIELD_SELECT_COUNT
 } flightLogFieldSelect_e;
 

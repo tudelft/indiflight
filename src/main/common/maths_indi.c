@@ -15,6 +15,9 @@
 
 #include "platform.h"
 
+// indiflight-only code: compiled out of stock builds
+#if defined(USE_INDI) || defined(USE_EKF) || defined(USE_LOCAL_POSITION) || defined(USE_PITOT) || defined(USE_GEOFENCE)
+
 #include "common/axis.h"
 #include "common/maths_indi.h"
 
@@ -364,3 +367,5 @@ void arraySubUint16(int16_t *dest, uint16_t *array1, uint16_t *array2, int count
         dest[i] = array1[i] - array2[i];
     }
 }
+
+#endif

@@ -25,14 +25,6 @@
 
 #include "platform.h"
 
-#include "flight/servos.h"
-
-#if defined(USE_INDI) || defined(USE_SERVOS)
-// indiflight servo interface, see servos.h
-float servo_normalized[MAX_SUPPORTED_SERVOS];
-int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
-#endif
-
 #ifdef USE_SERVOS
 
 #include "build/build_config.h"
@@ -628,3 +620,11 @@ static void filterServos(void)
 #endif
 }
 #endif // USE_SERVOS
+
+// indiflight servo interface, see servos.h. Kept at the end of the file, so
+// upstream line numbers (and __LINE__-based symbol names) do not change.
+#if defined(USE_INDI) || defined(USE_SERVO_FEEDBACK)
+#include "flight/servos.h"
+float servo_normalized[MAX_SUPPORTED_SERVOS];
+int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
+#endif
