@@ -36,6 +36,9 @@
 #include "sensors/acceleration_init.h"
 #include "sensors/boardalignment.h"
 #include "sensors/gyro.h"
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
 
 #include "acceleration.h"
 
@@ -157,6 +160,9 @@ void accUpdate(timeUs_t currentTimeUs)
     if (!acc.dev.readFn(&acc.dev)) {
         return;
     }
+#ifdef HIL_BUILD
+    hilInjectAccRaw(&acc.dev); // indiflight HIL: simulated acc replaces the device data
+#endif
 
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
         acc.accADC.v[axis] = acc.dev.ADCRaw[axis];
@@ -177,7 +183,9 @@ FAST_CODE void accSampleInGyroTask(void)
     if (!acc.dev.readFn(&acc.dev)) {
         return;
     }
-    // HIL injection point: replace acc.dev.ADCRaw[] here (sensor axes, raw units)
+#ifdef HIL_BUILD
+    hilInjectAccRaw(&acc.dev); // indiflight HIL: simulated acc replaces the device data
+#endif
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
         accSampleSum[axis] += acc.dev.ADCRaw[axis];
     }

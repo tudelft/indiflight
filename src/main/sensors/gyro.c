@@ -57,6 +57,9 @@
 
 #include "sensors/boardalignment.h"
 #include "sensors/gyro.h"
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
 #include "sensors/gyro_init.h"
 
 #if ((TARGET_FLASH_SIZE > 128) && (defined(USE_GYRO_SPI_ICM20601) || defined(USE_GYRO_SPI_ICM20689) || defined(USE_GYRO_SPI_MPU6500)))
@@ -396,6 +399,9 @@ static FAST_CODE void gyroUpdateSensor(gyroSensor_t *gyroSensor)
     if (!gyroSensor->gyroDev.readFn(&gyroSensor->gyroDev)) {
         return;
     }
+#ifdef HIL_BUILD
+    hilInjectGyroRaw(&gyroSensor->gyroDev); // indiflight HIL: simulated gyro replaces the device data
+#endif
     gyroSensor->gyroDev.dataReady = false;
 
     if (isGyroSensorCalibrationComplete(gyroSensor)) {

@@ -30,6 +30,9 @@ void cliEnter(struct serialPort_s *serialPort, bool interactive);
 
 #ifdef CONFIG_IN_FILE
 void cliProcessConfigFile(const char *filename);
+#ifdef MOCKUP
+void mockupCliChar(char c);
+#endif
 #endif
 
 #ifdef USE_CLI

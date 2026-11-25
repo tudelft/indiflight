@@ -90,6 +90,9 @@
 #ifdef USE_LOCAL_POSITION
 #include "io/local_pos.h"
 #endif
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
 #ifdef USE_ACTUATORS_T4
 #include "io/t4.h"
 #endif
@@ -1571,7 +1574,10 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
 #endif
     }
 
-#ifdef USE_SERVOS
+#ifdef HIL_BUILD
+    // indiflight HIL: motor and servo commands go to the simulator, which returns servo_feedback[]
+    hilSendActuators();
+#elif defined(USE_SERVOS)
     // motor outputs are used as sources for servo mixing, so motors must be calculated using mixTable() before servos.
     if (isMixerUsingServos()) {
         writeServos();

@@ -71,6 +71,16 @@ static void taskUpdatePitot(timeUs_t currentTimeUs)
     pitotUpdate(currentTimeUs);
 }
 #endif
+#ifdef HIL_BUILD
+#include "io/hil.h"
+
+static void taskHil(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    checkHilState();
+    handleHil();
+}
+#endif
 #ifdef USE_TELEMETRY_PI
 #include "io/keyboard.h"
 
@@ -441,6 +451,9 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
 #endif
+#ifdef HIL_BUILD
+    [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
+#endif
 
 #ifdef USE_MAG
     [TASK_COMPASS] = DEFINE_TASK("COMPASS", NULL, NULL, taskUpdateMag, TASK_PERIOD_HZ(TASK_COMPASS_RATE_HZ), TASK_PRIORITY_LOW),
@@ -636,6 +649,9 @@ void tasksInit(void)
 #endif
 #ifdef USE_TELEMETRY_PI
     setTaskEnabled(TASK_KEYBOARD, true);
+#endif
+#ifdef HIL_BUILD
+    setTaskEnabled(TASK_HIL, true);
 #endif
 
 #ifdef USE_MAG

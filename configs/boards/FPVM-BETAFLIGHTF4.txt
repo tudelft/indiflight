@@ -1,0 +1,11 @@
+# indiflight board overlay for the FPVM BETAFLIGHTF4 (make BOARD=FPVM-BETAFLIGHTF4 PROFILE=<profile>).
+#
+# The resources and defaults the 4.4 fork kept here are in the upstream board
+# config src/config/configs/FPVM/BETAFLIGHTF4/config.h (CONFIG=BETAFLIGHTF4).
+#
+# Sensor alignment: the fork used gyro_1_sensor_align = CW180FLIP. With the
+# FLU -> FRD conversion in code that equals CW0_DEG, but the upstream default
+# is CW180_DEG (no longer a CLI setting): the data is rotated by 180 deg about
+# Z against the fork. Compensate in the profile with align_board_yaw + 180
+# (a profile flown with align_board_yaw = 180 on this board needs 0).
+#define CONFIG=BETAFLIGHTF4

@@ -142,7 +142,7 @@ extern float servo_normalized[MAX_SUPPORTED_SERVOS];
 extern int16_t servo_feedback[MAX_SUPPORTED_SERVOS]; // centi degrees
 
 // a driver that fills servo_feedback[] is compiled in (enables blackbox logging)
-#if defined(USE_ACTUATORS_T4) || defined(USE_SERVOS_FEETECH)
+#if defined(USE_ACTUATORS_T4) || defined(USE_SERVOS_FEETECH) || defined(HIL_BUILD)
 #define USE_SERVO_FEEDBACK
 #endif
 

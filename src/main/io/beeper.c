@@ -424,6 +424,10 @@ static enum beeperState_e beeperSequenceAdvance(timeUs_t currentTimeUs)
  */
 void beeperUpdate(timeUs_t currentTimeUs)
 {
+#ifdef HIL_BUILD
+    beeperSilence(); // indiflight HIL: the craft is on the bench
+    return;
+#endif
     // If beeper option from AUX switch has been selected
     if (IS_RC_MODE_ACTIVE(BOXBEEPERON)) {
         beeper(BEEPER_RX_SET);

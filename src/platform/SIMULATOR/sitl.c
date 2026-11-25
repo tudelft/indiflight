@@ -596,6 +596,12 @@ void systemInit(void)
 
     clock_gettime(CLOCK_MONOTONIC, &start_time);
     printf("[system]Init...\n");
+#ifdef MOCKUP
+    // indiflight MOCKUP: a shared library driven step by step by the caller
+    // (support/simulation/PyNDIflight): no worker threads, no UDP links, virtual clock
+    SystemCoreClock = 500 * 1e6; // virtual 500MHz
+    return;
+#endif
 
     // Close the GPX track file cleanly on exit
     atexit(gpxTrackClose);
@@ -645,6 +651,10 @@ void systemInit(void)
 
 void systemReset(void)
 {
+#ifdef MOCKUP
+    printf("[system]Reset ignored (MOCKUP)\n");
+    return;
+#endif
     printf("[system]Reset!\n");
     workerRunning = false;
     pthread_join(tcpWorker, NULL);
@@ -702,6 +712,22 @@ uint64_t millis64_real(void)
     return 1.0e3*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
 }
 
+#ifdef MOCKUP
+// indiflight MOCKUP: virtual time, advanced only by mockupClockTick() (tick()) and delays
+static uint64_t mockupTimeNs = 0;
+void mockupClockTick(uint32_t us)
+{
+    mockupTimeNs += 1000ULL * us;
+}
+uint64_t micros64(void)
+{
+    return mockupTimeNs / 1000;
+}
+uint64_t millis64(void)
+{
+    return mockupTimeNs / (1000 * 1000);
+}
+#else
 uint64_t micros64(void)
 {
     static uint64_t last = 0;
@@ -725,6 +751,7 @@ uint64_t millis64(void)
 
     return out / (1000 * 1000);
 }
+#endif // MOCKUP
 
 uint32_t micros(void)
 {
@@ -771,7 +798,12 @@ static void microsleep(uint32_t usec)
 
 void delayMicroseconds(uint32_t us)
 {
+#ifdef MOCKUP
+    mockupClockTick(us);
+    UNUSED(microsleep);
+#else
     microsleep(us / simRate);
+#endif
 }
 
 void delayMicroseconds_real(uint32_t us)
@@ -781,6 +813,10 @@ void delayMicroseconds_real(uint32_t us)
 
 void delay(uint32_t ms)
 {
+#ifdef MOCKUP
+    mockupClockTick(1000 * ms);
+    return;
+#endif
     uint64_t start = millis64();
 
     while ((millis64() - start) < ms) {
@@ -883,6 +919,9 @@ static void pwmCompleteMotorUpdate(void)
         pwmPkt.motor_speed[i] = motorsPwm[i] / outScale;
     }
 
+#ifdef MOCKUP
+    return; // indiflight MOCKUP: the caller reads the outputs (mockup.c)
+#endif
     // get one "fdm_packet" can only send one "servo_packet"!!
     if (pthread_mutex_trylock(&updateLock) != 0) return;
     udpSend(&pwmLink, &pwmPkt, sizeof(servo_packet));

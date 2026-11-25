@@ -24,3 +24,4 @@ bool haveSticksMoved(void);
 bool indiIsActive(void);                         // INDI_MODE: INDI (true) or upstream PID (false)
 void indiMixTable(timeUs_t currentTimeUs);       // replaces mixTable() when INDI is active
 void indiTrackMotorOutput(void);                 // after mixTable() when INDI is not active
+float indiGetMotorNormalized(int i);

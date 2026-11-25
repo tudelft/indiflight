@@ -105,6 +105,9 @@
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
 #ifdef USE_ACTUATORS_T4
 #include "io/t4.h"
 #endif
@@ -769,6 +772,10 @@ void initPhase3(void)
     servosFilterInit();
 #endif
 
+#ifdef HIL_BUILD
+    initHil();
+    checkHilState();
+#endif
 #ifdef USE_ACTUATORS_T4
     initActuatorsT4();
     configureActuatorsT4Port();

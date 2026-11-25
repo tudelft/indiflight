@@ -292,6 +292,7 @@ COMMON_SRC = \
             io/ledstrip.c \
             io/local_pos.c \
             io/t4.c \
+            io/hil.c \
             io/pidaudio.c \
             osd/osd.c \
             osd/osd_custom_text.c \
@@ -509,6 +510,7 @@ SPEED_OPTIMISED_SRC += \
             flight/pos_ctl.c \
             io/feetech.c \
             io/t4.c \
+            io/hil.c \
             flight/rpm_filter.c \
             rx/ibus.c \
             rx/rc_stats.c \

@@ -30,6 +30,9 @@
 #include "platform.h"
 
 #include "dshot.h"
+#ifdef HIL_BUILD
+#include "io/hil.h"
+#endif
 
 #ifdef USE_DSHOT
 
@@ -263,6 +266,7 @@ static void dshotUpdateTelemetryData(uint8_t motorIndex, dshotTelemetryType_t ty
 
 FAST_CODE_NOINLINE void updateDshotTelemetry(void)
 {
+#ifndef HIL_BUILD // indiflight HIL: motor rpm comes from the simulator, every loop
     if (!useDshotTelemetry) {
         return;
     }
@@ -271,6 +275,7 @@ FAST_CODE_NOINLINE void updateDshotTelemetry(void)
     if (dshotTelemetryState.rawValueState != DSHOT_RAW_VALUE_STATE_NOT_PROCESSED) {
         return;
     }
+#endif
 
     const unsigned motorCount = MIN(MAX_SUPPORTED_MOTORS, dshotMotorCount);
     uint32_t erpmTotal = 0;
@@ -281,7 +286,12 @@ FAST_CODE_NOINLINE void updateDshotTelemetry(void)
         dshotTelemetryType_t type;
         uint32_t value;
 
+#ifdef HIL_BUILD
+        hilGetDshotTelemetry(k, &value, &type);
+        UNUSED(dshot_decode_telemetry_value);
+#else
         dshot_decode_telemetry_value(k, &value, &type);
+#endif
 
         if (value != DSHOT_TELEMETRY_INVALID) {
             dshotUpdateTelemetryData(k, type, value);
