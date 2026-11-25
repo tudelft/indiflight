@@ -40,9 +40,6 @@
 #ifdef USE_TELEMETRY_PI
 #include "telemetry/pi.h"
 #endif
-#ifdef USE_TELEMETRY_UROS
-#include "telemetry/uros.h"
-#endif
 #include "io/gps.h"
 
 #ifdef USE_LOCAL_POSITION

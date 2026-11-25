@@ -29,10 +29,10 @@
 #include "io/gps.h"
 
 typedef enum {
-    LOCAL_POS_SOURCE_PI,
-    LOCAL_POS_SOURCE_UROS,
-    LOCAL_POS_SOURCE_GPS,
-    LOCAL_POS_SOURCE_MOCKUP,
+    // values are stored in ekf_meas_source and logged: keep them stable (1 is unused)
+    LOCAL_POS_SOURCE_PI = 0,
+    LOCAL_POS_SOURCE_GPS = 2,
+    LOCAL_POS_SOURCE_MOCKUP = 3,
 } local_pos_source_e;
 
 // todo: reformulate using fp_vector_t
