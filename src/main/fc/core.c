@@ -1172,11 +1172,32 @@ void processRxModes(timeUs_t currentTimeUs)
     navTrailUpdate(currentTimeUs);
 #endif
 
+#ifdef USE_INDI
+    // INDI replaces the upstream PID controller and mixer while the switch is on.
+    // Can be toggled in flight, like indiflight's former LEGACY PIDs switch.
+    //
+    // Position modes, rule when several switches are on: the INDI switch picks the stack.
+    // - INDI_MODE off: upstream ALT_HOLD / POS_HOLD (they act through the PID angle
+    //   path and the upstream mixer) as in vanilla; indiflight POSITION_MODE is off.
+    // - INDI_MODE on: indiflight POSITION_MODE / WAYPOINT_MODE; upstream ALT_HOLD and
+    //   POS_HOLD are kept off, since nothing on the INDI path consumes their output.
+    // Set here, before ALT_HOLD / POS_HOLD, which test it.
+    if (IS_RC_MODE_ACTIVE(BOXINDI)) {
+        ENABLE_FLIGHT_MODE(INDI_MODE);
+    } else {
+        DISABLE_FLIGHT_MODE(INDI_MODE);
+    }
+#endif
+
 #ifdef USE_ALTITUDE_HOLD
     // only if armed; can coexist with position hold
     if (ARMING_FLAG(ARMED)
         // and not in GPS_RESCUE_MODE, to give it priority over Altitude Hold
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
+#ifdef USE_INDI
+        // and not with INDI, which uses indiflight POSITION_MODE instead
+        && !FLIGHT_MODE(INDI_MODE)
+#endif
         // and either the alt_hold switch is activated, or are in failsafe landing mode,
         // or an autopilot mission needs altitude control, or a switch-rescue fallback descent
         && (IS_RC_MODE_ACTIVE(BOXALTHOLD) || failsafeIsActive() || FLIGHT_MODE(AUTOPILOT_MODE) || flightPlanNavIsRescueDescentActive())
@@ -1199,6 +1220,10 @@ void processRxModes(timeUs_t currentTimeUs)
     if (ARMING_FLAG(ARMED)
         // and not in GPS_RESCUE_MODE, to give it priority over Position Hold
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
+#ifdef USE_INDI
+        // and not with INDI, which uses indiflight POSITION_MODE instead
+        && !FLIGHT_MODE(INDI_MODE)
+#endif
         // and either the pos_hold switch is activated, or are in failsafe landing mode,
         // or an autopilot mission needs the position controller
         && (IS_RC_MODE_ACTIVE(BOXPOSHOLD) || failsafeIsActive() || FLIGHT_MODE(AUTOPILOT_MODE))
@@ -1211,16 +1236,6 @@ void processRxModes(timeUs_t currentTimeUs)
         }
     } else {
         DISABLE_FLIGHT_MODE(POS_HOLD_MODE);
-    }
-#endif
-
-#ifdef USE_INDI
-    // INDI replaces the upstream PID controller and mixer while the switch is on.
-    // Can be toggled in flight, like indiflight's former LEGACY PIDs switch.
-    if (IS_RC_MODE_ACTIVE(BOXINDI)) {
-        ENABLE_FLIGHT_MODE(INDI_MODE);
-    } else {
-        DISABLE_FLIGHT_MODE(INDI_MODE);
     }
 #endif
 
