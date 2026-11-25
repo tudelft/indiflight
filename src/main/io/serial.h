@@ -55,7 +55,9 @@ typedef enum {
     FUNCTION_LIDAR_NL            = (1 << 19), // 524288
     FUNCTION_OSD_CUSTOM_TEXT     = (1 << 20), // 1048576
     // indiflight. The 4.4 fork used 18 for TELEMETRY_PI, now upstream GIMBAL
+    FUNCTION_SERVOS_FEETECH      = (1 << 22), // 4194304, same as the 4.4 fork
     FUNCTION_TELEMETRY_PI        = (1 << 23), // 8388608
+    FUNCTION_ACTUATORS_T4        = (1 << 24), // 16777216, the 4.4 fork used 20 (now upstream OSD_CUSTOM_TEXT)
 } serialPortFunction_e;
 
 #define TELEMETRY_SHAREABLE_PORT_FUNCTIONS_MASK (FUNCTION_TELEMETRY_FRSKY_HUB | FUNCTION_TELEMETRY_LTM | FUNCTION_TELEMETRY_MAVLINK)

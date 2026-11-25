@@ -285,11 +285,13 @@ COMMON_SRC = \
             io/rcdevice_cam.c \
             io/rcdevice.c \
             io/gps.c \
+            io/feetech.c \
             io/keyboard.c \
             drivers/pitotmeter/pitotmeter_ms4525.c \
             sensors/pitotmeter.c \
             io/ledstrip.c \
             io/local_pos.c \
+            io/t4.c \
             io/pidaudio.c \
             osd/osd.c \
             osd/osd_custom_text.c \
@@ -505,6 +507,8 @@ SPEED_OPTIMISED_SRC += \
             flight/pos_att_indi.c \
             flight/pos_att_ndi.c \
             flight/pos_ctl.c \
+            io/feetech.c \
+            io/t4.c \
             flight/rpm_filter.c \
             rx/ibus.c \
             rx/rc_stats.c \

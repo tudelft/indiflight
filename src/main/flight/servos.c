@@ -25,6 +25,14 @@
 
 #include "platform.h"
 
+#include "flight/servos.h"
+
+#if defined(USE_INDI) || defined(USE_SERVOS)
+// indiflight servo interface, see servos.h
+float servo_normalized[MAX_SUPPORTED_SERVOS];
+int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
+#endif
+
 #ifdef USE_SERVOS
 
 #include "build/build_config.h"

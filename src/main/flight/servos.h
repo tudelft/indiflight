@@ -135,6 +135,17 @@ typedef struct servoProfile_s {
 
 extern int16_t servo[MAX_SUPPORTED_SERVOS];
 
+// indiflight servo interface: commands normalized to [-1, 1] (zeroed while
+// disarmed), measured angles in centidegrees (10000 cdeg = normalized 1),
+// filled by at most one feedback driver
+extern float servo_normalized[MAX_SUPPORTED_SERVOS];
+extern int16_t servo_feedback[MAX_SUPPORTED_SERVOS]; // centi degrees
+
+// a driver that fills servo_feedback[] is compiled in (enables blackbox logging)
+#if defined(USE_ACTUATORS_T4) || defined(USE_SERVOS_FEETECH)
+#define USE_SERVO_FEEDBACK
+#endif
+
 bool isMixerUsingServos(void);
 void writeServos(void);
 void servoMixerLoadMix(int index);

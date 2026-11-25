@@ -105,6 +105,12 @@
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
+#ifdef USE_ACTUATORS_T4
+#include "io/t4.h"
+#endif
+#ifdef USE_SERVOS_FEETECH
+#include "io/feetech.h"
+#endif
 #ifdef USE_INDI
 #include "flight/indi.h"
 #include "flight/indi_glue.h"
@@ -761,6 +767,15 @@ void initPhase3(void)
         servoDevInit(&servoConfig()->dev);
     }
     servosFilterInit();
+#endif
+
+#ifdef USE_ACTUATORS_T4
+    initActuatorsT4();
+    configureActuatorsT4Port();
+#endif
+#ifdef USE_SERVOS_FEETECH
+    initServosFeetech();
+    configureServosFeetechPort();
 #endif
 
 

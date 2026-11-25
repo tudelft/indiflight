@@ -90,6 +90,12 @@
 #ifdef USE_LOCAL_POSITION
 #include "io/local_pos.h"
 #endif
+#ifdef USE_ACTUATORS_T4
+#include "io/t4.h"
+#endif
+#ifdef USE_SERVOS_FEETECH
+#include "io/feetech.h"
+#endif
 #ifdef USE_GEOFENCE
 #include "flight/geofence.h"
 #endif
@@ -1539,6 +1545,25 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
     if (isMixerUsingServos()) {
         writeServos();
     }
+#if defined(USE_ACTUATORS_T4) || defined(USE_SERVOS_FEETECH)
+    // indiflight serial actuator drivers, read servo_normalized[], fill servo_feedback[]
+    static unsigned servoCounter = 0;
+    if (++servoCounter % 4 == 0) {
+#ifdef USE_ACTUATORS_T4
+        sendActuatorsT4();
+#endif
+#ifdef USE_SERVOS_FEETECH
+        sendServosFeetech(currentTimeUs);
+#endif
+        servoCounter = 0;
+    }
+#endif
+#ifdef USE_ACTUATORS_T4
+    handleActuatorsT4();
+#endif
+#ifdef USE_SERVOS_FEETECH
+    handleServosFeetech(currentTimeUs);
+#endif
 #endif
 
     writeMotors();

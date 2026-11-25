@@ -319,6 +319,12 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"eRPM",  6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MOTOR_7_HAS_RPM)},
     {"eRPM",  7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MOTOR_8_HAS_RPM)},
 #endif /* USE_DSHOT_TELEMETRY */
+#ifdef USE_SERVO_FEEDBACK
+    {"servo_feedback", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+#endif
 #ifdef USE_INDI
     // indiflight: INDI inputs, gyro downsampled + rpm filtered, acc INDI input
     {"gyroADCafterRpm",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(GYRO)},
@@ -627,6 +633,9 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
+#ifdef USE_SERVO_FEEDBACK
+    int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
+#endif
 #ifdef USE_INDI
     int16_t gyroADCafterRpm[XYZ_AXIS_COUNT];
     int16_t accADCafterRpm[XYZ_AXIS_COUNT];
@@ -1099,6 +1108,9 @@ static void writeIntraframe(void)
     }
 #endif
 
+#ifdef USE_SERVO_FEEDBACK
+    blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
+#endif
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(GYRO))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->gyroADCafterRpm, XYZ_AXIS_COUNT);
@@ -1210,7 +1222,7 @@ static void writeInterframe(void)
     blackboxWriteSignedVB((int32_t) (blackboxHistory[0]->time - 2 * blackboxHistory[1]->time + blackboxHistory[2]->time));
 
     int32_t deltas[8];
-#if defined(USE_INDI) || defined(USE_LOCAL_POSITION) || defined(USE_EKF)
+#if defined(USE_INDI) || defined(USE_LOCAL_POSITION) || defined(USE_EKF) || defined(USE_SERVO_FEEDBACK)
     int16_t deltas16[MAX_SUPPORTED_MOTORS]; // indiflight fields
 #endif
     int32_t setpointDeltas[4];
@@ -1350,6 +1362,10 @@ static void writeInterframe(void)
     }
 #endif
 
+#ifdef USE_SERVO_FEEDBACK
+    arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
+    blackboxWriteSigned16VBArray(deltas16, 4);
+#endif
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(GYRO))) {
         blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, gyroADCafterRpm), XYZ_AXIS_COUNT);
@@ -1881,6 +1897,11 @@ static void loadMainState(timeUs_t currentTimeUs)
 #ifdef USE_SERVOS
     for (unsigned i = 0; i < ARRAYLEN(blackboxCurrent->servo); i++) {
         blackboxCurrent->servo[i] = servo[i];
+    }
+#endif
+#ifdef USE_SERVO_FEEDBACK
+    for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
+        blackboxCurrent->servo_feedback[i] = servo_feedback[i];
     }
 #endif
 #ifdef USE_INDI
