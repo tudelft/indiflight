@@ -105,6 +105,10 @@
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
+#ifdef USE_INDI
+#include "flight/indi.h"
+#include "flight/indi_glue.h"
+#endif
 #include "flight/pid_init.h"
 #include "flight/position.h"
 #include "flight/pos_hold.h"
@@ -740,6 +744,9 @@ void initPhase3(void)
     gyroInitFilters();
 
     pidInit(currentPidProfile);
+#ifdef USE_INDI
+    indiflightInit();
+#endif
 
     mixerInitProfile();
 

@@ -93,7 +93,8 @@ typedef enum {
 //    RANGEFINDER_MODE= (1 << 9),
     FAILSAFE_MODE   = (1 << 10),
     GPS_RESCUE_MODE = (1 << 11),
-    AUTOPILOT_MODE  = (1 << 12)  // GPS waypoint tracking
+    AUTOPILOT_MODE  = (1 << 12), // GPS waypoint tracking
+    PID_MODE        = (1 << 13), // indiflight: legacy PID instead of INDI
 } flightModeFlags_e;
 
 extern uint16_t flightModeFlags;

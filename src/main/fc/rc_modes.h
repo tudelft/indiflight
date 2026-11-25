@@ -84,6 +84,10 @@ typedef enum {
     BOXREADY,
     BOXLAPTIMERRESET,
     BOXWPCAPTURE,
+    // indiflight boxes: appended, so upstream boxId_e indices (stored in
+    // modeActivationConditions) do not shift. Their flags are set by hand in
+    // indiflightProcessRxModes(), not via BOXID_TO_FLIGHT_MODE_MAP.
+    BOXPIDCTL,
     CHECKBOX_ITEM_COUNT
 } boxId_e;
 

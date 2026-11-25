@@ -80,6 +80,10 @@
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
+#ifdef USE_INDI
+#include "flight/indi.h"
+#include "flight/indi_glue.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1263,6 +1267,10 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
+#ifdef USE_INDI
+    indiflightProcessRxModes();
+#endif
+
     if (IS_RC_MODE_ACTIVE(BOXPASSTHRU)) {
         ENABLE_FLIGHT_MODE(PASSTHRU_MODE);
     } else {
@@ -1310,6 +1318,11 @@ static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
 {
     uint32_t startTime = 0;
     if (debugMode == DEBUG_PIDLOOP) {startTime = micros();}
+#ifdef USE_INDI
+    if (indiIsActive()) {
+        indiController(currentTimeUs);
+    } else
+#endif
     // PID - note this is function pointer set by setPIDController()
     pidController(currentPidProfile, currentTimeUs);
     DEBUG_SET(DEBUG_PIDLOOP, 1, micros() - startTime);
@@ -1412,6 +1425,11 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
         startTime = micros();
     }
 
+#ifdef USE_INDI
+    if (indiIsActive()) {
+        indiMixTable(currentTimeUs);
+    } else
+#endif
     mixTable(currentTimeUs);
 
 #ifdef USE_SERVOS

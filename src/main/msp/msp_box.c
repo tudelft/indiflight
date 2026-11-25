@@ -103,7 +103,9 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXLAPTIMERRESET, .boxName = "LAP TIMER RESET", .permanentId = 54},
     { .boxId = BOXCHIRP, .boxName = "CHIRP", .permanentId = 55},
     { .boxId = BOXAUTOPILOT, .boxName = "AUTOPILOT", .permanentId = 56},
-    { .boxId = BOXWPCAPTURE, .boxName = "WP CAPTURE", .permanentId = 57}
+    { .boxId = BOXWPCAPTURE, .boxName = "WP CAPTURE", .permanentId = 57},
+    // indiflight: permanentIds from 100 up, clear of upstream (indiflight 4.4 used 55..62)
+    { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 100},
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -265,6 +267,10 @@ void initActiveBoxIds(void)
 #endif
 
     BME(BOXFAILSAFE);
+
+#ifdef USE_INDI
+    BME(BOXPIDCTL); // without USE_INDI, PID is always active
+#endif
 
     if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE || mixerConfig()->mixerMode == MIXER_CUSTOM_AIRPLANE) {
         BME(BOXPASSTHRU);

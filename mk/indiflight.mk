@@ -7,13 +7,15 @@ INDIFLIGHT_SRC = \
             common/filter_biquad.c \
             flight/ahrs_compat.c \
             flight/indi.c \
-            flight/indi_init.c
+            flight/indi_init.c \
+            flight/indi_glue.c
 
 COMMON_SRC += $(INDIFLIGHT_SRC)
 SPEED_OPTIMISED_SRC += \
             common/maths_indi.c \
             common/filter_biquad.c \
-            flight/indi.c
+            flight/indi.c \
+            flight/indi_glue.c
 
 ifneq ($(findstring -DUSE_INDI,$(EXTRA_FLAGS)),)
 # ActiveSetCtlAlloc (submodule lib/main/ActiveSetCtlAlloc), control allocation for INDI
