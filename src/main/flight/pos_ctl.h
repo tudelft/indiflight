@@ -36,6 +36,11 @@ typedef enum {
     POSITION_ATTITUDE_MAPPING_DF,       // differential flatness, Tal (2022), tailsitter model (pos_att_df.c)
 } position_attitude_mapping_t;
 
+typedef enum {
+    POSITION_WAYPOINT_SOURCE_LOCAL = 0,  // waypoint_ned list of the position profile (NED cm)
+    POSITION_WAYPOINT_SOURCE_GLOBAL,     // upstream flight plan (waypoint CLI), only when the EKF flies on GPS
+} position_waypoint_source_t;
+
 typedef struct positionProfile_s {
     uint8_t horz_p; // m/s/s per m * 10
     uint8_t horz_i; // m/s/s per m/s * s  * 10
@@ -56,18 +61,40 @@ typedef struct positionProfile_s {
     uint8_t use_spf_attenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
     uint8_t stick_takeover;       // bool: moving the sticks while armed aborts automatic flight (manual takeover)
     uint8_t attitude_mapping;     // position_attitude_mapping_t: acceleration setpoint to attitude/thrust (pos_att_*.c)
+    uint8_t waypoint_source;      // position_waypoint_source_t: LOCAL is forced unless ekf_meas_source is GPS
     // --- inaccessible from CLI / dump files for now
     uint16_t vert_max_iterm; // cm/s
     uint16_t horz_max_iterm; // cm/s
 } positionProfile_t;
 
+// decoded waypoint, as flown by the WAYPOINT_MODE executor in pos_ctl.c
 typedef struct positionWaypoint_s {
     fp_vector_t location; // local cartesian NED coordinates in m
     float tolerance; // horizontal acceptance radius in m
     float heightTolerance; // vertical acceptance distance in m
-    float velocityLimit; // maximum waypoint velocity in m/s
-    float heading; // yaw setpoint in rad; if > 0, yaw is tracked (trackPsi), otherwise yaw is free
+    float velocityLimit; // maximum waypoint velocity in m/s, 0: profile limits only
+    float heading; // yaw setpoint in rad; if >= 0, yaw is tracked (trackPsi), otherwise yaw is free
+    float holdTime; // s to stay after reaching the waypoint before moving on
 } positionWaypoint_t;
+
+// stored local waypoint (CLI "waypoint_ned"), one list per position profile.
+// NED relative to the EKF origin: GPS home (reset with RESET HOME) or the mocap/uplink frame.
+#define POSITION_WAYPOINT_MAX 16
+typedef struct positionWaypointNed_s {
+    int32_t north;              // cm
+    int32_t east;               // cm
+    int32_t down;               // cm (negative is up)
+    uint16_t tolerance;         // cm, horizontal acceptance radius
+    uint16_t height_tolerance;  // cm, vertical acceptance distance
+    uint16_t speed;             // cm/s, 0: profile limits only
+    int16_t heading;            // deg [0, 359], -1: yaw free
+    uint16_t duration;          // ds to hold after reaching
+} positionWaypointNed_t;
+
+typedef struct positionWaypointList_s {
+    uint8_t count;
+    positionWaypointNed_t waypoints[POSITION_WAYPOINT_MAX];
+} positionWaypointList_t;
 
 typedef struct positionRuntime_s {
     float horz_p; // m/s/s per m 
@@ -97,6 +124,7 @@ typedef struct positionRuntime_s {
 
 #define POSITION_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles);
+PG_DECLARE_ARRAY(positionWaypointList_t, POSITION_PROFILE_COUNT, positionWaypointLists);
 
 typedef struct posCtlConfig_s {
     uint8_t profileIndex;

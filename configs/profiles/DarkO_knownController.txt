@@ -430,6 +430,8 @@ set position_yaw_p = 50
 set position_use_thrust_attenuation = 1
 # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 set position_attitude_mapping = DF
+# LOCAL: this profile's waypoint_ned list (NED cm); GLOBAL: upstream waypoint plan, only with ekf_meas_source = 2 (GPS)
+set position_waypoint_source = LOCAL
 
 
 positionprofile 2
@@ -459,6 +461,8 @@ set position_weathervane_p = 0
 set position_use_thrust_attenuation = 1
 # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 set position_attitude_mapping = DF
+# LOCAL: this profile's waypoint_ned list (NED cm); GLOBAL: upstream waypoint plan, only with ekf_meas_source = 2 (GPS)
+set position_waypoint_source = LOCAL
 
 
 ## ----- SET DEFAULT PROFILES

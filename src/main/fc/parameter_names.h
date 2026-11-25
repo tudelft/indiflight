@@ -150,6 +150,7 @@
 #define PARAM_NAME_POSITION_THRUST_ATTENUATION "position_use_thrust_attenuation"
 #define PARAM_NAME_POSITION_STICK_TAKEOVER "position_stick_takeover"
 #define PARAM_NAME_POSITION_ATTITUDE_MAPPING "position_attitude_mapping"
+#define PARAM_NAME_POSITION_WAYPOINT_SOURCE "position_waypoint_source"
 #endif
 
 #ifdef USE_EKF

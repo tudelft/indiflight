@@ -186,6 +186,7 @@
 #define PG_GEOFENCE_CONFIG      1009
 #define PG_PROBER_CONFIG        1010
 #define PG_PITOTMETER_CONFIG    1011
+#define PG_POSITION_WAYPOINTS   1012 // waypoint_ned lists, one per position profile
 // end of indiflight block (1099)
 
 // OSD configuration (subject to change)

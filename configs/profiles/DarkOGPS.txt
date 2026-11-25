@@ -21,6 +21,7 @@
 
 ## ----- Other features
 #define USE_GPS
+#define USE_FLIGHT_PLAN
 #define USE_GEOFENCE
 ## #define USE_MAG
 #define USE_BARO
@@ -481,6 +482,19 @@ set position_yaw_p = 50
 set position_use_thrust_attenuation = 1
 # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 set position_attitude_mapping = DF
+# LOCAL: this profile's waypoint_ned list (NED cm); GLOBAL: upstream waypoint plan, only with ekf_meas_source = 2 (GPS)
+set position_waypoint_source = LOCAL
+
+# WAYPOINT_MODE plan (was hardcoded in pos_ctl.c), NED relative to GPS home (RESET HOME)
+# waypoint_ned insert <idx> <north_cm> <east_cm> <down_cm> <tol_cm> <height_tol_cm> <speed_cm/s> <heading_deg|-1> <hold_ds>
+waypoint_ned clear
+waypoint_ned insert 0 0 2000 -3500 500 500 400 161 0
+waypoint_ned insert 1 -9455 5256 -3500 2500 2000 2500 -1 0
+waypoint_ned insert 2 -6200 14711 -3500 2500 2000 2500 -1 0
+waypoint_ned insert 3 12711 8200 -3500 2500 2000 2500 -1 0
+waypoint_ned insert 4 9455 -1256 -3500 2500 2000 2500 -1 0
+waypoint_ned insert 5 0 2000 -3500 2500 2000 2500 -1 0
+waypoint_ned insert 6 0 2000 -3500 100 2000 500 -1 0
 
 
 positionprofile 2
@@ -510,6 +524,8 @@ set position_weathervane_p = 0
 set position_use_thrust_attenuation = 1
 # NDI: multirotor, INDI: incremental (untested), DF: Tal 2022 tailsitter model
 set position_attitude_mapping = DF
+# LOCAL: this profile's waypoint_ned list (NED cm); GLOBAL: upstream waypoint plan, only with ekf_meas_source = 2 (GPS)
+set position_waypoint_source = LOCAL
 
 
 ## ----- SET DEFAULT PROFILES

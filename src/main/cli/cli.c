@@ -5091,6 +5091,149 @@ static void cliPositionProfile(const char *cmdName, char *cmdline)
     }
 }
 
+static const char * const waypointNedFormat = "waypoint_ned insert %u %d %d %d %u %u %u %d %u";
+
+// Prints the local waypoint list of one position profile, as replayable
+// "waypoint_ned clear/insert" lines. In a dump, current values are in the copy.
+static void printPositionWaypoints(dumpFlags_t dumpMask, const positionWaypointList_t *list, const positionWaypointList_t *defaultList)
+{
+    const unsigned count = MIN(list->count, POSITION_WAYPOINT_MAX);
+    bool equalsDefaultAll = false;
+    if (defaultList) {
+        equalsDefaultAll = (list->count == defaultList->count)
+            && !memcmp(list->waypoints, defaultList->waypoints, count * sizeof(list->waypoints[0]));
+    }
+
+    cliDumpPrintLinef(dumpMask, equalsDefaultAll, "waypoint_ned clear");
+    for (unsigned i = 0; i < count; i++) {
+        const positionWaypointNed_t *wp = &list->waypoints[i];
+        cliDumpPrintLinef(dumpMask, equalsDefaultAll, waypointNedFormat, i,
+            (int)wp->north, (int)wp->east, (int)wp->down,
+            wp->tolerance, wp->height_tolerance, wp->speed, wp->heading, wp->duration);
+    }
+}
+
+static bool parseWaypointNedArg(const char *arg, long min, long max, long *out)
+{
+    char *endptr;
+    errno = 0;
+    const long value = strtol(arg, &endptr, 10);
+    if (*arg == '\0' || *endptr != '\0' || errno == ERANGE || value < min || value > max) {
+        return false;
+    }
+    *out = value;
+    return true;
+}
+
+// waypoint_ned: local NED waypoints (cm) of the position profile in use,
+// flown in WAYPOINT_MODE when position_waypoint_source = LOCAL or when not on GPS.
+static void cliWaypointNed(const char *cmdName, char *cmdline)
+{
+    positionWaypointList_t *list = positionWaypointListsMutable(getPositionProfileIndexToUse());
+    if (list->count > POSITION_WAYPOINT_MAX) {
+        list->count = 0;
+        cliPrintErrorLinef(cmdName, "WAYPOINT COUNT CORRUPTED, CLEARED");
+    }
+
+    enum { OP = 0, INDEX, NORTH, EAST, DOWN, TOL, HTOL, SPEED, HEADING, DURATION, MAX_ARGS };
+    char *args[MAX_ARGS];
+    int argCount = 0;
+    char *ptr = cmdline;
+    while (*ptr && argCount < MAX_ARGS) {
+        while (*ptr == ' ') ptr++;
+        if (*ptr == '\0') break;
+        args[argCount++] = ptr;
+        while (*ptr && *ptr != ' ') ptr++;
+        if (*ptr) *ptr++ = '\0';
+    }
+    while (*ptr == ' ') ptr++;
+    if (*ptr != '\0') {
+        cliShowInvalidArgumentCountError(cmdName);
+        return;
+    }
+
+    if (argCount == 0 || strcasecmp(args[OP], "list") == 0) {
+        cliPrintLinef("# positionprofile %d, %u of %u waypoints", getPositionProfileIndexToUse(), list->count, POSITION_WAYPOINT_MAX);
+        printPositionWaypoints(DUMP_MASTER, list, NULL);
+        return;
+    }
+
+    if (strcasecmp(args[OP], "clear") == 0) {
+        if (argCount != 1) {
+            cliShowInvalidArgumentCountError(cmdName);
+            return;
+        }
+        list->count = 0;
+        memset(list->waypoints, 0, sizeof(list->waypoints)); // keeps diff against the empty default clean
+        return;
+    }
+
+    const bool isRemove = strcasecmp(args[OP], "remove") == 0;
+    const bool isInsert = strcasecmp(args[OP], "insert") == 0;
+    const bool isUpdate = strcasecmp(args[OP], "update") == 0;
+    if (!isRemove && !isInsert && !isUpdate) {
+        cliPrintErrorLinef(cmdName, "INVALID OPERATION. USE: list, insert, update, remove, clear");
+        return;
+    }
+    if (argCount != (isRemove ? 2 : MAX_ARGS)) {
+        cliShowInvalidArgumentCountError(cmdName);
+        return;
+    }
+
+    long index;
+    const long maxIndex = isInsert ? list->count : (long)list->count - 1;
+    if (!parseWaypointNedArg(args[INDEX], 0, maxIndex, &index)) {
+        cliShowArgumentRangeError(cmdName, "index", 0, MAX(maxIndex, 0L));
+        return;
+    }
+    if (isInsert && list->count >= POSITION_WAYPOINT_MAX) {
+        cliPrintErrorLinef(cmdName, "WAYPOINT LIST FULL");
+        return;
+    }
+
+    if (isRemove) {
+        for (unsigned i = index; i + 1 < list->count; i++) {
+            list->waypoints[i] = list->waypoints[i + 1];
+        }
+        list->count--;
+        memset(&list->waypoints[list->count], 0, sizeof(list->waypoints[0]));
+        return;
+    }
+
+    // north/east/down in cm (+-100 km), tolerances in cm, speed in cm/s,
+    // heading in deg (-1: yaw free), duration in ds
+    static const struct { const char *name; long min; long max; } ranges[] = {
+        [NORTH] = { "north", -10000000, 10000000 },
+        [EAST] = { "east", -10000000, 10000000 },
+        [DOWN] = { "down", -10000000, 10000000 },
+        [TOL] = { "tolerance", 1, UINT16_MAX },
+        [HTOL] = { "height_tolerance", 1, UINT16_MAX },
+        [SPEED] = { "speed", 0, UINT16_MAX },
+        [HEADING] = { "heading", -1, 359 },
+        [DURATION] = { "duration", 0, UINT16_MAX },
+    };
+    long v[MAX_ARGS];
+    for (int i = NORTH; i < MAX_ARGS; i++) {
+        if (!parseWaypointNedArg(args[i], ranges[i].min, ranges[i].max, &v[i])) {
+            cliShowArgumentRangeError(cmdName, (char *)ranges[i].name, ranges[i].min, ranges[i].max);
+            return;
+        }
+    }
+
+    const positionWaypointNed_t wp = {
+        .north = v[NORTH], .east = v[EAST], .down = v[DOWN],
+        .tolerance = v[TOL], .height_tolerance = v[HTOL], .speed = v[SPEED],
+        .heading = v[HEADING], .duration = v[DURATION],
+    };
+    if (isInsert) {
+        for (unsigned i = list->count; i > (unsigned)index; i--) {
+            list->waypoints[i] = list->waypoints[i - 1];
+        }
+        list->count++;
+    }
+    list->waypoints[index] = wp;
+}
+
 static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, dumpFlags_t dumpMask)
 {
     if (profileIndex >= POSITION_PROFILE_COUNT) {
@@ -5102,6 +5245,7 @@ static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, du
     char profileStr[20];
     tfp_sprintf(profileStr, "positionprofile %d", profileIndex);
     dumpAllValues(cmdName, PROFILE_POSITION_VALUE, dumpMask, profileStr);
+    printPositionWaypoints(dumpMask, &positionWaypointLists_CopyArray[profileIndex], positionWaypointLists(profileIndex));
     positionProfileIndexToUse = CURRENT_PROFILE_INDEX;
 }
 #endif
@@ -8670,6 +8814,10 @@ const clicmd_t cmdTable[] = {
 #endif
 #if ENABLE_FLIGHT_PLAN
     CLI_COMMAND_DEF("waypoint", "configure waypoints", "list | status | insert <idx> <lat.ddddddd> <lon.ddddddd> <alt> <spd> <type> <dur> <pat> | update <idx> <lat.ddddddd> <lon.ddddddd> <alt> <spd> <type> <dur> <pat> | remove <idx> | clear", cliWaypoint),
+#endif
+#ifdef USE_LOCAL_POSITION
+    CLI_COMMAND_DEF("waypoint_ned", "local NED waypoints of the position profile",
+        "list | insert <idx> <north_cm> <east_cm> <down_cm> <tol_cm> <height_tol_cm> <speed_cm/s> <heading_deg|-1> <hold_ds> | update <idx> ... | remove <idx> | clear", cliWaypointNed),
 #endif
 };
 

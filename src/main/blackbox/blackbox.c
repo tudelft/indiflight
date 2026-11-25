@@ -2472,6 +2472,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_ATTITUDE_MAPPING, "%d",  posProfile->attitude_mapping);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WAYPOINT_SOURCE, "%d",  posProfile->waypoint_source);
 #endif
 #ifdef USE_INDI
         BLACKBOX_PRINT_HEADER_LINE_CUSTOM(

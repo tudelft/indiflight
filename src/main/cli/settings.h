@@ -167,6 +167,7 @@ typedef enum {
 #endif
 #ifdef USE_LOCAL_POSITION
     TABLE_POSITION_ATTITUDE_MAPPING,
+    TABLE_POSITION_WAYPOINT_SOURCE,
 #endif
     LOOKUP_TABLE_COUNT
 } lookupTableIndex_e;

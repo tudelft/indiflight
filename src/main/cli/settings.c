@@ -597,6 +597,10 @@ static const char * const lookupTableTransponderProvider[] = {
 static const char * const lookupTablePositionAttitudeMapping[] = {
     "NDI", "INDI", "DF"
 };
+// order of position_waypoint_source_t
+static const char * const lookupTablePositionWaypointSource[] = {
+    "LOCAL", "GLOBAL"
+};
 #endif
 
 #define LOOKUP_TABLE_ENTRY(name) { name, ARRAYLEN(name) }
@@ -747,6 +751,7 @@ const lookupTableEntry_t lookupTables[] = {
 #endif
 #ifdef USE_LOCAL_POSITION
     LOOKUP_TABLE_ENTRY(lookupTablePositionAttitudeMapping),
+    LOOKUP_TABLE_ENTRY(lookupTablePositionWaypointSource),
 #endif
 };
 
@@ -1489,6 +1494,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_POSITION_THRUST_ATTENUATION,     VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, use_spf_attenuation) },
     { PARAM_NAME_POSITION_STICK_TAKEOVER,         VAR_UINT8 | PROFILE_POSITION_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_POSITION_PROFILE, offsetof(positionProfile_t, stick_takeover) },
     { PARAM_NAME_POSITION_ATTITUDE_MAPPING,       VAR_UINT8 | PROFILE_POSITION_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_POSITION_ATTITUDE_MAPPING }, PG_POSITION_PROFILE, offsetof(positionProfile_t, attitude_mapping) },
+    { PARAM_NAME_POSITION_WAYPOINT_SOURCE,        VAR_UINT8 | PROFILE_POSITION_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_POSITION_WAYPOINT_SOURCE }, PG_POSITION_PROFILE, offsetof(positionProfile_t, waypoint_source) },
 #endif
 
 #ifdef USE_EKF

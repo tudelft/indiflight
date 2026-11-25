@@ -44,6 +44,9 @@
 #include "flight/geofence.h"
 #endif
 #include "flight/pos_att.h"
+#include "io/gps.h"
+#include "pg/autopilot.h"
+#include "pg/flight_plan.h"
 
 #ifdef USE_LOCAL_POSITION
 
@@ -55,7 +58,7 @@
 #error "USE_LOCAL_POSITION require the use of USE_EKF"
 #endif
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 2);
+PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 3);
 
 // active position profile. Not "positionConfig": upstream owns that name (PG_POSITION).
 PG_REGISTER_WITH_RESET_TEMPLATE(posCtlConfig_t, posCtlConfig, PG_POS_CTL_CONFIG, 0);
@@ -96,8 +99,12 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
 #else
         p->attitude_mapping = POSITION_ATTITUDE_MAPPING_NDI;
 #endif
+        p->waypoint_source = POSITION_WAYPOINT_SOURCE_LOCAL;
     }
 }
+
+// local waypoints, one list per position profile; empty by default
+PG_REGISTER_ARRAY(positionWaypointList_t, POSITION_PROFILE_COUNT, positionWaypointLists, PG_POSITION_WAYPOINTS, 0);
 
 void posCtlInit(void) {
     initPositionRuntime();
@@ -108,54 +115,92 @@ void posCtlInit(void) {
 // filtered stick-based velocity (NED)
 static svfLowpassFilter_t posVelFilter[3];
 
-// Edit this plan and POSITION_WAYPOINT_COUNT to define an automatic flight.
-// The plan is flown in WAYPOINT_MODE (BOXWAYPOINTS, on top of POSITION_MODE).
-#define POSITION_WAYPOINT_COUNT 7
-static const positionWaypoint_t positionWaypoints[POSITION_WAYPOINT_COUNT] = { 
-    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 5.0f, .heightTolerance = 5.0f, .velocityLimit = 10.f, .heading = DEGREES_TO_RADIANS(161.f) },
-    // { .location = { .V = { .X = 0.f,  .Y =  100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    // { .location = { .V = { .X = 100.f, .Y =  100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    // { .location = { .V = { .X = 100.f, .Y = -100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y = -100.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 20.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    // { .location = { .V = { .X = 0.f,  .Y =    0.f, .Z = -35.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 5.f, .heading = -1.f },
-
-    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 5.0f, .heightTolerance = 5.0f, .velocityLimit = 4.f, .heading = DEGREES_TO_RADIANS(161.f) },
-    { .location = { .V = { .X = -94.55f, .Y = 52.56f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    { .location = { .V = { .X = -62.00f, .Y = 147.11f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    { .location = { .V = { .X = 127.11f, .Y = 82.00f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    { .location = { .V = { .X = 94.55f, .Y = -12.56f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 25.f, .heightTolerance = 20.f, .velocityLimit = 25.f, .heading = -1.f },
-    { .location = { .V = { .X = 0.00f, .Y = 20.00f, .Z = -35.f } }, .tolerance = 1.0f, .heightTolerance = 20.f, .velocityLimit = 5.f, .heading = -1.f },
-
-  
-
-    // { .location = { .V = { .X = +0.0f,  .Y =    0.f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 0.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.33f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 1.67f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = +3.0f,  .Y = +3.0f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 10.f, .heading = 0.25f*M_PIf + 2.00f*0.5f*M_PIf },
-    // { .location = { .V = { .X = -3.5f,  .Y = -3.5f, .Z = -2.5f } }, .tolerance = 0.5f, .heightTolerance = 1.f, .velocityLimit = 2.f,  .heading = 0.25f*M_PIf }
-
-};
-
 static unsigned int activeWaypointIndex;
+static positionWaypoint_t activeWaypoint; // decoded when it becomes active
+static bool activeWaypointHolding;        // reached, hold time running
+static timeUs_t activeWaypointReachedUs;
 static bool waypointRunActive;  // waypoints drive the position setpoint in this loop
 static bool waypointResumable;  // false: next engagement of WAYPOINT_MODE starts at the first waypoint
 
-static bool isWaypointReached(unsigned int index)
+// Global waypoints are only meaningful while the EKF flies on GPS, because the
+// local NED frame is then anchored at GPS home. Indoors (mocap/uplink) the
+// local list is always used, whatever position_waypoint_source says.
+static position_waypoint_source_t getWaypointSource(void)
 {
-    const positionWaypoint_t *waypoint = &positionWaypoints[index];
+#if defined(USE_GPS) && ENABLE_FLIGHT_PLAN
+    if ((positionProfiles(getCurrentPositionProfileIndex())->waypoint_source == POSITION_WAYPOINT_SOURCE_GLOBAL)
+            && (ekfConfig()->meas_source == LOCAL_POS_SOURCE_GPS)) {
+        return POSITION_WAYPOINT_SOURCE_GLOBAL;
+    }
+#endif
+    return POSITION_WAYPOINT_SOURCE_LOCAL;
+}
+
+static unsigned int getWaypointCount(position_waypoint_source_t source)
+{
+#if defined(USE_GPS) && ENABLE_FLIGHT_PLAN
+    if (source == POSITION_WAYPOINT_SOURCE_GLOBAL) {
+        return MIN(flightPlanConfig()->waypointCount, MAX_WAYPOINTS);
+    }
+#else
+    UNUSED(source);
+#endif
+    return MIN(positionWaypointLists(getCurrentPositionProfileIndex())->count, POSITION_WAYPOINT_MAX);
+}
+
+// Decode waypoint index into local NED (m). Returns false if it can't be flown;
+// the caller then leaves WAYPOINT_MODE and holds position.
+static bool decodeWaypoint(position_waypoint_source_t source, unsigned int index, positionWaypoint_t *out)
+{
+#if defined(USE_GPS) && ENABLE_FLIGHT_PLAN
+    if (source == POSITION_WAYPOINT_SOURCE_GLOBAL) {
+        // upstream flight plan: lat/lon 1e-7 deg, altitude cm AMSL. Relative to
+        // GPS home, the origin of the EKF's GPS frame (localPosOnGpsNewData()).
+        if (!STATE(GPS_FIX_HOME)) {
+            return false;
+        }
+        const waypoint_t *wp = &flightPlanConfig()->waypoints[index];
+        switch (wp->type) {
+        case WAYPOINT_TYPE_FLYOVER:
+        case WAYPOINT_TYPE_FLYBY:
+        case WAYPOINT_TYPE_HOLD:
+            break;
+        default:
+            return false; // LAND, TAKEOFF and the modifier types are not supported here
+        }
+        const gpsLocation_t llh = { .lat = wp->latitude, .lon = wp->longitude, .altCm = wp->altitude };
+        llh_to_local(&llh, &GPS_home_llh, &out->location);
+        out->tolerance = autopilotConfig()->waypointArrivalRadius * 0.01f;
+        out->heightTolerance = out->tolerance;
+        out->velocityLimit = wp->speed * 0.01f;
+        out->heading = -1.f;
+        out->holdTime = (wp->type == WAYPOINT_TYPE_HOLD) ? wp->duration * 0.1f : 0.f;
+        return true;
+    }
+#else
+    UNUSED(source);
+#endif
+    const positionWaypointNed_t *wp = &positionWaypointLists(getCurrentPositionProfileIndex())->waypoints[index];
+    out->location.V.X = wp->north * 0.01f;
+    out->location.V.Y = wp->east * 0.01f;
+    out->location.V.Z = wp->down * 0.01f;
+    out->tolerance = wp->tolerance * 0.01f;
+    out->heightTolerance = wp->height_tolerance * 0.01f;
+    out->velocityLimit = wp->speed * 0.01f;
+    out->heading = (wp->heading >= 0) ? DEGREES_TO_RADIANS(wp->heading) : -1.f;
+    out->holdTime = wp->duration * 0.1f;
+    return true;
+}
+
+static bool activateWaypoint(position_waypoint_source_t source, unsigned int index)
+{
+    activeWaypointIndex = index;
+    activeWaypointHolding = false;
+    return decodeWaypoint(source, index, &activeWaypoint);
+}
+
+static bool isWaypointReached(const positionWaypoint_t *waypoint)
+{
     const float northError = waypoint->location.V.X - posEstNed.V.X;
     const float eastError = waypoint->location.V.Y - posEstNed.V.Y;
     const float downError = waypoint->location.V.Z - posEstNed.V.Z;
@@ -164,65 +209,99 @@ static bool isWaypointReached(unsigned int index)
     return (horizontalDistance <= waypoint->tolerance) && (fabsf(downError) <= waypoint->heightTolerance);
 }
 
+// reached, and the hold time (if any) has elapsed since first reaching it
+static bool isActiveWaypointDone(timeUs_t current)
+{
+    if (!activeWaypointHolding) {
+        if (!isWaypointReached(&activeWaypoint)) {
+            return false;
+        }
+        activeWaypointHolding = true;
+        activeWaypointReachedUs = current;
+    }
+    return cmpTimeUs(current, activeWaypointReachedUs) >= (timeDelta_t)(activeWaypoint.holdTime * 1e6f);
+}
+
+static void leaveWaypointMode(void)
+{
+    // hold the current setpoint in normal position mode; core.c only
+    // re-enables WAYPOINT_MODE after the switch is cycled
+    waypointRunActive = false;
+    waypointResumable = false;
+    DISABLE_INDIFLIGHT_MODE(WAYPOINT_MODE);
+}
+
 // WAYPOINT_MODE runs on top of POSITION_MODE (it is only enabled by core.c while
-// POSITION_MODE is active). Edge handling:
+// POSITION_MODE is active). Waypoints come from the local list of the position
+// profile or the upstream flight plan (getWaypointSource()), and each one is
+// decoded into local NED when it becomes active. Edge handling:
 // - rising edge: start at the first waypoint if the plan was never started, was
 //   finished, or POSITION_MODE was left in between. Otherwise resume the last waypoint.
 // - falling edge (switch off, POSITION_MODE still on): arrest motion and hold position.
-// - plan finished: WAYPOINT_MODE is switched off here and the final waypoint is held.
-//   core.c only re-enables it after the switch is cycled.
-static void updateWaypointMode(void)
+// - plan finished, empty, or a waypoint can't be decoded: WAYPOINT_MODE is switched
+//   off here and the last setpoint is held.
+static void updateWaypointMode(timeUs_t current)
 {
     static bool waypointModePrev = false;
     const bool positionMode = INDIFLIGHT_MODE(POSITION_MODE);
-    const bool waypointMode = positionMode && INDIFLIGHT_MODE(WAYPOINT_MODE)
-        && (POSITION_WAYPOINT_COUNT > 0);
+    const bool waypointMode = positionMode && INDIFLIGHT_MODE(WAYPOINT_MODE);
+    const position_waypoint_source_t source = getWaypointSource();
+    const unsigned int count = getWaypointCount(source);
 
     if (!positionMode) {
         waypointResumable = false;
     }
 
+    bool decoded = true;
     if (waypointMode && !waypointModePrev) {
-        if (!waypointResumable) {
-            activeWaypointIndex = 0;
-        }
+        const unsigned int startIndex = (waypointResumable && activeWaypointIndex < count) ? activeWaypointIndex : 0;
+        decoded = (count > 0) && activateWaypoint(source, startIndex);
         waypointResumable = true;
     } else if (!waypointMode && waypointModePrev && positionMode && ARMING_FLAG(ARMED)) {
         posArrestMotion();
     }
     waypointModePrev = waypointMode;
 
+    if (!decoded || (waypointMode && activeWaypointIndex >= count)) {
+        // empty plan, undecodable waypoint, or the list shrank under us
+        waypointModePrev = false; // not a falling edge, don't arrest motion
+        leaveWaypointMode();
+        return;
+    }
+
     waypointRunActive = waypointMode && ARMING_FLAG(ARMED);
     if (!waypointRunActive) {
         return;
     }
 
-    // advance through all waypoints that are already reached
-    while ((activeWaypointIndex + 1 < POSITION_WAYPOINT_COUNT) && isWaypointReached(activeWaypointIndex)) {
-        activeWaypointIndex++;
+    // advance through all waypoints that are already done
+    while ((activeWaypointIndex + 1 < count) && isActiveWaypointDone(current)) {
+        if (!activateWaypoint(source, activeWaypointIndex + 1)) {
+            waypointModePrev = false;
+            leaveWaypointMode();
+            return;
+        }
     }
 
-    const float heading = positionWaypoints[activeWaypointIndex].heading;
-    posSpNed.pos = positionWaypoints[activeWaypointIndex].location;
+    const float heading = activeWaypoint.heading;
+    posSpNed.pos = activeWaypoint.location;
     posSpNed.valid = true;
     posSpNed.trackPsi = heading >= 0.f;
     if (posSpNed.trackPsi) {
         posSpNed.psi = heading;
     }
 
-    if ((activeWaypointIndex + 1 == POSITION_WAYPOINT_COUNT) && isWaypointReached(activeWaypointIndex)) {
+    if ((activeWaypointIndex + 1 == count) && isActiveWaypointDone(current)) {
         // plan finished: hold the final waypoint in normal position mode
-        waypointRunActive = false;
-        waypointResumable = false;
         waypointModePrev = false; // not a falling edge, don't arrest motion
-        DISABLE_INDIFLIGHT_MODE(WAYPOINT_MODE);
+        leaveWaypointMode();
     }
 }
 
 static float activeWaypointVelocityLimit(void)
 {
-    if (waypointRunActive && activeWaypointIndex < POSITION_WAYPOINT_COUNT) {
-        return positionWaypoints[activeWaypointIndex].velocityLimit;
+    if (waypointRunActive) {
+        return activeWaypoint.velocityLimit;
     }
 
     return 0.f;
@@ -253,6 +332,7 @@ void initPositionRuntime(void) {
     posRuntime.stick_takeover = (bool) p->stick_takeover;
 
     posRuntime.attitude_mapping = (position_attitude_mapping_t) p->attitude_mapping;
+    waypointResumable = false; // the waypoint list may differ per profile
 
     // init stick velocity filters (2nd order LPF)
     for (int i = 0; i < 3; i++) {
@@ -305,7 +385,7 @@ void updatePosCtl(timeUs_t current) {
     static bool latch_descend = false;
     static bool manual_takeover = false;
 
-    updateWaypointMode();
+    updateWaypointMode(current);
 
     if (manual_takeover && (posSpNed.valid || waypointRunActive)) {
         // no more manual control because new setpoint received
