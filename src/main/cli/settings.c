@@ -881,6 +881,7 @@ const clivalue_t valueTable[] = {
 #endif
     { "blackbox_mode",              VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_BLACKBOX_MODE }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, mode) },
     { "blackbox_serial_packets",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, serial_packets) },
+    { "blackbox_serial_header_interval", VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 60 }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, serial_header_interval) },
     { "blackbox_high_resolution",   VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_BLACKBOX_CONFIG, offsetof(blackboxConfig_t, high_resolution) },
 #endif
 

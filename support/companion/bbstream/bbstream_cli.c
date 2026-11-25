@@ -133,9 +133,10 @@ static void print_status(const bbs_t *b, const char *dev_is_tty)
 {
     const bbs_stats_t *s = bbs_stats(b);
     fprintf(stderr,
-        "rows %zu | pkts ok %llu crc %llu lost %llu skipped %lluB | resyncs %llu | decodes %llu (max %.1f ms) | ring drops %lluB%s\n",
+        "rows %zu | pkts ok %llu crc %llu lost %llu skipped %lluB | hdr copies %llu/%llu used | resyncs %llu | decodes %llu (max %.1f ms) | ring drops %lluB%s\n",
         bbs_n_rows(b), (unsigned long long) s->packets_ok, (unsigned long long) s->packets_bad_crc,
         (unsigned long long) s->packets_lost, (unsigned long long) s->bytes_skipped,
+        (unsigned long long) s->header_copies, (unsigned long long) s->header_installs,
         (unsigned long long) s->resyncs, (unsigned long long) s->decodes, s->decode_ms_max,
         (unsigned long long) atomic_load(&ring_dropped), dev_is_tty);
 }

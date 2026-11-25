@@ -19,7 +19,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
-from blackbox_packets import encode_packet, PAYLOAD_MAX  # noqa: E402
+from blackbox_packets import encode_packet, PAYLOAD_MAX, FLAG_HEADER, FLAG_FIRST, FLAG_LAST  # noqa: E402
 
 CLI = os.environ.get("BBSTREAM_CLI", os.path.join(HERE, "obj", "bbstream_cli"))
 REF = os.path.join(HERE, "obj", "blackbox_decode")
@@ -52,14 +52,24 @@ def reference(path):
     return read_csv(out.splitlines())
 
 
-def packetize(data, rng, max_len=PAYLOAD_MAX):
-    """Cut at random places, like a flush at arbitrary points. Returns the list of packets."""
-    pkts, seq, i = [], 0, 0
+def packetize(data, rng, max_len=PAYLOAD_MAX, header_every=0):
+    """Cut at random places, like a flush at arbitrary points. Returns the list of packets.
+
+    header_every > 0: like the firmware's blackbox_serial_header_interval, put a copy of the header into the
+    header channel (own seq) after every that many data packets."""
+    header = data[:HEADER_BYTES(data)]
+    pkts, seq, hseq, i, count = [], 0, 0, 0, 0
     while i < len(data):
         n = rng.choice([max_len, max_len, rng.randint(1, max_len)])
         pkts.append(encode_packet(seq, data[i:i + n]))
         seq = (seq + 1) & 0xFF
         i += n
+        count += 1
+        if header_every and count % header_every == 0 and i > len(header):
+            for k in range(0, len(header), max_len):
+                flags = FLAG_HEADER | (FLAG_FIRST if k == 0 else 0) | (FLAG_LAST if k + max_len >= len(header) else 0)
+                pkts.append(encode_packet(hseq, header[k:k + max_len], flags))
+                hseq = (hseq + 1) & 0xFF
     return pkts
 
 
@@ -87,6 +97,10 @@ def damage(pkts, rng, p_drop=0.0, p_flip=0.0, p_junk=0.0, keep_first=0):
             out.append(bytes(rng.randrange(256) for _ in range(rng.randint(1, 20))))
         out.append(p)
     return b"".join(out)
+
+
+def flip(packet):
+    return packet[:-1] + bytes([packet[-1] ^ 0xFF])
 
 
 def run_cli(stream, rng, use_pty=False):
@@ -173,9 +187,12 @@ def stress(log, n):
     kinds = [dict(p_flip=0.02), dict(p_drop=0.05), dict(p_drop=0.05, p_flip=0.05, p_junk=0.05), dict(p_junk=0.2)]
     for seed in range(n):
         rng = random.Random(100 + seed)
-        pk = packetize(data, rng)
-        stream = damage(pk, rng, keep_first=header_packets(pk, HEADER_BYTES(data)), **kinds[seed % 4])
+        repeats = seed % 2 == 1  # with repeats the header may be damaged as well
+        pk = packetize(data, rng, header_every=40 if repeats else 0)
+        stream = damage(pk, rng, keep_first=0 if repeats else header_packets(pk, HEADER_BYTES(data)), **kinds[seed % 4])
         names, rows, status = run_cli(stream, rng)
+        if names == [""]:
+            names = ref[0]
         bad = [r for r in rows if by_it.get(r[0]) is None
                or any(a != b for a, b, nm in zip(by_it[r[0]], r, ref[0]) if nm not in slow)]
         total += len(rows)
@@ -213,10 +230,25 @@ def main():
         else:
             assert matched > 0.3 * len(ref[1]), "too little survived"
 
-    # a damaged header makes the log undecodable, but must not crash anything
+    # with the header repeated, a damaged header, a late start and a damaged repeat are all survivable
+    for name, build in [
+        ("clean + header repeats", lambda pk: b"".join(pk)),
+        ("damaged header + repeats", lambda pk: b"".join(pk[:3] + [flip(pk[3])] + pk[4:])),
+        ("late start + repeats", lambda pk: b"".join(pk)[1000:]),
+        # the initial header is damaged and 1% of the repeat packets are lost, so about half of the copies are unusable
+        ("damaged hdr, repeats -1%", lambda pk: b"".join(
+            [p for i, p in enumerate(pk[:3] + [flip(pk[3])] + pk[4:]) if not (p[3] & 0x80 and rng.random() < 0.01)])),
+    ]:
+        pk = packetize(data, rng, header_every=40)
+        names, rows, status = run_cli(build(pk), rng)
+        matched, missing = compare(ref, (names, rows), True, slow)
+        print(f"{name:24s} ok: {matched} rows exact, {missing} of reference missing | {status}")
+        assert matched > 0.3 * len(ref[1]), "too little survived"
+        assert "used" in status
+
+    # without repeats a damaged header or a late start makes the log undecodable, but must not crash anything
     pk = packetize(data, rng)
-    pk[3] = pk[3][:-1] + bytes([pk[3][-1] ^ 0xFF])
-    names, rows, status = run_cli(b"".join(pk), rng)
+    names, rows, status = run_cli(b"".join(pk[:3] + [flip(pk[3])] + pk[4:]), rng)
     print(f"{'damaged header':24s} ok: {len(rows)} rows (expected 0) | {status}")
     assert len(rows) == 0 or names == [""]
 

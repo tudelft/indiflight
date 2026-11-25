@@ -196,21 +196,15 @@ static bool serialPacketsEnabled(void)
     return blackboxConfig()->serial_packets;
 }
 
-// Send the staged payload as one packet, or drop it as a whole if the TX buffer cannot take it
-static void serialPacketFlush(void)
+// Send one packet if the TX buffer can take it as a whole
+static bool serialPacketSend(uint8_t seq, uint16_t lenAndFlags, const uint8_t *payload, uint16_t len)
 {
-    if (!blackboxPort || packetPayloadLen == 0) {
-        packetPayloadLen = 0;
-        return;
-    }
-
     uint8_t packet[BLACKBOX_PACKET_OVERHEAD + BLACKBOX_PACKET_PAYLOAD_MAX];
-    const uint16_t len = packetPayloadLen;
     packet[0] = BLACKBOX_PACKET_SYNC;
-    packet[1] = packetSeq;
-    packet[2] = len & 0xFF;
-    packet[3] = len >> 8;
-    memcpy(&packet[4], packetPayload, len);
+    packet[1] = seq;
+    packet[2] = lenAndFlags & 0xFF;
+    packet[3] = lenAndFlags >> 8;
+    memcpy(&packet[4], payload, len);
 
     uint16_t crc = 0xFFFF;
     for (unsigned i = 1; i < 4u + len; i++) {
@@ -220,9 +214,22 @@ static void serialPacketFlush(void)
     packet[5 + len] = crc >> 8;
 
     const int total = BLACKBOX_PACKET_OVERHEAD + len;
-    if (serialTxBytesFree(blackboxPort) >= (uint32_t) total) {
-        serialWriteBuf(blackboxPort, packet, total);
-    } else {
+    if (serialTxBytesFree(blackboxPort) < (uint32_t) total) {
+        return false;
+    }
+    serialWriteBuf(blackboxPort, packet, total);
+    return true;
+}
+
+// Send the staged payload as one data packet, or drop it as a whole if the TX buffer cannot take it
+static void serialPacketFlush(void)
+{
+    if (!blackboxPort || packetPayloadLen == 0) {
+        packetPayloadLen = 0;
+        return;
+    }
+
+    if (!serialPacketSend(packetSeq, packetPayloadLen, packetPayload, packetPayloadLen)) {
         packetDrops++;
 #ifdef DEBUG_BB_OUTPUT
         DEBUG_SET(DEBUG_BLACKBOX_OUTPUT, 2, packetDrops);
@@ -231,6 +238,115 @@ static void serialPacketFlush(void)
     packetSeq++;
     packetPayloadLen = 0;
 }
+
+#if BLACKBOX_HEADER_COPY_SIZE > 0
+/*
+ * Header repeat, see blackbox_io.h. The header is recorded while it is written, and replayed as packets of
+ * the header channel while the log runs.
+ */
+static uint8_t headerCopy[BLACKBOX_HEADER_COPY_SIZE];
+static uint16_t headerCopyLen;
+static bool headerCopyCapturing;
+static bool headerCopyValid;
+static bool headerRepeatReady;      // a complete copy is stored and logging is running
+static bool headerSending;          // a copy is going out
+static uint16_t headerSendPos;
+static uint8_t headerSeq;
+static timeMs_t headerNextCopyMs;
+static timeMs_t headerNextPacketMs;
+static uint16_t headerPacketSpacingMs;
+
+static void serialHeaderRepeatReset(uint32_t baud)
+{
+    // a header packet takes about a tenth of the line: 10 * (6 + 240) bytes * 10 bit / baud
+    headerPacketSpacingMs = constrain(24600000u / baud, 1, 1000);
+    headerCopyCapturing = false;
+    headerCopyValid = false;
+    headerRepeatReady = false;
+    headerSending = false;
+    headerSeq = 0;
+}
+
+void blackboxSerialHeaderCaptureBegin(void)
+{
+    headerCopyLen = 0;
+    headerCopyValid = true;
+    headerRepeatReady = false;
+    headerSending = false;
+    headerCopyCapturing = blackboxConfig()->device == BLACKBOX_DEVICE_SERIAL && serialPacketsEnabled()
+        && blackboxConfig()->serial_header_interval > 0;
+}
+
+void blackboxSerialHeaderCaptureEnd(void)
+{
+    if (!headerCopyCapturing) {
+        return;
+    }
+    headerCopyCapturing = false;
+    if (headerCopyValid && headerCopyLen > 0) {
+        headerRepeatReady = true;
+        headerNextCopyMs = millis() + blackboxConfig()->serial_header_interval * 1000u;
+    }
+}
+
+static void serialHeaderCaptureByte(uint8_t value)
+{
+    if (!headerCopyCapturing) {
+        return;
+    }
+    if (headerCopyLen < BLACKBOX_HEADER_COPY_SIZE) {
+        headerCopy[headerCopyLen++] = value;
+    } else {
+        headerCopyValid = false;  // too big, do not repeat a truncated header
+    }
+}
+
+// Called after the data packet has been flushed, so header packets never end up inside a data packet
+static void serialHeaderRepeat(void)
+{
+    if (!headerRepeatReady || !blackboxPort) {
+        return;
+    }
+
+    const timeMs_t now = millis();
+    if (!headerSending) {
+        if ((int32_t)(now - headerNextCopyMs) < 0) {
+            return;
+        }
+        headerSending = true;
+        headerSendPos = 0;
+    }
+    if ((int32_t)(now - headerNextPacketMs) < 0) {
+        return;
+    }
+
+    uint16_t len = headerCopyLen - headerSendPos;
+    if (len > BLACKBOX_PACKET_PAYLOAD_MAX) {
+        len = BLACKBOX_PACKET_PAYLOAD_MAX;
+    }
+    const bool last = headerSendPos + len == headerCopyLen;
+    const uint16_t flags = BLACKBOX_PACKET_FLAG_HEADER
+        | (headerSendPos == 0 ? BLACKBOX_PACKET_FLAG_FIRST : 0)
+        | (last ? BLACKBOX_PACKET_FLAG_LAST : 0);
+
+    if (!serialPacketSend(headerSeq, len | flags, &headerCopy[headerSendPos], len)) {
+        return;  // no room, data goes first. Try again later
+    }
+    headerSeq++;
+    headerSendPos += len;
+    headerNextPacketMs = now + headerPacketSpacingMs;
+    if (last) {
+        headerSending = false;
+        headerNextCopyMs = now + blackboxConfig()->serial_header_interval * 1000u;
+    }
+}
+#else
+static void serialHeaderRepeatReset(uint32_t baud) { UNUSED(baud); }
+void blackboxSerialHeaderCaptureBegin(void) {}
+void blackboxSerialHeaderCaptureEnd(void) {}
+static void serialHeaderCaptureByte(uint8_t value) { UNUSED(value); }
+static void serialHeaderRepeat(void) {}
+#endif
 
 void blackboxWrite(uint8_t value)
 {
@@ -261,6 +377,7 @@ void blackboxWrite(uint8_t value)
                 serialPacketFlush();
             }
             packetPayload[packetPayloadLen++] = value;
+            serialHeaderCaptureByte(value);
             break;
         }
         {
@@ -364,6 +481,7 @@ void blackboxDeviceFlush(void)
     case BLACKBOX_DEVICE_SERIAL:
         // end the current packet so that it holds whole frames
         serialPacketFlush();
+        serialHeaderRepeat();
         break;
 
     default:
@@ -458,6 +576,7 @@ bool blackboxDeviceOpen(void)
             packetSeq = 0;
             blackboxPortSharing = determinePortSharing(portConfig, FUNCTION_BLACKBOX);
             baudRateIndex = portConfig->blackbox_baudrateIndex;
+            serialHeaderRepeatReset(baudRates[baudRateIndex]);
 
             if (baudRates[baudRateIndex] == 230400) {
                 /*

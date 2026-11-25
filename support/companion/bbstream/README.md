@@ -46,10 +46,17 @@ to SI units. The one exception: the time column is unwrapped to 64 bit.
   I-frame follows at exactly one I-interval distance.
 - The parser accepts a frame that is cut off by the end of its input as if it was complete. bbstream only trusts
   a frame that is followed by at least one more byte, so the newest row appears one frame late.
-- **A damaged header is fatal for that log.** The header is about 16 kB, i.e. 66 packets, and without it nothing
-  can be decoded. Starting the receiver after the FC started logging also gives no header. A new header in
-  the stream (logging restarted) is detected and starts a new log (`bbs_log_starts()`). Having the firmware repeat the header
-  now and then would fix both and has not been done.
+- **The header comes from the data channel, or the header channel.** The header is about 14 kB, i.e. 60
+  packets, and nothing can be decoded without it. With `blackbox_serial_header_interval` > 0 the firmware repeats it
+  in the header channel (flags in `len`, see `../README.md`). bbstream assembles a copy from packets with
+  consecutive seq between `FIRST` and `LAST`. If the current log already has that header the copy is ignored.
+  Otherwise (the receiver started late, or the header was damaged) the copy becomes the header, and decoding
+  starts at the next I-frame. Data that arrived before is lost, about one interval at most.
+  Without repeats a damaged header or a late start means no rows for that log.
+- A header copy that differs from the current header starts a new log. A new log with a *lost* initial header
+  and the same settings as the previous log looks like a continuation, and its rows are skipped until the
+  iteration counter passes the old one. A new header in the data channel (logging restarted) is detected
+  and starts a new log (`bbs_log_starts()`).
 
 ## Pi notes (what the code does, and what it cannot do)
 

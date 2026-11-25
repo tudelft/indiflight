@@ -66,6 +66,7 @@ typedef struct blackboxConfig_s {
     uint8_t mode;
     uint8_t high_resolution;
     uint8_t serial_packets; // wrap serial output in CRC-protected packets, see blackbox_io.h
+    uint8_t serial_header_interval; // s, repeat the header this often in serial packet mode, 0 = never
 } blackboxConfig_t;
 
 PG_DECLARE(blackboxConfig_t, blackboxConfig);

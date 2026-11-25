@@ -17,6 +17,10 @@
 #define PKT_SYNC 0xA5
 #define PKT_PAYLOAD_MAX 240
 #define PKT_OVERHEAD 6
+#define PKT_LEN_MASK 0x1FFF
+#define PKT_FLAG_HEADER 0x8000  // header channel: repeated copies of the log header
+#define PKT_FLAG_FIRST 0x4000
+#define PKT_FLAG_LAST 0x2000
 #define HDR_MAX (256 * 1024)
 #define DAT_MAX (4 * 1024 * 1024)
 #define RESYNC_TRIES 256
@@ -34,6 +38,9 @@ struct bbs {
     size_t plen;
     bool have_seq, disc_pending;
     uint8_t next_seq;
+
+    // header channel: the copy being assembled
+    uint8_t *hc; size_t hc_len; bool hc_active; uint8_t hc_next_seq;
 
     // header / data of the log being received
     uint8_t *hdr; size_t hdr_len; bool hdr_done, at_line_start;
@@ -429,6 +436,55 @@ static void handle_packet(bbs_t *b, uint8_t seq, const uint8_t *p, size_t n)
     for (size_t i = 0; i < n; i++) payload_byte(b, p[i]);
 }
 
+/*
+ * Header channel: the firmware repeats the log header while logging, so that a receiver that started late, or
+ * lost part of the header, can still decode. A copy is a run of packets with consecutive seq, from one marked
+ * FIRST to one marked LAST; a run with a gap is dropped. Nothing is guessed: if the log already has this
+ * header the copy is ignored, otherwise it becomes the header of the log whose data follows.
+ */
+static void header_copy_complete(bbs_t *b)
+{
+    const size_t ml = strlen(LOG_MARKER);
+    if (b->hc_len < ml || memcmp(b->hc, LOG_MARKER, ml) != 0 || b->hc[b->hc_len - 1] != '\n') return;
+    b->st.header_copies++;
+
+    if (b->hdr_done && b->hdr_len == b->hc_len && memcmp(b->hdr, b->hc, b->hc_len) == 0) return;
+
+    // no header for the data that is coming in (late start, or the header was damaged), or a different log
+    if (b->hdr_done) bbs_decode(b);
+    memcpy(b->hdr, b->hc, b->hc_len);
+    b->hdr_len = b->hc_len;
+    b->hdr_done = true;
+    b->at_line_start = true;
+    b->dat_len = b->dat_decoded = 0;
+    b->marker_match = 0;
+    b->resync = true;  // where in a frame the data continues is unknown
+    b->have_last = false;
+    b->slow_n = 0;
+    b->st.header_installs++;
+    register_log(b);
+}
+
+static void handle_header_packet(bbs_t *b, uint8_t seq, unsigned flags, const uint8_t *p, size_t n)
+{
+    if (flags & PKT_FLAG_FIRST) {
+        b->hc_len = 0;
+        b->hc_active = true;
+    } else if (!b->hc_active || seq != b->hc_next_seq) {
+        b->hc_active = false;
+        b->hc_next_seq = (uint8_t)(seq + 1);
+        return;
+    }
+    b->hc_next_seq = (uint8_t)(seq + 1);
+    if (b->hc_len + n > HDR_MAX) { b->hc_active = false; return; }
+    memcpy(b->hc + b->hc_len, p, n);
+    b->hc_len += n;
+    if (flags & PKT_FLAG_LAST) {
+        b->hc_active = false;
+        header_copy_complete(b);
+    }
+}
+
 static size_t process_packets(bbs_t *b)
 {
     size_t o = 0;
@@ -442,7 +498,8 @@ static size_t process_packets(bbs_t *b)
         }
         if (!s || b->plen - o < 4) break;
 
-        const size_t n = b->pbuf[o + 2] | (size_t) b->pbuf[o + 3] << 8;
+        const unsigned lenflags = b->pbuf[o + 2] | (unsigned) b->pbuf[o + 3] << 8;
+        const size_t n = lenflags & PKT_LEN_MASK;
         if (n < 1 || n > PKT_PAYLOAD_MAX) {  // false sync
             o++;
             b->st.bytes_skipped++;
@@ -459,7 +516,11 @@ static size_t process_packets(bbs_t *b)
             o++;  // maybe the real packet starts inside this one
             continue;
         }
-        handle_packet(b, b->pbuf[o + 1], b->pbuf + o + 4, n);
+        if (lenflags & PKT_FLAG_HEADER) {
+            handle_header_packet(b, b->pbuf[o + 1], lenflags, b->pbuf + o + 4, n);
+        } else {
+            handle_packet(b, b->pbuf[o + 1], b->pbuf + o + 4, n);
+        }
         o += PKT_OVERHEAD + n;
     }
     return o;
@@ -495,10 +556,11 @@ bbs_t *bbs_create(const bbs_config_t *cfg)
     if (!b->cfg.max_iter_jump) b->cfg.max_iter_jump = 50000;
     if (!b->cfg.max_dt_us) b->cfg.max_dt_us = 30 * 1000000;
     b->hdr = malloc(HDR_MAX);
+    b->hc = malloc(HDR_MAX);
     b->memfd = -1;
     b->at_line_start = true;
     b->win_i_off = -1;
-    if (!b->hdr) { free(b); return NULL; }
+    if (!b->hdr || !b->hc) { free(b->hdr); free(b->hc); free(b); return NULL; }
     return b;
 }
 
@@ -507,7 +569,7 @@ void bbs_destroy(bbs_t *b)
     if (!b) return;
     free_names(b);
     if (b->memfd >= 0) close(b->memfd);
-    free(b->hdr); free(b->dat); free(b->rows); free(b->log_starts);
+    free(b->hdr); free(b->hc); free(b->dat); free(b->rows); free(b->log_starts);
     free(b);
 }
 

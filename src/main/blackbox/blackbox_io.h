@@ -43,24 +43,54 @@ typedef enum {
  *
  * The plain blackbox byte stream has no integrity protection, so a lost or flipped byte silently corrupts
  * every following P-frame. With packets enabled the stream is cut into packets, at the latest once per
- * blackboxUpdate() so that a packet holds whole frames in the normal case. The concatenated payloads are
- * exactly the plain log file.
+ * blackboxUpdate() so that a packet holds whole frames in the normal case. The concatenated payloads of the
+ * data packets are exactly the plain log file.
  *
  *   offset  size  field
  *   0       1     sync, 0xA5
- *   1       1     seq, increments per packet (also for packets dropped for lack of TX buffer space)
- *   2       2     len, payload length, 1..BLACKBOX_PACKET_PAYLOAD_MAX, little-endian
+ *   1       1     seq, increments per packet of its channel (see below)
+ *   2       2     len, little-endian: bits 0..12 payload length 1..BLACKBOX_PACKET_PAYLOAD_MAX, bits 13..15 flags
  *   4       len   payload
  *   4+len   2     crc16 CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection) over bytes 1..3+len,
  *                 little-endian
  *
- * A packet that does not fit in the UART TX buffer is dropped as a whole (counted, seq still advances) so
- * the receiver sees a seq gap and can resynchronise at the next I-frame. The packet size is 6 + len bytes,
- * the UART TX buffer must be larger than that to ever send one.
+ * Two channels, each with its own seq counter, are told apart by the flags:
+ *
+ *   data channel   (flags 0)       the log. A packet that does not fit in the UART TX buffer is dropped as a
+ *                                  whole (counted, seq still advances) so the receiver sees a seq gap and can
+ *                                  resynchronise at the next I-frame.
+ *   header channel (BLACKBOX_PACKET_FLAG_HEADER set)
+ *                                  repeated copies of the log header (everything the log starts with, up to
+ *                                  the first data frame), for receivers that started late or lost part of the
+ *                                  header. Only sent while logging, every blackbox_serial_header_interval
+ *                                  seconds, at about a tenth of the line rate and only if the TX buffer has
+ *                                  room, so it never replaces data. A copy is a run of packets with
+ *                                  consecutive seq: the first has BLACKBOX_PACKET_FLAG_FIRST, the last
+ *                                  BLACKBOX_PACKET_FLAG_LAST (a copy of one packet has both). A receiver
+ *                                  discards a copy with a seq gap. The initial header is sent in the data
+ *                                  channel as usual.
+ *
+ * The packet size is 6 + len bytes, the UART TX buffer must be larger than that to ever send one.
  */
 #define BLACKBOX_PACKET_SYNC 0xA5
 #define BLACKBOX_PACKET_PAYLOAD_MAX 240
 #define BLACKBOX_PACKET_OVERHEAD 6
+#define BLACKBOX_PACKET_LEN_MASK 0x1FFF
+#define BLACKBOX_PACKET_FLAG_HEADER 0x8000
+#define BLACKBOX_PACKET_FLAG_FIRST 0x4000
+#define BLACKBOX_PACKET_FLAG_LAST 0x2000
+
+/*
+ * RAM for the copy of the header that is repeated, 0 disables the repeat. The header is about 14 kB.
+ * If the header does not fit, it is not repeated.
+ */
+#ifndef BLACKBOX_HEADER_COPY_SIZE
+#if defined(STM32H7) || defined(SITL) || defined(MOCKUP)
+#define BLACKBOX_HEADER_COPY_SIZE 24576
+#else
+#define BLACKBOX_HEADER_COPY_SIZE 0
+#endif
+#endif
 
 extern int32_t blackboxHeaderBudget;
 
@@ -69,6 +99,9 @@ void blackboxWrite(uint8_t value);
 int blackboxWriteString(const char *s);
 
 void blackboxDeviceFlush(void);
+// Record the header being written, so that it can be repeated (serial packets only). End when logging starts.
+void blackboxSerialHeaderCaptureBegin(void);
+void blackboxSerialHeaderCaptureEnd(void);
 bool blackboxDeviceFlushForce(void);
 bool blackboxDeviceFlushForceComplete(void);
 

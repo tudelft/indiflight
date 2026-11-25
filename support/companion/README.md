@@ -9,6 +9,7 @@ for in-flight analysis. No MSP is involved, the FC just uses the serial blackbox
 serial <port> 128 115200 57600 0 2000000   # FUNCTION_BLACKBOX (bit 7) on the chosen UART; last field = blackbox baud
 set blackbox_device = SERIAL
 set blackbox_serial_packets = ON
+set blackbox_serial_header_interval = 2    # repeat the header every 2 s, 0 = never
 set blackbox_sample_rate = 1/2             # start at 250 Hz, see the budget below
 ```
 
@@ -23,8 +24,19 @@ The plain blackbox stream has no integrity protection: a lost or flipped byte co
 payloads are exactly the plain `.bbl` log.
 
 ```
-0xA5 | seq u8 | len u16 LE (1..240) | payload | crc16 u16 LE      CRC16 CCITT-FALSE over seq, len, payload
+0xA5 | seq u8 | len u16 LE | payload | crc16 u16 LE      CRC16 CCITT-FALSE over seq, len, payload
 ```
+
+`len` holds the payload length (1..240) in bits 0..12 and flags in bits 13..15. There are two channels, each
+with its own `seq`:
+
+- **Data channel** (no flags): the log. Concatenated payloads are the plain `.bbl`.
+- **Header channel** (`0x8000`, `FIRST` `0x4000`, `LAST` `0x2000`): while logging, the FC repeats the log header
+  every `blackbox_serial_header_interval` seconds (0 = never), so that a receiver that started late or lost
+  part of the header can still decode. A copy is a run of packets from `FIRST` to `LAST` with consecutive
+  `seq`. The firmware sends it at about a tenth of the line rate, and only when the TX buffer has room, so it
+  never displaces data. It costs `BLACKBOX_HEADER_COPY_SIZE` (24 kB) of RAM, on STM32H7 only, and is only
+  active for `blackbox_device = SERIAL` with packets on. Flash and SD logging are not affected.
 
 - The FC ends a packet once per `blackboxUpdate()`, so a packet normally holds whole frames, and it also ends
   when 240 bytes are staged. A frame can therefore span two packets.
@@ -38,7 +50,8 @@ payloads are exactly the plain `.bbl` log.
 blackbox-tools parser, see `bbstream/README.md`. The ideas below are the background; `blackbox_packets.py` stays
 as the small reference for the packet format.
 
-`blackbox_packets.py` is a reference receiver: `PacketParser.feed(bytes)` yields `(seq, payload, lost)`.
+`blackbox_packets.py` is a reference receiver: `PacketParser.feed(bytes)` yields `(seq, payload, lost)` for data
+packets, and collects complete header copies in `PacketParser.header_copies`.
 It resyncs on the sync byte after a bad CRC or a false sync. Ideas for the rest:
 
 1. **Hardware.** Use the PL011 UART (`dtoverlay=disable-bt`, or `miniuart-bt` on the Zero 2 W), not the mini-UART,
@@ -61,9 +74,9 @@ It resyncs on the sync byte after a bad CRC or a false sync. Ideas for the rest:
 6. **Timing.** Use the frame's own time field, not arrival time. The serial link adds jitter and buffering.
    The analysis can still run on the latest decoded frame, and should look at the age
    of the newest frame as a health signal for the link.
-7. **Late start.** If the Pi starts while the FC is already logging, it has no header. Either wait for the
-   next log, or have the Pi disarm-safe restart logging, or (future firmware work) resend the header
-   every few seconds.
+7. **Late start.** If the Pi starts while the FC is already logging, it has no header from the data channel.
+   The header channel repeats it every `blackbox_serial_header_interval` seconds, so start decoding at the next
+   copy (`bbstream` does this).
 8. **Bandwidth check.** Compute from a real log: `mean P-frame bytes * rate`, plus 6/240 = 2.5 % packet
    overhead, against baud/10 bytes/s. Count in the I-frames too.
 

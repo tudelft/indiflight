@@ -40,6 +40,7 @@ typedef struct {
     uint64_t bytes_in;
     uint64_t packets_ok, packets_bad_crc, packets_lost; // lost = seq gaps (number of missing packets)
     uint64_t bytes_skipped;                             // bytes that were not part of a good packet
+    uint64_t header_copies, header_installs;            // repeated headers received complete / used because the log had no header
     uint64_t decodes, rows, rows_duplicate, rows_rejected, resyncs, logs;
     double decode_ms_total, decode_ms_max;
 } bbs_stats_t;
