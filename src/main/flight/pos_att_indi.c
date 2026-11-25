@@ -38,7 +38,9 @@
 #include "pg/pg_ids.h"
 #include "config/config.h"
 #include "flight/indi.h"
+#ifdef USE_INDI
 #include "setupWLS.h"
+#endif
 
 #ifdef USE_LOCAL_POSITION
 

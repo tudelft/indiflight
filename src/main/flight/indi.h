@@ -27,6 +27,9 @@
 #include <stdbool.h>
 
 #include "platform.h"
+
+// everything below needs the ActiveSetCtlAlloc lib, which is only built with USE_INDI
+#ifdef USE_INDI
 #include "flight/pid.h"
 #include "solveActiveSet.h"
 #include "common/maths_indi.h"
@@ -377,3 +380,5 @@ void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);
 void indiUpdateActuatorState( float* motor_normalized, float* servo_normalized );
 void indiUpdateRpmCtlState( const float* motor_normalized );
+
+#endif // USE_INDI
