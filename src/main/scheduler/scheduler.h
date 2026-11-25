@@ -137,6 +137,9 @@ typedef enum {
 #ifdef USE_POS_CTL
     TASK_POS_CTL,  // indiflight position control
 #endif
+#ifdef USE_TELEMETRY_PI
+    TASK_KEYBOARD, // indiflight keyboard commands over pi-protocol
+#endif
 #ifdef USE_MAG
     TASK_COMPASS,
 #endif

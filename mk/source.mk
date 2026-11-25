@@ -284,6 +284,7 @@ COMMON_SRC = \
             io/rcdevice_cam.c \
             io/rcdevice.c \
             io/gps.c \
+            io/keyboard.c \
             io/ledstrip.c \
             io/local_pos.c \
             io/pidaudio.c \
@@ -307,6 +308,7 @@ COMMON_SRC = \
             telemetry/mavlink.c \
             telemetry/mavlink_mission.c \
             telemetry/msp_shared.c \
+            telemetry/pi.c \
             telemetry/ibus.c \
             telemetry/ibus_shared.c \
             sensors/esc_sensor.c \
@@ -616,6 +618,21 @@ endif
 
 # indiflight: generated EKF code (kalman_filter_c_code_generation) uses double literals
 SRC_CFLAGS_ekf_calc.c += -Wno-double-promotion
+
+# indiflight: pi-protocol (submodule lib/main/pi-protocol). Its message code is
+# generated (python3 with jinja2, pyyaml, semver) on the first build.
+ifneq ($(findstring -DUSE_TELEMETRY_PI,$(EXTRA_FLAGS)),)
+PI_DIR = pi-protocol/src
+ifeq ($(wildcard $(LIB_MAIN_DIR)/$(PI_DIR)/pi-messages.c),)
+$(info generating pi-protocol messages)
+PI_GEN_OUT := $(shell $(MAKE) -s -C $(LIB_MAIN_DIR)/pi-protocol generate >/dev/null 2>&1 || echo failed)
+ifneq ($(PI_GEN_OUT),)
+$(error pi-protocol generation failed: run make -C lib/main/pi-protocol generate)
+endif
+endif
+INCLUDE_DIRS += $(LIB_MAIN_DIR)/$(PI_DIR)
+SRC += $(PI_DIR)/pi-protocol.c $(PI_DIR)/pi-messages.c
+endif
 
 # indiflight: ActiveSetCtlAlloc (submodule lib/main/ActiveSetCtlAlloc), control allocation for INDI
 ifneq ($(findstring -DUSE_INDI,$(EXTRA_FLAGS)),)

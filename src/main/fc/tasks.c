@@ -63,6 +63,15 @@
 #ifdef USE_POS_CTL
 #include "flight/pos_ctl.h"
 #endif
+#ifdef USE_TELEMETRY_PI
+#include "io/keyboard.h"
+
+static void taskKeyboard(timeUs_t currentTimeUs)
+{
+    UNUSED(currentTimeUs);
+    processKeyboard();
+}
+#endif
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -418,6 +427,9 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #ifdef USE_POS_CTL
     [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, updatePosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
+#ifdef USE_TELEMETRY_PI
+    [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#endif
 
 #ifdef USE_MAG
     [TASK_COMPASS] = DEFINE_TASK("COMPASS", NULL, NULL, taskUpdateMag, TASK_PERIOD_HZ(TASK_COMPASS_RATE_HZ), TASK_PRIORITY_LOW),
@@ -605,6 +617,9 @@ void tasksInit(void)
 #endif
 #ifdef USE_POS_CTL
     setTaskEnabled(TASK_POS_CTL, true);
+#endif
+#ifdef USE_TELEMETRY_PI
+    setTaskEnabled(TASK_KEYBOARD, true);
 #endif
 
 #ifdef USE_MAG

@@ -77,6 +77,9 @@
 #include "flight/pos_ctl.h"
 #include "io/local_pos.h"
 #endif
+#ifdef USE_TELEMETRY_PI
+#include "io/keyboard.h"
+#endif
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
