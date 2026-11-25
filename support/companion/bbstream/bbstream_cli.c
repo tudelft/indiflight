@@ -133,10 +133,10 @@ static void print_status(const bbs_t *b, const char *dev_is_tty)
 {
     const bbs_stats_t *s = bbs_stats(b);
     fprintf(stderr,
-        "rows %zu | pkts ok %llu crc %llu lost %llu skipped %lluB | hdr copies %llu/%llu used | resyncs %llu | decodes %llu (max %.1f ms) | ring drops %lluB%s\n",
+        "rows %zu | pkts ok %llu crc %llu lost %llu skipped %lluB | logs %llu | hdr copies %llu/%llu used | resyncs %llu | decodes %llu (max %.1f ms) | ring drops %lluB%s\n",
         bbs_n_rows(b), (unsigned long long) s->packets_ok, (unsigned long long) s->packets_bad_crc,
         (unsigned long long) s->packets_lost, (unsigned long long) s->bytes_skipped,
-        (unsigned long long) s->header_copies, (unsigned long long) s->header_installs,
+        (unsigned long long) s->logs, (unsigned long long) s->header_copies, (unsigned long long) s->header_installs,
         (unsigned long long) s->resyncs, (unsigned long long) s->decodes, s->decode_ms_max,
         (unsigned long long) atomic_load(&ring_dropped), dev_is_tty);
 }
@@ -144,7 +144,7 @@ static void print_status(const bbs_t *b, const char *dev_is_tty)
 static void usage(const char *a0)
 {
     fprintf(stderr,
-        "usage: %s (-d tty | -f file|-) [-b baud] [-o out.csv] [-n decode_bytes] [-p rt_prio] [-c reader_cpu] [-v]\n", a0);
+        "usage: %s (-d tty | -f file|-) [-b baud] [-o out.csv] [-n decode_bytes] [-g header_gap_ms] [-p rt_prio] [-c reader_cpu] [-v]\n", a0);
 }
 
 int main(int argc, char **argv)
@@ -152,15 +152,17 @@ int main(int argc, char **argv)
     const char *dev = NULL, *file = NULL, *out = NULL;
     long baud = 2000000;
     unsigned decode_bytes = 0;
+    int header_gap_ms = 0;
     int verbose = 0, opt;
 
-    while ((opt = getopt(argc, argv, "d:f:b:o:n:p:c:vh")) != -1) {
+    while ((opt = getopt(argc, argv, "d:f:b:o:n:g:p:c:vh")) != -1) {
         switch (opt) {
         case 'd': dev = optarg; break;
         case 'f': file = optarg; break;
         case 'b': baud = atol(optarg); break;
         case 'o': out = optarg; break;
         case 'n': decode_bytes = (unsigned) atoi(optarg); break;
+        case 'g': header_gap_ms = atoi(optarg); break;
         case 'p': rt_prio = atoi(optarg); break;
         case 'c': reader_cpu = atoi(optarg); break;
         case 'v': verbose = 1; break;
@@ -182,7 +184,7 @@ int main(int argc, char **argv)
     signal(SIGINT, on_sigint);
     signal(SIGTERM, on_sigint);
 
-    bbs_config_t cfg = { .decode_every_bytes = decode_bytes };
+    bbs_config_t cfg = { .decode_every_bytes = decode_bytes, .header_gap_ms = header_gap_ms };
     bbs_t *b = bbs_create(&cfg);
     if (!b) return 1;
 

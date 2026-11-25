@@ -103,14 +103,18 @@ def flip(packet):
     return packet[:-1] + bytes([packet[-1] ^ 0xFF])
 
 
-def run_cli(stream, rng, use_pty=False):
+def run_cli(stream, rng, use_pty=False, args=()):
+    """stream: bytes, or a list of byte strings that are fed with a pause of 0.7 s in between"""
     csv_path = tempfile.mktemp(suffix=".csv")
     chunks = []
-    i = 0
-    while i < len(stream):
-        n = rng.choice([100, 1000, 4096] if use_pty else [1, 3, 16, 100, 1000, 4096])
-        chunks.append(stream[i:i + n])
-        i += n
+    for part in (stream if isinstance(stream, list) else [stream]):
+        if chunks:
+            chunks.append(None)  # pause
+        i = 0
+        while i < len(part):
+            n = rng.choice([100, 1000, 4096] if use_pty else [1, 3, 16, 100, 1000, 4096])
+            chunks.append(part[i:i + n])
+            i += n
     if use_pty:
         master, slave = pty.openpty()
         import termios
@@ -122,6 +126,9 @@ def run_cli(stream, rng, use_pty=False):
         def feed():
             time.sleep(0.3)  # the CLI flushes the input when it opens the port
             for c in chunks:
+                if c is None:
+                    time.sleep(0.7)
+                    continue
                 os.write(master, c)
                 time.sleep(len(c) / 800e3)  # a serial port cannot be stopped: stay below the decoder's speed
             time.sleep(1.0)
@@ -134,10 +141,14 @@ def run_cli(stream, rng, use_pty=False):
         os.close(master)
         os.close(slave)
     else:
-        proc = subprocess.Popen([CLI, "-f", "-", "-o", csv_path, "-p", "0"], stdin=subprocess.PIPE,
+        proc = subprocess.Popen([CLI, "-f", "-", "-o", csv_path, "-p", "0", *args], stdin=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=False)
         def feed():
             for c in chunks:
+                if c is None:
+                    proc.stdin.flush()
+                    time.sleep(0.7)
+                    continue
                 try:
                     proc.stdin.write(c)
                 except BrokenPipeError:
@@ -245,6 +256,20 @@ def main():
         print(f"{name:24s} ok: {matched} rows exact, {missing} of reference missing | {status}")
         assert matched > 0.3 * len(ref[1]), "too little survived"
         assert "used" in status
+
+    # a second log whose own header is lost: its repeats carry the same header, so only the pause tells them apart
+    pk_a = packetize(data, rng, header_every=40)
+    pk_b = packetize(data, rng, header_every=40)
+    b_stream = b"".join(pk_b[header_packets(pk_b, HEADER_BYTES(data)):])
+    names, rows, status = run_cli([b"".join(pk_a), b_stream], rng, args=("-g", "300"))
+    cuts = [i for i in range(1, len(rows)) if rows[i][0] <= rows[i - 1][0]]
+    assert len(cuts) == 1, f"expected two logs, iterations restart {len(cuts)} times"
+    for part in (rows[:cuts[0]], rows[cuts[0]:]):
+        compare(ref, (names, part), True)
+    n_b = len(rows) - cuts[0]
+    print(f"{'2nd log, header lost':24s} ok: {cuts[0]} + {n_b} rows exact | {status}")
+    assert cuts[0] >= len(ref[1]) - 3 and n_b > 0.8 * len(ref[1])
+    assert "logs 2" in status
 
     # without repeats a damaged header or a late start makes the log undecodable, but must not crash anything
     pk = packetize(data, rng)

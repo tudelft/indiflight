@@ -39,6 +39,8 @@ struct bbs {
     bool have_seq, disc_pending;
     uint8_t next_seq;
 
+    double last_header_ms;  // when a header (or complete copy of it) was last seen
+
     // header channel: the copy being assembled
     uint8_t *hc; size_t hc_len; bool hc_active; uint8_t hc_next_seq;
 
@@ -357,6 +359,7 @@ static void discontinuity(bbs_t *b)
 
 static void register_log(bbs_t *b)
 {
+    b->last_header_ms = now_ms();
     b->st.logs++;
     if (b->n_logs == b->cap_logs) {
         size_t cap = b->cap_logs ? b->cap_logs * 2 : 8;
@@ -448,7 +451,14 @@ static void header_copy_complete(bbs_t *b)
     if (b->hc_len < ml || memcmp(b->hc, LOG_MARKER, ml) != 0 || b->hc[b->hc_len - 1] != '\n') return;
     b->st.header_copies++;
 
-    if (b->hdr_done && b->hdr_len == b->hc_len && memcmp(b->hdr, b->hc, b->hc_len) == 0) return;
+    /*
+     * The same header means the same log, unless no header has been seen for a while: the copies come every
+     * few seconds, so then logging stopped in between and this is another log (whose own header was lost).
+     */
+    const double now = now_ms();
+    const bool stale = now - b->last_header_ms > b->cfg.header_gap_ms;
+    b->last_header_ms = now;
+    if (b->hdr_done && !stale && b->hdr_len == b->hc_len && memcmp(b->hdr, b->hc, b->hc_len) == 0) return;
 
     // no header for the data that is coming in (late start, or the header was damaged), or a different log
     if (b->hdr_done) bbs_decode(b);
@@ -554,6 +564,7 @@ bbs_t *bbs_create(const bbs_config_t *cfg)
     if (cfg) b->cfg = *cfg;
     if (!b->cfg.decode_every_bytes) b->cfg.decode_every_bytes = 16384;
     if (!b->cfg.max_iter_jump) b->cfg.max_iter_jump = 50000;
+    if (!b->cfg.header_gap_ms) b->cfg.header_gap_ms = 6000;
     if (!b->cfg.max_dt_us) b->cfg.max_dt_us = 30 * 1000000;
     b->hdr = malloc(HDR_MAX);
     b->hc = malloc(HDR_MAX);

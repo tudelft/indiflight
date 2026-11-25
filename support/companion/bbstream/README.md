@@ -53,10 +53,12 @@ to SI units. The one exception: the time column is unwrapped to 64 bit.
   Otherwise (the receiver started late, or the header was damaged) the copy becomes the header, and decoding
   starts at the next I-frame. Data that arrived before is lost, about one interval at most.
   Without repeats a damaged header or a late start means no rows for that log.
-- A header copy that differs from the current header starts a new log. A new log with a *lost* initial header
-  and the same settings as the previous log looks like a continuation, and its rows are skipped until the
-  iteration counter passes the old one. A new header in the data channel (logging restarted) is detected
-  and starts a new log (`bbs_log_starts()`).
+- **What counts as a new log:** a header in the data channel (logging restarted), a header copy that differs
+  from the current header, or a header copy that arrives more than `header_gap_ms` (default 6 s, `-g`) after
+  the last header or copy. The last rule catches a new log with the same settings whose own header was lost:
+  the copies stop when logging stops. Keep it above twice the firmware's `blackbox_serial_header_interval`, or a
+  long link outage splits one log in two. Each log is listed in `bbs_log_starts()`. There is no log filename
+  in the stream: the FC only has one for SD logs, and a counter would not survive a reboot.
 
 ## Pi notes (what the code does, and what it cannot do)
 

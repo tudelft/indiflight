@@ -30,6 +30,7 @@ typedef struct {
     uint32_t decode_every_bytes;  // decode when this many undecoded bytes are buffered, 0 = 16384
     int32_t max_iter_jump;        // plausibility gate for rows after a gap, 0 = 50000 iterations
     int64_t max_dt_us;            // same, in microseconds, 0 = 30 s
+    int32_t header_gap_ms;        // a header (copy) arriving after this long without any header is a new log, 0 = 6000
     int library_stderr;           // nonzero: let the parser print its diagnostics (they are silenced by default)
     // optional: called after a decode with the rows that were just appended (n_cols values each)
     void (*on_rows)(void *user, const int64_t *rows, size_t n_rows, size_t n_cols);
