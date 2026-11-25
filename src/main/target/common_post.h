@@ -829,6 +829,14 @@ extern struct linker_symbol __fontdata_end;
 #endif
 #endif // USE_GPS
 
+// indiflight: INDI builds have no upstream GPS rescue (no BOXGPSRESCUE, no
+// GPS_RESCUE failsafe procedure, no rescue flight plan) and no failsafe
+// auto-landing; RX loss runs failsafe stage 1 and then DROP (disarm), see
+// flight/failsafe.c.
+#ifdef USE_INDI
+#undef USE_GPS_RESCUE
+#endif
+
 #if (!defined(USE_GPS_RESCUE) || !defined(USE_CMS_FAILSAFE_MENU))
 #undef USE_CMS_GPS_RESCUE_MENU
 #endif

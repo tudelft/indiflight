@@ -653,7 +653,7 @@ static void crsfFrameFlightMode(sbuf_t *dst)
         // ! = arming disabled
         // ? = GPS rescue disabled
         bool isGpsRescueDisabled = false;
-#ifdef USE_GPS
+#ifdef USE_GPS_RESCUE // indiflight: was USE_GPS; INDI builds compile GPS rescue out
         isGpsRescueDisabled = featureIsEnabled(FEATURE_GPS) && gpsRescueIsConfigured() && gpsSol.numSat < gpsRescueConfig()->minSats && !STATE(GPS_FIX);
 #endif
         sbufWriteU8(dst, isArmingDisabled() ? '!' : isGpsRescueDisabled ? '?' : '*');

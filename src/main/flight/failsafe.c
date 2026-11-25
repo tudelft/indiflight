@@ -240,12 +240,14 @@ LOCAL_UNUSED_FUNCTION static uint32_t failsafeFailurePeriodMs(void)
 static void failsafeStartProcedure(failsafeProcedure_e procedure)
 {
     switch (procedure) {
+#ifndef USE_INDI // indiflight: no auto-landing in INDI builds, every procedure is DROP_IT
         case FAILSAFE_PROCEDURE_AUTO_LANDING:
             //  Enter Stage 2 with settings for landing mode
             ENABLE_FLIGHT_MODE(FAILSAFE_MODE);
             failsafeState.phase = FAILSAFE_LANDING;
             failsafeState.landingShouldBeFinishedAt = millis() + failsafeConfig()->failsafe_landing_time * MILLIS_PER_SECOND;
             break;
+#endif
 
         case FAILSAFE_PROCEDURE_DROP_IT:
         default:
@@ -365,7 +367,7 @@ FAST_CODE_NOINLINE void failsafeUpdateState(void)
                 } else {
                     failsafeState.active = true;
                     failsafeState.events++;
-#if ENABLE_FLIGHT_PLAN && !defined(USE_WING)
+#if ENABLE_FLIGHT_PLAN && !defined(USE_WING) && !defined(USE_INDI) // indiflight: no mission continue/land on RX loss
                     if (FLIGHT_MODE(AUTOPILOT_MODE) && flightPlanNavIsActive()
                         && flightPlanNavGetState() != FP_NAV_COMPLETE
                         && flightPlanNavGetState() != FP_NAV_ABORTED

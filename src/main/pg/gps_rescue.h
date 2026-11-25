@@ -19,3 +19,12 @@
 
 #include "pg/gps_rescue_multirotor.h"
 #include "pg/gps_rescue_wing.h"
+
+// Satellite count for a home fix. Upstream keeps it in the GPS rescue config;
+// indiflight INDI builds compile GPS rescue out (target/common_post.h) and use
+// upstream's default.
+#ifdef USE_GPS_RESCUE
+#define gpsRescueMinSats() (gpsRescueConfig()->minSats)
+#else
+#define gpsRescueMinSats() 8
+#endif
