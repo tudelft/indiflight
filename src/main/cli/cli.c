@@ -188,6 +188,10 @@ bool cliMode = false;
 
 #include "telemetry/frsky_hub.h"
 #include "telemetry/telemetry.h"
+#ifdef USE_TELEMETRY_PI
+#include "telemetry/pi.h"
+#include "pi-protocol.h"
+#endif
 
 #include "cli.h"
 
@@ -311,6 +315,9 @@ typedef enum dumpFlags_e {
     HIDE_UNUSED = (1 << 6),
     HARDWARE_ONLY = (1 << 7),
     BARE = (1 << 8),
+    // indiflight: dump/diff only the INDI or the position profile
+    DUMP_INDI = (1 << 9),
+    DUMP_POSITION = (1 << 10),
 } dumpFlags_t;
 
 static void cliExit(const bool reboot);
@@ -456,6 +463,20 @@ CLI_DEBUG_EXPORT void cliPrintLinef(const char *format, ...)
     va_end(va);
     cliPrintLinefeed();
 }
+
+#if defined(USE_TELEMETRY_PI) && (defined(PI_STATS) || defined(PI_USE_PRINT_MSGS))
+// indiflight: printf-like line printer with an int return, for the pi-protocol printers
+static int cliPrintLinefi(const char *format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    cliPrintfva(format, va);
+    va_end(va);
+    cliPrintLinefeed();
+
+    return 0;
+}
+#endif
 
 static const char *cliEnvFilter;
 
@@ -6710,6 +6731,28 @@ RAM_CODE static void cliOptions(const char *cmdName, char *cmdline)
     }
 }
 
+#ifdef USE_TELEMETRY_PI
+// indiflight: pi-protocol uplink statistics / last received messages
+static void cliUplink(const char *cmdName, char *cmdline)
+{
+    if (strcasecmp(cmdline, "stats") == 0) {
+#ifdef PI_STATS
+        piPrintStats(&cliPrintLinefi);
+#else
+        cliPrintLine("not compiled in (PI_STATS)");
+#endif
+    } else if (strcasecmp(cmdline, "msgs") == 0) {
+#ifdef PI_USE_PRINT_MSGS
+        piPrintMsgs(&cliPrintLinefi);
+#else
+        cliPrintLine("not compiled in (PI_USE_PRINT_MSGS)");
+#endif
+    } else {
+        cliShowParseError(cmdName);
+    }
+}
+#endif
+
 RAM_CODE static void cliVersion(const char *cmdName, char *cmdline)
 {
     UNUSED(cmdName);
@@ -8306,6 +8349,14 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
         dumpMask = DUMP_PROFILE; // only
     } else if ((options = checkCommand(cmdline, "rates"))) {
         dumpMask = DUMP_RATES; // only
+#ifdef USE_INDI
+    } else if ((options = checkCommand(cmdline, "indi"))) {
+        dumpMask = DUMP_INDI; // only
+#endif
+#ifdef USE_LOCAL_POSITION
+    } else if ((options = checkCommand(cmdline, "position"))) {
+        dumpMask = DUMP_POSITION; // only
+#endif
     } else if ((options = checkCommand(cmdline, "hardware"))) {
         dumpMask = DUMP_MASTER | HARDWARE_ONLY;   // Show only hardware related settings (useful to generate unified target configs).
     } else if ((options = checkCommand(cmdline, "all"))) {
@@ -8546,6 +8597,14 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
         cliDumpPidProfile(cmdName, systemConfig_Copy.pidProfileIndex, dumpMask);
     } else if (dumpMask & DUMP_RATES) {
         cliDumpRateProfile(cmdName, systemConfig_Copy.activeRateProfile, dumpMask);
+#ifdef USE_INDI
+    } else if (dumpMask & DUMP_INDI) {
+        cliDumpIndiProfile(cmdName, getCurrentIndiProfileIndex(), dumpMask);
+#endif
+#ifdef USE_LOCAL_POSITION
+    } else if (dumpMask & DUMP_POSITION) {
+        cliDumpPositionProfile(cmdName, getCurrentPositionProfileIndex(), dumpMask);
+#endif
     }
 
 #ifdef USE_CLI_BATCH
@@ -8632,6 +8691,17 @@ typedef struct {
 RAM_CODE STATIC_UNIT_TESTED void cliHelp(const char *cmdName, char *cmdline);
 
 // should be sorted a..z for bsearch()
+// indiflight: dump/diff indi|position
+#if defined(USE_INDI) && defined(USE_LOCAL_POSITION)
+#define CLI_DUMP_SECTIONS_HELP "[master|profile|rates|indi|position|hardware|all]"
+#elif defined(USE_INDI)
+#define CLI_DUMP_SECTIONS_HELP "[master|profile|rates|indi|hardware|all]"
+#elif defined(USE_LOCAL_POSITION)
+#define CLI_DUMP_SECTIONS_HELP "[master|profile|rates|position|hardware|all]"
+#else
+#define CLI_DUMP_SECTIONS_HELP "[master|profile|rates|hardware|all]"
+#endif
+
 const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("adjrange", "configure adjustment ranges", "<index> <unused> <range channel> <start> <end> <function> <select channel> [<center> <scale>]", cliAdjustmentRange),
     CLI_COMMAND_DEF("aux", "configure modes", "<index> <mode> <aux> <start> <end> <logic>", cliAux),
@@ -8661,7 +8731,7 @@ const clicmd_t cmdTable[] = {
         CLI_COMMAND_DEF("color", "configure colors", NULL, cliColor),
 #endif
     CLI_COMMAND_DEF("defaults", "reset to defaults and reboot", "{nosave}", cliDefaults),
-    CLI_COMMAND_DEF("diff", "list configuration changes from default", "[master|profile|rates|hardware|all] {defaults|bare}", cliDiff),
+    CLI_COMMAND_DEF("diff", "list configuration changes from default", CLI_DUMP_SECTIONS_HELP " {defaults|bare}", cliDiff),
 #ifdef USE_RESOURCE_MGMT
 
 #ifdef USE_DMA
@@ -8680,7 +8750,7 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("dshotprog", "program DShot ESC(s)", "<index> <command>+", cliDshotProg),
 #endif
     CLI_COMMAND_DEF("dump", "dump configuration",
-        "[master|profile|rates|hardware|all] {defaults|bare}", cliDump),
+        CLI_DUMP_SECTIONS_HELP " {defaults|bare}", cliDump),
 #if ENABLE_DEBUG_CLI_COMMANDS
     CLI_COMMAND_DEF("dxr", "read 32-bit words from memory",
         "<hex-addr> [count]", cliMemRead),
@@ -8799,6 +8869,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("tasks", "show task stats", NULL, cliTasks),
 #ifdef USE_TIMER_MGMT
     CLI_COMMAND_DEF("timer", "show/set timers", "<> | <pin> list | <pin> [af<alternate function>|none|<option(deprecated)>] | list | show", cliTimer),
+#endif
+#ifdef USE_TELEMETRY_PI
+    CLI_COMMAND_DEF("uplink", "show pi uplink stats/msgs", "stats | msgs", cliUplink),
 #endif
     CLI_COMMAND_DEF("version", "show version", NULL, cliVersion),
 #ifdef USE_VTX_CONTROL
@@ -9046,8 +9119,10 @@ void cliEnter(serialPort_t *serialPort, bool interactive)
 #else
         cliPrintLine("\r\nCLI");
 #endif
+#ifndef USE_INDIFLIGHT // indiflight: arming with the CLI open is allowed (HIL/companion workflows, as in the 4.4 fork)
         // arming flag not released if exiting cli with no reboot for safety
         setArmingDisabled(ARMING_DISABLED_CLI);
+#endif
         cliPrompt();
 
 #ifdef USE_CLI_BATCH

@@ -54,17 +54,33 @@ void *stdout_putp;
 static int putchw(void *putp, putcf putf, int n, char z, char *bf)
 {
     int written = 0;
+#ifdef USE_INDIFLIGHT
+    // indiflight: z == '-' left-justifies (pads with spaces on the right)
+    const bool leftJustify = (z == '-');
+    char fc = (z && !leftJustify) ? '0' : ' ';
+#else
     char fc = z ? '0' : ' ';
+#endif
     char ch;
     char *p = bf;
     while (*p++ && n > 0)
         n--;
+#ifdef USE_INDIFLIGHT
+    if (!leftJustify)
+#endif
     while (n-- > 0) {
         putf(putp, fc); written++;
     }
     while ((ch = *bf++)) {
         putf(putp, ch); written++;
     }
+#ifdef USE_INDIFLIGHT
+    if (leftJustify) {
+        while (n-- > 0) {
+            putf(putp, fc); written++;
+        }
+    }
+#endif
     return written;
 }
 
@@ -89,6 +105,12 @@ int tfp_format(void *putp, putcf putf, const char *fmt, va_list va)
                 ch = *(fmt++);
                 lz = 1;
             }
+#ifdef USE_INDIFLIGHT
+            else if (ch == '-') {
+                ch = *(fmt++);
+                lz = '-';
+            }
+#endif
             if (ch >= '0' && ch <= '9') {
                 ch = a2i(ch, &fmt, 10, &w);
             }
@@ -135,8 +157,20 @@ int tfp_format(void *putp, putcf putf, const char *fmt, va_list va)
                 putf(putp, (char) (va_arg(va, int))); written++;
                 break;
             case 's':
+#ifdef USE_INDIFLIGHT
+                written += putchw(putp, putf, w, (lz == '-') ? '-' : 0, va_arg(va, char *));
+#else
                 written += putchw(putp, putf, w, 0, va_arg(va, char *));
+#endif
                 break;
+#ifdef USE_INDIFLIGHT
+            case 'f':
+            case 'e':
+                // indiflight: floats as +1.234e+5 (see f2a())
+                f2a(va_arg(va, double), bf);
+                written += putchw(putp, putf, w, lz, bf);
+                break;
+#endif
             case '%':
                 putf(putp, ch); written++;
                 break;

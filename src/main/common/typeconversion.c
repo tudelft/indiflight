@@ -79,6 +79,59 @@ void ui2a(unsigned int num, unsigned int base, int uc, char *bf)
     *bf = 0;
 }
 
+#ifdef USE_INDIFLIGHT
+// indiflight (as in the 4.4 fork): float in scientific notation with 4
+// significant digits, e.g. "+1.234e+2", "-5.000e-3", "+0.000e+0", "nan",
+// "+inf". bf needs at least 12 chars.
+void f2a(double num, char *bf)
+{
+    if (num != num) {
+        memcpy(bf, "nan", 4);
+        return;
+    }
+    const char sign = (num < 0) ? '-' : '+';
+    if (num < 0) {
+        num = -num;
+    }
+    if (num < 1e-38) {
+        memcpy(bf, "+0.000e+0", 10);
+        bf[0] = sign;
+        return;
+    }
+    if (num > 3.4e38) {
+        *bf++ = sign;
+        memcpy(bf, "inf", 4);
+        return;
+    }
+
+    int e = 0;
+    while (num >= 10.0) {
+        num /= 10.0;
+        e++;
+    }
+    while (num < 1.0) {
+        num *= 10.0;
+        e--;
+    }
+    // 4 significant digits, rounded; 9.9996 rounds up into the next decade
+    unsigned int digits = (unsigned int)(num * 1000.0 + 0.5);
+    if (digits >= 10000) {
+        digits /= 10;
+        e++;
+    }
+
+    *bf++ = sign;
+    *bf++ = '0' + digits / 1000;
+    *bf++ = '.';
+    *bf++ = '0' + (digits / 100) % 10;
+    *bf++ = '0' + (digits / 10) % 10;
+    *bf++ = '0' + digits % 10;
+    *bf++ = 'e';
+    *bf++ = (e >= 0) ? '+' : '-';
+    ui2a((e >= 0) ? e : -e, 10, 0, bf);
+}
+#endif
+
 void i2a(int num, char *bf)
 {
     if (num < 0) {

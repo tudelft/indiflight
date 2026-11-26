@@ -3975,7 +3975,9 @@ RAM_CODE static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t
             if (command) {
 #if !ENABLE_SIMULATOR // In simulator mode we can safely arm with MSP link.
                 mspArmingDisableByDescriptor(srcDesc);
+#ifndef USE_INDIFLIGHT // indiflight: arming with the configurator connected is allowed (as in the 4.4 fork)
                 setArmingDisabled(ARMING_DISABLED_MSP);
+#endif
                 if (ARMING_FLAG(ARMED)) {
                     disarm(DISARM_REASON_ARMING_DISABLED);
                 }

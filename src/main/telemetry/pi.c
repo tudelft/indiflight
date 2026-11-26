@@ -155,7 +155,7 @@ void checkPiTelemetryState(void)
 
 void piSendIMU(void)
 {
-    piMsgImuTx.time_us = (uint32_t) clockCyclesToMicros(gyro.rawSensorDev->gyroLastEXTI);
+    piMsgImuTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
     piMsgImuTx.roll = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[0]);
     piMsgImuTx.pitch = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[1]);
     piMsgImuTx.yaw = DEGREES_TO_RADIANS(gyro.gyroADCafterRpm[2]);
@@ -170,7 +170,7 @@ void piSendIMU(void)
 
 void piSendEkfInputs(void)
 {
-    piMsgEkfInputsTx.time_us = (uint32_t) clockCyclesToMicros(gyro.rawSensorDev->gyroLastEXTI);
+    piMsgEkfInputsTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
     piMsgEkfInputsTx.x = 2048.f * INDI_ACC_INPUT(0) * acc.dev.acc_1G_rec;
     piMsgEkfInputsTx.y = 2048.f * INDI_ACC_INPUT(1) * acc.dev.acc_1G_rec;
     piMsgEkfInputsTx.z = 2048.f * INDI_ACC_INPUT(2) * acc.dev.acc_1G_rec;

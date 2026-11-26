@@ -125,6 +125,9 @@ typedef struct gyroDev_s {
     gyroModeSPI_e gyroModeSPI;
     uint32_t detectedEXTI;
     uint32_t gyroLastEXTI;
+#ifdef USE_TELEMETRY_PI
+    timeUs_t gyroLastEXTIUs; // indiflight: EXTI time in us for the PI telemetry timestamps (the cycle counter wraps)
+#endif
     uint32_t gyroSyncEXTI;
     int32_t gyroShortPeriod;
     int32_t gyroDmaMaxDuration;
