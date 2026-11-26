@@ -214,10 +214,17 @@ static bool serialPacketSend(uint8_t seq, uint16_t lenAndFlags, const uint8_t *p
     packet[5 + len] = crc >> 8;
 
     const int total = BLACKBOX_PACKET_OVERHEAD + len;
-    if (serialTxBytesFree(blackboxPort) < (uint32_t) total) {
+    const uint32_t txBytesFree = serialTxBytesFree(blackboxPort);
+#ifdef DEBUG_BB_OUTPUT
+    DEBUG_SET(DEBUG_BLACKBOX_OUTPUT, 3, MIN(txBytesFree, (uint32_t) INT16_MAX));
+#endif
+    if (txBytesFree < (uint32_t) total) {
         return false;
     }
     serialWriteBuf(blackboxPort, packet, total);
+#ifdef DEBUG_BB_OUTPUT
+    bbBits += 10 * total;  // what goes on the wire: framing, header copies and start/stop bits (8N1) included
+#endif
     return true;
 }
 
@@ -373,6 +380,9 @@ void blackboxWrite(uint8_t value)
     case BLACKBOX_DEVICE_SERIAL:
     default:
         if (serialPacketsEnabled()) {
+#ifdef DEBUG_BB_OUTPUT
+            bbBits -= 8;  // counted when the packet is actually sent, in serialPacketSend()
+#endif
             if (packetPayloadLen == BLACKBOX_PACKET_PAYLOAD_MAX) {
                 serialPacketFlush();
             }
