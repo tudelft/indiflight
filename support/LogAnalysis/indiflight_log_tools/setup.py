@@ -55,7 +55,9 @@ blackbox_decode = Extension(
         "units.c",
     )],
     include_dirs=[SRC],
-    extra_compile_args=["-O3", "-std=gnu99"],
+    # -fsigned-char: the parser keeps EOF in plain `char` (`char command = streamPeekChar()`), which is
+    # unsigned on aarch64 Linux; EOF then never matches and decoding never ends.
+    extra_compile_args=["-O3", "-std=gnu99", "-fsigned-char"],
     libraries=["m"],
     export_symbols=["main"],
 )

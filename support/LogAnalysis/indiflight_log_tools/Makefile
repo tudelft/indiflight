@@ -61,6 +61,7 @@ endif
 
 DEBUG_FLAGS	 = -g3 -ggdb
 
+# -fsigned-char: the parser keeps EOF in plain `char`, unsigned on aarch64 Linux, where decoding then never ends
 CFLAGS		= $(ARCH_FLAGS) \
 		$(LTO_FLAGS) \
 		$(addprefix -D,$(OPTIONS)) \
@@ -68,6 +69,7 @@ CFLAGS		= $(ARCH_FLAGS) \
 		$(if $(strip $(BLACKBOX_VERSION)), -DBLACKBOX_VERSION=$(BLACKBOX_VERSION)) \
 		$(DEBUG_FLAGS) \
 		-std=gnu99 \
+		-fsigned-char \
 		-pthread \
 		-Wall -pedantic -Wextra -Wshadow
 
