@@ -739,6 +739,16 @@
 #endif
 #endif // USE_RANGEFINDER_XXX
 
+// indiflight: optical flow is inoperative in indiflight builds. Its axis signs
+// have not been verified against the FRD/NED frames, so it is compiled out.
+// The cross-deps above have already enabled the matching rangefinder drivers,
+// so MT/UPT1 rangefinders keep working.
+#if defined(USE_INDIFLIGHT)
+#undef USE_OPTICALFLOW
+#undef USE_OPTICALFLOW_MT
+#undef USE_OPTICALFLOW_UPT1
+#endif
+
 // Bottom-up: individual opticalflow drivers → USE_OPTICALFLOW
 #if defined(USE_OPTICALFLOW_MT) || defined(USE_OPTICALFLOW_UPT1)
 #ifndef USE_OPTICALFLOW
@@ -927,6 +937,12 @@ extern struct linker_symbol __fontdata_end;
 // (pg, osd, cli, core) shares one gate.
 #if ENABLE_FLIGHT_PLAN && !defined(USE_WING) && defined(USE_OSD) && defined(USE_GPS)
 #define USE_OSD_NAV_MAP
+#endif
+
+// indiflight: without GPS, upstream position hold would only have had the
+// optical flow that indiflight builds compile out (see above).
+#if defined(USE_INDIFLIGHT) && defined(USE_POSITION_HOLD) && !defined(USE_GPS)
+#undef USE_POSITION_HOLD
 #endif
 
 #if defined(USE_POSITION_HOLD) && !(defined(USE_GPS) || defined(USE_OPTICALFLOW))
