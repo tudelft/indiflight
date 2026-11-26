@@ -75,10 +75,8 @@
 # pasting.
 defaults nosave
 
-# compile-time in Betaflight 2026 (board config GYRO_N_ALIGN), FLU->FRD is in code: set gyro_1_sensor_align = DEFAULT
-# compile-time in Betaflight 2026 (board config GYRO_N_ALIGN), FLU->FRD is in code: set gyro_1_align_pitch = 0
-# compile-time in Betaflight 2026 (board config GYRO_N_ALIGN), FLU->FRD is in code: set gyro_2_sensor_align = DEFAULT
-# compile-time in Betaflight 2026 (board config GYRO_N_ALIGN), FLU->FRD is in code: set gyro_2_align_pitch = 0
+# IMU-on-board alignment: none in SIL/HIL builds (USE_SIM_IDENTITY_SENSOR_ALIGN, common_post.h),
+# replaces the 4.4 fork's "set gyro_n_sensor_align = DEFAULT / gyro_n_align_pitch = 0"; only align_board_* applies
 
 ## ----- PERIPHERALS
 
@@ -102,7 +100,7 @@ serial 3 2 115200 115200 0 115200 # GPS
 serial 0 8388608 115200 57600 0 115200 # PI
 #serial 4 0 115200 57600 0 115200 # ???
 serial 5 64 115200 57600 0 115200 # RC
-#serial 2 524288 115200 57600 0 115200 # HIL
+#serial 2 33554432 115200 57600 0 115200 # HIL (bit 25; 4.4 fork: 524288)
 serial 1 16777216 115200 57600 0 115200 # actuator teensy board. has to be last somehow
 serial 7 1024 115200 57600 0 115200 # ESC telemetry wire
 

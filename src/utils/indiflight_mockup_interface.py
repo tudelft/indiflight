@@ -60,7 +60,7 @@ class boxId():
     BOXARM = "ARM"
     BOXPREARM = "PREARM"
     BOXINDI = "INDI"
-    BOXPOSCTL = "POSITION"
+    BOXPOSCTL = "POSITION CONTROL"
     BOXWAYPOINTS = "WAYPOINTS"
     # not in this port: BOXTHROWTOARM
 

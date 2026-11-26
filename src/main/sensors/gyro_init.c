@@ -292,8 +292,15 @@ static void gyroInitSensorFilters(gyroSensor_t *gyroSensor)
 void gyroInitSensor(gyroSensor_t *gyroSensor, const gyroDeviceConfig_t *config)
 {
     gyroSensor->gyroDev.gyro_high_fsr = gyroConfig()->gyro_high_fsr;
+#ifdef USE_SIM_IDENTITY_SENSOR_ALIGN
+    // indiflight SIL/HIL: no IMU-to-board rotation (see common_post.h)
+    gyroSensor->gyroDev.gyroAlign = CW0_DEG;
+    const sensorAlignment_t identityAlignment = CUSTOM_ALIGN_CW0_DEG;
+    buildRotationMatrixFromAngles(&gyroSensor->gyroDev.rotationMatrix, &identityAlignment);
+#else
     gyroSensor->gyroDev.gyroAlign = config->alignment;
     buildRotationMatrixFromAngles(&gyroSensor->gyroDev.rotationMatrix, &config->customAlignment);
+#endif
     gyroSensor->gyroDev.mpuIntExtiTag = config->extiTag;
     gyroSensor->gyroDev.hardware_lpf = gyroConfig()->gyro_hardware_lpf;
 

@@ -857,6 +857,14 @@ extern struct linker_symbol __fontdata_end;
 #define AFATFS_NUM_CACHE_SECTORS 40
 #endif
 
+// indiflight simulation (SIL = MOCKUP, HIL = HIL_BUILD): the simulator delivers IMU data
+// in the board frame. The IMU is assumed mounted on the board without rotation, so the
+// board config's GYRO_n_ALIGN is replaced by CW0_DEG; only the profile's align_board_*
+// (board mounting in the craft) is applied, identically in SIL and HIL.
+#if defined(HIL_BUILD) || defined(MOCKUP)
+#define USE_SIM_IDENTITY_SENSOR_ALIGN
+#endif
+
 // indiflight: the motor test sequence lives in the INDI mixer glue (flight/indi_glue.c)
 #if defined(USE_ACTUATOR_TEST_DANGEROUS) && !defined(USE_INDI)
 #error "USE_ACTUATOR_TEST_DANGEROUS needs USE_INDI"

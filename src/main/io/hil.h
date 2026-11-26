@@ -32,9 +32,9 @@
 #include "drivers/accgyro/accgyro.h"
 #include "common/sensor_alignment.h"
 
-// raw sensor vector that the alignment chain (sensor/board alignment, then
-// FLU -> FRD) maps to the FRD vector frd
-void hilRawFromFrd(const float frd[3], float raw[3], bool custom, sensor_align_e align, matrix33_t *customMatrix);
+// raw (FLU) sensor vector from the simulator's FRD vector in the sensor frame;
+// the alignment chain then applies sensor/board alignment and FLU -> FRD
+void hilRawFromSensorFrd(const float frd[3], float raw[3]);
 #endif
 
 #ifdef HIL_BUILD

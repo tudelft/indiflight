@@ -75,7 +75,12 @@
 
 #undef TASK_GYROPID_DESIRED_PERIOD
 #ifdef MOCKUP
-#define TASK_GYROPID_DESIRED_PERIOD     125 // indiflight MOCKUP: one tick() = 125 us (8 kHz)
+// indiflight MOCKUP: one tick() = one gyro sample = 125 us (8 kHz). The virtual
+// gyro must report that rate, or the filters, PID/INDI dT and the blackbox
+// looptime assume the upstream 1 kHz (accgyro_virtual.h).
+#define MOCKUP_TICK_DT_US               125
+#define TASK_GYROPID_DESIRED_PERIOD     MOCKUP_TICK_DT_US
+#define VIRTUAL_GYRO_SAMPLE_RATE_HZ     (1000000 / MOCKUP_TICK_DT_US)
 #else
 #define TASK_GYROPID_DESIRED_PERIOD     100
 #endif
@@ -133,6 +138,11 @@
 
 #define USE_BLACKBOX
 #define USE_BLACKBOX_VIRTUAL
+#ifdef USE_INDIFLIGHT
+// indiflight: SITL/MOCKUP logs go to ./logs-mockup/LOGnnnnn.BFL, as in the 4.4
+// fork (support/simulation expects them there)
+#define BLACKBOX_VIRTUAL_LOG_DIR "logs-mockup"
+#endif
 
 #undef USE_STACK_CHECK // I think SITL don't need this
 #undef USE_DASHBOARD

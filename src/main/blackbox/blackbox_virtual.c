@@ -27,6 +27,10 @@
 #include <string.h>
 #include <dirent.h>
 #include <common/maths.h>
+#ifdef BLACKBOX_VIRTUAL_LOG_DIR
+#include <limits.h>
+#include <sys/stat.h>
+#endif
 
 #define LOGFILE_PREFIX "LOG"
 #define LOGFILE_SUFFIX "BFL"
@@ -37,7 +41,13 @@ static int32_t largestLogFileNumber = 0;
 
 bool blackboxVirtualOpen(void)
 {
+#ifdef BLACKBOX_VIRTUAL_LOG_DIR
+    // indiflight: logs go into their own directory (target.h), created on demand
+    mkdir(BLACKBOX_VIRTUAL_LOG_DIR, 0755);
+    DIR *dir = opendir(BLACKBOX_VIRTUAL_LOG_DIR);
+#else
     DIR *dir = opendir(".");
+#endif
     if (!dir) {
         return false; // Failed to open directory
     }
@@ -87,8 +97,13 @@ bool blackboxVirtualBeginLog(void)
     if (blackboxVirtualFile != NULL) {
         return false;
     }
+#ifdef BLACKBOX_VIRTUAL_LOG_DIR
+    char filename[PATH_MAX];
+    snprintf(filename, sizeof(filename), "%s/%s%05u.%s", BLACKBOX_VIRTUAL_LOG_DIR, LOGFILE_PREFIX, (largestLogFileNumber + 1) % 100000, LOGFILE_SUFFIX);
+#else
     char filename[NAME_BUFFER_LENGTH];
     snprintf(filename, NAME_BUFFER_LENGTH, "%s%05u.%s", LOGFILE_PREFIX, (largestLogFileNumber + 1) % 100000, LOGFILE_SUFFIX);
+#endif
     blackboxVirtualFile = fopen(filename, "w");
     if (blackboxVirtualFile != NULL) {
         largestLogFileNumber++;

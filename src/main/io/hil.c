@@ -55,24 +55,18 @@
 #include "pi-protocol.h"
 #include "pi-messages.h"
 
-// The alignment chain maps a raw sensor vector r to M r (sensor/board alignment,
-// then FLU -> FRD). M is a rotation, so the raw vector that yields the FRD
-// vector v is M^T v. Build M column by column by aligning the unit vectors.
-void hilRawFromFrd(const float frd[3], float raw[3], bool custom, sensor_align_e align, matrix33_t *customMatrix)
+// The simulator sends FRD vectors in the board frame, as PyNDIflight's
+// IMU(qBody=...) models it for both HIL and MOCKUP (SIL). The IMU is assumed
+// mounted on the board without rotation (USE_SIM_IDENTITY_SENSOR_ALIGN replaces the
+// board config's GYRO_n_ALIGN by CW0_DEG), so the profile's align_board_* must
+// match qBody, identically in SIL and HIL. The raw counts are FLU (the FLU -> FRD
+// step follows the alignment, sensors/boardalignment.c).
+void hilRawFromSensorFrd(const float frd[3], float raw[3])
 {
-    for (int col = 0; col < 3; col++) {
-        vector3_t e = { .v = { 0, 0, 0 } };
-        e.v[col] = 1.0f;
-        if (custom) {
-            alignSensorViaMatrix(&e, customMatrix);
-        } else {
-            alignSensorViaRotation(&e, align);
-        }
-        raw[col] = e.v[0] * frd[0] + e.v[1] * frd[1] + e.v[2] * frd[2];
-    }
+    raw[0] = frd[0];
+    raw[1] = -frd[1];
+    raw[2] = -frd[2];
 }
-
-
 
 #endif // HIL_BUILD || MOCKUP
 
@@ -237,7 +231,7 @@ static int16_t toInt16(float x)
 void hilInjectGyroRaw(gyroDev_t *gyroDev)
 {
     float raw[3];
-    hilRawFromFrd(hilInput.gyro, raw, gyroDev->gyroAlign == ALIGN_CUSTOM, gyroDev->gyroAlign, &gyroDev->rotationMatrix);
+    hilRawFromSensorFrd(hilInput.gyro, raw);
     for (int i = 0; i < 3; i++) {
         gyroDev->gyroADCRaw[i] = toInt16(raw[i] / gyroDev->scale);
     }
@@ -246,7 +240,7 @@ void hilInjectGyroRaw(gyroDev_t *gyroDev)
 void hilInjectAccRaw(accDev_t *accDev)
 {
     float raw[3];
-    hilRawFromFrd(hilInput.acc, raw, accDev->accAlign == ALIGN_CUSTOM, accDev->accAlign, &accDev->rotationMatrix);
+    hilRawFromSensorFrd(hilInput.acc, raw);
     for (int i = 0; i < 3; i++) {
         accDev->ADCRaw[i] = toInt16(raw[i] * accDev->acc_1G);
     }

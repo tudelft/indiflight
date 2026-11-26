@@ -187,6 +187,12 @@ static bool isOnFirstGyroCalibrationCycle(const gyroCalibration_t *gyroCalibrati
 
 static void gyroSetCalibrationCycles(gyroSensor_t *gyroSensor)
 {
+#ifdef HIL_BUILD
+    // indiflight HIL: the simulator's gyro replaces the device data and is bias
+    // free; calibrating on it would stall on sim noise (as the 4.4 fork, skip it)
+    gyroSensor->calibration.cyclesRemaining = 0;
+    return;
+#endif
 #if defined(USE_VIRTUAL_GYRO) && !defined(UNIT_TEST)
     if (gyroSensor->gyroDev.gyroHardware == GYRO_VIRTUAL) {
         gyroSensor->calibration.cyclesRemaining = 0;

@@ -1040,6 +1040,21 @@ void configLock(void)
     }
 }
 
+#ifdef MOCKUP
+// indiflight MOCKUP: release what outlives dlclose() of the library (file
+// descriptors), so the next instance can bind the serial ports' TCP listen
+// sockets again: the dyad streams and the EEPROM file left open by
+// loadEEPROMFromFile() if nothing was saved since init (as the 4.4 fork)
+void mockupReleasePlatform(void)
+{
+    dyad_shutdown();
+    if (eepromFd != NULL) {
+        fclose(eepromFd);
+        eepromFd = NULL;
+    }
+}
+#endif
+
 configStreamerResult_e configWriteWord(uintptr_t address, config_streamer_buffer_type_t *buffer)
 {
     STATIC_ASSERT(CONFIG_STREAMER_BUFFER_SIZE == sizeof(uint32_t), "CONFIG_STREAMER_BUFFER_SIZE does not match written size");

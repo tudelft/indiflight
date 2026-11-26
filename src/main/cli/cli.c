@@ -9316,7 +9316,6 @@ void mockupCliChar(char c)
     static unsigned len = 0;
 
     if (!initialized) {
-        cliMode = true;
         cliInteractive = true;
         static serialPort_t dummyPort;
         memset(&dummyPort, 0, sizeof(dummyPort));
@@ -9344,11 +9343,15 @@ void mockupCliChar(char c)
     if (lineIsCommand(line, "exit") || lineIsCommand(line, "defaults") || lineIsCommand(line, "bl") || lineIsCommand(line, "msc")) {
         return;
     }
+    // cliMode only while a line runs: a lingering cliMode stops blackbox logging,
+    // telemetry and RC adjustments (fc/core.c, fc/tasks.c) until the next init()
+    cliMode = true;
     for (size_t i = 0; line[i]; i++) {
         processCharacter(line[i]);
     }
     processCharacter('\n');
     cliWriterFlush();
+    cliMode = false;
 }
 #endif
 #endif // CONFIG_IN_FILE

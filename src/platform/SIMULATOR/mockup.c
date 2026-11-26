@@ -40,6 +40,7 @@
 #include "common/utils.h"
 
 #include "blackbox/blackbox.h"
+#include "blackbox/blackbox_virtual.h"
 #include "drivers/accgyro/accgyro_virtual.h"
 #include "drivers/time.h"
 #include "fc/core.h"
@@ -64,10 +65,11 @@
 #include "sensors/acceleration.h"
 #include "sensors/gyro.h"
 
-#define MOCKUP_TICK_DT_US 125   // one tick = one gyro/PID loop at 8 kHz
+// MOCKUP_TICK_DT_US (target.h): one tick = one gyro sample at 8 kHz
 #define MOCKUP_GRAVITY 9.80665f
 
 void mockupClockTick(uint32_t us); // sitl.c
+void mockupReleasePlatform(void); // sitl.c
 
 static float motorOmega[MAX_SUPPORTED_MOTORS]; // rad/s, from the simulation
 
@@ -79,21 +81,22 @@ static int16_t toInt16(float x)
 // Gyro in rad/s, specific force in N/kg, in the FRD *sensor* frame, as in the
 // 4.4 fork: the firmware applies the sensor and board alignment to them, so the
 // sim's IMU(qBody=...) must match the alignment settings (identity by default).
-// The virtual sensor reports FLU counts (Y, Z negated), which the FLU -> FRD
-// step after the alignment (sensors/boardalignment.c) turns back into FRD.
+// hilRawFromSensorFrd() (io/hil.c, shared with HIL_BUILD) gives the FLU counts
+// the virtual sensor reports; the FLU -> FRD step after the alignment
+// (sensors/boardalignment.c) turns them back into FRD.
 void setImu(const float *g, const float *a)
 {
-    static const float fluFromFrd[3] = { 1.f, -1.f, -1.f };
+    float raw[3];
     if (virtualGyroDev) {
         const float s = 1.0f / virtualGyroDev->scale;
-        virtualGyroSet(virtualGyroDev,
-            toInt16(fluFromFrd[0] * RADIANS_TO_DEGREES(g[0]) * s),
-            toInt16(fluFromFrd[1] * RADIANS_TO_DEGREES(g[1]) * s),
-            toInt16(fluFromFrd[2] * RADIANS_TO_DEGREES(g[2]) * s));
+        const float gDeg[3] = { RADIANS_TO_DEGREES(g[0]), RADIANS_TO_DEGREES(g[1]), RADIANS_TO_DEGREES(g[2]) };
+        hilRawFromSensorFrd(gDeg, raw);
+        virtualGyroSet(virtualGyroDev, toInt16(raw[0] * s), toInt16(raw[1] * s), toInt16(raw[2] * s));
     }
     if (virtualAccDev) {
         const float s = virtualAccDev->acc_1G / MOCKUP_GRAVITY;
-        virtualAccSet(virtualAccDev, toInt16(fluFromFrd[0] * a[0] * s), toInt16(fluFromFrd[1] * a[1] * s), toInt16(fluFromFrd[2] * a[2] * s));
+        hilRawFromSensorFrd(a, raw);
+        virtualAccSet(virtualAccDev, toInt16(raw[0] * s), toInt16(raw[1] * s), toInt16(raw[2] * s));
     }
 }
 
@@ -241,6 +244,14 @@ bool mockupSetRxBoxByName(const char *name, bool enable)
 void mockupArm(bool arm)
 {
     if (arm) {
+#ifdef USE_BLACKBOX
+        // blackbox_device etc. set by the CLI since init() (setLogging(), no save
+        // and reboot): blackboxInit() would otherwise only run at boot, and with
+        // the default device NONE the recorder stays disabled
+        if (!ARMING_FLAG(ARMED) && blackboxMayEditConfig()) {
+            blackboxInit();
+        }
+#endif
         ENABLE_ARMING_FLAG(ARMED);
     } else {
         disarm(DISARM_REASON_SWITCH);
@@ -282,7 +293,12 @@ int mockupGetState(float *out, int n)
 
 void mockupShutdown(void)
 {
-    // nothing to release: no threads or sockets in MOCKUP (sitl.c)
+    // called before dlclose(): file descriptors survive it. An open log file
+    // would also stay unflushed, so close it (the log then ends without LOG_END).
+#ifdef USE_BLACKBOX_VIRTUAL
+    blackboxVirtualClose();
+#endif
+    mockupReleasePlatform(); // TCP serial sockets, EEPROM file
 }
 
 #if !defined(USE_DSHOT)
@@ -316,8 +332,11 @@ static void runTask(taskId_e id, timeUs_t now)
     getTask(id)->attribute->taskFunc(now);
 }
 
-// one 8 kHz gyro loop: gyro, filter, acc, and by division attitude, position control and
-// the PID/INDI loop (incl. EKF)
+// one 8 kHz gyro loop, sequenced like the scheduler's gyro cycle
+// (scheduler/scheduler.c): gyro (+ acc, USE_ACC_IN_GYRO_TASK) every tick,
+// filter (gyroFilterReady) and the PID/INDI loop incl. EKF (pidLoopReady) at
+// gyro rate / pid_process_denom, half a PID period apart for pid_process_denom > 1;
+// attitude and position control by division
 void tick(void)
 {
     static uint32_t n = 0;
@@ -328,8 +347,12 @@ void tick(void)
     unsetArmingDisabled(0xffffffff);
 
     runTask(TASK_GYRO, now);
-    runTask(TASK_FILTER, now);
+    if (gyroFilterReady()) {
+        runTask(TASK_FILTER, now);
+    }
+#ifndef USE_ACC_IN_GYRO_TASK // indiflight: acc is sampled in TASK_GYRO and processed in TASK_FILTER
     runTask(TASK_ACCEL, now);
+#endif
 #ifndef USE_INDI // indiflight: with INDI, attitude estimation runs inside TASK_PID
     if (n % 8 == 0) {   // 1 kHz
         runTask(TASK_ATTITUDE, now);
@@ -340,8 +363,7 @@ void tick(void)
         runTask(TASK_POS_CTL, now);
     }
 #endif
-    const unsigned pidDenom = MAX(1, pidConfig()->pid_process_denom);
-    if (n % pidDenom == 0) { // the PID/INDI loop runs at gyro rate / pid_process_denom
+    if (pidLoopReady()) {
         runTask(TASK_PID, now);
     }
     n++;

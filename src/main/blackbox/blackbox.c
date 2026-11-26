@@ -823,7 +823,6 @@ static bool testBlackboxConditionUncached(flightLogFieldCondition_e condition)
         return (getMotorCount() >= condition - CONDITION(MOTOR_1_HAS_RPM) + 1) && useDshotTelemetry && isFieldEnabled(FIELD_SELECT(RPM));
 #endif
 
-#ifdef USE_SERVOS
 #ifdef USE_INDI
     case CONDITION(INDI):
         return isFieldEnabled(FIELD_SELECT(INDI));
@@ -837,6 +836,7 @@ static bool testBlackboxConditionUncached(flightLogFieldCondition_e condition)
         return isFieldEnabled(FIELD_SELECT(EKF));
 #endif
 
+#ifdef USE_SERVOS
     case CONDITION(SERVOS):
         return hasServos() && (FIELD_SELECT(SERVO));
 #endif
