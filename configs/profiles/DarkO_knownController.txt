@@ -1,6 +1,6 @@
 # Ported from the indiflight 4.4 fork (configs/profiles/DarkO_knownController.txt):
 # serial function bits remapped (TELEMETRY_PI 18->23, ACTUATORS_T4 20->24, HIL 19->25),
-# ahrs_process_denom -> imu_process_denom, acc_offset -> acc_calibration, dshot_idle_value -> motor_idle,
+# ahrs_process_denom -> imu_process_denom, dshot_idle_value -> motor_idle,
 # motor_output_limit / gps_rescue_* dropped (gone with USE_INDI), settings of features
 # that are not ported commented out ("# not in this port").
 # This file contains build flags and configuration for the CineRat 3inch drone
@@ -131,7 +131,7 @@ set align_board_roll = 0
 set align_board_pitch = 90
 set align_board_yaw = 0
 set acc_calibration = 0,0,0,1
-set acc_calibration = -30, 0, 0, 1
+set acc_offset = -30, 0, 0
 
 # motor setup
 set dshot_bidir = ON
@@ -190,6 +190,7 @@ set gyro_lpf1_dyn_max_hz = 250
 set acc_lpf_hz = 50
 set simplified_gyro_filter_multiplier = 40
 set rpm_filter_min_hz = 60
+set acc_rpm_filter = 0
 set rpm_filter_harmonics = 0
 
 profile 0

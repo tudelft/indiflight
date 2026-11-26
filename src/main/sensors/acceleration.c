@@ -39,6 +39,10 @@
 #ifdef HIL_BUILD
 #include "io/hil.h"
 #endif
+#if defined(USE_ACC_IN_GYRO_TASK) && defined(USE_INDI) && defined(USE_RPM_FILTER)
+#include "flight/indi.h"
+#include "flight/rpm_filter.h"
+#endif
 
 #include "acceleration.h"
 
@@ -128,6 +132,12 @@ static inline __attribute__((always_inline)) void accProcessSample(void)
     calibrateAccelerometer();
     applyAccelerationTrims(accelerationRuntime.accelerationTrims);
 #ifdef USE_ACC_IN_GYRO_TASK
+#if defined(USE_INDI) && defined(USE_RPM_FILTER)
+    // indiflight: optional rpm notches on acc, like the gyro: notch, then acc_lpf
+    if (indiConfig()->acc_rpm_filter) {
+        rpmFilterRunAcc(acc.accADC.v);
+    }
+#endif
     acc.accADCunfiltered = acc.accADC;
 #endif
     postProcessAccelerometer();

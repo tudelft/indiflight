@@ -1415,6 +1415,10 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_TPA_BREAKPOINT,    VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { PWM_RANGE_MIN, PWM_RANGE_MAX }, PG_PID_PROFILE, offsetof(pidProfile_t, tpa_breakpoint) },
 
 #ifdef USE_INDI
+    { PARAM_NAME_ACC_OFFSET,                            VAR_INT16 | MASTER_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_CONFIG, offsetof(indiConfig_t, acc_offset) },
+#ifdef USE_RPM_FILTER
+    { PARAM_NAME_ACC_RPM_FILTER,                        VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 1 }, PG_INDI_CONFIG, offsetof(indiConfig_t, acc_rpm_filter) },
+#endif
     { PARAM_NAME_INDI_ATTITUDE_GAINS,                   VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, attGains) },
     { PARAM_NAME_INDI_RATE_GAINS,                       VAR_UINT16 | PROFILE_INDI_VALUE | MODE_ARRAY, .config.array.length = 3, PG_INDI_PROFILE, offsetof(indiProfile_t, rateGains) },
     { PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE,           VAR_UINT16 | PROFILE_INDI_VALUE, .config.minmaxUnsigned = { 0, 1600 }, PG_INDI_PROFILE, offsetof(indiProfile_t, attMaxTiltRate) },

@@ -72,7 +72,7 @@ typedef struct acc_s {
     float jerkMagnitude;                    // in multiples of 1G/s (measure of collision strength)
     bool isAccelUpdatedAtLeastOnce;
 #ifdef USE_ACC_IN_GYRO_TASK
-    vector3_t accADCunfiltered;             // indiflight: averaged over the PID period, aligned and trimmed, before acc_lpf
+    vector3_t accADCunfiltered;             // indiflight: averaged over the PID period, aligned, trimmed, rpm-notched if acc_rpm_filter, before acc_lpf
 #endif
 } acc_t;
 

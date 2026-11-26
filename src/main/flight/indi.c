@@ -105,9 +105,12 @@
 // change to indiProfile_t, or stored profiles 1..N are read shifted.
 PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 2);
 
-PG_REGISTER_WITH_RESET_TEMPLATE(indiConfig_t, indiConfig, PG_INDI_CONFIG, 0);
+// version 1: acc_rpm_filter and acc_offset added
+PG_REGISTER_WITH_RESET_TEMPLATE(indiConfig_t, indiConfig, PG_INDI_CONFIG, 1);
 PG_RESET_TEMPLATE(indiConfig_t, indiConfig,
     .profileIndex = 0,
+    .acc_rpm_filter = 0, // off, as in the 4.4 fork (USE_ACCEL_RPM_FILTER was never set)
+    .acc_offset = { 0, 0, 0 },
 );
 
 uint8_t getCurrentIndiProfileIndex(void)

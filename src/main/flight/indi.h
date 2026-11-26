@@ -358,6 +358,9 @@ PG_DECLARE_ARRAY(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles);
 // active INDI profile. Own PG, so upstream systemConfig_t stays untouched.
 typedef struct indiConfig_s {
     uint8_t profileIndex;
+    uint8_t acc_rpm_filter; // 0/1: acc through the gyro's rpm notches (filter task, before acc_lpf)
+    int16_t acc_offset[3];  // mm, offset from CoG to the acc in Forward-Left-Up (as in the 4.4 fork's
+                            // accelerometerConfig_t; used by the learner). Not upstream's acc_calibration!
 } indiConfig_t;
 PG_DECLARE(indiConfig_t, indiConfig);
 

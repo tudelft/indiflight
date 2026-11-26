@@ -30,6 +30,7 @@
 #include "flight/indi_glue.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
+#include "io/beeper.h"
 #include "sensors/acceleration.h"
 #include "sensors/gyro.h"
 #ifdef USE_EKF
@@ -93,7 +94,8 @@ static float *indiServoState(void)
 }
 
 // acc input of INDI at PID rate: acc sampled in the gyro task and averaged over
-// the PID period (USE_ACC_IN_GYRO_TASK), before acc_lpf, then the gyro's rpm notches
+// the PID period (USE_ACC_IN_GYRO_TASK), rpm-notched in the filter task if
+// acc_rpm_filter is set, before acc_lpf
 static FAST_CODE void indiAccFiltering(void)
 {
     for (int axis = 0; axis < 3; axis++) {
@@ -103,8 +105,10 @@ static FAST_CODE void indiAccFiltering(void)
         indiAccAfterRpm[axis] = acc.accADC.v[axis];
 #endif
     }
-#ifdef USE_RPM_FILTER
-    rpmFilterRunAcc(indiAccAfterRpm);
+#if !defined(USE_ACC_IN_GYRO_TASK) && defined(USE_RPM_FILTER)
+    if (indiConfig()->acc_rpm_filter) {
+        rpmFilterRunAcc(indiAccAfterRpm);
+    }
 #endif
 }
 
@@ -144,6 +148,85 @@ bool indiIsActive(void)
     return INDIFLIGHT_MODE(INDI_MODE);
 }
 
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+#pragma message "WARNING: compiling with dangerous code (USE_ACTUATOR_TEST_DANGEROUS)."
+// indiflight motor test (as in the 4.4 fork): after arming and a grace period,
+// motor 0 runs a fixed sequence of sines and steps, the other motors idle. Used
+// by the CineRatMotorTest profile on a test stand. Overrides PID and INDI.
+#define ACTUATOR_TEST_GRACE_PERIOD_US 2000000
+
+// Sine input settings
+#define ACTUATOR_TEST_N_AMPLITUDES 3
+#define ACTUATOR_TEST_N_FREQUENCIES 3
+#define ACTUATOR_TEST_SIN_US 3000000 // 3 sec
+static const float actuatorTestAmplitudes[ACTUATOR_TEST_N_AMPLITUDES] = { 0.1f, 0.2f, 0.3f }; // [-]
+static const float actuatorTestFrequencies[ACTUATOR_TEST_N_FREQUENCIES] = { 0.5f, 1.f, 2.f }; // [Hz]
+
+// Step input settings
+#define ACTUATOR_TEST_N_STEPS 3
+#define ACTUATOR_TEST_STEP_US 2000000 // 2 sec
+static const float actuatorTestStepAmplitudes[ACTUATOR_TEST_N_STEPS] = { 0.25f, 0.5f, 0.75f };
+
+// Other settings
+#define ACTUATOR_TEST_BREAK_US 5000000 // 5 sec
+#define ACTUATOR_TEST_IDLE_OUTPUT 0.1f // 10% throttle
+
+static float actuatorTestSignal(timeDelta_t timeSinceStartUs)
+{
+    timeDelta_t totalUs = 0;
+
+    for (int i = 0; i < ACTUATOR_TEST_N_AMPLITUDES; i++) {
+        for (int j = 0; j < ACTUATOR_TEST_N_FREQUENCIES; j++) {
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+                return ACTUATOR_TEST_IDLE_OUTPUT;
+            }
+            totalUs += ACTUATOR_TEST_BREAK_US;
+
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_SIN_US) {
+                const float periodUs = 1000000.f / actuatorTestFrequencies[j];
+                const float phase = 2.0f * M_PIf * ((float)(timeSinceStartUs - totalUs)) / periodUs;
+                return 0.5f + actuatorTestAmplitudes[i] * sinf(phase);
+            }
+            totalUs += ACTUATOR_TEST_SIN_US;
+        }
+    }
+
+    for (int i = 0; i < ACTUATOR_TEST_N_STEPS; i++) {
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+            return ACTUATOR_TEST_IDLE_OUTPUT;
+        }
+        totalUs += ACTUATOR_TEST_BREAK_US;
+
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_STEP_US) {
+            return actuatorTestStepAmplitudes[i];
+        }
+        totalUs += ACTUATOR_TEST_STEP_US;
+    }
+    return ACTUATOR_TEST_IDLE_OUTPUT;
+}
+
+// overwrite motor_normalized[] with the test sequence
+static void actuatorTestOverride(timeUs_t currentTimeUs, int numMotors)
+{
+    for (int i = 0; i < numMotors; i++) {
+        motor_normalized[i] = 0.f;
+    }
+
+    static timeUs_t lastArmedUs = 0;
+    static bool lastArmed = false;
+    if (!lastArmed && ARMING_FLAG(ARMED)) {
+        lastArmedUs = currentTimeUs;
+        beeperWarningBeeps(15); // warn user
+    }
+    lastArmed = ARMING_FLAG(ARMED);
+    const timeDelta_t timeSinceArmUs = cmpTimeUs(currentTimeUs, lastArmedUs);
+
+    if (timeSinceArmUs >= ACTUATOR_TEST_GRACE_PERIOD_US) {
+        motor_normalized[0] = constrainf(actuatorTestSignal(timeSinceArmUs - ACTUATOR_TEST_GRACE_PERIOD_US), 0.f, 1.f);
+    }
+}
+#endif // USE_ACTUATOR_TEST_DANGEROUS
+
 // INDI output -> upstream motor[] (motor protocol units). Replaces mixTable().
 // TODO(spike): servos (servo_normalized -> upstream servo[]), throw/learner
 // overrides, failsafe/motor-stop handling that mixTable() does for PID.
@@ -169,6 +252,10 @@ FAST_CODE void indiMixTable(timeUs_t currentTimeUs)
         }
     }
 
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+    actuatorTestOverride(currentTimeUs, numMotors);
+#endif
+
     // INDI's actuator state uses the measured servo angles when a driver reports them
     indiUpdateActuatorState(motor_normalized, indiServoState());
 
@@ -189,12 +276,22 @@ FAST_CODE void indiMixTable(timeUs_t currentTimeUs)
 }
 
 // PID path: feed the upstream motor outputs back into INDI's actuator state
-FAST_CODE void indiTrackMotorOutput(void)
+FAST_CODE void indiTrackMotorOutput(timeUs_t currentTimeUs)
 {
+    UNUSED(currentTimeUs);
     const int numMotors = mixerRuntime.motorCount;
     for (int i = 0; i < numMotors; i++) {
         motor_normalized[i] = constrainf(scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0.f, 1.f), 0.f, 1.f);
     }
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+    // the test sequence also overrides the PID outputs
+    actuatorTestOverride(currentTimeUs, numMotors);
+    for (int i = 0; i < numMotors; i++) {
+        motor[i] = ARMING_FLAG(ARMED)
+            ? scaleRangef(motor_normalized[i], 0.f, 1.f, mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh)
+            : motor_disarmed[i];
+    }
+#endif
     for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
         servo_normalized[i] = 0.f; // PID path does not command the indiflight servo drivers
     }

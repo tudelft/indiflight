@@ -59,6 +59,8 @@
 #define PARAM_NAME_TPA_LOW_ALWAYS "tpa_low_always"
 
 #ifdef USE_INDI
+#define PARAM_NAME_ACC_RPM_FILTER "acc_rpm_filter"
+#define PARAM_NAME_ACC_OFFSET "acc_offset"
 #define PARAM_NAME_INDI_ATTITUDE_GAINS "indi_attitude_gains"
 #define PARAM_NAME_INDI_RATE_GAINS "indi_rate_gains"
 #define PARAM_NAME_INDI_ATTITUDE_MAX_TILT_RATE "indi_attitude_max_tilt_rate"

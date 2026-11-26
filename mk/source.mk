@@ -72,6 +72,7 @@ COMMON_SRC = \
             common/huffman_table.c \
             common/maths.c \
             common/maths_indi.c \
+            common/signal_generator.c \
             common/printf.c \
             common/printf_serial.c \
             common/pwl.c \
@@ -288,6 +289,10 @@ COMMON_SRC = \
             io/feetech.c \
             io/keyboard.c \
             drivers/pitotmeter/pitotmeter_ms4525.c \
+            drivers/pitotmeter/pitotmeter_ms5525.c \
+            drivers/pitotmeter/pitotmeter_dlvr_l10d.c \
+            drivers/pitotmeter/pitotmeter_adc.c \
+            drivers/pitotmeter/pitotmeter_fake.c \
             sensors/pitotmeter.c \
             io/ledstrip.c \
             io/local_pos.c \

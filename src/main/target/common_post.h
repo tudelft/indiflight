@@ -847,8 +847,13 @@ extern struct linker_symbol __fontdata_end;
     || defined(USE_SERVOS_FEETECH) || defined(USE_ACTUATORS_T4) \
     || defined(HIL_BUILD) || defined(MOCKUP) || defined(USE_TRAJECTORY_TRACKER) \
     || defined(USE_NN_CONTROL) || defined(USE_LEARNER) || defined(USE_CATAPULT) \
-    || defined(USE_THROW_TO_ARM))
+    || defined(USE_THROW_TO_ARM) || defined(USE_ACTUATOR_TEST_DANGEROUS))
 #error "indiflight features need USE_INDIFLIGHT: add '#define USE_INDIFLIGHT' to the profile or -DUSE_INDIFLIGHT to EXTRA_FLAGS"
+#endif
+
+// indiflight: the motor test sequence lives in the INDI mixer glue (flight/indi_glue.c)
+#if defined(USE_ACTUATOR_TEST_DANGEROUS) && !defined(USE_INDI)
+#error "USE_ACTUATOR_TEST_DANGEROUS needs USE_INDI"
 #endif
 
 // indiflight: INDI builds have no upstream GPS rescue (no BOXGPSRESCUE, no

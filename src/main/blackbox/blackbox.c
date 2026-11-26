@@ -2313,6 +2313,9 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_DESCEND_DELAY, "%d", geofenceConfig()->descendDelaySeconds);
 #endif
 #ifdef USE_INDI
+#ifdef USE_RPM_FILTER
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_ACC_RPM_FILTER, "%d",             indiConfig()->acc_rpm_filter);
+#endif
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_GAINS, "%d,%d,%d",                indiProfile->attGains[0],
                                                                                               indiProfile->attGains[1],
                                                                                               indiProfile->attGains[2]);

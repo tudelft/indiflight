@@ -1570,7 +1570,7 @@ static FAST_CODE void subTaskMotorUpdate(timeUs_t currentTimeUs)
 #ifdef USE_INDI
         // keep INDI's actuator state in sync with the PID outputs (no effect on them),
         // so switching INDI on in flight starts from the right state
-        indiTrackMotorOutput();
+        indiTrackMotorOutput(currentTimeUs);
 #endif
     }
 
