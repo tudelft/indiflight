@@ -62,7 +62,7 @@ struct bbs {
     bool have_last; uint32_t last_it, last_raw_time; int64_t last_time64;
 
     // output
-    int64_t *rows; size_t n_rows, cap_rows, n_cols, n_main, n_slow;
+    int64_t *rows; size_t rows_base, n_rows, cap_rows /* values */, n_cols, n_main, n_slow;
     int64_t slow[FLIGHT_LOG_MAX_FIELDS]; size_t slow_n;
     char **names; size_t names_n; size_t names_log;
     size_t *log_starts; size_t n_logs, cap_logs;
@@ -118,9 +118,12 @@ static void capture_names(bbs_t *b, flightLog_t *log)
 
 static bool append_row(bbs_t *b, const int64_t *frame, int64_t time64)
 {
-    if (b->n_rows == b->cap_rows) {
-        size_t cap = b->cap_rows ? b->cap_rows * 2 : 4096;
-        int64_t *r = realloc(b->rows, cap * b->n_cols * sizeof(int64_t));
+    // capacity is counted in values: a later log can have more columns than the rows already held
+    const size_t need = (b->n_rows + 1) * b->n_cols;
+    if (need > b->cap_rows) {
+        size_t cap = b->cap_rows ? b->cap_rows : 4096 * b->n_cols;
+        while (cap < need) cap *= 2;
+        int64_t *r = realloc(b->rows, cap * sizeof(int64_t));
         if (!r) return false;
         b->rows = r;
         b->cap_rows = cap;
@@ -338,6 +341,10 @@ void bbs_decode(bbs_t *b)
     if (b->cfg.on_rows && b->n_rows > first_new_row) {
         b->cfg.on_rows(b->cfg.user, b->rows + first_new_row * b->n_cols, b->n_rows - first_new_row, b->n_cols);
     }
+    if (b->cfg.discard_rows) {
+        b->rows_base += b->n_rows;
+        b->n_rows = 0;
+    }
 }
 
 /* ---------------------------------------------------------------- stream layer */
@@ -368,7 +375,7 @@ static void register_log(bbs_t *b)
         b->log_starts = l;
         b->cap_logs = cap;
     }
-    b->log_starts[b->n_logs++] = b->n_rows;
+    b->log_starts[b->n_logs++] = b->rows_base + b->n_rows;
 }
 
 static void new_log(bbs_t *b)
@@ -426,7 +433,10 @@ static void payload_byte(bbs_t *b, uint8_t c)
 static void handle_packet(bbs_t *b, uint8_t seq, const uint8_t *p, size_t n)
 {
     if (b->have_seq && seq != b->next_seq) {
-        b->st.packets_lost += (uint8_t)(seq - b->next_seq);
+        const uint8_t missing = (uint8_t)(seq - b->next_seq);
+        b->st.packets_lost += missing;
+        // nothing corrupt arrived in between: the packets were never sent (firmware TX buffer full)
+        if (!b->disc_pending) b->st.packets_dropped_tx += missing;
         b->disc_pending = true;
     }
     if (b->disc_pending) {
@@ -436,6 +446,7 @@ static void handle_packet(bbs_t *b, uint8_t seq, const uint8_t *p, size_t n)
     b->have_seq = true;
     b->next_seq = (uint8_t)(seq + 1);
     b->st.packets_ok++;
+    if (b->cfg.on_log_bytes) b->cfg.on_log_bytes(b->cfg.user, p, n);
     for (size_t i = 0; i < n; i++) payload_byte(b, p[i]);
 }
 
@@ -462,6 +473,8 @@ static void header_copy_complete(bbs_t *b)
 
     // no header for the data that is coming in (late start, or the header was damaged), or a different log
     if (b->hdr_done) bbs_decode(b);
+    // the .BFL output gets the header too, so that the data that follows can be decoded from the file
+    if (b->cfg.on_log_bytes) b->cfg.on_log_bytes(b->cfg.user, b->hc, b->hc_len);
     memcpy(b->hdr, b->hc, b->hc_len);
     b->hdr_len = b->hc_len;
     b->hdr_done = true;
@@ -562,7 +575,7 @@ bbs_t *bbs_create(const bbs_config_t *cfg)
     bbs_t *b = calloc(1, sizeof(*b));
     if (!b) return NULL;
     if (cfg) b->cfg = *cfg;
-    if (!b->cfg.decode_every_bytes) b->cfg.decode_every_bytes = 16384;
+    if (!b->cfg.decode_every_bytes) b->cfg.decode_every_bytes = 65536;
     if (!b->cfg.max_iter_jump) b->cfg.max_iter_jump = 50000;
     if (!b->cfg.header_gap_ms) b->cfg.header_gap_ms = 6000;
     if (!b->cfg.max_dt_us) b->cfg.max_dt_us = 30 * 1000000;

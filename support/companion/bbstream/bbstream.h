@@ -27,7 +27,7 @@
 typedef struct bbs bbs_t;
 
 typedef struct {
-    uint32_t decode_every_bytes;  // decode when this many undecoded bytes are buffered, 0 = 16384
+    uint32_t decode_every_bytes;  // decode when this many undecoded bytes are buffered, 0 = 65536
     int32_t max_iter_jump;        // plausibility gate for rows after a gap, 0 = 50000 iterations
     int64_t max_dt_us;            // same, in microseconds, 0 = 30 s
     int32_t header_gap_ms;        // a header (copy) arriving after this long without any header is a new log, 0 = 6000
@@ -35,11 +35,22 @@ typedef struct {
     // optional: called after a decode with the rows that were just appended (n_cols values each)
     void (*on_rows)(void *user, const int64_t *rows, size_t n_rows, size_t n_cols);
     void *user;
+    // nonzero: forget the rows once on_rows has seen them, so memory stays bounded however long the stream
+    // runs. bbs_rows() then only holds the rows of the current decode; row indices (bbs_log_starts) count all
+    // rows ever appended.
+    int discard_rows;
+    // optional: the log as it came over the link (a .BFL file, decodable with blackbox_decode): the data channel
+    // payload in order, with a header copy inserted where one was used because the log's own header was missing
+    // or damaged. Lost packets are gaps in it, as in a damaged flash log.
+    void (*on_log_bytes)(void *user, const uint8_t *data, size_t len);
 } bbs_config_t;
 
 typedef struct {
     uint64_t bytes_in;
     uint64_t packets_ok, packets_bad_crc, packets_lost; // lost = seq gaps (number of missing packets)
+    uint64_t packets_dropped_tx;                        // the part of lost that is a clean seq gap: no bad data
+                                                        // before it, so the firmware dropped them (TX buffer
+                                                        // full = baud rate too low), not the receiver
     uint64_t bytes_skipped;                             // bytes that were not part of a good packet
     uint64_t header_copies, header_installs;            // repeated headers received complete / used because the log had no header
     uint64_t decodes, rows, rows_duplicate, rows_rejected, resyncs, logs;
@@ -55,7 +66,7 @@ void bbs_feed(bbs_t *b, const uint8_t *data, size_t len);
 void bbs_decode(bbs_t *b);
 
 const int64_t *bbs_rows(const bbs_t *b);   // n_rows * n_cols values, row major
-size_t bbs_n_rows(const bbs_t *b);
+size_t bbs_n_rows(const bbs_t *b);         // rows held now (see discard_rows); bbs_stats()->rows counts all
 size_t bbs_n_cols(const bbs_t *b);
 const char *bbs_col_name(const bbs_t *b, size_t col);
 const bbs_stats_t *bbs_stats(const bbs_t *b);

@@ -18,12 +18,34 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# blackbox_packets.py is in the parent directory, or next to this file in a CMake build directory
 sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, HERE)
 from blackbox_packets import encode_packet, PAYLOAD_MAX, FLAG_HEADER, FLAG_FIRST, FLAG_LAST  # noqa: E402
 
-CLI = os.environ.get("BBSTREAM_CLI", os.path.join(HERE, "obj", "bbstream_cli"))
-REF = os.path.join(HERE, "obj", "blackbox_decode")
-DEFAULT_LOG = os.path.join(HERE, "..", "..", "..", "logs-mockup", "LOG00043.BFL")
+
+sys.stdout.reconfigure(line_buffering=True)  # show each result as it happens, also under ctest
+CLI_TIMEOUT = float(os.environ.get("BBSTREAM_TIMEOUT", 120))  # s per run: a hanging decoder fails the test instead of blocking it
+
+
+def _watchdog(proc):
+    """kill proc if it runs longer than CLI_TIMEOUT (returncode -9 afterwards)"""
+    t = threading.Timer(CLI_TIMEOUT, proc.kill)
+    t.start()
+    return t
+
+
+def _find(env, *candidates):
+    """$env, else the first candidate that exists (next to this file = CMake build dir, obj/ = Makefile)"""
+    if os.environ.get(env):
+        return os.environ[env]
+    paths = [os.path.join(HERE, *c) for c in candidates]
+    return next((p for p in paths if os.path.exists(p)), paths[-1])
+
+
+CLI = _find("BBSTREAM_CLI", ("bbstream_cli",), ("obj", "bbstream_cli"))
+REF = _find("BBSTREAM_REF", ("blackbox_decode",), ("obj", "blackbox_decode"))
+DEFAULT_LOG = _find("BBSTREAM_LOG", ("LOG00043.BFL",), ("..", "..", "..", "logs-mockup", "LOG00043.BFL"))
 
 
 def HEADER_BYTES(data):
@@ -42,13 +64,16 @@ def slow_names(data):
 
 
 def read_csv(text_lines):
+    if not text_lines:  # nothing decoded: the CLI writes an empty file
+        return [], []
     names = [c.strip() for c in text_lines[0].split(",")]
     rows = [[int(c) for c in l.split(",")] for l in text_lines[1:] if l.strip()]
     return names, rows
 
 
 def reference(path):
-    out = subprocess.run([REF, "--stdout", path], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([REF, "--stdout", path], capture_output=True, text=True, check=True,
+                         timeout=CLI_TIMEOUT).stdout
     return read_csv(out.splitlines())
 
 
@@ -123,6 +148,7 @@ def run_cli(stream, rng, use_pty=False, args=()):
         termios.tcsetattr(slave, termios.TCSANOW, attr)
         proc = subprocess.Popen([CLI, "-d", os.ttyname(slave), "-b", "115200", "-o", csv_path, "-p", "0"],
                                 stderr=subprocess.PIPE, text=True)
+        wd = _watchdog(proc)
         def feed():
             time.sleep(0.3)  # the CLI flushes the input when it opens the port
             for c in chunks:
@@ -133,16 +159,18 @@ def run_cli(stream, rng, use_pty=False, args=()):
                 time.sleep(len(c) / 800e3)  # a serial port cannot be stopped: stay below the decoder's speed
             time.sleep(1.0)
             proc.send_signal(2)  # SIGINT: the reader stops at the end of a tty
-        t = threading.Thread(target=feed)
+        t = threading.Thread(target=feed, daemon=True)
         t.start()
         err = proc.stderr.read()
         t.join()
         proc.wait()
+        wd.cancel()
         os.close(master)
         os.close(slave)
     else:
         proc = subprocess.Popen([CLI, "-f", "-", "-o", csv_path, "-p", "0", *args], stdin=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=False)
+        wd = _watchdog(proc)
         def feed():
             for c in chunks:
                 if c is None:
@@ -154,11 +182,13 @@ def run_cli(stream, rng, use_pty=False, args=()):
                 except BrokenPipeError:
                     break
             proc.stdin.close()
-        t = threading.Thread(target=feed)
+        t = threading.Thread(target=feed, daemon=True)
         t.start()
         err = proc.stderr.read().decode()
         t.join()
         proc.wait()
+        wd.cancel()
+    assert proc.returncode != -9, f"bbstream_cli hung (killed after {CLI_TIMEOUT} s)"
     assert "Sanitizer" not in err and "runtime error" not in err, err
     with open(csv_path) as f:
         names, rows = read_csv(f.read().splitlines())
@@ -270,6 +300,20 @@ def main():
     print(f"{'2nd log, header lost':24s} ok: {cuts[0]} + {n_b} rows exact | {status}")
     assert cuts[0] >= len(ref[1]) - 3 and n_b > 0.8 * len(ref[1])
     assert "logs 2" in status
+
+    # -r: the .BFL written on the companion. Clean: byte for byte the original log (the header repeats are not
+    # part of it). Late start: the header copy that was used is written first, so blackbox_decode can read it.
+    bfl = tempfile.mktemp(suffix=".BFL")
+    pk = packetize(data, rng, header_every=40)
+    run_cli(b"".join(pk), rng, args=("-r", bfl))
+    with open(bfl, "rb") as f:
+        assert f.read() == data, "BFL differs from the original log"
+    print(f"{'BFL, clean':24s} ok: identical to the original ({len(data)} bytes)")
+    run_cli(b"".join(pk)[1000:], rng, args=("-r", bfl))
+    matched, missing = compare(ref, reference(bfl), True, slow)
+    print(f"{'BFL, late start':24s} ok: blackbox_decode reads {matched} rows exact, {missing} missing")
+    assert matched > 0.9 * len(ref[1])
+    os.unlink(bfl)
 
     # without repeats a damaged header or a late start makes the log undecodable, but must not crash anything
     pk = packetize(data, rng)

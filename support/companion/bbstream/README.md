@@ -1,16 +1,52 @@
 # bbstream: near-live decoding of the blackbox stream on a companion computer
 
 C library (`bbstream.c/.h`) plus a command line program (`bbstream_cli`) that decode the packetised blackbox
-stream (`blackbox_serial_packets = ON`, see `../README.md`) into a growing table of rows in memory.
+stream (`blackbox_serial_packets = ON`, see `../README.md`) into rows (a growing table in memory, or handed to a callback and
+forgotten with `discard_rows`, which is what `bbstream_cli` does).
 
 The blackbox-tools parser in `../../LogAnalysis/.../blackbox-tools/src` is used **unmodified**.
+It keeps EOF in plain `char`, which is unsigned on aarch64 Linux, so the parser would loop forever at the end of
+every window. Both builds pass `-fsigned-char` for that; keep it when adding another build.
 
 ```
 make              # obj/bbstream_cli and obj/blackbox_decode (reference decoder, for the tests)
 make test         # python3 test_bbstream.py (uses logs-mockup/LOG00043.BFL)
-./obj/bbstream_cli -d /dev/serial0 -b 2000000 -o out.csv -v      # Ctrl-C writes the CSV
+./obj/bbstream_cli -d /dev/serial0 -b 2000000 -o out.csv -v      # CSV is written as rows arrive; Ctrl-C to stop
 ./obj/bbstream_cli -f capture.bin -o out.csv                      # replay a capture, or "-f -" for stdin
+./obj/bbstream_cli -d /dev/serial0 -b 2000000 -o out.csv -v -L   # without ASYNC_LOW_LATENCY, to compare overruns
+./obj/bbstream_cli -d /dev/serial0 -b 2470000 -o out.csv -r out.BFL -v   # also keep the log itself (any baud rate)
 ```
+
+### Cross-compiling for the companion (aarch64)
+
+`CMakeLists.txt` builds `bbstream_cli` (add `-DBBSTREAM_REFERENCE_DECODER=ON` for `blackbox_decode`). From the
+repo root, with `remote.env` filled in, the cross-compiler container builds it and deploys to the Pi:
+
+```
+docker run -v rootfs:/rootfs --mount type=bind,src=./,dst=/package --env-file=./remote.env \
+  aarch64-linux-gnu-cross --processes=8 --clean-build --deploy=/home/pi --wd=support/companion/bbstream
+```
+
+The binary should end up in `~/bbstream/build-aarch64-linux-gnu/bbstream_cli`. Native: `mkdir build && cd build && cmake .. && make`.
+
+The CMake build also builds `blackbox_decode` and copies the test and its inputs (`test_bbstream.py`,
+`blackbox_packets.py`, `LOG00043.BFL`) into the build directory, so the tests also run on the companion after a
+deploy (needs only `python3`; each run is killed after 120 s, `BBSTREAM_TIMEOUT` changes that):
+
+```
+cd ~/bbstream/build-aarch64-linux-gnu && python3 test_bbstream.py     # or: make test (ctest), natively
+```
+
+`-r out.BFL` writes the log as it came over the link, for `blackbox_decode` or the log tools: the data payload in
+order, plus the repeated header where the log's own one was missing (late start, damaged header). A clean stream
+gives exactly the file the FC would have written to flash; lost packets are gaps, as in a damaged flash log.
+
+Baud rates other than the standard ones (e.g. 2470000) are set with `termios2`; the driver makes the nearest rate
+it can (PL011 at 48 MHz: 2461538, 0.3% off) and the CLI prints a note if that differs from the request.
+
+With `-v` the status line separates the causes of loss: `fc dropped` are clean seq gaps, packets the firmware
+never sent because its TX buffer was full (the baud rate is too low for the log rate). `crc` and `uart overrun` are
+bytes the companion lost. `link N% (max M%)` is the received byte rate against what the baud rate carries.
 
 ## How it works
 
@@ -18,7 +54,7 @@ make test         # python3 test_bbstream.py (uses logs-mockup/LOG00043.BFL)
    sequence number. Bad or missing packets are a *discontinuity*.
 2. Payload bytes are the plain log. The header (the leading `H ...` lines) is kept; the data after it is kept in
    a buffer.
-3. Every `decode_every_bytes` (default 16 kB, about 80 ms at 2 Mbaud) the header and the buffered data are written
+3. Every `decode_every_bytes` (default 64 kB, about 330 ms at 2 Mbaud) the header and the buffered data are written
    to an in-memory file (`memfd`, nothing touches the SD card) and parsed by `flightLogParse()`.
 4. The parser reports the offset of every frame. The newest I-frame it completed becomes the start of the next
    window, so a window only holds the data since the last I-frame, and the overlap is small. No knowledge about
@@ -68,7 +104,7 @@ to SI units. The one exception: the time column is unwrapped to 64 bit.
   `uart overrun` in the `-v` status line (from `TIOCGICOUNT`).
 - Whatever is lost anyway is detected by the CRC and sequence number and costs rows, not correctness.
 - `bbstream_cli` has two threads. The reader thread only does `poll`+`read` into a 1 MiB lock-free ring (5 s of data);
-  it runs `SCHED_FIFO` (`-p`, needs root or `CAP_SYS_NICE`), with locked memory and optionally pinned to a core (`-c`).
+  it runs `SCHED_FIFO` (`-p`, needs root or `CAP_SYS_NICE`), with its ring locked in RAM (not `mlockall`: that would pin every later allocation too) and optionally pinned to a core (`-c`).
   The decoder thread drains the ring, so a slow decode (about 10 ms worst case on a PC) cannot stall the UART read. If it ever
   falls more than 5 s behind, data is dropped and counted (`ring drops`).
 - `low_latency` is set on the tty and it is put in raw mode, 8N1, no flow control.

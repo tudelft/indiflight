@@ -2,6 +2,8 @@
 BBT   := ../../LogAnalysis/indiflight_log_tools/indiflight_log_tools/blackbox-tools/src
 OBJ   ?= obj
 CFLAGS ?= -O2 -Wall -Wextra -g
+# blackbox-tools keeps EOF in plain `char`: unsigned on aarch64, the parser then never ends (see CMakeLists.txt)
+override CFLAGS += -fsigned-char
 LIB   := parser.c tools.c platform.c stream.c decoders.c units.c blackbox_fielddefs.c
 
 all: $(OBJ)/bbstream_cli $(OBJ)/blackbox_decode
