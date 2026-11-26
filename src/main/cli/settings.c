@@ -74,6 +74,9 @@
 #ifdef USE_GEOFENCE
 #include "flight/geofence.h"
 #endif
+#ifdef USE_PITOT
+#include "sensors/pitotmeter.h"
+#endif
 #ifdef USE_LOCAL_POSITION
 #include "flight/pos_ctl.h"
 #endif
@@ -603,6 +606,13 @@ static const char * const lookupTablePositionWaypointSource[] = {
 };
 #endif
 
+#ifdef USE_PITOT
+// order of pitotSensor_e
+static const char * const lookupTablePitotHardware[] = {
+    "NONE", "AUTO", "MS4525", "ADC", "FAKE", "DLVR", "MS5525"
+};
+#endif
+
 #define LOOKUP_TABLE_ENTRY(name) { name, ARRAYLEN(name) }
 
 const lookupTableEntry_t lookupTables[] = {
@@ -752,6 +762,9 @@ const lookupTableEntry_t lookupTables[] = {
 #ifdef USE_LOCAL_POSITION
     LOOKUP_TABLE_ENTRY(lookupTablePositionAttitudeMapping),
     LOOKUP_TABLE_ENTRY(lookupTablePositionWaypointSource),
+#endif
+#ifdef USE_PITOT
+    LOOKUP_TABLE_ENTRY(lookupTablePitotHardware),
 #endif
 };
 
@@ -1512,6 +1525,10 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_EKF_BARO_RPM_COEFF,         VAR_INT16  | MASTER_VALUE,              .config.minmax = { -32000, 32000 }, PG_EKF_CONFIG, offsetof(ekfConfig_t, baro_rpm_coeff) },
 #endif
 
+#ifdef USE_PITOT
+    { PARAM_NAME_PITOT_HARDWARE,              VAR_UINT8 | HARDWARE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_PITOT_HARDWARE }, PG_PITOTMETER_CONFIG, offsetof(pitotmeterConfig_t, pitot_hardware) },
+    { PARAM_NAME_PITOT_LPF_HZ,                VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 255 }, PG_PITOTMETER_CONFIG, offsetof(pitotmeterConfig_t, pitot_lpf_hz) },
+#endif
 #ifdef USE_GEOFENCE
     { PARAM_NAME_GEOFENCE_MAX_ALTITUDE,       VAR_INT16 | MASTER_VALUE, .config.minmax = { -30000, 30000 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, maxAltMeters) },
     { PARAM_NAME_GEOFENCE_HARD_OFFSET,        VAR_UINT8 | MASTER_VALUE, .config.minmax = { 0, 50 },   PG_GEOFENCE_CONFIG, offsetof(geofenceConfig_t, hardFenceOffset) },

@@ -22,20 +22,16 @@
 #include "pg/pg.h"
 #include "drivers/pitotmeter/pitotmeter.h"
 
+// order of the pitot_hardware lookup table (cli/settings.c)
 typedef enum {
     PITOT_NONE = 0,
-    PITOT_AUTODETECT = 1,
-    PITOT_MS4525 = 2,
-    PITOT_ADC = 3,
-    PITOT_VIRTUAL = 4,
-    PITOT_FAKE = 5,
-    PITOT_MSP = 6,
-    PITOT_DLVR = 7,
-    PITOT_MS5525 = 8,
+    PITOT_AUTODETECT,
+    PITOT_MS4525,
+    PITOT_ADC,
+    PITOT_FAKE,
+    PITOT_DLVR,
+    PITOT_MS5525,
 } pitotSensor_e;
-
-#define PITOT_MAX  PITOT_FAKE
-#define PITOT_SAMPLE_COUNT_MAX   48
 
 typedef struct pitotmeterConfig_s {
     uint8_t pitot_hardware;          // Pitotmeter hardware to use
@@ -67,8 +63,4 @@ bool pitotInit(void);
 bool pitotIsCalibrationComplete(void);
 void pitotStartCalibration(void);
 void pitotUpdate(timeUs_t currentTimeUs);
-float getAirspeedEstimate(void);
 bool pitotIsHealthy(void);
-bool pitotValidateAirspeed(void);
-bool pitotGetValidForAirspeed(void);
-bool pitotHasFailed(void);

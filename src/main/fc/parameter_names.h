@@ -169,6 +169,8 @@
 #endif
 
 #ifdef USE_GEOFENCE
+#define PARAM_NAME_PITOT_HARDWARE "pitot_hardware"
+#define PARAM_NAME_PITOT_LPF_HZ "pitot_lpf_hz"
 #define PARAM_NAME_GEOFENCE_MAX_ALTITUDE  "geofence_max_altitude"
 #define PARAM_NAME_GEOFENCE_HARD_OFFSET   "geofence_hard_offset"
 #define PARAM_NAME_GEOFENCE_GRACE_COUNT   "geofence_grace_count"

@@ -2302,6 +2302,10 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_RATE, "%d",           currentPidProfile->tpa_low_rate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_BREAKPOINT, "%d",     currentPidProfile->tpa_low_breakpoint);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_TPA_LOW_ALWAYS, "%d",         currentPidProfile->tpa_low_always);
+#ifdef USE_PITOT
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PITOT_HARDWARE, "%d",     pitotmeterConfig()->pitot_hardware);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PITOT_LPF_HZ, "%d",       pitotmeterConfig()->pitot_lpf_hz);
+#endif
 #ifdef USE_GEOFENCE
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_MAX_ALTITUDE, "%d", geofenceConfig()->maxAltMeters);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_HARD_OFFSET, "%d", geofenceConfig()->hardFenceOffset);

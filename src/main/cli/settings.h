@@ -169,6 +169,9 @@ typedef enum {
     TABLE_POSITION_ATTITUDE_MAPPING,
     TABLE_POSITION_WAYPOINT_SOURCE,
 #endif
+#ifdef USE_PITOT
+    TABLE_PITOT_HARDWARE,
+#endif
     LOOKUP_TABLE_COUNT
 } lookupTableIndex_e;
 
