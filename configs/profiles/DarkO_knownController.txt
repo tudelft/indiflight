@@ -103,13 +103,14 @@ map AETR1234
 # switch configs
 aux 0 0 1 1700 2100 0 0
 aux 1 1 3 900 2100 0 0
-aux 2 55 0 1700 2100 0 0
-aux 3 58 3 1300 2100 0 0
+aux 2 101 0 1700 2100 0 0
+# not in this port yet (LEARNER, 4.4 fork id 58): aux 3 58 3 1300 2100 0 0
 #aux 5 60 3 1700 2100 0 0 ## NN
 #aux 5 13 7 1700 2100 0 0 ## beeper instead of NN
-aux 4 61 7 1700 2100 0 0 ## reset home
+aux 4 103 7 1700 2100 0 0 ## reset home
 aux 5 36 2 1700 2100 0 0
-aux 6 56 6 1700 2100 0 0
+# not in this port yet (THROWTOARM, 4.4 fork id 56): aux 6 56 6 1700 2100 0 0
+aux 7 100 0 900 2100 0 0 ## INDI always on (the 4.4 fork flew INDI unless LEGACY PIDs was set)
 
 # blackbox config
 set blackbox_mode = NORMAL
