@@ -399,7 +399,7 @@ static size_t parseHeaderLine(flightLog_t *log, mmapStream_t *stream, ParserStat
         char fieldCopy[200];
         strcpy(fieldCopy, fieldValue);
         char* fcName = strtok(fieldCopy, " "); //Read firmware name
-        if (!strcmp(fcName, "Betaflight")) { //Version text location known for Betaflight firmware
+        if (!strcmp(fcName, "Betaflight") || !strcmp(fcName, "Indiflight")) { //Version text location known for Betaflight/Indiflight firmware
             char* fcVersion = strtok(NULL, " "); //Firmware version text
             strcpy(log->private->fcVersion, fcVersion);
         } else {

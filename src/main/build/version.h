@@ -22,7 +22,13 @@
 
 #include "common/utils.h"
 
+#ifdef USE_INDIFLIGHT
+// indiflight: own name, upstream's version numbering; the MSP identifier stays "BTFL" so
+// configurators work, the indiflight configurator detects it by BUILD_OPTION_INDIFLIGHT
+#define FC_FIRMWARE_NAME            "Indiflight"
+#else
 #define FC_FIRMWARE_NAME            "Betaflight"
+#endif
 #define FC_FIRMWARE_IDENTIFIER      "BTFL"
 
 #define FC_CALVER_BASE_YEAR 2000

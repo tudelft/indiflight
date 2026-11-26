@@ -35,7 +35,14 @@
 
 #include "msp/msp_build_info.h"
 
+// indiflight: marks an indiflight build in MSP_BUILD_INFO, outside the cloud build option
+// ranges (keep this when regenerating the file)
+#define BUILD_OPTION_INDIFLIGHT                 61441
+
 static const uint16_t buildOptions[] = {
+#ifdef USE_INDIFLIGHT
+        BUILD_OPTION_INDIFLIGHT,
+#endif
 #ifdef USE_SERIALRX_CRSF
         BUILD_OPTION_SERIALRX_CRSF,
 #endif
