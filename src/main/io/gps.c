@@ -1596,10 +1596,12 @@ void gpsUpdate(timeUs_t currentTimeUs)
 
     static bool hasBeeped = false;
     if (!ARMING_FLAG(ARMED)) {
+#ifndef USE_INDI // indiflight: home is kept while disarmed (set by RESET HOME, cleared on disarm)
         if (!gpsConfig()->gps_set_home_point_once) {
         // clear the home fix icon between arms if the user configuration is to reset home point between arms
             DISABLE_STATE(GPS_FIX_HOME);
         }
+#endif
         // while disarmed, beep when requirements for a home fix are met
         // ?? should we also beep if home fix requirements first appear after arming?
         if (!hasBeeped && STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueMinSats()) {

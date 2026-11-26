@@ -135,6 +135,9 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 #include "sensors/opticalflow.h"
 
 #include "telemetry/telemetry.h"
+#ifdef USE_TELEMETRY_PI
+#include "telemetry/pi.h"
+#endif
 #include "telemetry/crsf.h"
 
 #ifdef USE_BST
@@ -146,6 +149,12 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 #endif
 
 #include "tasks.h"
+
+#ifdef USE_INDIFLIGHT
+#define CURRENT_METER_TASK_FREQ_HZ 200 // indiflight: as in the 4.4 fork
+#else
+#define CURRENT_METER_TASK_FREQ_HZ 50
+#endif
 
 // taskUpdateRxMain() has occasional peaks in execution time so normal moving average duration estimation doesn't work
 // Decay the estimated max task duration by 1/(1 << RX_TASK_DECAY_SHIFT) on every invocation
@@ -367,6 +376,13 @@ static void taskTelemetry(timeUs_t currentTimeUs)
 
         telemetryProcess(currentTimeUs);
     }
+#ifdef USE_TELEMETRY_PI
+    else if (cliMode && featureIsEnabled(FEATURE_TELEMETRY)) {
+        // indiflight: keep the pi uplink (mocap poses, setpoints) alive while the CLI
+        // is open, as in the 4.4 fork; the pi port is never the CLI port
+        handlePiTelemetry();
+    }
+#endif
 }
 #endif
 
@@ -401,7 +417,7 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_SERIAL] = DEFINE_TASK("SERIAL", NULL, NULL, taskHandleSerial, TASK_PERIOD_HZ(100), TASK_PRIORITY_LOW), // 100 Hz should be enough to flush up to 115 bytes @ 115200 baud
     [TASK_BATTERY_ALERTS] = DEFINE_TASK("BATTERY_ALERTS", NULL, NULL, taskBatteryAlerts, TASK_PERIOD_HZ(5), TASK_PRIORITY_MEDIUM),
     [TASK_BATTERY_VOLTAGE] = DEFINE_TASK("BATTERY_VOLTAGE", NULL, NULL, batteryUpdateVoltage, TASK_PERIOD_HZ(SLOW_VOLTAGE_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM), // Freq may be updated in tasksInit
-    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(CURRENT_METER_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM),
 
 #ifdef USE_TRANSPONDER
     [TASK_TRANSPONDER] = DEFINE_TASK("TRANSPONDER", NULL, NULL, transponderUpdate, TASK_PERIOD_HZ(250), TASK_PRIORITY_LOW),
@@ -600,7 +616,9 @@ void tasksInit(void)
         setTaskEnabled(TASK_ACCEL, true);
         rescheduleTask(TASK_ACCEL, TASK_PERIOD_HZ(acc.sampleRateHz));
 #endif
+#ifndef USE_INDI // indiflight: attitude estimation runs in the PID loop (indiflightPreController())
         setTaskEnabled(TASK_ATTITUDE, true);
+#endif
     }
 #endif
 

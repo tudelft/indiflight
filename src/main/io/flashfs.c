@@ -73,8 +73,13 @@ static DMA_DATA_ZERO_INIT uint8_t flashWriteBuffer[FLASHFS_WRITE_BUFFER_SIZE];
  * The tail is advanced once a write is complete up to the location behind head. The tail is advanced
  * by a callback from the FLASH write routine. This prevents data being overwritten whilst a write is in progress.
  */
+#ifdef USE_INDIFLIGHT // indiflight: the write buffer is 512 bytes (flashfs.h)
+static uint16_t bufferHead = 0;
+static volatile uint16_t bufferTail = 0;
+#else
 static uint8_t bufferHead = 0;
 static volatile uint8_t bufferTail = 0;
+#endif
 
 /* Track whether the write interlock is clear, i.e. whether the buffers may be presented to the
  * device. It is cleared while a write is outstanding and set again once the completion callback

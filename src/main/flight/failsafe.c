@@ -525,6 +525,11 @@ FAST_CODE_NOINLINE void failsafeUpdateState(void)
                 break;
 
             default:
+#ifdef USE_INDI
+                // indiflight: unknown phase means memory corruption: failsafe now (as in the 4.4 fork)
+                failsafeState.phase = FAILSAFE_LANDED;
+                reprocessState = true;
+#endif
                 break;
         }
 

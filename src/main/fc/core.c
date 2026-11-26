@@ -580,6 +580,14 @@ void disarm(flightLogDisarmReason_e reason)
             statsOnDisarm();
         }
 #endif
+#ifdef USE_LOCAL_POSITION
+        // indiflight: invalidate the previous position setpoint
+        posSpNed.valid = false;
+#endif
+#if defined(USE_INDI) && defined(USE_GPS)
+        // indiflight: home is set by RESET HOME only and cleared on disarm (as in the 4.4 fork)
+        DISABLE_STATE(GPS_FIX_HOME);
+#endif
     // Terminate crashflip mode in any disarm
     if (crashFlipModeActive) {
         crashFlipModeActive = false;
@@ -690,7 +698,9 @@ if (isMotorProtocolDshot()) {
 #ifdef USE_GPS
         //beep to indicate arming
         if (featureIsEnabled(FEATURE_GPS)) {
+#ifndef USE_INDI // indiflight: home is set by RESET HOME, not on arming (as in the 4.4 fork)
             GPS_reset_home_position();
+#endif
             canUseGPSHeading = false; // block use of GPS Heading in position hold after each arm, until quad can set IMU to GPS COG
             if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueMinSats()) {
                 beeper(BEEPER_ARMING_GPS_FIX);
@@ -702,6 +712,14 @@ if (isMotorProtocolDshot()) {
         }
 #else
         beeper(BEEPER_ARMING);
+#endif
+
+#ifdef USE_LOCAL_POSITION
+        // indiflight: arming in POSITION mode holds the current position
+        // (the 4.4 fork kept a valid setpoint after a throw; add that check with throw-to-arm)
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            setLocalPosSpHere();
+        }
 #endif
 
 #ifdef USE_PERSISTENT_STATS
@@ -1664,7 +1682,13 @@ FAST_CODE bool gyroFilterReady(void)
 
 FAST_CODE bool pidLoopReady(void)
 {
+#ifdef USE_INDI
+    // indiflight: PID/INDI (and EKF, attitude) right after the filter task, in the same
+    // gyro cycle, as in the 4.4 fork; upstream's half-period offset adds latency
+    if ((pidUpdateCounter % activePidLoopDenom) == 0) {
+#else
     if ((pidUpdateCounter % activePidLoopDenom) == (activePidLoopDenom / 2)) {
+#endif
         return true;
     }
     return false;

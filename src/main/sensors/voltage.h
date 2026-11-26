@@ -22,7 +22,13 @@
 
 #include "voltage_ids.h"
 
+#ifdef USE_INDIFLIGHT
+// indiflight: battery voltage always at 200 Hz (as in the 4.4 fork); the
+// display/sag filters follow this rate
+#define SLOW_VOLTAGE_TASK_FREQ_HZ 200
+#else
 #define SLOW_VOLTAGE_TASK_FREQ_HZ 50
+#endif
 #define FAST_VOLTAGE_TASK_FREQ_HZ 200
 
 #define VOLTAGE_STABLE_TICK_MS        100

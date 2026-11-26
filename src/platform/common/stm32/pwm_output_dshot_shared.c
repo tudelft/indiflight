@@ -298,6 +298,14 @@ FAST_CODE_NOINLINE bool pwmTelemetryDecode(void)
             if (edges > MIN_GCR_EDGES) {
                 dshotTelemetryState.readCount++;
 
+#if defined(USE_INDIFLIGHT) && defined(USE_DSHOT_CACHE_MGMT)
+                // indiflight (from the 4.4 fork): DMA wrote telemetry edges into dmaBuffer (SRAM), but the
+                // cache may hold stale motor output data. Invalidate before the CPU reads, as the bitbang
+                // path does for its input buffer.
+                SCB_InvalidateDCache_by_Addr((uint32_t *)dmaMotors[i].dmaBuffer,
+                    ((GCR_TELEMETRY_INPUT_LEN * sizeof(DSHOT_DMA_BUFFER_UNIT) + 0x1F) & ~0x1F));
+#endif
+
                 rawValue = decodeTelemetryPacket(dmaMotors[i].dmaBuffer, edges);
 
                 if (rawValue != DSHOT_TELEMETRY_INVALID) {

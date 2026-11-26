@@ -20,11 +20,20 @@
 
 #pragma once
 
+#ifdef USE_INDIFLIGHT
+// indiflight: larger buffer for the large indiflight blackbox frames (as in the 4.4 fork)
+#define FLASHFS_WRITE_BUFFER_SIZE 512
+#else
 #define FLASHFS_WRITE_BUFFER_SIZE 128
+#endif
 #define FLASHFS_WRITE_BUFFER_USABLE (FLASHFS_WRITE_BUFFER_SIZE - 1)
 
 // Automatically trigger a flush when this much data is in the buffer
+#ifdef USE_INDIFLIGHT
+#define FLASHFS_WRITE_BUFFER_AUTO_FLUSH_LEN 256
+#else
 #define FLASHFS_WRITE_BUFFER_AUTO_FLUSH_LEN 64
+#endif
 
 void flashfsEraseCompletely(void);
 void flashfsEraseRange(uint32_t start, uint32_t end);

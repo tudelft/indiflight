@@ -33,6 +33,7 @@
 #include "io/beeper.h"
 #include "sensors/acceleration.h"
 #include "sensors/gyro.h"
+#include "flight/imu.h"
 #ifdef USE_EKF
 #include "flight/ekf.h"
 #endif
@@ -112,14 +113,26 @@ static FAST_CODE void indiAccFiltering(void)
 #endif
 }
 
+// attitude estimation in the PID loop, every imu_process_denom gyro samples, after
+// the EKF (as the 4.4 fork's TASK_AHRS in the realtime loop); TASK_ATTITUDE is off
+static FAST_CODE void indiImuUpdate(timeUs_t currentTimeUs)
+{
+    static FAST_DATA_ZERO_INIT uint32_t gyroSamplesSinceImu;
+    const uint32_t gyroSamplesPerPidLoop = (gyro.sampleLooptime > 0) ? MAX(1, lrintf((float)gyro.targetLooptime / gyro.sampleLooptime)) : 1;
+    gyroSamplesSinceImu += gyroSamplesPerPidLoop;
+    if (gyroSamplesSinceImu >= imuConfig()->imu_process_denom) {
+        gyroSamplesSinceImu = 0;
+        imuUpdateAttitude(currentTimeUs);
+    }
+}
+
 FAST_CODE void indiflightPreController(timeUs_t currentTimeUs)
 {
     indiAccFiltering();
 #ifdef USE_EKF
     updateEkf(currentTimeUs);
-#else
-    UNUSED(currentTimeUs);
 #endif
+    indiImuUpdate(currentTimeUs);
 }
 
 // stick activity detection (was in indiflight fc/rc.c)

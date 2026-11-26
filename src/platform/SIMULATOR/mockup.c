@@ -330,9 +330,11 @@ void tick(void)
     runTask(TASK_GYRO, now);
     runTask(TASK_FILTER, now);
     runTask(TASK_ACCEL, now);
+#ifndef USE_INDI // indiflight: with INDI, attitude estimation runs inside TASK_PID
     if (n % 8 == 0) {   // 1 kHz
         runTask(TASK_ATTITUDE, now);
     }
+#endif
 #ifdef USE_POS_CTL
     if (n % 16 == 0) {  // 500 Hz
         runTask(TASK_POS_CTL, now);

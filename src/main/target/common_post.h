@@ -851,6 +851,12 @@ extern struct linker_symbol __fontdata_end;
 #error "indiflight features need USE_INDIFLIGHT: add '#define USE_INDIFLIGHT' to the profile or -DUSE_INDIFLIGHT to EXTRA_FLAGS"
 #endif
 
+// indiflight: more SD card cache for the large indiflight blackbox frames ("fix logging
+// overhead" in the 4.4 fork)
+#if defined(USE_INDIFLIGHT) && !defined(AFATFS_NUM_CACHE_SECTORS)
+#define AFATFS_NUM_CACHE_SECTORS 40
+#endif
+
 // indiflight: the motor test sequence lives in the INDI mixer glue (flight/indi_glue.c)
 #if defined(USE_ACTUATOR_TEST_DANGEROUS) && !defined(USE_INDI)
 #error "USE_ACTUATOR_TEST_DANGEROUS needs USE_INDI"
