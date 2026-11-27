@@ -476,15 +476,16 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
     {"tt_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
-    // wind estimator (trajectory tracker spin mode), one TAG8_8SVB group of 8
+    // wind estimator (trajectory tracker spin mode): one TAG8_8SVB group of 8, then wind_state
     {"wind_tilt", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
     {"wind_tilt", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
     {"wind_dir", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
     {"wind_dir_std", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
     {"wind_bias", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
     {"wind_bias", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
-    {"wind_swept", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
-    {"wind_state", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_swept", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_swept", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_state", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 #endif
 #ifdef USE_NN_CONTROL
     {"nn_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
@@ -857,8 +858,8 @@ typedef struct blackboxMainState_s {
     int16_t wind_dir;       // 0.1 deg, wind from
     int16_t wind_dir_std;   // 0.1 deg
     int16_t wind_bias[2];   // 1e-4, heading frame (fwd, right)
-    int16_t wind_swept;     // deg
-    int16_t wind_state;     // windEstState_t
+    int16_t wind_swept[2];  // deg, positive / negative spin
+    int16_t wind_state;     // WIND_EST_* bits
 #endif
 #ifdef USE_NN_CONTROL
     uint8_t nn_active;
@@ -1307,7 +1308,7 @@ static void writeIntraframe(void)
         blackboxWriteSignedVB(blackboxCurrent->wind_dir);
         blackboxWriteSignedVB(blackboxCurrent->wind_dir_std);
         blackboxWriteSigned16VBArray(blackboxCurrent->wind_bias, 2);
-        blackboxWriteSignedVB(blackboxCurrent->wind_swept);
+        blackboxWriteSigned16VBArray(blackboxCurrent->wind_swept, 2);
         blackboxWriteSignedVB(blackboxCurrent->wind_state);
 #endif
 #ifdef USE_NN_CONTROL
@@ -1657,9 +1658,10 @@ static void writeInterframe(void)
         deltas[3] = blackboxCurrent->wind_dir_std - blackboxLast->wind_dir_std;
         deltas[4] = blackboxCurrent->wind_bias[0] - blackboxLast->wind_bias[0];
         deltas[5] = blackboxCurrent->wind_bias[1] - blackboxLast->wind_bias[1];
-        deltas[6] = blackboxCurrent->wind_swept - blackboxLast->wind_swept;
-        deltas[7] = blackboxCurrent->wind_state - blackboxLast->wind_state;
+        deltas[6] = blackboxCurrent->wind_swept[0] - blackboxLast->wind_swept[0];
+        deltas[7] = blackboxCurrent->wind_swept[1] - blackboxLast->wind_swept[1];
         blackboxWriteTag8_8SVB(deltas, 8);
+        blackboxWriteSignedVB(blackboxCurrent->wind_state - blackboxLast->wind_state);
 #endif
 #ifdef USE_NN_CONTROL
         blackboxWriteUnsignedVB(blackboxCurrent->nn_active - blackboxLast->nn_active);
@@ -2199,7 +2201,8 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->wind_dir_std = lrintf(constrainf(wind->dirStdDeg, 0.f, 180.f) * 10.f);
     blackboxCurrent->wind_bias[0] = lrintf(constrainf(wind->biasBody[0], -1.f, 1.f) * 10000.f);
     blackboxCurrent->wind_bias[1] = lrintf(constrainf(wind->biasBody[1], -1.f, 1.f) * 10000.f);
-    blackboxCurrent->wind_swept = lrintf(constrainf(wind->sweptYawDeg, 0.f, 32000.f));
+    blackboxCurrent->wind_swept[0] = lrintf(constrainf(wind->sweptYawDeg[WIND_EST_SPIN_POS], 0.f, 32000.f));
+    blackboxCurrent->wind_swept[1] = lrintf(constrainf(wind->sweptYawDeg[WIND_EST_SPIN_NEG], 0.f, 32000.f));
     blackboxCurrent->wind_state = wind->state;
 #endif
 #endif
@@ -2938,6 +2941,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE("wind_est_min_sweep_deg", "%d",      WIND_EST_MIN_SWEEP_DEG);
         BLACKBOX_PRINT_HEADER_LINE("wind_est_max_horz_speed_cms", "%d", (int) lrintf(WIND_EST_MAX_HORZ_SPEED * 100.f));
         BLACKBOX_PRINT_HEADER_LINE("wind_est_max_tilt_deg", "%d",       WIND_EST_MAX_TILT_DEG);
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_min_yaw_rate_mrads", "%d", (int) lrintf(WIND_EST_MIN_YAW_RATE * 1000.f));
 #endif
         BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF

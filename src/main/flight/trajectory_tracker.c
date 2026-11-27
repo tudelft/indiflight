@@ -170,6 +170,10 @@ bool isActiveSpinTrajectoryTracker(void) {
     return tt_active && tt_spin_mode && !tt_recovery_active;
 }
 
+float getSpinRateTrajectoryTracker(void) {
+    return tt_spin_mode ? tt_speed_factor : 0.f;
+}
+
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
     // x(t)   = R*cos(p(t))

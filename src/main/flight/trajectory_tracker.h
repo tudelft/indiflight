@@ -31,6 +31,7 @@ void initRecoveryMode(void);
 bool isActiveTrajectoryTracker(void);
 bool isActiveTrajectoryTrackerRecovery(void);
 bool isActiveSpinTrajectoryTracker(void);
+float getSpinRateTrajectoryTracker(void); // rad/s, spin mode yaw rate setpoint
 void initTrajectoryTracker(bool here);
 void initSpinTrajectoryTracker(void);
 void setSpeedTrajectoryTracker(float speed);

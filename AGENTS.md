@@ -91,12 +91,22 @@ frame, `getHoverAttitudeQuaternion()`) in NED against the heading:
 mean + harmonics up to `WIND_EST_HARMONICS` (least squares in running-mean
 form, one shared 5x5 normal matrix for N and E). The mean term points upwind
 (`wind_dir` = where the wind comes FROM); the co-rotating 1st harmonic is the
-body-fixed tilt (`wind_bias`). Wind speed is not observable (unknown drag).
+body-fixed tilt (`wind_bias`). Spinning rotates the mean by a few degrees with
+opposite sign per spin direction, so there is one fit per yaw-rate sign and
+the estimate averages them once both are valid (`wind_state` bits). Wind speed is not observable (unknown drag).
 `initSpinTrajectoryTracker()` resets it, `updatePosCtl()` feeds it
 (`spinTracking`). Tuning is compile-time (`WIND_EST_*` in `wind_estimator.h`,
 overridable with `-D`), logged in the blackbox header. The core
 (`windEstCore*`) has no flight controller dependencies and compiles on the
-host without `USE_TRAJECTORY_TRACKER`.
+host without `USE_TRAJECTORY_TRACKER`. SIL check (about 25 s, prints the
+error against the true wind):
+
+```sh
+make TARGET=MOCKUP PROFILE=DarkO_ThrowToHover YES=y
+python support/simulation/windSpinTailsitterSim.py --sil obj/main/indiflight_MOCKUP.so \
+    --sil-profile-txt configs/profiles/DarkO_ThrowToHover.txt --throw --no-vis --no-real-time \
+    --wind 0 3 0 --spin-dirs both --analyse
+```
 
 ## Adding or modifying a blackbox log signal
 

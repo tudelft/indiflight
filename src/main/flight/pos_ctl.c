@@ -448,7 +448,7 @@ void updatePosCtl(timeUs_t current) {
     }
 
 #ifdef USE_TRAJECTORY_TRACKER
-    updateWindEstimator(current, spinTracking && ARMING_FLAG(ARMED));
+    updateWindEstimator(current, spinTracking && ARMING_FLAG(ARMED), getSpinRateTrajectoryTracker());
 #else
     UNUSED(spinTracking);
 #endif

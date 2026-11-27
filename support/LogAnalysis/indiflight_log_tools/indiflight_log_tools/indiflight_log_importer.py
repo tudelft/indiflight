@@ -406,7 +406,7 @@ class IndiflightLog(object):
             ("wind_bias", range(2)),
             ("wind_dir", -1),
             ("wind_dir_std", -1),
-            ("wind_swept", -1),
+            ("wind_swept", range(2)),
             ("wind_state", -1),
             ("extPos", range(3)),
             ("extVel", range(3)),
@@ -713,11 +713,12 @@ class IndiflightLog(object):
             elif col == 'wind_dir' or col == 'wind_dir_std':
                 # 0.1 deg -> rad. wind_dir: direction the wind comes FROM
                 data[col] /= 10. * self.RADIANS_TO_DEGREES
-            elif col == 'wind_swept':
-                # deg -> rad
+            elif col.startswith('wind_swept'):
+                # wind_swept[0..1] (positive / negative spin): deg -> rad
                 data[col] /= self.RADIANS_TO_DEGREES
             elif col == 'wind_state':
-                # windEstState_t: 0 idle, 1 collecting, 2 valid, 3 hold
+                # bits: 1 sampling, 2 positive-spin fit valid,
+                # 4 negative-spin fit valid (both: spin offset cancelled)
                 data[col] = data[col].astype(int)
             elif col.startswith('ekf_acc_b'):
                 # ekf_acc_b[0..2]: mm/s^2 -> m/s^2
