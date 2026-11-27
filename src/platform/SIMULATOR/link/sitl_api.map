@@ -1,11 +1,12 @@
-/* indiflight MOCKUP: exported API of the shared library (src/platform/SIMULATOR/mockup.c),
+/* indiflight SIL: exported API of the shared library (src/platform/SIMULATOR/sitl_api.c),
    everything else stays local so unused platform code is garbage collected */
 {
   global:
     init; tick;
     setImu; setMotorSpeed; setServoAngle; setMocap; setMocapT; setPosSetpoint;
     getMotorOutputCommands; getServoOutputCommands;
-    mockup*;
+    sitlArm; sitlBlackboxUpdate; sitlCliChar; sitlGetFlightModes; sitlGetState;
+    sitlSetFlightModes; sitlSetRxBox; sitlSetRxBoxByName; sitlShutdown;
     processKey; disarm;
     armingFlags; flightModeFlags;
   local: *;

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Python bindings for the MOCKUP target interface functions
+# Python bindings for the indiflight SITL library (obj/main/indiflight.so, make sitl)
 #
 # Copyright 2024 Till Blaha (Delft University of Technology)
 #
@@ -31,8 +31,8 @@ import os
 # similar problem with the configurator on a few things.. but yeah.. this is what it will be
 class flightModeFlags():
     # flightModeFlags_e in src/main/fc/runtime_config.h. Written and read only
-    # through IndiflightSITLMockup._setFlightModes()/_getFlightModes() (C side:
-    # mockupSetFlightModes() in src/platform/SIMULATOR/mockup.c), so moving the
+    # through IndiflightSITL._setFlightModes()/_getFlightModes() (C side:
+    # sitlSetFlightModes() in src/platform/SIMULATOR/sitl_api.c), so moving the
     # indiflight modes into their own word only changes these values and that helper.
     ANGLE_MODE       = (1 << 0)
     HORIZON_MODE     = (1 << 1)
@@ -45,7 +45,7 @@ class flightModeFlags():
     FAILSAFE_MODE    = (1 << 10)
     GPS_RESCUE_MODE  = (1 << 11)
     AUTOPILOT_MODE   = (1 << 12)
-    # bits 16.. are the firmware's separate indiflightModeFlags word (see mockupSetFlightModes)
+    # bits 16.. are the firmware's separate indiflightModeFlags word (see sitlSetFlightModes)
     INDI_MODE        = (1 << 16)   # INDI controller instead of PID
     POSITION_MODE    = (1 << 17)   # indiflight position control (with INDI_MODE)
     WAYPOINT_MODE    = (1 << 18)
@@ -80,7 +80,7 @@ hid_codes = {
 float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
 timeUs_t = ct.c_uint32
 
-class IndiflightSITLMockup():
+class IndiflightSITL():
     def __init__(self, libfile, Nr=4, Ns=0):
         self.libfile = libfile
         self.Nr = Nr
@@ -111,7 +111,7 @@ class IndiflightSITLMockup():
         self._loadLibAndInit()
 
     def __del__(self):
-        #print("IndiflightSITLMockup destroyed: ensure disarmed to flush blackbox logs... ", end="")
+        #print("IndiflightSITL destroyed: ensure disarmed to flush blackbox logs... ", end="")
         self.disarm( reason = flightLogDisarmReason.DISARM_REASON_SYSTEM )
         #print("done.")
 
@@ -120,7 +120,7 @@ class IndiflightSITLMockup():
         if self.lib_handle is not None:
             # close sockets/files of this instance; dlclose does not, so the
             # next init() would fail to bind the TCP serial ports
-            self.lib.mockupShutdown()
+            self.lib.sitlShutdown()
 
             del self.armingFlags
             del self.lib
@@ -147,14 +147,14 @@ class IndiflightSITLMockup():
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.getServoOutputCommands.argtypes = [float_ptr, ct.c_int]
         self.lib.tick.argtypes = []
-        self.lib.mockupCliChar.argtypes = [ct.c_char]
+        self.lib.sitlCliChar.argtypes = [ct.c_char]
         self.lib.processKey.argtypes = [ct.c_uint8]
         self.lib.disarm.argtypes = [ct.c_uint8]
-        self.lib.mockupSetFlightModes.argtypes = [ct.c_uint32, ct.c_bool]
-        self.lib.mockupGetFlightModes.restype = ct.c_uint32
-        self.lib.mockupSetRxBoxByName.argtypes = [ct.c_char_p, ct.c_bool]
-        self.lib.mockupSetRxBoxByName.restype = ct.c_bool
-        self.lib.mockupArm.argtypes = [ct.c_bool]
+        self.lib.sitlSetFlightModes.argtypes = [ct.c_uint32, ct.c_bool]
+        self.lib.sitlGetFlightModes.restype = ct.c_uint32
+        self.lib.sitlSetRxBoxByName.argtypes = [ct.c_char_p, ct.c_bool]
+        self.lib.sitlSetRxBoxByName.restype = ct.c_bool
+        self.lib.sitlArm.argtypes = [ct.c_bool]
 
         # most important state
         self.armingFlags = self.getVariableReference(ct.c_uint8, "armingFlags")
@@ -169,11 +169,11 @@ class IndiflightSITLMockup():
                 char = file.read(1)
                 if not char:
                     break
-                self.lib.mockupCliChar(bytes(char, 'utf-8'))
+                self.lib.sitlCliChar(bytes(char, 'utf-8'))
 
         #todo: what if file already contains this? then we crash, i think
         for char in "batch end\nsave\n":
-            self.lib.mockupCliChar(bytes(char, 'utf-8'))
+            self.lib.sitlCliChar(bytes(char, 'utf-8'))
 
         ## realod lib
         self._loadLibAndInit()
@@ -184,16 +184,16 @@ class IndiflightSITLMockup():
             raise ValueError("cannot issue save command in this function. call saveConfig()")
 
         for char in string:
-            self.lib.mockupCliChar(bytes(char, 'utf-8'))
+            self.lib.sitlCliChar(bytes(char, 'utf-8'))
 
-        self.lib.mockupCliChar(bytes("\n", 'utf-8'))
+        self.lib.sitlCliChar(bytes("\n", 'utf-8'))
 
-        # todo: pipe clioutput to printf for MOCKUP/(SITL) target
+        # todo: pipe clioutput to printf for the SITL library
 
     def saveConfig(self):
         self.disarm()
         for char in "\nsave\n":
-            self.lib.mockupCliChar(bytes(char, 'utf-8'))
+            self.lib.sitlCliChar(bytes(char, 'utf-8'))
 
         self._loadLibAndInit()
 
@@ -247,10 +247,10 @@ class IndiflightSITLMockup():
 #%% managing modes and states
     # the one place that touches the flight-mode word(s), see flightModeFlags
     def _setFlightModes(self, mask, enable):
-        self.lib.mockupSetFlightModes(mask, enable)
+        self.lib.sitlSetFlightModes(mask, enable)
 
     def _getFlightModes(self):
-        return self.lib.mockupGetFlightModes()
+        return self.lib.sitlGetFlightModes()
 
     def enableFlightMode(self, mode):
         self._setFlightModes(mode, True)
@@ -262,11 +262,11 @@ class IndiflightSITLMockup():
         return self._getFlightModes()
 
     def enableRxBox(self, box):
-        if not self.lib.mockupSetRxBoxByName(box.encode(), True):
+        if not self.lib.sitlSetRxBoxByName(box.encode(), True):
             raise ValueError(f"unknown RX box {box}")
 
     def disableRxBox(self, box):
-        if not self.lib.mockupSetRxBoxByName(box.encode(), False):
+        if not self.lib.sitlSetRxBoxByName(box.encode(), False):
             raise ValueError(f"unknown RX box {box}")
 
     def getCurrentRxBoxes(self):
@@ -277,12 +277,12 @@ class IndiflightSITLMockup():
         print()
 
     def arm(self):
-        self.lib.mockupArm(True)
+        self.lib.sitlArm(True)
 
     def disarm(self, reason = flightLogDisarmReason.DISARM_REASON_SWITCH):
         self.lib.disarm(reason) # also marks blackbox finished
-        self.lib.mockupBlackboxUpdate()
-        self.lib.mockupBlackboxUpdate() # call twice to flush all blackbox state changes
+        self.lib.sitlBlackboxUpdate()
+        self.lib.sitlBlackboxUpdate() # call twice to flush all blackbox state changes
         self.armingFlags.value = 0 # make extra sure
 
 #%% finally: tick the inner loop controls
@@ -292,40 +292,40 @@ class IndiflightSITLMockup():
 
 
 if __name__=="__main__":
-    # init the Mockup. This deletes any existing "./eeprom.bin" and generates one with default settings
-    mockup = IndiflightSITLMockup( "./obj/main/indiflight_MOCKUP.so" )
+    # init the SITL. This deletes any existing "./eeprom.bin" and generates one with default settings
+    sitl = IndiflightSITL( "./obj/main/indiflight.so" )
 
     # load settings from a profile exported from the configurator ontop of this 
     # default "./eeprom.bin". On exit, the "./eeprom.bin" is overwritten 
     # with this combined result.
-    mockup.load_profile( "./src/utils/SIL.txt" )
+    sitl.load_profile( "./src/utils/SIL.txt" )
 
     # set flight modes and rc switch positions
-    mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | 
+    sitl.enableFlightMode(flightModeFlags.ANGLE_MODE | 
                             flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
-    #mockup.enableRxBox(boxId.BOXTHROWTOARM)
+    #sitl.enableRxBox(boxId.BOXTHROWTOARM)
 
     # enable logging
-    mockup.setLogging( True )
+    sitl.setLogging( True )
 
     # send a position setpoint
-    mockup.sendPositionSetpoint( [0., 1., -1.], np.pi )
+    sitl.sendPositionSetpoint( [0., 1., -1.], np.pi )
 
     # arm
-    mockup.arm()
+    sitl.arm()
 
     for i in range( 20000 ):
         # send (some) data 
-        mockup.sendImu( [0., 1., 0.], [0., 0., -9.81] )
-        mockup.sendMocap( [0., 1., 0.], [0., 0., 0.], [1., 0., 0., 0.] )
-        mockup.sendMotorSpeeds( [0., 0., 0., 100.] )
+        sitl.sendImu( [0., 1., 0.], [0., 0., -9.81] )
+        sitl.sendMocap( [0., 1., 0.], [0., 0., 0.], [1., 0., 0., 0.] )
+        sitl.sendMotorSpeeds( [0., 0., 0., 100.] )
 
         # run system
-        mockup.tick( 500 ) # 2000 Hz PID Frequency
+        sitl.tick( 500 ) # 2000 Hz PID Frequency
 
         # get (some) outputs
-        cmd = mockup.getMotorCommands()
+        cmd = sitl.getMotorCommands()
         if not i % 2000:
             print(cmd)
 
-    mockup.disarm() # not strictly needed, just makes the logfile terminate nicer
+    sitl.disarm() # not strictly needed, just makes the logfile terminate nicer

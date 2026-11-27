@@ -127,32 +127,32 @@ class Mocap:
 
 class IndiflightSITLWrapper():
     def __init__(self, uav, imu, libfile, Nr=4, Ns=0):
-        from indiflight_mockup_interface import IndiflightSITLMockup
+        from indiflight_sitl_interface import IndiflightSITL
         self.uav = uav
         self.imu = imu
-        self.mockup = IndiflightSITLMockup(libfile, Nr=Nr, Ns=Ns)
+        self.sitl = IndiflightSITL(libfile, Nr=Nr, Ns=Ns)
 
     def sendImuAndMotor(self):
-        self.mockup.sendImu( self.imu.gyro, self.imu.acc )
-        self.mockup.sendMotorSpeeds( self.uav.r_w ) # rad/s
-        self.mockup.sendServoAngles( self.uav.s_d ) # radians
+        self.sitl.sendImu( self.imu.gyro, self.imu.acc )
+        self.sitl.sendMotorSpeeds( self.uav.r_w ) # rad/s
+        self.sitl.sendServoAngles( self.uav.s_d ) # radians
 
     def sendMocap(self):
-        self.mockup.sendMocap( self.uav.xI, self.uav.vI, self.uav.q )
+        self.sitl.sendMocap( self.uav.xI, self.uav.vI, self.uav.q )
 
     def receive(self):
-        motor_normalized = self.mockup.getMotorCommands()
+        motor_normalized = self.sitl.getMotorCommands()
         nr = min(len(motor_normalized), self.uav.Nr)
         self.uav.r_u[:nr] = motor_normalized
         self.uav.r_u = np.clip(self.uav.r_u, 0., 1.)
 
-        servo_normalized = self.mockup.getServoCommands()
+        servo_normalized = self.sitl.getServoCommands()
         ns = min(len(servo_normalized), self.uav.Ns)
         self.uav.s_u[:ns] = servo_normalized
         self.uav.s_u = np.clip(self.uav.s_u, -1., 1.)
 
     def tick(self):
-        self.mockup.tick()
+        self.sitl.tick()
 
 
 #%% hardware in the loop interface

@@ -591,7 +591,7 @@ static void* tcpThread(void* data)
 
 #ifdef SIL_BUILD
 // indiflight SIL: true when the shared library is stepped by an external program
-// (mockup.c init(), support/simulation/PyNDIflight): no worker threads, no UDP links,
+// (sitl_api.c init(), support/simulation/PyNDIflight): no worker threads, no UDP links,
 // virtual clock advanced by sitlClockTick(). False when run as the executable.
 static bool sitlExternalClock = false;
 void sitlUseExternalClock(void)
@@ -727,7 +727,7 @@ uint64_t millis64_real(void)
 
 #ifdef SIL_BUILD
 // indiflight SIL, externally clocked: virtual time, advanced only by sitlClockTick()
-// (mockup.c tick()) and delays
+// (sitl_api.c tick()) and delays
 static uint64_t sitlVirtualTimeNs = 0;
 void sitlClockTick(uint32_t us)
 {
@@ -940,7 +940,7 @@ static void pwmCompleteMotorUpdate(void)
 
 #ifdef SIL_BUILD
     if (sitlExternalClock) {
-        return; // indiflight SIL: the caller reads the outputs (mockup.c)
+        return; // indiflight SIL: the caller reads the outputs (sitl_api.c)
     }
 #endif
     // get one "fdm_packet" can only send one "servo_packet"!!

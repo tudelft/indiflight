@@ -596,7 +596,7 @@ $(TARGET_EXE): $(TARGET_ELF)
 	$(V1) cp $< $@
 
 # indiflight SIL (SIMULATOR/mk/SITL.mk): the same objects also as the shared library
-# that support/simulation/PyNDIflight steps (src/platform/SIMULATOR/mockup.c)
+# that support/simulation/PyNDIflight steps (src/platform/SIMULATOR/sitl_api.c)
 ifeq ($(INDIFLIGHT_SIL),yes)
 TARGET_SIL_SO   := $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).so
 $(TARGET_SIL_SO): $(TARGET_OBJS) $(LD_SCRIPT) $(LD_SCRIPTS)
@@ -814,13 +814,13 @@ uf2: $(PLATFORM_SDK_STAMP) $(AUTOHYDRATE_STAMPS) validate-deps
 # indiflight SIL: an indiflight SITL build gives both the executable and the shared
 # library (SIMULATOR/mk/SITL.mk). This builds it with the default SIL features and
 # copies the library to where support/simulation and src/utils load it from.
-# make mockup [PROFILE=...] [EXTRA_FLAGS=...] -> obj/main/indiflight_MOCKUP.so (+ the SITL executable)
-MOCKUP_FLAGS ?= -DUSE_INDIFLIGHT -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
-.PHONY: mockup
-mockup:
-	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/mockup EXTRA_FLAGS="$(MOCKUP_FLAGS) $(EXTRA_FLAGS)"
-	$(V1) mkdir -p $(ROOT)/obj/main && cp $(ROOT)/obj/mockup/$(FORKNAME)_SITL.so $(ROOT)/obj/main/indiflight_MOCKUP.so
-	@echo "SIL library: obj/main/indiflight_MOCKUP.so"
+# make sitl [EXTRA_FLAGS=...] -> obj/main/indiflight.so (+ the SITL executable)
+SITL_FLAGS ?= -DUSE_INDIFLIGHT -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
+.PHONY: sitl
+sitl:
+	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/sitl EXTRA_FLAGS="$(SITL_FLAGS) $(EXTRA_FLAGS)"
+	$(V1) mkdir -p $(ROOT)/obj/main && cp $(ROOT)/obj/sitl/$(FORKNAME)_SITL.so $(ROOT)/obj/main/indiflight.so
+	@echo "SIL library: obj/main/indiflight.so"
 
 exe: $(AUTOHYDRATE_STAMPS) validate-deps
 	$(V1) $(MAKE) $(MAKE_PARALLEL) $(TARGET_EXE)

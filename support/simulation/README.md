@@ -12,14 +12,13 @@ To reproduce these, the [README](README.md#References) of this repo for details.
 
 This variant runs part of the Indiflight code on your local workstation, with 
 the purpose of testing and debugging estimation and control code, but not
-debugging device drivers, schedulers, or interfaces. We call such a build a 
-`MOCKUP`, as it's not the whole package.
+debugging device drivers, schedulers, or interfaces.
 
 Every indiflight SITL build (`USE_INDIFLIGHT`, `SIL_BUILD`) produces both the
 upstream-style SITL executable (real time, UDP to Gazebo/RealFlight) and the
-shared library that these scripts clock step by step. `make mockup` builds it
+shared library that these scripts clock step by step. `make sitl` builds it
 with the default SIL features and copies the library to
-`obj/main/indiflight_MOCKUP.so`.
+`obj/main/indiflight.so`.
 
 <!--
 ### Quickstart using Docker
@@ -32,10 +31,10 @@ Run all commands from the root directory of this repo.
 
     docker build . -t pyndiflight -f Simulation/sil-githash.Dockerfile \
         --build-arg COMMIT=85e336c1e \
-        --build-arg BUILD_CONFIG=./Simulation/config/mockupConfig.mk
+        --build-arg BUILD_CONFIG=./Simulation/config/sitlConfig.mk
 
 - downloads an `indiflight` commit
-- builds the `MOCKUP` library using a build configuration (aka. `local.mk` file)
+- builds the SITL library using a build configuration (aka. `local.mk` file)
 - provides facilities to pass in an `indiflight` configuration profile and python simulation script
 
 #### Step 2 -- Run the container (sorry for the long arguments...) and open http://localhost:5000
@@ -116,7 +115,7 @@ that can be started from within VSCode.
 **ONLY IF YOU STARTED WITH GDBSERVER TURNED ON**
 
 Open a VSCode window in the `indiflight` repo that you cloned. Install the 
-`Native Debug` extension and run the `MOCKUP docker` debug launch configuration.
+`Native Debug` extension and run the `SITL docker` debug launch configuration.
 It will connect to the container and allow pausing the app and settings 
 breakpoints and so on. Open your browser at `http://localhost:5000` for the visualization
 
@@ -126,7 +125,7 @@ in `indiflight` for the arguments used.
 
 #### Step 5 -- Get log from latest container
 
-They should just appear in `./logs-mockup`
+They should just appear in `./logs-sitl`
 
 
 ### Software architecture and limitations

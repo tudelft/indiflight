@@ -45,7 +45,7 @@ if __name__=="__main__":
     parser.add_argument("--mocap", required=False, nargs=2, metavar=("IP", "PORT"), help="Stream mocap UDP packets to this IP/hostname and port")
     parser.add_argument("--no-vis", required=False, action="store_true", help="Do not launch visualization webserver")
     parser.add_argument("--no-real-time", required=False, action="store_true", help="Run as fast as possible")
-    parser.add_argument("--no-sil-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-mockup")  # enabled by default now
+    parser.add_argument("--no-sil-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-sitl")  # enabled by default now
     parser.add_argument("--catapult", required=False, action="store_true", help="Use catapult (sil-only)")
     parser.add_argument("--throw", required=False, action="store_true", help="Use throwing")
     parser.add_argument("--learn", required=False, action="store_true", help="Learn after throw/catapult (sil-only)")
@@ -72,12 +72,12 @@ if __name__=="__main__":
 
     if args.sil:
         if not os.path.isfile(args.sil):
-            raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make TARGET=MOCKUP so`")
+            raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make sitl`")
 
         import os
         sys.path.append(os.path.join((os.path.dirname(args.sil)),
                                      "../../src/utils"))
-        from indiflight_mockup_interface import flightModeFlags, boxId
+        from indiflight_sitl_interface import flightModeFlags, boxId
 
     if args.mocap is not None:
         args.mocap_host = args.mocap[0]
@@ -187,18 +187,18 @@ if __name__=="__main__":
 
     #%% indiflight configuration, if software in the loop
     if sil is not None:
-        sil.mockup.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
-        sil.mockup.setLogging( not args.no_sil_log )
+        sil.sitl.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
+        sil.sitl.setLogging( not args.no_sil_log )
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -2.], 0. )
-        sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
+        sil.sitl.sendPositionSetpoint( [0., 0., -2.], 0. )
+        sil.sitl.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
 
         if args.catapult:
-            sil.mockup.enableFlightMode(flightModeFlags.CATAPULT_MODE)
+            sil.sitl.enableFlightMode(flightModeFlags.CATAPULT_MODE)
         elif args.throw:
-            sil.mockup.enableRxBox(boxId.BOXTHROWTOARM)
-            sil.mockup.enableRxBox(boxId.BOXARM)
+            sil.sitl.enableRxBox(boxId.BOXTHROWTOARM)
+            sil.sitl.enableRxBox(boxId.BOXARM)
 
 
     #%% initial conditions
@@ -240,50 +240,50 @@ if __name__=="__main__":
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if sil is not None:
             if not args.throw and not armed and sim.t > 2.1:
-                sil.mockup.arm()
+                sil.sitl.arm()
                 armed = True
 
             if not takeoff and sim.t > 3.0:
-                sil.mockup.sendPositionSetpoint( [0., 0., -1.0], 0. )
+                sil.sitl.sendPositionSetpoint( [0., 0., -1.0], 0. )
                 print("Takeoff!")
                 takeoff = True
 
             if not traj_inited and sim.t > 6.0:
                 # start trajectory tracking at 8*0.5 = 4m/s target speed
-                sil.mockup.sendKeyboard('1')
+                sil.sitl.sendKeyboard('1')
                 print("Init!")
                 traj_inited = True
 
             if not traj_activated and sim.t > 10.0:
-                sil.mockup.sendKeyboard('h')
+                sil.sitl.sendKeyboard('h')
                 for _ in range(6):
-                    sil.mockup.sendKeyboard('3')
+                    sil.sitl.sendKeyboard('3')
                 print("Activate!")
                 traj_activated = True
 
-            # if traj_activated and not traj_recovered and not sil.mockup.lib.nn_is_active():
+            # if traj_activated and not traj_recovered and not sil.sitl.lib.nn_is_active():
             #     print("Recovery initiated by INDIflight")
-            #     sil.mockup.disableRcBox(boxId.BOXNNCTL)
+            #     sil.sitl.disableRcBox(boxId.BOXNNCTL)
             #     traj_recovered = True
 
             if not traj_recovered and sim.t > 15.0:
-                sil.mockup.sendKeyboard('8')
+                sil.sitl.sendKeyboard('8')
                 print("Recovery initiated by simulation command!")
                 traj_recovered = True
 
             if not back_to_center and sim.t > 20.:
-                sil.mockup.sendPositionSetpoint( [0., 0., -1.0], 0. )
+                sil.sitl.sendPositionSetpoint( [0., 0., -1.0], 0. )
                 print("Back to center")
                 back_to_center = True
 
             if not violate_again and sim.t > 25.:
-                sil.mockup.sendPositionSetpoint( [0., 10., -1.0], 0. )
+                sil.sitl.sendPositionSetpoint( [0., 10., -1.0], 0. )
                 print("Violate geofence again, then violate hardkill")
                 violate_again = True
 
             if sim.t > 32.:
                 # keep on sending
-                sil.mockup.sendPositionSetpoint( [0., 2., -40.0], 0. )
+                sil.sitl.sendPositionSetpoint( [0., 2., -40.0], 0. )
 
 
         sim.tick(dt)

@@ -67,7 +67,7 @@ def make_parser():
     parser.add_argument(
         "--params-pkl",
         type=str,
-        default="logs-mockup/tailsitter_parameter_samples.pkl",
+        default="logs-sitl/tailsitter_parameter_samples.pkl",
         help="Output pickle containing base and sampled tails plus sampled parameter dicts",
     )
 
@@ -271,18 +271,18 @@ def sampled_to_tail_params(sampled):
 
 def configure_sil(sil, sil_profile_txt, flightModeFlags, boxId, load_profile=False):
     if load_profile:
-        sil.mockup.load_profile(sil_profile_txt)
+        sil.sitl.load_profile(sil_profile_txt)
 
-    sil.mockup.setLogging(True)
+    sil.sitl.setLogging(True)
     sil.sendMocap()
-    sil.mockup.sendPositionSetpoint([0.0, 0.0, 0.0], 0.0)
-    sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
-    sil.mockup.enableRxBox(boxId.BOXTHROWTOARM)
-    sil.mockup.enableRxBox(boxId.BOXARM)
+    sil.sitl.sendPositionSetpoint([0.0, 0.0, 0.0], 0.0)
+    sil.sitl.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
+    sil.sitl.enableRxBox(boxId.BOXTHROWTOARM)
+    sil.sitl.enableRxBox(boxId.BOXARM)
 
 
 def reboot_sil(sil, flightModeFlags, boxId):
-    sil.mockup.saveConfig()
+    sil.sitl.saveConfig()
     configure_sil(sil, None, flightModeFlags, boxId, load_profile=False)
 
 
@@ -345,18 +345,18 @@ def run_single_sim(run_idx, args, base, rng, sigma_cfg, sil=None, flightModeFlag
 
         for _ in tqdm(range(int(sim_time / dt)), target_looptime=None, leave=False, desc=f"run {run_idx+1}/{args.runs}"):
             if sim.t > 3.0 and sil is not None:
-                sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE)
+                sil.sitl.enableFlightMode(flightModeFlags.LEARNER_MODE)
 
             if not goto_center and sim.t > 10.0 and sil is not None:
-                sil.mockup.sendPositionSetpoint([0.0, 0.0, -1.5], 0.0)
+                sil.sitl.sendPositionSetpoint([0.0, 0.0, -1.5], 0.0)
                 goto_center = True
 
             if not goto_33 and sim.t > 15.0 and sil is not None:
-                sil.mockup.sendPositionSetpoint([3.0, 3.0, -1.5], 0.0)
+                sil.sitl.sendPositionSetpoint([3.0, 3.0, -1.5], 0.0)
                 goto_33 = True
 
             if not goto_back and sim.t > 18.0 and sil is not None:
-                sil.mockup.sendPositionSetpoint([0.0, 0.0, -1.5], 0.0)
+                sil.sitl.sendPositionSetpoint([0.0, 0.0, -1.5], 0.0)
                 goto_back = True
 
             sim.tick(dt)
@@ -376,14 +376,14 @@ if __name__=="__main__":
         raise ValueError("--runs must be >= 1")
 
     if args.sil and not os.path.isfile(args.sil):
-        raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make TARGET=MOCKUP so`")
+        raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make sitl`")
     if not os.path.isfile(args.sigma_config):
         raise FileNotFoundError(f"Sigma config not found: {args.sigma_config}")
 
     sys.path.append(os.path.join((os.path.dirname(args.sil)), "../../src/utils"))
-    mockup_interface = importlib.import_module("indiflight_mockup_interface")
-    flightModeFlags = mockup_interface.flightModeFlags
-    boxId = mockup_interface.boxId
+    sitl_interface = importlib.import_module("indiflight_sitl_interface")
+    flightModeFlags = sitl_interface.flightModeFlags
+    boxId = sitl_interface.boxId
 
     base = get_base_model()
     base_tail = create_nominal_craft(base)

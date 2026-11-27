@@ -19,9 +19,9 @@
  */
 
 // indiflight SIL: the SIMULATOR platform (sitl.c, SIL_BUILD) linked as a
-// shared library and stepped by the caller, see src/utils/indiflight_mockup_interface.py
+// shared library and stepped by the caller, see src/utils/indiflight_sitl_interface.py
 // and support/simulation/PyNDIflight. All vectors are body FRD / earth NED, SI units.
-// Ported from the 4.4 fork's src/main/mockup/main.c.
+// Ported from the SIL main of the 4.4 fork.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,8 +31,8 @@
 
 #ifdef SIL_BUILD
 
-#if !defined(USE_LOCAL_POSITION) || !defined(USE_ACC) || !defined(USE_INDI)
-#error "SIL_BUILD requires USE_INDI, USE_LOCAL_POSITION and USE_ACC"
+#if !defined(USE_ACC) || !defined(USE_INDI)
+#error "SIL_BUILD requires USE_INDI and USE_ACC"
 #endif
 
 #include "common/maths.h"
@@ -66,7 +66,7 @@
 #include "sensors/gyro.h"
 
 // SIL_TICK_DT_US (target.h): one tick = one gyro sample at 8 kHz
-#define MOCKUP_GRAVITY 9.80665f
+#define SITL_GRAVITY 9.80665f
 
 void sitlClockTick(uint32_t us); // sitl.c
 void sitlUseExternalClock(void); // sitl.c
@@ -95,7 +95,7 @@ void setImu(const float *g, const float *a)
         virtualGyroSet(virtualGyroDev, toInt16(raw[0] * s), toInt16(raw[1] * s), toInt16(raw[2] * s));
     }
     if (virtualAccDev) {
-        const float s = virtualAccDev->acc_1G / MOCKUP_GRAVITY;
+        const float s = virtualAccDev->acc_1G / SITL_GRAVITY;
         hilRawFromSensorFrd(a, raw);
         virtualAccSet(virtualAccDev, toInt16(raw[0] * s), toInt16(raw[1] * s), toInt16(raw[2] * s));
     }
@@ -121,10 +121,12 @@ void setServoAngle(const float *angles, const int n)
 }
 
 // position (m), velocity (m/s), NED; attitude quaternion body FRD -> NED (w, x, y, z)
+// (no-ops without USE_LOCAL_POSITION)
 void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us)
 {
+#ifdef USE_LOCAL_POSITION
     local_pos_ned_t p;
-    p.source = LOCAL_POS_SOURCE_MOCKUP;
+    p.source = LOCAL_POS_SOURCE_SITL;
     p.time_us = time_us;
     for (int i = 0; i < 3; i++) {
         p.pos.A[i] = pos[i];
@@ -137,6 +139,9 @@ void setMocapT(const float *pos, const float *vel, const float *q, const uint32_
     p.vel_valid = true;
     p.quat_valid = true;
     setLocalPosMeas(&p);
+#else
+    UNUSED(pos); UNUSED(vel); UNUSED(q); UNUSED(time_us);
+#endif
 }
 
 void setMocap(const float *pos, const float *vel, const float *q)
@@ -147,8 +152,9 @@ void setMocap(const float *pos, const float *vel, const float *q)
 // position setpoint (m, NED) and heading (rad)
 void setPosSetpoint(const float *pos, const float yaw)
 {
+#ifdef USE_LOCAL_POSITION
     local_pos_sp_ned_t sp;
-    sp.source = LOCAL_POS_SOURCE_MOCKUP;
+    sp.source = LOCAL_POS_SOURCE_SITL;
     sp.time_us = micros();
     for (int i = 0; i < 3; i++) {
         sp.pos.A[i] = pos[i];
@@ -156,6 +162,9 @@ void setPosSetpoint(const float *pos, const float yaw)
     sp.psi = yaw;
     sp.trackPsi = true;
     setLocalPosSp(&sp);
+#else
+    UNUSED(pos); UNUSED(yaw);
+#endif
 }
 
 // normalized motor commands [0, 1] (0 while disarmed)
@@ -183,10 +192,10 @@ void getServoOutputCommands(float *cmd, int n)
 }
 
 // Flight modes and RX boxes. All mode access goes through these two helpers
-// (and the matching one in indiflight_mockup_interface.py), so moving the
+// (and the matching one in indiflight_sitl_interface.py), so moving the
 // indiflight flags into their own word only needs a change here.
 // mask: bits 0..15 = upstream flightModeFlags, bits 16..31 = indiflightModeFlags
-void mockupSetFlightModes(uint32_t mask, bool enable)
+void sitlSetFlightModes(uint32_t mask, bool enable)
 {
     const uint32_t upstream = mask & 0xFFFFu;
     const uint32_t indiflight = mask >> 16;
@@ -206,7 +215,7 @@ void mockupSetFlightModes(uint32_t mask, bool enable)
 #endif
 }
 
-uint32_t mockupGetFlightModes(void)
+uint32_t sitlGetFlightModes(void)
 {
 #ifdef USE_INDI
     return (uint32_t)flightModeFlags | ((uint32_t)indiflightModeFlags << 16);
@@ -217,7 +226,7 @@ uint32_t mockupGetFlightModes(void)
 
 extern boxBitmask_t rcModeActivationMask; // fc/rc_modes.c
 
-void mockupSetRxBox(uint32_t boxId, bool enable)
+void sitlSetRxBox(uint32_t boxId, bool enable)
 {
     if (boxId >= CHECKBOX_ITEM_COUNT) {
         return;
@@ -230,19 +239,19 @@ void mockupSetRxBox(uint32_t boxId, bool enable)
 }
 
 // RX box by its configurator name ("ARM", "PREARM", "INDI", ...), returns false if unknown
-bool mockupSetRxBoxByName(const char *name, bool enable)
+bool sitlSetRxBoxByName(const char *name, bool enable)
 {
     for (unsigned i = 0; i < CHECKBOX_ITEM_COUNT; i++) {
         const box_t *box = findBoxByBoxId(i);
         if (box && strcmp(box->boxName, name) == 0) {
-            mockupSetRxBox(i, enable);
+            sitlSetRxBox(i, enable);
             return true;
         }
     }
     return false;
 }
 
-void mockupArm(bool arm)
+void sitlArm(bool arm)
 {
     if (arm) {
 #ifdef USE_BLACKBOX
@@ -259,7 +268,7 @@ void mockupArm(bool arm)
     }
 }
 
-void mockupBlackboxUpdate(void)
+void sitlBlackboxUpdate(void)
 {
 #ifdef USE_BLACKBOX
     blackboxUpdate(micros());
@@ -270,16 +279,26 @@ void mockupBlackboxUpdate(void)
 // position setpoint (3, NED), INDI specific force setpoint (3, body FRD),
 // EKF in use / converged (2), INDI d[0], acc.accADC.z (counts), INDI measured specific force z (N/kg),
 // INDI u[0] and omega[0] (rad/s) (5), filtered gyro (3, deg/s)
-int mockupGetState(float *out, int n)
+int sitlGetState(float *out, int n)
 {
     float v[22];
     int k = 0;
+    // (position and EKF fields are 0 without USE_LOCAL_POSITION / USE_EKF)
+#ifdef USE_LOCAL_POSITION
     for (int i = 0; i < 3; i++) { v[k++] = posEstNed.A[i]; }
     for (int i = 0; i < 3; i++) { v[k++] = velEstNed.A[i]; }
     for (int i = 0; i < 3; i++) { v[k++] = posSpNed.pos.A[i]; }
+#else
+    for (int i = 0; i < 9; i++) { v[k++] = 0.f; }
+#endif
     for (int i = 0; i < 3; i++) { v[k++] = indiRun.spfSpBody.A[i]; }
+#ifdef USE_EKF
     v[k++] = shouldBeUsedEkf();
     v[k++] = isConvergedEkf();
+#else
+    v[k++] = 0.f;
+    v[k++] = 0.f;
+#endif
     v[k++] = indiRun.d[0];
     v[k++] = acc.accADC.z;
     v[k++] = indiRun.spfIMU.V.Z;
@@ -292,7 +311,7 @@ int mockupGetState(float *out, int n)
     return k;
 }
 
-void mockupShutdown(void)
+void sitlShutdown(void)
 {
     // called before dlclose(): file descriptors survive it. An open log file
     // would also stay unflushed, so close it (the log then ends without LOG_END).

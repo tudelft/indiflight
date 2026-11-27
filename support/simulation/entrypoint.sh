@@ -11,7 +11,7 @@ if [[ -z ${SIM} ]]; then
     exit 1
 fi
 
-make -j -e DEBUG=${DEBUG} -e PROFILE=${PROFILE} mockup
+make -j -e DEBUG=${DEBUG} -e PROFILE=${PROFILE} sitl
 
 GDBSERVER_CMD=
 if [[ ${GDBSERVER} == "y" ]]; then
@@ -20,6 +20,6 @@ fi
 
 #${GDBSERVER_CMD} /usr/bin/python3 -m cProfile -o profile.prof ./support/simulation/${SIM}.py   \
 ${GDBSERVER_CMD} /python-venv/bin/python3 ./support/simulation/${SIM}.py   \
-    --sil ./obj/main/indiflight_MOCKUP.so                          \
+    --sil ./obj/main/indiflight.so                          \
     --sil-profile-txt ./configs/profiles/${PROFILE}.txt            \
     "$@"

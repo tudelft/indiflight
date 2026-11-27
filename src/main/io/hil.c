@@ -56,7 +56,7 @@
 #include "pi-messages.h"
 
 // The simulator sends FRD vectors in the board frame, as PyNDIflight's
-// IMU(qBody=...) models it for both HIL and MOCKUP (SIL). The IMU is assumed
+// IMU(qBody=...) models it for both HIL and SIL. The IMU is assumed
 // mounted on the board without rotation (USE_SIM_IDENTITY_SENSOR_ALIGN replaces the
 // board config's GYRO_n_ALIGN by CW0_DEG), so the profile's align_board_* must
 // match qBody, identically in SIL and HIL. The raw counts are FLU (the FLU -> FRD
@@ -68,7 +68,7 @@ void hilRawFromSensorFrd(const float frd[3], float raw[3])
     raw[2] = -frd[2];
 }
 
-#endif // HIL_BUILD || MOCKUP
+#endif // HIL_BUILD || SIL_BUILD
 
 #if defined(HIL_BUILD)
 

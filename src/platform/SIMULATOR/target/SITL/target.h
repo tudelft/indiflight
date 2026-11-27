@@ -33,7 +33,7 @@
 
 // indiflight SIL: every indiflight SITL build is the SIL. One compile links both the
 // upstream-style executable (real time, UDP to an external simulator) and the shared
-// library obj/.../*_SITL.so that PyNDIflight clocks step by step (mockup.c, which
+// library obj/.../*_SITL.so that PyNDIflight clocks step by step (sitl_api.c, which
 // switches sitl.c to its virtual clock at init()).
 #ifdef USE_INDIFLIGHT
 #define SIL_BUILD
@@ -147,9 +147,9 @@
 #define USE_BLACKBOX
 #define USE_BLACKBOX_VIRTUAL
 #ifdef USE_INDIFLIGHT
-// indiflight: SITL/MOCKUP logs go to ./logs-mockup/LOGnnnnn.BFL, as in the 4.4
+// indiflight: SITL logs go to ./logs-sitl/LOGnnnnn.BFL, as in the 4.4
 // fork (support/simulation expects them there)
-#define BLACKBOX_VIRTUAL_LOG_DIR "logs-mockup"
+#define BLACKBOX_VIRTUAL_LOG_DIR "logs-sitl"
 #endif
 
 #undef USE_STACK_CHECK // I think SITL don't need this
@@ -192,6 +192,20 @@
 
 #undef USE_I2C
 #undef USE_SPI
+
+// indiflight: board profiles (make SITL PROFILE=...) enable hardware features the
+// SIMULATOR platform has no driver for. Motor rpm comes from the simulation
+// (sitl_api.c), so the dshot driver and its telemetry are off.
+#undef USE_DSHOT
+#undef USE_DSHOT_TELEMETRY
+#undef USE_DSHOT_BITBANG
+#undef USE_DSHOT_DMAR
+// no OSD in SITL (USE_OSD is off above), also not from a profile's OSD flavours
+#undef USE_OSD_SD
+#undef USE_OSD_HD
+#undef USE_OSD_CUSTOM_TEXT // common_pre.h enables it with a profile's USE_OSD
+#undef ENABLE_OSD_CUSTOM_TEXT
+#define ENABLE_OSD_CUSTOM_TEXT 0
 
 #define TARGET_FLASH_SIZE 2048
 

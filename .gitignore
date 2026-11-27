@@ -55,8 +55,8 @@ ubuntu*.log
 
 # EEPROM image file (created by SITL)
 eeprom.bin
-# indiflight: SITL/MOCKUP blackbox logs (BLACKBOX_VIRTUAL_LOG_DIR)
-logs-mockup/
+# indiflight: SITL blackbox logs (BLACKBOX_VIRTUAL_LOG_DIR)
+logs-sitl/
 
 # config used for building targets
 # changed to submodule

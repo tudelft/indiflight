@@ -9306,10 +9306,10 @@ void cliProcessConfigFile(const char *filename)
 }
 
 #ifdef SIL_BUILD
-// indiflight MOCKUP: feed the CLI one character at a time (output on stdout).
+// indiflight SIL: feed the CLI one character at a time (output on stdout).
 // Lines are handled like cliProcessConfigFile(), except that 'save' writes the
 // EEPROM file and continues, and reboot-class commands are skipped.
-void mockupCliChar(char c)
+void sitlCliChar(char c)
 {
     static bool initialized = false;
     static char line[CLI_IN_BUFFER_SIZE];

@@ -47,7 +47,7 @@ if __name__=="__main__":
     parser.add_argument("--mocap", required=False, nargs=2, metavar=("IP", "PORT"), help="Stream mocap UDP packets to this IP/hostname and port")
     parser.add_argument("--no-vis", required=False, action="store_true", help="Do not launch visualization webserver")
     parser.add_argument("--no-real-time", required=False, action="store_true", help="Run as fast as possible")
-    parser.add_argument("--no-sil-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-mockup")  # enabled by default now
+    parser.add_argument("--no-sil-log", required=False, action="store_true", help="DO NOT write Indiflight logs into ./logs-sitl")  # enabled by default now
     parser.add_argument("--catapult", required=False, action="store_true", help="Use catapult (sil-only)")
     parser.add_argument("--throw", required=False, action="store_true", help="Use throwing")
     parser.add_argument("--learn", required=False, action="store_true", help="Learn after throw/catapult (sil-only)")
@@ -73,12 +73,12 @@ if __name__=="__main__":
 
     if args.sil:
         if not os.path.isfile(args.sil):
-            raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make TARGET=MOCKUP so`")
+            raise FileNotFoundError("Library not found. Likely you didnt compile it yet. In external/indiflight, run `make sitl`")
 
         import os
         sys.path.append(os.path.join((os.path.dirname(args.sil)),
                                      "../../src/utils"))
-        from indiflight_mockup_interface import flightModeFlags, boxId
+        from indiflight_sitl_interface import flightModeFlags, boxId
 
     if args.mocap is not None:
         args.mocap_host = args.mocap[0]
@@ -114,7 +114,7 @@ if __name__=="__main__":
     #    2 (CW)      4 (CW)
     #             3 (CCW)
     #
-    # Note that the MOCKUP target does not apply motor_output_reordering, so
+    # Note that the SITL library does not apply motor_output_reordering, so
     # rotor i here is INDI actuator i of the profile.
     G1_FZ    = 7.00                      # N/kg,   -indi_act_g1_fz / 100
     G1_ROLL  = 495.5 / np.sin(np.pi/3)   # rad/s/s, roll effectiveness of a motor at lever arm R; |g1_roll| / 10 of the 60deg arms is R*sin(60deg)
@@ -165,11 +165,11 @@ if __name__=="__main__":
     rImu = np.array([-22., -13., 9.]) * 1e-3
 
     # acc_calibration = 63,-92,5 are subtracted from the (body-aligned) raw acc
-    # readings. In the MOCKUP target, acc_1G is 256, so these trims correspond to a
+    # readings. In the SITL library, acc_1G is 256, so these trims correspond to a
     # large ~0.25g bias. Give the simulated sensor exactly that bias, such that
     # the firmware sees the true specific force after its calibration.
-    MOCKUP_ACC_1G = 256.
-    accTrimsBody = np.array([63., -92., 5.]) * 9.81 / MOCKUP_ACC_1G
+    SITL_ACC_1G = 256.
+    accTrimsBody = np.array([63., -92., 5.]) * 9.81 / SITL_ACC_1G
     accBiasSensor = rotBoard.inv().apply(accTrimsBody)
 
     imu = IMU(mc, r=rImu, qBody=qBody, accBias=accBiasSensor, accStd=0.8, gyroStd=0.08)
@@ -181,21 +181,21 @@ if __name__=="__main__":
 
     #%% indiflight configuration, if software in the loop
     if sil is not None:
-        sil.mockup.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
-        sil.mockup.setLogging( not args.no_sil_log )
+        sil.sitl.load_profile( args.sil_profile_txt ) if args.sil_profile_txt else None
+        sil.sitl.setLogging( not args.no_sil_log )
 
         sil.sendMocap()
-        sil.mockup.sendPositionSetpoint( [0., 0., -1.5], 0. )
-        sil.mockup.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
+        sil.sitl.sendPositionSetpoint( [0., 0., -1.5], 0. )
+        sil.sitl.enableFlightMode(flightModeFlags.ANGLE_MODE | flightModeFlags.POSITION_MODE | flightModeFlags.INDI_MODE)
 
         if args.learn:
-            sil.mockup.enableFlightMode(flightModeFlags.LEARNER_MODE)
+            sil.sitl.enableFlightMode(flightModeFlags.LEARNER_MODE)
 
         if args.catapult:
-            sil.mockup.enableFlightMode(flightModeFlags.CATAPULT_MODE)
+            sil.sitl.enableFlightMode(flightModeFlags.CATAPULT_MODE)
         elif args.throw:
-            sil.mockup.enableRxBox(boxId.BOXTHROWTOARM)
-            sil.mockup.enableRxBox(boxId.BOXARM)
+            sil.sitl.enableRxBox(boxId.BOXTHROWTOARM)
+            sil.sitl.enableRxBox(boxId.BOXARM)
 
 
     #%% initial conditions
@@ -225,18 +225,18 @@ if __name__=="__main__":
     heading = False
     for i in tqdm(range(int(T / dt)), target_looptime=dt_rt):
         if not args.throw and sim.t > 2.5:
-            sil.mockup.arm() if sil else None
+            sil.sitl.arm() if sil else None
 
         if not start_trajectory and sim.t > 9. and sil is not None:
             # start trajectory tracking at 8*0.5 = 4m/s target speed
-            sil.mockup.sendKeyboard('1')
+            sil.sitl.sendKeyboard('1')
             if sim.t > 10.:
                 for _ in range(8):
-                    sil.mockup.sendKeyboard('3')
+                    sil.sitl.sendKeyboard('3')
                 start_trajectory = True
 
         if not heading and sim.t > 10. and sil is not None:
-            sil.mockup.sendKeyboard('h')
+            sil.sitl.sendKeyboard('h')
             heading = True
             # test recovery mode
             # sil.sendMocap = lambda *args: None
