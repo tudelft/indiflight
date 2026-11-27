@@ -94,6 +94,10 @@
 #include "sensors/acceleration.h"
 #include "sensors/barometer.h"
 #include "sensors/battery.h"
+#if defined(SITL) || defined(MOCKUP)
+#include <stdio.h>
+#include <time.h>
+#endif
 #include "sensors/compass.h"
 #include "sensors/gyro.h"
 #include "sensors/rangefinder.h"
@@ -2370,7 +2374,15 @@ static bool sendFieldDefinition(char mainFrameChar, char deltaFrameChar, const v
 // Buf must be at least FORMATTED_DATE_TIME_BUFSIZE
 STATIC_UNIT_TESTED char *blackboxGetStartDateTime(char *buf)
 {
-#ifdef USE_RTC_TIME
+#if defined(SITL) || defined(MOCKUP)
+    // simulation: use the host's local wall-clock time, so logs can be sorted by date
+    struct timespec ts;
+    struct tm tmLocal;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    localtime_r(&ts.tv_sec, &tmLocal);
+    size_t n = strftime(buf, FORMATTED_DATE_TIME_BUFSIZE, "%Y-%m-%dT%H:%M:%S", &tmLocal);
+    snprintf(buf + n, FORMATTED_DATE_TIME_BUFSIZE - n, ".%03d", (int)(ts.tv_nsec / 1000000));
+#elif defined(USE_RTC_TIME)
     dateTime_t dt;
     // rtcGetDateTime will fill dt with 0000-01-01T00:00:00
     // when time is not known.
