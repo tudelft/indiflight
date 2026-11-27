@@ -255,6 +255,68 @@ either.
 - Position, speed and load are sign-magnitude (sign bit 15, 15 and 10).
 - Command scaling: normalized ±1 = ±100 deg; 4096 steps/rev, centre 2048.
 
+## Learner, prober, catapult and throw-to-arm state machines
+
+`runCatapultStateMachine()` and `runLearningQueryStateMachine()` run every inner
+loop from `getSetpoints()` (`flight/indi.c`); the throw state machine runs in
+its own task (`updateThrowFallStateMachine()`, `flight/throw.c`).
+
+- **Learner query** (`flight/learner.c`): `IDLE -> WAITING_FOR_LAUNCH -> DELAY
+  -> ACTIVE -> DONE`. `DONE` is final: a new query needs LEARNER_MODE switched
+  off and on again. LEARNER_MODE off is the only way back to `IDLE`; it also
+  resets the prober (`resetProber()`), the board misalignment and the hover
+  rotation. While the query drives the actuators (`learnerQueryIsActive()`),
+  INDI is bypassed and `d` is the prober output (`getMotorCommands`), except
+  while the catapult launches: the catapult has precedence.
+- **Board misalignment** (`learner_*_misalignment`, for simulation tests): applied
+  once after the catapult launch, before the query starts, kept for the whole
+  flight; undone on LEARNER_MODE off or when the catapult sequence restarts
+  (`catapultState` back to `IDLE`/`WAITING_FOR_ARM`). Skipped if the configured
+  board alignment is not 0 0 0.
+- **Prober** (`flight/learning_prober.c`): `initProber()` at launch, excitation at
+  most `PROBER_SAFETY_TIME_MAX` (1 s) plus the pre/post delays.
+- **Learned profiles**: with `learner_apply_indi_profile`, the learned INDI
+  profile is made active while learning and only its parameters are refreshed
+  (`initIndiRuntimeParameters()`). Filters are re-tuned once when learning
+  stops (`initIndiRuntime()`). `initIndiRuntime()` keeps all filter and runtime
+  states while armed, so profile changes in flight do not reset the sync filters.
+- **Effectiveness RLS layout**: only the motors selected by `learner_act_mask`,
+  packed. Motor `m` (the m-th selected motor, not the actuator index) is `x[m]`
+  of the spf RLS and `x[1 + m]`, `x[1 + numMotors + m]` of the rotation RLS
+  (`x[0]` is the inertia term). Init, regressors, read-back and blackbox all use
+  this.
+- **Forgetting factor** `learner_rls_lambda` (modular_drone semantics): `> 0`
+  fixed, `* 1e-6`; `0` the bandwidth equation of modular_drone (about 0.995 in a
+  query). Only `learner_use_fortescue = 1` with `learner_rls_lambda = 0` gives the
+  tailsitter behaviour (no forgetting while probing, fortescue after). Until
+  2026-11 `0` meant "no forgetting" for the tailsitter profiles; they now say
+  `1000000`.
+- **Idle before throw** (`throw_to_arm_idle_before_throw`): `throwHoldsIdle()`
+  latches on the arming edge with the throw-to-arm switch on and releases at
+  `THROWN` or disarm. While held, no controller output reaches the actuators
+  (`core.c` overrides motors and servos after the controllers and again after
+  lead-lag/disturbance injection; INDI is bypassed). Only the learner's servo
+  identification may move servos. Position control does not latch its
+  no-setpoint descend mode and keeps its I-terms at 0 while held.
+- **Servo state for INDI**: measured `servo_feedback` (centidegrees, normalized
+  +-1 = +-100 deg) when `SERVO_FEEDBACK_AVAILABLE` (T4, Feetech, HIL, MOCKUP),
+  otherwise the command `servo_normalized`. TODO: the feedback is not
+  time-aligned with the command, and the 100 deg scale is hardcoded in several
+  places (drivers, `indi.c` tailsitter path, learner, prober).
+
+Regression check in simulation (a few seconds per scenario):
+
+```sh
+make TARGET=MOCKUP PROFILE=CineRat YES=y
+python support/simulation/stateMachineSim.py obj/main/indiflight_MOCKUP.so configs/profiles/CineRat.txt all
+```
+
+The MOCKUP sets flight modes directly and does not run `processRxModes()`, so
+the LEARNER_MODE-off switch back to INDI profile 0 (`core.c`) is not covered.
+CLAPACK's `slamch`/`dlamch` are replaced by `common/lapack_lamch.c`: the f2c
+versions loop forever with `-ffast-math` (MOCKUP uses `-Ofast`), which hung the
+simulation at the first hover-attitude QR.
+
 ## Building
 
 - Run `make STM32H743 YES=y -j16` as the basic compile check (`YES=y` skips the
