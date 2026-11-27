@@ -25,6 +25,21 @@ import flask as fl
 import json
 from copy import deepcopy
 
+# visual types, must match craftTypes in static/crafts.js
+VIS_TYPE_QUADROTOR = 0          # fixed generic quad
+VIS_TYPE_AIRPLANE = 1
+VIS_TYPE_TAILSITTER = 2         # 2 rotors + 2 flaps
+VIS_TYPE_MULTIROTOR = 3         # rotor geometry from /craftdata, any rotor count
+
+def visTypeOf(uav):
+    # a craft class can set `visType` to choose its visual. Otherwise crafts
+    # with servos (the tailsitters) show as tailsitter, all others as
+    # multirotor drawn from their real rotor geometry
+    visType = getattr(uav, 'visType', None)
+    if visType is not None:
+        return visType
+    return VIS_TYPE_TAILSITTER if uav.Ns > 0 else VIS_TYPE_MULTIROTOR
+
 class VisData():
     def __init__(self):
         self.x = np.zeros(3, dtype=np.float64)
@@ -32,15 +47,17 @@ class VisData():
         self.q = np.zeros(4, dtype=np.float64)
         self.q[0] = 1.
         self.inputs = np.zeros(4, dtype=np.float64)
-        self.newCraft = False
         self.uav = None
         self.n = 0
+        self.visType = VIS_TYPE_MULTIROTOR
+        self.generation = 0 # bumped on every spawn, so clients rebuild the visual
 
-    def spawn(self, uav):
+    def spawn(self, uav, visType=None):
         self.n = uav.Nr + uav.Ns
         self.inputs = np.zeros(self.n, dtype=np.float64)
         self.uav = uav
-        self.newCraft = True
+        self.visType = visTypeOf(uav) if visType is None else visType
+        self.generation += 1
 
     def update(self):
         self.x[:] = self.uav.xI.round(4)
@@ -66,13 +83,14 @@ def pose():
     vel = list(visData.v.round(4))
     quat = list(visData.q.round(4))
     ctl = list(visData.inputs)
-    arr.append({'id': 0, 'type': 2, 'newCraft': visData.newCraft, 'pos': pos, 'vel': vel, 'quat': quat, 'ctl': ctl})
+    arr.append({'id': 0, 'type': visData.visType, 'generation': visData.generation, 'pos': pos, 'vel': vel, 'quat': quat, 'ctl': ctl})
     return json.dumps(arr)
 
 @visApp.route("/craftdata")
 def craftdata():
-    visData.newCraft = False
     arr = []
+    if visData.uav is None:
+        return json.dumps(arr)
     for i in range(visData.uav.Nr):
         r = visData.uav.r_X[:, i].round(4).tolist()
         axis = visData.uav.r_ax[:, i].round(4).tolist()

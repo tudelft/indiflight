@@ -31,50 +31,71 @@ import {
 
 var clock = new THREE.Clock();
 
-async function updateVisualization(data) {
-    for (let i = 0; i < data.length; i++) {
-        var existsAlready = idList.includes(data[i].id);
-        var shouldReload = data[i].newCraft;
-        if (!existsAlready || shouldReload) {
-            // never seen this id, add new craft to scene
-            var newCraft;
-            switch (data[i].type) {
-                case craftTypes.quadRotor:
-                    newCraft = new quadRotor(0.12, 0.09, 3.*0.0254);
-                    break;
-                case craftTypes.tailSitter:
-                    newCraft = new tailSitter(1., 0.3, 6*0.0254);
-                    break;
-                case craftTypes.airplane:
-                    newCraft = new airplane(1., 0.3, 8*0.0254);
-                    break;
-                case craftTypes.quadRotorExternal:
-                    // synchronous call because i'm lazy
-                    const response = await fetch('/craftdata');
-                    const json = await response.json();
-                    newCraft = new quadRotorExternal(json);
-                    break;
-                default:
-                    break;
-            }
-
-            if (!existsAlready) {
-                idList.push(data[i].id);
-                craftList.push(newCraft);
-            } else {
-                scene.remove(craftList[data[i].id].obj);
-                craftList[data[i].id] = newCraft;
-            }
-
-            scene.add(newCraft.obj);
-            scene.add(newCraft.line);
+async function createCraft(type) {
+    switch (type) {
+        case craftTypes.quadRotor:
+            return new quadRotor(0.12, 0.09, 3.*0.0254);
+        case craftTypes.tailSitter:
+            return new tailSitter(1., 0.3, 6*0.0254);
+        case craftTypes.airplane:
+            return new airplane(1., 0.3, 8*0.0254);
+        case craftTypes.quadRotorExternal: {
+            const response = await fetch('craftdata');
+            const json = await response.json();
+            return new quadRotorExternal(json);
         }
-        var idx = idList.indexOf(data[i].id);
-        craftList[idx].setPose(data[i].pos, data[i].quat);
-        craftList[idx].setControls(data[i].ctl);
-        // if (idx === 0) {
-        //     updateFollowCamera(data[i].pos, data[i].vel);
-        // }
+        default:
+            console.error('Unknown craft type', type);
+            return null;
+    }
+}
+
+var updating = false; // poll results that arrive while a craft is being built are dropped
+
+async function updateVisualization(data) {
+    if (updating)
+        return;
+    updating = true;
+    try {
+        for (let i = 0; i < data.length; i++) {
+            if (!data[i].generation)
+                continue; // sim has not spawned a craft yet
+
+            var idx = idList.indexOf(data[i].id);
+            var existing = (idx >= 0) ? craftList[idx] : null;
+            if (!existing
+                    || existing.generation !== data[i].generation
+                    || existing.type !== data[i].type) {
+                // new id, or the sim spawned a new craft: (re)build the visual
+                var newCraft = await createCraft(data[i].type);
+                if (!newCraft)
+                    continue;
+                newCraft.generation = data[i].generation;
+                newCraft.type = data[i].type;
+
+                if (existing) {
+                    scene.remove(existing.obj);
+                    if (existing.line)
+                        scene.remove(existing.line);
+                    craftList[idx] = newCraft;
+                } else {
+                    idList.push(data[i].id);
+                    craftList.push(newCraft);
+                    idx = craftList.length - 1;
+                }
+
+                scene.add(newCraft.obj);
+                if (newCraft.line)
+                    scene.add(newCraft.line);
+            }
+            craftList[idx].setPose(data[i].pos, data[i].quat);
+            craftList[idx].setControls(data[i].ctl);
+            // if (idx === 0) {
+            //     updateFollowCamera(data[i].pos, data[i].vel);
+            // }
+        }
+    } finally {
+        updating = false;
     }
 }
 window.updateVisualization = updateVisualization;
@@ -108,7 +129,7 @@ function updateFollowCamera(position, velocity = [0, 0, 0]) {
 }
 
 function fetchPose() {
-    fetch('/pose')
+    fetch('pose')
     //fetch('/pose_showoff')
       .then(response => {
         // Check if the request was successful (status code 200)
