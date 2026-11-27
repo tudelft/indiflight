@@ -616,7 +616,9 @@ LAPACK_FILTER_OUT := arithchk.c main.c uninit.c backspac.c getarg_.c iargc_.c
 LAPACK_SOURCE_F2CLIB = $(filter-out $(addprefix $(LAPACK_DIR)/F2CLIBS/libf2c/, $(LAPACK_FILTER_OUT)), $(wildcard $(LAPACK_DIR)/F2CLIBS/libf2c/*.c))
 LAPACK_SOURCE_NO_OPTIM += $(LAPACK_SOURCE_F2CLIB)
 
-LAPACK_SOURCE_INSTALL = dlamch.c dsecnd.c second.c slamch.c
+# slamch/dlamch replaced by common/lapack_lamch.c (the f2c ones hang with
+# -ffast-math). It is picked up by the common/*.c wildcard
+LAPACK_SOURCE_INSTALL = dsecnd.c second.c
 LAPACK_SOURCE_NO_OPTIM += $(addprefix $(LAPACK_DIR)/INSTALL/, $(LAPACK_SOURCE_INSTALL))
 
 ### ADD SOURCES
