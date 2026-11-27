@@ -300,11 +300,11 @@ void updateWindEstimator(timeUs_t current, bool sampling)
         return;
     }
 
-    // thrust axis = -z of the hover frame, in NED
+    // thrust axis = -z of the hover frame, in NED. Level hover: bodyZNed = (0, 0, 1)
     fp_quaternion_t qHover;
     getHoverAttitudeQuaternion(&qHover);
     const fp_vector_t bodyZNed = quatRotMatCol(&qHover, 2);
-    if (-bodyZNed.V.Z < cosf(DEGREES_TO_RADIANS(WIND_EST_MAX_TILT_DEG))) {
+    if (bodyZNed.V.Z < cosf(DEGREES_TO_RADIANS(WIND_EST_MAX_TILT_DEG))) { // cos(tilt)
         return;
     }
 
