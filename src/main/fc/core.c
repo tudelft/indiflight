@@ -1368,6 +1368,9 @@ bool isTouchingGround(void) {
     }
 
     throttleLow |= !ARMING_FLAG(ARMED);
+#ifdef USE_THROW_TO_ARM
+    throttleLow |= throwHoldsIdle(); // the setpoint may ask for thrust, but the motors idle
+#endif
 
     return (accHigh && throttleLow && gyroLow && !isLaunchControlActive());
 }
@@ -1728,6 +1731,24 @@ static float testSignal(timeDelta_t timeSinceStartUs) {
 
 // generates motor[i] commands according to the selected controller
 // does not handle arm/disarm logic, that's only done at the last step
+// not FAST_CODE (ITCM is full): the caller checks throwHoldsIdle()
+static NOINLINE void applyThrowIdleHoldOutputs(void)
+{
+#ifdef USE_THROW_TO_ARM
+    for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
+        motor_normalized[i] = 0.f;
+    }
+#ifdef USE_LEARNER
+    if (!learnerQueryIsActive())
+#endif
+    {
+        for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+            servo_normalized[i] = 0.f;
+        }
+    }
+#endif
+}
+
 FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 {
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_GYROPID_SYNC)
@@ -1744,6 +1765,10 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     subTaskRcCommand(currentTimeUs);
 
     uint8_t numMotors = getMotorCount();
+
+#ifdef USE_THROW_TO_ARM
+    updateThrowIdleHold();
+#endif
 
     for (int motor = 0; motor < MAX_SUPPORTED_MOTORS; motor++) {
         motor_normalized[motor] = 0.;
@@ -1796,6 +1821,14 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
     }
 
+    // idle before throw: no controller output reaches the actuators, in any
+    // mode. Servos only follow the learner's servo identification.
+#ifdef USE_THROW_TO_ARM
+    if (throwHoldsIdle()) {
+        applyThrowIdleHoldOutputs();
+    }
+#endif
+
 #ifdef USE_ACTUATOR_TEST_DANGEROUS
 #pragma message "WARNING: compiling with dangerous code."
     // overwrite outputs with test commands
@@ -1823,12 +1856,21 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 #endif
 
 #ifdef USE_INDI
+#ifdef SERVO_FEEDBACK_AVAILABLE
+    // measured servo angles: servo_feedback is in centidegrees and normalized
+    // +-1 is +-100 deg (10000 cdeg), as in the T4 and Feetech drivers
+    // TODO: the feedback is not time-aligned with the command, and the
+    // 100 deg scale is hardcoded in several places (indi.c tailsitter path,
+    // learner, prober, drivers). Needs another look.
     float servo_normalized_feedback[MAX_SUPPORTED_SERVOS];
     for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
         servo_normalized_feedback[i] = constrainf(((float)servo_feedback[i]) * 1e-4f, -1.f, 1.f);
     }
-    // indiUpdateActuatorState( motor_normalized, servo_normalized );
     indiUpdateActuatorState( motor_normalized, servo_normalized_feedback );
+#else
+    // no servo angle measurement: use the command (servo_feedback stays 0)
+    indiUpdateActuatorState( motor_normalized, servo_normalized );
+#endif
 #endif
 
     // apply motor lead-lag filter only after the commands are fed into the actuator state filter
@@ -1855,6 +1897,13 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
     }
 #endif
+    // again, after the lead-lag filter and disturbance injection
+#ifdef USE_THROW_TO_ARM
+    if (throwHoldsIdle()) {
+        applyThrowIdleHoldOutputs();
+    }
+#endif
+
 #ifdef USE_INDI
     // INDI rpm loop must see the final commands that go to the ESCs
     indiUpdateRpmCtlState( motor_normalized );

@@ -75,7 +75,7 @@
 
 // version 2: rpm control fields added (indiProfile_t grew). Bump on every
 // change to indiProfile_t, or stored profiles 1..N are read shifted.
-PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 2);
+PG_REGISTER_ARRAY_WITH_RESET_FN(indiProfile_t, INDI_PROFILE_COUNT, indiProfiles, PG_INDI_PROFILE, 3);
 
 FAST_DATA_ZERO_INIT indiRuntime_t indiRun;
 
@@ -163,18 +163,8 @@ static fp_euler_t getCurrentEulerZXY(void)
 FAST_CODE
 #endif
 void indiController(timeUs_t current) {
-    if (flightModeFlags && !(flightModeFlags & (CATAPULT_MODE | LEARNER_MODE))) {
-#pragma message "LEARNER_MODE probably shouldnt be here"
-        // any flight mode active other than catapult, learner or acro (acro is all off)?
-        if ( ((++indiRun.attExecCounter)%indiRun.attRateDenom) == 1 || (indiRun.attRateDenom == 1) ) {
-            // rate limit attitude control
-            getSetpoints(current);
-            indiRun.attExecCounter = 1;
-        }
-    } else {
-        // function is cheap, let's do it an all iterations
-        getSetpoints(current);
-    }
+    // setpoints and state machines, every loop (there used to be a rate divider)
+    getSetpoints(current);
 
     // for any flight mode:
     // 1. compute desired angular accelerations
@@ -681,6 +671,24 @@ static float rpmControl(int i, bool rpmValid) {
     return constrainf(indiRun.rpmCmd_f[i] + indiRun.rpmCtlGain * dOmega / omegaMax, 0.f, dMax);
 }
 
+#ifdef USE_THROW_TO_ARM
+// not FAST_CODE: only runs while idling in hand, ITCM is full
+static NOINLINE void indiHoldIdleBeforeThrow(void) {
+#ifdef USE_LEARNER
+    const bool queryActive = learnerQueryIsActive();
+#endif
+    for (int i = 0; i < MAXU; i++) {
+        bool servoProbe = false;
+#ifdef USE_LEARNER
+        servoProbe = queryActive && learnerQueryActuatorSelected(i)
+            && (indiRun.actType[i] == INDI_ACT_TYPE_SERVO);
+#endif
+        indiRun.d[i] = servoProbe ? outputFromLearningQuery[i] : 0.f;
+        indiRun.rpmControlRan[i] = false;
+    }
+}
+#endif
+
 #ifdef STM32H7
 FAST_CODE
 #endif
@@ -752,6 +760,15 @@ void getMotorCommands(timeUs_t current) {
     }
 #if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
     omegaPrevValid = rpmTelemetryActive && indiRun.useRpmDotFeedback;
+#endif
+
+#ifdef USE_THROW_TO_ARM
+    // idle before throw: INDI must not drive the actuators (motors idle). Only
+    // the learner's servo identification may move the servos.
+    if (throwHoldsIdle()) {
+        indiHoldIdleBeforeThrow();
+        return;
+    }
 #endif
 
 #ifdef USE_LEARNER

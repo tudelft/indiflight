@@ -61,7 +61,7 @@ typedef struct learnerConfig_s {
     uint8_t applyHoverRotation;
     // from modular_drone
     uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
-    uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 0: per-mode default (1 while probing, fortescue/1 otherwise). 1000000: no forgetting
+    uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 1000000: no forgetting. 0: bandwidth equation (modular_drone), or with useFortescue: 1 while probing, fortescue after
     uint32_t hardcodeMaxRpm;    // 0: learned max rpm. otherwise: use this max rpm for all motors
     int16_t hardcodeG1Fz;       // used if hardcodeLinearForces. same units as indi_act_g1_fz, 0 is a valid value
     uint8_t hardcodeLinearForces; // 0: learned fx, fy, fz. 1: use hardcodeG1Fx, hardcodeG1Fy, hardcodeG1Fz

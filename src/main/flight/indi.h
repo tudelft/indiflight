@@ -117,7 +117,6 @@ typedef struct indiProfile_s {
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
-    uint8_t attRateDenom;        // only execute attitude loop every attRateDenom loops
     // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
     uint8_t rpmCtlGain;            // INDI rpm loop gain K * 10, K normalised so 1 = omegaMax per full command (paper nominal). 0: off (open loop). Replaces the unused useRpmFeedback (same offset/size)
@@ -184,7 +183,6 @@ typedef struct indiRuntime_s {
     fp_vector_t rateGains;
     float attMaxTiltRate; // rad/s
     float attMaxYawRate;  // rad/s
-    uint8_t attRateDenom;
     bool manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     float manualMaxUpwardsSpf; // 255 means sum(G1[2, :])
     float manualMaxTilt; // rad
@@ -299,7 +297,6 @@ typedef struct indiRuntime_s {
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz
-    uint8_t attExecCounter; // count executions (wrapping)
     uint16_t nanCounter; // count times consequtive nans appear in allocation
     // ---- control law selection
     // bool bypassControl; // no control at all. u and d are unmodified by loop
