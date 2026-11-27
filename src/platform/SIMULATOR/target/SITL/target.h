@@ -31,6 +31,14 @@
 
 #define TARGET_BOARD_IDENTIFIER "SITL"
 
+// indiflight SIL: every indiflight SITL build is the SIL. One compile links both the
+// upstream-style executable (real time, UDP to an external simulator) and the shared
+// library obj/.../*_SITL.so that PyNDIflight clocks step by step (mockup.c, which
+// switches sitl.c to its virtual clock at init()).
+#ifdef USE_INDIFLIGHT
+#define SIL_BUILD
+#endif
+
 // SITL bridge selector. Configs that target legacy bridges (X-Plane,
 // RealFlight) define ENABLE_GAZEBO_BRIDGE=0 in config.h; otherwise default
 // to Gazebo so the bare TARGET=SITL build behaves like the SITL_GAZEBO config.
@@ -74,13 +82,13 @@
 #define U_ID_2 2
 
 #undef TASK_GYROPID_DESIRED_PERIOD
-#ifdef MOCKUP
-// indiflight MOCKUP: one tick() = one gyro sample = 125 us (8 kHz). The virtual
+#ifdef SIL_BUILD
+// indiflight SIL: one tick() = one gyro sample = 125 us (8 kHz). The virtual
 // gyro must report that rate, or the filters, PID/INDI dT and the blackbox
 // looptime assume the upstream 1 kHz (accgyro_virtual.h).
-#define MOCKUP_TICK_DT_US               125
-#define TASK_GYROPID_DESIRED_PERIOD     MOCKUP_TICK_DT_US
-#define VIRTUAL_GYRO_SAMPLE_RATE_HZ     (1000000 / MOCKUP_TICK_DT_US)
+#define SIL_TICK_DT_US                  125
+#define TASK_GYROPID_DESIRED_PERIOD     SIL_TICK_DT_US
+#define VIRTUAL_GYRO_SAMPLE_RATE_HZ     (1000000 / SIL_TICK_DT_US)
 #else
 #define TASK_GYROPID_DESIRED_PERIOD     100
 #endif

@@ -27,10 +27,10 @@
 
 #include "platform.h"
 
-#if defined(HIL_BUILD) || defined(MOCKUP)
+#if defined(HIL_BUILD) || defined(SIL_BUILD)
 
 #if !defined(USE_FRD_NED)
-#error "HIL_BUILD and MOCKUP exchange FRD body-frame data: build with USE_INDIFLIGHT"
+#error "HIL_BUILD and SIL_BUILD exchange FRD body-frame data: build with USE_INDIFLIGHT"
 #endif
 
 #include "common/maths.h"

@@ -18,7 +18,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-// indiflight MOCKUP: the SIMULATOR platform (sitl.c with -DMOCKUP) built as a
+// indiflight SIL: the SIMULATOR platform (sitl.c, SIL_BUILD) linked as a
 // shared library and stepped by the caller, see src/utils/indiflight_mockup_interface.py
 // and support/simulation/PyNDIflight. All vectors are body FRD / earth NED, SI units.
 // Ported from the 4.4 fork's src/main/mockup/main.c.
@@ -29,10 +29,10 @@
 
 #include "platform.h"
 
-#ifdef MOCKUP
+#ifdef SIL_BUILD
 
 #if !defined(USE_LOCAL_POSITION) || !defined(USE_ACC) || !defined(USE_INDI)
-#error "MOCKUP requires USE_INDI, USE_LOCAL_POSITION and USE_ACC"
+#error "SIL_BUILD requires USE_INDI, USE_LOCAL_POSITION and USE_ACC"
 #endif
 
 #include "common/maths.h"
@@ -65,11 +65,12 @@
 #include "sensors/acceleration.h"
 #include "sensors/gyro.h"
 
-// MOCKUP_TICK_DT_US (target.h): one tick = one gyro sample at 8 kHz
+// SIL_TICK_DT_US (target.h): one tick = one gyro sample at 8 kHz
 #define MOCKUP_GRAVITY 9.80665f
 
-void mockupClockTick(uint32_t us); // sitl.c
-void mockupReleasePlatform(void); // sitl.c
+void sitlClockTick(uint32_t us); // sitl.c
+void sitlUseExternalClock(void); // sitl.c
+void sitlReleasePlatform(void); // sitl.c
 
 static float motorOmega[MAX_SUPPORTED_MOTORS]; // rad/s, from the simulation
 
@@ -298,7 +299,7 @@ void mockupShutdown(void)
 #ifdef USE_BLACKBOX_VIRTUAL
     blackboxVirtualClose();
 #endif
-    mockupReleasePlatform(); // TCP serial sockets, EEPROM file
+    sitlReleasePlatform(); // TCP serial sockets, EEPROM file
 }
 
 #if !defined(USE_DSHOT)
@@ -321,6 +322,7 @@ uint16_t getDshotErpm(uint8_t motorIndex)
 // what main() does before run() (src/main/main.c), without the scheduler loop
 void init(void)
 {
+    sitlUseExternalClock(); // the caller clocks the firmware with tick()
     systemInit();
     initPhase1();
     initPhase2();
@@ -340,7 +342,7 @@ static void runTask(taskId_e id, timeUs_t now)
 void tick(void)
 {
     static uint32_t n = 0;
-    mockupClockTick(MOCKUP_TICK_DT_US);
+    sitlClockTick(SIL_TICK_DT_US);
     const timeUs_t now = micros();
 
     // the caller arms/disarms and sets the modes directly; no RX, no arming checks
@@ -369,4 +371,4 @@ void tick(void)
     n++;
 }
 
-#endif // MOCKUP
+#endif // SIL_BUILD

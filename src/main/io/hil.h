@@ -27,7 +27,7 @@
 
 #include "platform.h"
 
-#if defined(HIL_BUILD) || defined(MOCKUP)
+#if defined(HIL_BUILD) || defined(SIL_BUILD)
 
 #include "drivers/accgyro/accgyro.h"
 #include "common/sensor_alignment.h"

@@ -589,6 +589,17 @@ static void* tcpThread(void* data)
     return NULL;
 }
 
+#ifdef SIL_BUILD
+// indiflight SIL: true when the shared library is stepped by an external program
+// (mockup.c init(), support/simulation/PyNDIflight): no worker threads, no UDP links,
+// virtual clock advanced by sitlClockTick(). False when run as the executable.
+static bool sitlExternalClock = false;
+void sitlUseExternalClock(void)
+{
+    sitlExternalClock = true;
+}
+#endif
+
 // system
 void systemInit(void)
 {
@@ -596,11 +607,11 @@ void systemInit(void)
 
     clock_gettime(CLOCK_MONOTONIC, &start_time);
     printf("[system]Init...\n");
-#ifdef MOCKUP
-    // indiflight MOCKUP: a shared library driven step by step by the caller
-    // (support/simulation/PyNDIflight): no worker threads, no UDP links, virtual clock
-    SystemCoreClock = 500 * 1e6; // virtual 500MHz
-    return;
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        SystemCoreClock = 500 * 1e6; // virtual 500MHz
+        return;
+    }
 #endif
 
     // Close the GPX track file cleanly on exit
@@ -651,9 +662,11 @@ void systemInit(void)
 
 void systemReset(void)
 {
-#ifdef MOCKUP
-    printf("[system]Reset ignored (MOCKUP)\n");
-    return;
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        printf("[system]Reset ignored (externally clocked SIL)\n");
+        return;
+    }
 #endif
     printf("[system]Reset!\n");
     workerRunning = false;
@@ -712,24 +725,23 @@ uint64_t millis64_real(void)
     return 1.0e3*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - (start_time.tv_sec + (start_time.tv_nsec*1.0e-9)));
 }
 
-#ifdef MOCKUP
-// indiflight MOCKUP: virtual time, advanced only by mockupClockTick() (tick()) and delays
-static uint64_t mockupTimeNs = 0;
-void mockupClockTick(uint32_t us)
+#ifdef SIL_BUILD
+// indiflight SIL, externally clocked: virtual time, advanced only by sitlClockTick()
+// (mockup.c tick()) and delays
+static uint64_t sitlVirtualTimeNs = 0;
+void sitlClockTick(uint32_t us)
 {
-    mockupTimeNs += 1000ULL * us;
+    sitlVirtualTimeNs += 1000ULL * us;
 }
+#endif
+
 uint64_t micros64(void)
 {
-    return mockupTimeNs / 1000;
-}
-uint64_t millis64(void)
-{
-    return mockupTimeNs / (1000 * 1000);
-}
-#else
-uint64_t micros64(void)
-{
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        return sitlVirtualTimeNs / 1000;
+    }
+#endif
     static uint64_t last = 0;
     static uint64_t out = 0;
     uint64_t now = nanos64_real();
@@ -742,6 +754,11 @@ uint64_t micros64(void)
 
 uint64_t millis64(void)
 {
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        return sitlVirtualTimeNs / (1000 * 1000);
+    }
+#endif
     static uint64_t last = 0;
     static uint64_t out = 0;
     uint64_t now = nanos64_real();
@@ -751,7 +768,6 @@ uint64_t millis64(void)
 
     return out / (1000 * 1000);
 }
-#endif // MOCKUP
 
 uint32_t micros(void)
 {
@@ -798,12 +814,13 @@ static void microsleep(uint32_t usec)
 
 void delayMicroseconds(uint32_t us)
 {
-#ifdef MOCKUP
-    mockupClockTick(us);
-    UNUSED(microsleep);
-#else
-    microsleep(us / simRate);
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        sitlClockTick(us);
+        return;
+    }
 #endif
+    microsleep(us / simRate);
 }
 
 void delayMicroseconds_real(uint32_t us)
@@ -813,9 +830,11 @@ void delayMicroseconds_real(uint32_t us)
 
 void delay(uint32_t ms)
 {
-#ifdef MOCKUP
-    mockupClockTick(1000 * ms);
-    return;
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        sitlClockTick(1000 * ms);
+        return;
+    }
 #endif
     uint64_t start = millis64();
 
@@ -919,8 +938,10 @@ static void pwmCompleteMotorUpdate(void)
         pwmPkt.motor_speed[i] = motorsPwm[i] / outScale;
     }
 
-#ifdef MOCKUP
-    return; // indiflight MOCKUP: the caller reads the outputs (mockup.c)
+#ifdef SIL_BUILD
+    if (sitlExternalClock) {
+        return; // indiflight SIL: the caller reads the outputs (mockup.c)
+    }
 #endif
     // get one "fdm_packet" can only send one "servo_packet"!!
     if (pthread_mutex_trylock(&updateLock) != 0) return;
@@ -1040,12 +1061,12 @@ void configLock(void)
     }
 }
 
-#ifdef MOCKUP
-// indiflight MOCKUP: release what outlives dlclose() of the library (file
+#ifdef SIL_BUILD
+// indiflight SIL: release what outlives dlclose() of the library (file
 // descriptors), so the next instance can bind the serial ports' TCP listen
 // sockets again: the dyad streams and the EEPROM file left open by
 // loadEEPROMFromFile() if nothing was saved since init (as the 4.4 fork)
-void mockupReleasePlatform(void)
+void sitlReleasePlatform(void)
 {
     dyad_shutdown();
     if (eepromFd != NULL) {

@@ -19,12 +19,14 @@ MCU_COMMON_SRC  := \
 #Flags
 ARCH_FLAGS      =
 
-# indiflight MOCKUP: the SIMULATOR platform as a shared library stepped by the
-# caller (support/simulation/PyNDIflight), make mockup
-ifneq ($(findstring -DMOCKUP,$(EXTRA_FLAGS)),)
+# indiflight SIL: an indiflight SITL build (USE_INDIFLIGHT, SIL_BUILD in target.h) links
+# the same position independent objects twice, as the executable and as the shared
+# library stepped by support/simulation/PyNDIflight (mockup.c), see SIL_SO in Makefile
+ifneq ($(findstring -DUSE_INDIFLIGHT,$(EXTRA_FLAGS)),)
+INDIFLIGHT_SIL  := yes
 MCU_COMMON_SRC  += SIMULATOR/mockup.c
 ARCH_FLAGS      = -fPIC
-MOCKUP_LD_FLAGS = -shared -Wl,--no-undefined -Wl,--version-script=$(TARGET_PLATFORM_DIR)/link/mockup.map
+SIL_SO_LD_FLAGS = -shared -Wl,--no-undefined -Wl,--version-script=$(TARGET_PLATFORM_DIR)/link/mockup.map
 endif
 DEVICE_FLAGS    =
 LD_SCRIPT       = $(LINKER_DIR)/sitl.ld
@@ -56,8 +58,7 @@ LD_FLAGS    := \
             -Wl,-L$(LINKER_DIR) \
             -Wl,--cref \
             -Wl,-z,noexecstack \
-            -T$(LD_SCRIPT) \
-            $(MOCKUP_LD_FLAGS)
+            -T$(LD_SCRIPT)
 
 ifneq ($(filter SITL_STATIC,$(OPTIONS)),)
 LD_FLAGS     += \

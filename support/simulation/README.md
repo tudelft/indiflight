@@ -15,6 +15,12 @@ the purpose of testing and debugging estimation and control code, but not
 debugging device drivers, schedulers, or interfaces. We call such a build a 
 `MOCKUP`, as it's not the whole package.
 
+Every indiflight SITL build (`USE_INDIFLIGHT`, `SIL_BUILD`) produces both the
+upstream-style SITL executable (real time, UDP to Gazebo/RealFlight) and the
+shared library that these scripts clock step by step. `make mockup` builds it
+with the default SIL features and copies the library to
+`obj/main/indiflight_MOCKUP.so`.
+
 <!--
 ### Quickstart using Docker
 

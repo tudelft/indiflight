@@ -845,7 +845,7 @@ extern struct linker_symbol __fontdata_end;
     || defined(USE_LOCAL_POSITION) || defined(USE_POS_CTL) || defined(USE_VEL_CTL) \
     || defined(USE_TELEMETRY_PI) || defined(USE_GEOFENCE) || defined(USE_PITOT) \
     || defined(USE_SERVOS_FEETECH) || defined(USE_ACTUATORS_T4) \
-    || defined(HIL_BUILD) || defined(MOCKUP) || defined(USE_TRAJECTORY_TRACKER) \
+    || defined(HIL_BUILD) || defined(USE_TRAJECTORY_TRACKER) \
     || defined(USE_NN_CONTROL) || defined(USE_LEARNER) || defined(USE_CATAPULT) \
     || defined(USE_THROW_TO_ARM) || defined(USE_ACTUATOR_TEST_DANGEROUS))
 #error "indiflight features need USE_INDIFLIGHT: add '#define USE_INDIFLIGHT' to the profile or -DUSE_INDIFLIGHT to EXTRA_FLAGS"
@@ -857,11 +857,11 @@ extern struct linker_symbol __fontdata_end;
 #define AFATFS_NUM_CACHE_SECTORS 40
 #endif
 
-// indiflight simulation (SIL = MOCKUP, HIL = HIL_BUILD): the simulator delivers IMU data
+// indiflight simulation (SIL = SIL_BUILD, HIL = HIL_BUILD): the simulator delivers IMU data
 // in the board frame. The IMU is assumed mounted on the board without rotation, so the
 // board config's GYRO_n_ALIGN is replaced by CW0_DEG; only the profile's align_board_*
 // (board mounting in the craft) is applied, identically in SIL and HIL.
-#if defined(HIL_BUILD) || defined(MOCKUP)
+#if defined(HIL_BUILD) || defined(SIL_BUILD)
 #define USE_SIM_IDENTITY_SENSOR_ALIGN
 #endif
 

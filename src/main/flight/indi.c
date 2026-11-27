@@ -755,7 +755,7 @@ void getMotorCommands(timeUs_t current) {
 
     static float rate_prev[XYZ_AXIS_COUNT] = {0.f, 0.f, 0.f};
     bool rpmTelemetryActive = false;
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(SIL_BUILD)
     static float omega_prev[MAXU] = {0.f};
     static bool omegaPrevValid = false; // omega_prev holds a real sample from the previous loop
     rpmTelemetryActive = isDshotTelemetryActive();
@@ -801,7 +801,7 @@ void getMotorCommands(timeUs_t current) {
 
     // get motor acceleration
     for (int i = 0; i < indiRun.actNum; i++) {
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(SIL_BUILD)
         if (rpmTelemetryActive && indiRun.useRpmDotFeedback && (indiRun.actType[i] == INDI_ACT_TYPE_MOTOR)) {
             if (!omegaPrevValid) {
                 // first sample after telemetry came up: no derivative spike
@@ -816,7 +816,7 @@ void getMotorCommands(timeUs_t current) {
             indiRun.omegaDot_fs[i] = indiRun.du_fs[i] * indiRun.G2_scaler[i] * omega_inv[i];
         }
     }
-#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(MOCKUP)
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) || defined(SIL_BUILD)
     omegaPrevValid = rpmTelemetryActive && indiRun.useRpmDotFeedback;
 #endif
 
@@ -1080,7 +1080,7 @@ void indiUpdateActuatorState( float* motors, float* servos ) {
                 indiRun.uState[i] = pt1FilterApply( &indiRun.uLagFilter[i], u );
 
                 // is motor, also get motor speed for control
-#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(MOCKUP)
+#if (defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY)) || defined(SIL_BUILD)
                 if (motor < getMotorCount() && (isDshotTelemetryActive() || getDshotErpm(motor))) { // getDshotTelemetry triggers an update to DshotTelemitryActive, so the || makes sure we retry
                     // to get to rad/s, multiply with erpm scaling (100), then divide by pole pairs and convert rpm to rad
                     indiRun.omega[i] = indiRun.erpmToRads * getDshotErpm(motor);
@@ -1206,7 +1206,7 @@ fp_vector_t extrinsicYaw(float yaw) {
 fp_vector_t coordinateTurn(void) {
     fp_vector_t output = {0};
 
-#if defined(HIL_BUILD) || defined(MOCKUP)
+#if defined(HIL_BUILD) || defined(SIL_BUILD)
 #ifndef USE_LOCAL_POSITION
     return output;
 #endif

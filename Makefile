@@ -595,6 +595,18 @@ $(TARGET_EXE): $(TARGET_ELF)
 	@echo "Creating exe - copying $< to $@" "$(STDOUT)"
 	$(V1) cp $< $@
 
+# indiflight SIL (SIMULATOR/mk/SITL.mk): the same objects also as the shared library
+# that support/simulation/PyNDIflight steps (src/platform/SIMULATOR/mockup.c)
+ifeq ($(INDIFLIGHT_SIL),yes)
+TARGET_SIL_SO   := $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).so
+$(TARGET_SIL_SO): $(TARGET_OBJS) $(LD_SCRIPT) $(LD_SCRIPTS)
+	@echo "Linking $(TARGET_NAME) shared library (SIL)" "$(STDOUT)"
+	$(V1) $(CROSS_CC) -o $@ $(filter-out %.ld,$^) $(LD_FLAGS) $(SIL_SO_LD_FLAGS)
+	$(V1) cp $@ $(BIN_DIR)/$(TARGET_FULLNAME).so
+
+$(TARGET_EXE): $(TARGET_SIL_SO)
+endif
+
 # Compile
 
 ## compile_file takes two arguments: (1) optimisation description string and (2) optimisation compiler flag
@@ -799,15 +811,16 @@ uf2: $(PLATFORM_SDK_STAMP) $(AUTOHYDRATE_STAMPS) validate-deps
 	$(V1) $(MAKE) $(MAKE_PARALLEL) $(TARGET_UF2)
 
 .PHONY: exe
-# indiflight MOCKUP: the SIMULATOR platform as a shared library for
-# support/simulation/PyNDIflight (src/platform/SIMULATOR/mockup.c).
-# make mockup [PROFILE=...] [EXTRA_FLAGS=...] -> obj/main/indiflight_MOCKUP.so
+# indiflight SIL: an indiflight SITL build gives both the executable and the shared
+# library (SIMULATOR/mk/SITL.mk). This builds it with the default SIL features and
+# copies the library to where support/simulation and src/utils load it from.
+# make mockup [PROFILE=...] [EXTRA_FLAGS=...] -> obj/main/indiflight_MOCKUP.so (+ the SITL executable)
 MOCKUP_FLAGS ?= -DUSE_INDIFLIGHT -DUSE_INDI -DUSE_EKF -DUSE_LOCAL_POSITION -DUSE_POS_CTL -DUSE_VEL_CTL -DUSE_TELEMETRY_PI
 .PHONY: mockup
 mockup:
-	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/mockup EXTRA_FLAGS="-DMOCKUP $(MOCKUP_FLAGS) $(EXTRA_FLAGS)"
-	$(V1) mkdir -p $(ROOT)/obj/main && cp $(ROOT)/obj/mockup/$(FORKNAME)_SITL.elf $(ROOT)/obj/main/indiflight_MOCKUP.so
-	@echo "MOCKUP library: obj/main/indiflight_MOCKUP.so"
+	$(V1) $(MAKE) SITL OBJECT_DIR=$(ROOT)/obj/mockup EXTRA_FLAGS="$(MOCKUP_FLAGS) $(EXTRA_FLAGS)"
+	$(V1) mkdir -p $(ROOT)/obj/main && cp $(ROOT)/obj/mockup/$(FORKNAME)_SITL.so $(ROOT)/obj/main/indiflight_MOCKUP.so
+	@echo "SIL library: obj/main/indiflight_MOCKUP.so"
 
 exe: $(AUTOHYDRATE_STAMPS) validate-deps
 	$(V1) $(MAKE) $(MAKE_PARALLEL) $(TARGET_EXE)

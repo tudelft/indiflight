@@ -9305,7 +9305,7 @@ void cliProcessConfigFile(const char *filename)
     }
 }
 
-#ifdef MOCKUP
+#ifdef SIL_BUILD
 // indiflight MOCKUP: feed the CLI one character at a time (output on stdout).
 // Lines are handled like cliProcessConfigFile(), except that 'save' writes the
 // EEPROM file and continues, and reboot-class commands are skipped.

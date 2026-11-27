@@ -70,7 +70,7 @@ void setLocalPosMeas(local_pos_ned_t* pos) {
 #ifdef USE_GPS
         sensorsSet(SENSOR_GPS);
 #endif
-#if defined(USE_GPS) && defined(MOCKUP)
+#if defined(USE_GPS) && defined(SIL_BUILD)
         // this is just for debugging geofence
         if (pos->source != LOCAL_POS_SOURCE_GPS) {
             // transform local to global, set and check for geofence
