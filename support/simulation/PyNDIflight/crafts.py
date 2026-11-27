@@ -271,38 +271,42 @@ class MultiRotor(Craft):
         #
         #   DeltaA + G2 * wdot_prev = ( G1 + G2n / w0 ) DeltaU
         ##################
-        N = len(self.rotors)
+        N = self.Nr
+        Tmax = self.r_k * self.r_wmax**2
 
         B1 = np.zeros((6, N))
         B2 = np.zeros((6, N))
-        for i, rotor in enumerate(self.rotors):
+        for i in range(N):
+            ax = self.r_ax[:, i].astype(np.float64)
+            ax /= np.linalg.norm(ax)
+
             # force contribution from thrust
-            B1[:3, i] = rotor.axis
+            B1[:3, i] = ax
 
             # moment contribution from thrust
-            # and moment contribution from rotor drag
-            B1[3:, i] = cross(rotor.r, rotor.axis) \
-                        -rotor.dir * rotor.cm * rotor.axis
+            # and moment contribution from rotor drag (r_cm is signed with spin direction)
+            B1[3:, i] = np.cross(self.r_X[:, i], ax) \
+                        -self.r_cm[i] * ax
 
-            B1[:, i] *= rotor.Tmax
+            B1[:, i] *= Tmax[i]
 
             # moment contribution from spinup
-            B2[3:, i] = -rotor.dir * rotor.axis * rotor.Izz
+            B2[3:, i] = -np.sign(self.r_cm[i]) * ax * self.r_I[i]
 
         M = np.zeros((6,6))
         M[:3, :3] = self.m * np.eye(3)
         M[3:, 3:] = np.diag(np.diag(self.I)) # remove offdiagonal elements
-        #M[3:, 3:] = self._I # isnt this more accurate?
+        #M[3:, 3:] = self.I # isnt this more accurate?
 
         G1 = np.linalg.solve(M, B1)
         G2 = np.linalg.solve(M, B2)
-        G2_scaler = np.array([0.5 * r.wmax**2 / (0.5*r.tau) for r in self.rotors])
+        G2_scaler = 0.5 * self.r_wmax**2 / (0.5*self.r_tau)
         return G1, G2, G2_scaler
 
     def checkHover(self):
         G1, _, _ = self.calculateG1G2()
         Qr, Rr = np.linalg.qr(G1[3:, :].T, 'complete')
-        if (len(self.rotors) < 4) or (np.abs(np.diag(Rr)) < 1e-3).any():
+        if (self.Nr < 4) or (np.abs(np.diag(Rr)) < 1e-3).any():
             print(f"\nWARNING: generated craft has no control over some rotation axis or axes.")
             return False
         else:
