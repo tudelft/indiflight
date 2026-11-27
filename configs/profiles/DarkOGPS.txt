@@ -504,7 +504,7 @@ set throw_to_arm_allow_manual_modes = 0
 # learner modes. probing bits: 1 in flight, 2 after throw, 4 after catapult
 #                fx/act/hover bits: 1 during flight (not probing), 2 during probing
 set learner_mode_probing = 6
-set learner_mode_fx = 3
+set learner_mode_fx = 2       # 2: during probing only (in-flight learning off, bit 1)
 set learner_mode_act = 2
 set learner_mode_hover = 2
 set learner_mix_control_after_ms = 1000   # add control to the excitation after this time
@@ -513,7 +513,7 @@ set learner_init_from_profile_act = 0
 set learner_act_mask = 65535
 set learner_fx_incremental = 0           # ignored with LEARNER_IS_TAILSITTER (global model only)
 set learner_simple_motor_model = 0
-set learner_rls_lambda = 0                 # 0: no forgetting while probing, fortescue/none after
+set learner_rls_lambda = 1000000       # * 1e-6, 1000000: no forgetting. 0: bandwidth equation (~0.995)
 set learner_hardcode_max_rpm = 0
 set learner_hardcode_linear_forces = 0
 

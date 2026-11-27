@@ -45,6 +45,13 @@ float totalAccSq(void);
 float totalGyroSq(void);
 void updateThrowFallStateMachine(timeUs_t currentTimeUs);
 
+// idle before throw (throw_to_arm_idle_before_throw): armed in hand, motors at
+// idle until the throw. Call once per inner loop, before any controller.
+void updateThrowIdleHold(void);
+// true while no controller may drive the actuators: from arming with the
+// throw-to-arm switch on until the throw is detected (or disarm)
+bool throwHoldsIdle(void);
+
 typedef enum {
     THROW_STATE_IDLE = -1,
     THROW_STATE_WAITING_FOR_THROW = 0,

@@ -128,6 +128,7 @@ typedef struct prober_runtime_s {
 extern prober_runtime_t proberRuntime;
 
 void initProber(timeUs_t currentTimeUs);
+void resetProber(void);
 void updateProber(timeUs_t currentTimeUs);
 void initServoProber(timeUs_t currentTimeUs);
 void updateServoProber(timeUs_t currentTimeUs);

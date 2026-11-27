@@ -86,6 +86,30 @@ fallState_t fallState = FALL_STATE_IDLE
 #endif
 
 
+static bool throwIdleHold = false;
+
+// Latched on the arming edge, so that switching the throw-to-arm switch on in
+// flight never cuts the motors. Released only by the throw (THROWN) or disarm;
+// switching throw-to-arm off while held keeps idling until disarm.
+NOINLINE void updateThrowIdleHold(void) { // not inlined into the inner loop: ITCM is full
+    static bool wasArmed = false;
+    const bool armed = ARMING_FLAG(ARMED);
+
+    if (armed && !wasArmed) {
+        throwIdleHold = throwConfig()->idleBeforeThrow
+            && IS_RC_MODE_ACTIVE(BOXTHROWTOARM)
+            && (throwState < THROW_STATE_THROWN);
+    }
+    if (!armed || (throwState >= THROW_STATE_THROWN)) {
+        throwIdleHold = false;
+    }
+    wasArmed = armed;
+}
+
+bool throwHoldsIdle(void) {
+    return throwIdleHold;
+}
+
 // implementations
 float totalAccSq(void) {
     return sq(GRAVITYf) * sq(acc.dev.acc_1G_rec) * 

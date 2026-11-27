@@ -76,10 +76,8 @@ learning_query_state_t learningQueryState = LEARNING_QUERY_IDLE;
 PG_REGISTER_WITH_RESET_TEMPLATE(learnerConfig_t, learnerConfig, PG_LEARNER_CONFIG, 6);
 PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig, 
     .modeProbing = (uint8_t) (LEARN_PROBING_AFTER_CATAPULT | LEARN_PROBING_AFTER_THROW),
-    // .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    // .modeAct   = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    // .modeHover = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
-    .modeFx    = (uint8_t) (LEARN_DURING_PROBING | LEARN_DURING_FLIGHT),
+    // in-flight learning (LEARN_DURING_FLIGHT) is available, but off by default for all crafts
+    .modeFx    = (uint8_t) (LEARN_DURING_PROBING),
     .modeAct   = (uint8_t) (LEARN_DURING_PROBING),
     .modeHover = (uint8_t) (LEARN_DURING_PROBING),
     .mixControlAfterMs = 1000,
@@ -105,7 +103,7 @@ PG_RESET_TEMPLATE(learnerConfig_t, learnerConfig,
     .applyPosition = false,
     .applyHoverRotation = false,
     .simpleMotorModel = LEARNER_DEFAULT(true, false), // modular_drone: since f5d3392 "simplify motor model"
-    .rlsLambda = LEARNER_DEFAULT(1000000, 0),      // modular_drone: lambda = 1 since 5bf60bd
+    .rlsLambda = 1000000,     // lambda = 1 (modular_drone since 5bf60bd). 0: bandwidth equation, see learnerSampleLambda
     .hardcodeMaxRpm = 0,      // 0: learned (was build flag LEARNER_HARDCODE_MAXRPM -> 37000)
     .hardcodeG1Fz = 0,
     .hardcodeLinearForces = false, // 0: learned (was build flag LEARNER_HARDCODE_LINEAR_FORCES -> 0, 0, -438)
@@ -178,14 +176,38 @@ static bool learnerFxIncremental(void) {
 #endif
 }
 
-// forgetting factor for one RLS sample.
-// learner_rls_lambda > 0: that value, always.
-// otherwise: no forgetting while probing; afterwards fortescue if learner_use_fortescue, else none
+// forgetting factor from the bandwidth equation of modular_drone's rlsInit,
+// set by initLearnerRls (depends on query vs. in-flight restart)
+static float learnerBandwidthLambda = 1.f;
+
+static float rlsBandwidthLambda(float bandwidthHz) {
+    const float sampleFreqHz = 1e6f / ((float) gyro.targetLooptime);
+    return powf(1.f - (float) M_LN2f, (2.f * M_PIf * bandwidthHz) / sampleFreqHz);
+}
+
+// forgetting factor for one sample of the effectiveness (fx) RLS. modular_drone semantics:
+//   learner_rls_lambda > 0:    that value * 1e-6, always
+//   learner_rls_lambda == 0:   from the bandwidth equation (about 0.995 during a query)
+// except learner_use_fortescue = 1 with learner_rls_lambda == 0 (tailsitter branch):
+//   no forgetting while probing, fortescue afterwards
 static float learnerSampleLambda(bool probing) {
-    if (learnerConfig()->rlsLambda > 0) {
-        return constrainf(1e-6f * (float) learnerConfig()->rlsLambda, LEARNER_RLS_LAMBDA_MIN, 1.f);
+    const learnerConfig_t *config = learnerConfig();
+    if (config->rlsLambda > 0) {
+        return constrainf(1e-6f * (float) config->rlsLambda, LEARNER_RLS_LAMBDA_MIN, 1.f);
     }
-    return probing ? 1.f : 0.f; // 0: fortescue if initialized, otherwise 1 (see rlsNewSample)
+    if (config->useFortescue) {
+        return probing ? 1.f : 0.f; // 0: fortescue (see rlsNewSample)
+    }
+    return learnerBandwidthLambda;
+}
+
+// same for the imu and actuator RLS, which never use fortescue
+static float learnerFixedLambda(void) {
+    const learnerConfig_t *config = learnerConfig();
+    if (config->rlsLambda > 0) {
+        return constrainf(1e-6f * (float) config->rlsLambda, LEARNER_RLS_LAMBDA_MIN, 1.f);
+    }
+    return config->useFortescue ? 1.f : learnerBandwidthLambda;
 }
 
 // learning
@@ -307,6 +329,13 @@ static void initLearnerRls(bool fromProfileInFlight) {
     }
     const float actBandwidthHz = incremental ? actionBandwidthHz : 0.f;
 
+    // learner_rls_lambda = 0: modular_drone's bandwidth equation. A query used
+    // 680 / looptime Hz (lambda ~0.995), an in-flight restart from the profile
+    // (setFxRlsToProfile) 0.2 / (2 pi 15ms) Hz
+    learnerBandwidthLambda = rlsBandwidthLambda(fromProfileInFlight
+            ? 0.2f * ( 1.f / (2.f * M_PIf * 0.015f) )
+            : 680.f / ((float) gyro.targetLooptime));
+
     if (!fromProfileInFlight) {
         rlsInit(&imuRls, 3, 3, covImu, gyro.targetLooptime, actionBandwidthHz);
     }
@@ -330,6 +359,11 @@ static void initLearnerRls(bool fromProfileInFlight) {
     fxRls[4].x[0] = 0.f;
     fxRls[5].x[0] = 0.f;
 
+    // the effectiveness RLS only hold the selected motors, packed: motor m (the
+    // m-th selected motor, not the actuator index) is x[m] of the spf RLS and
+    // x[1 + m], x[1 + numMotors + m] of the rotation RLS. Same as the regressors
+    // in updateLearner and the read-back in updateLearnedParameters.
+    int m = 0;
     for (int act = 0; act < indiRun.actNum; act++) {
         if (!(config->actMask & (1 << act))) {
             continue;
@@ -359,18 +393,19 @@ static void initLearnerRls(bool fromProfileInFlight) {
 
                 // todo: rotate with hover rotation
                 if (initFx) {
-                    fxRls[0].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[act];
-                    fxRls[1].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[act];
-                    fxRls[2].x[act] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[act];
+                    fxRls[0].x[m] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fx[act];
+                    fxRls[1].x[m] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fy[act];
+                    fxRls[2].x[m] = 10.f * 1e5f * isq * 1e-2f * p->actG1_fz[act];
 
-                    fxRls[3].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[act];
-                    fxRls[4].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[act];
-                    fxRls[5].x[1 + act] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[act];
+                    fxRls[3].x[1 + m] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_roll[act];
+                    fxRls[4].x[1 + m] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_pitch[act];
+                    fxRls[5].x[1 + m] = 1.f  * 1e5f * isq * 1e-1f * p->actG1_yaw[act];
 
-                    fxRls[3].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[act];
-                    fxRls[4].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[act];
-                    fxRls[5].x[1 + learnRun.numMotors + act] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[act];
+                    fxRls[3].x[1 + learnRun.numMotors + m] = 1.f  * 1e3f * 1e-5f * p->actG2_roll[act];
+                    fxRls[4].x[1 + learnRun.numMotors + m] = 1.f  * 1e3f * 1e-5f * p->actG2_pitch[act];
+                    fxRls[5].x[1 + learnRun.numMotors + m] = 1.f  * 1e3f * 1e-5f * p->actG2_yaw[act];
                 }
+                m++;
                 break;
             case INDI_ACT_TYPE_SERVO:
                 if (!fromProfileInFlight) { // keep the servo identification from before the launch
@@ -547,7 +582,7 @@ static bool calculateHoverAttitude(void) {
     // 8. verify that  Br uHover == 0
 
     // column major
-    const uint8_t numAct = learnRun.numActuators;
+    const uint8_t numAct = learnRun.numMotors; // actG1*IMU hold the selected motors, packed
     float BfT[LEARNING_MAX_ACT * 3];
     float BrT[LEARNING_MAX_ACT * LEARNING_MAX_ACT] = {0}; // waste of stack, reduce because M < N?
     for (int motor = 0; motor < numAct; motor++) {
@@ -685,6 +720,51 @@ static bool calculateHoverAttitude(void) {
     return true;
 }
 
+// learned INDI parameters were applied in flight, but the INDI filters still
+// use the old ones (see the end of updateLearner)
+static bool learnerIndiFiltersStale = false;
+
+static NOINLINE void learnerRetuneIndiFilters(void) {
+    if (learnerIndiFiltersStale) {
+        if (systemConfig()->indiProfileIndex == INDI_PROFILE_COUNT-1) {
+            initIndiRuntime(); // keeps the filter states while armed
+        }
+        learnerIndiFiltersStale = false;
+    }
+}
+
+static NOINLINE void learnerApplyProfiles(bool learning) { // not FAST_CODE: ITCM is full
+    const learnerConfig_t *config = learnerConfig();
+
+    if (learning && config->applyIndi) {
+        // not changeIndiProfile: that re-tunes the filters
+        systemConfigMutable()->indiProfileIndex = INDI_PROFILE_COUNT-1;
+        initIndiRuntimeParameters();
+        learnerIndiFiltersStale = true;
+    }
+
+    static bool appliedAfterQuery = false;
+    if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
+        if (config->applyIndi) {
+            changeIndiProfile(INDI_PROFILE_COUNT-1); // re-tunes filters, keeps their state while armed
+            learnerIndiFiltersStale = false;
+        }
+
+#ifdef USE_LOCAL_POSITION
+        if (config->applyPosition) {
+            changePositionProfile(POSITION_PROFILE_COUNT-1); 
+        }
+#endif
+        appliedAfterQuery = true;
+    }
+
+    appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
+
+    if (!learning) {
+        learnerRetuneIndiFilters();
+    }
+}
+
 #ifdef STM32H7
 FAST_CODE
 #endif
@@ -723,6 +803,7 @@ void updateLearner(timeUs_t current) {
 
     // if we are not armed, we do not learn
     if (!airborne) {
+        learnerRetuneIndiFilters(); // in-flight learning ended
         return;
     }
 
@@ -766,7 +847,7 @@ void updateLearner(timeUs_t current) {
         }
 
         // perform rls step
-        rlsNewSample(&imuRls, AT, y, (config->rlsLambda > 0) ? learnerSampleLambda(false) : 1.f);
+        rlsNewSample(&imuRls, AT, y, learnerFixedLambda());
     }
     learnerTimings.imu = cmpTimeUs(micros(), learnerTimings.start);
 
@@ -944,7 +1025,7 @@ void updateLearner(timeUs_t current) {
                     continue;
             }
 
-            rlsNewSample( &actRls[act], A, &y, (config->rlsLambda > 0) ? learnerSampleLambda(false) : 1.f ); // default: no forgetting
+            rlsNewSample( &actRls[act], A, &y, learnerFixedLambda() );
             if (simple) {
                 actRls[act].x[1] = 0.f;
                 actRls[act].x[2] = 0.f;
@@ -1026,28 +1107,13 @@ void updateLearner(timeUs_t current) {
 
     learnerTimings.hover = cmpTimeUs(micros(), learnerTimings.start);
 
-    static bool appliedAfterQuery = false;
-    if (!appliedAfterQuery && (learningQueryState == LEARNING_QUERY_DONE)) {
-        if (learnerConfig()->applyIndi) {
-            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-        }
-
-#ifdef USE_LOCAL_POSITION
-        if (learnerConfig()->applyPosition) {
-            changePositionProfile(POSITION_PROFILE_COUNT-1); 
-        }
-#endif
-        appliedAfterQuery = true;
-    }
-
-    appliedAfterQuery &= !(learningQueryState == LEARNING_QUERY_IDLE);
-
-    if (learnFx && learnerConfig()->applyIndi) {
-        if (systemConfig()->indiProfileIndex != INDI_PROFILE_COUNT-1) {
-            changeIndiProfile(INDI_PROFILE_COUNT-1); // CAREFUL WITH THIS
-        }
-        initIndiRuntimeParameters();
-    }
+    // Apply the learned profiles. While learning, the learned INDI profile is
+    // made active early (learner_apply_indi_profile) and only its parameters
+    // are refreshed every loop. The stateful filters (actuator and rpm models,
+    // feedforward, lead-lag) are re-tuned once, when the learning stops: at the
+    // end of the query, or when in-flight learning ends. They keep their state
+    // then (initIndiRuntime while armed), so control does not see a transient.
+    learnerApplyProfiles(learnFx || learnAct || learnHover);
 
 #ifdef USE_CLI_DEBUG_PRINT
     static unsigned int printCounter = 0;
@@ -1127,7 +1193,7 @@ static void updateScheduledGains(indiProfile_t* indi) {
                                              (const float**)ffK2D.table, maxTau, minC);
                     pFf = -interpolate2D(ffPole2D.xAxis, ffPole2D.xSize, ffPole2D.yAxis, ffPole2D.ySize,
                                              (const float**)ffPole2D.table, maxTau, minC);
-                    biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                    zFf = 0.f;
                 }
                 break;
             case GAIN_SCHEDULE_1D_POLY:
@@ -1136,11 +1202,7 @@ static void updateScheduledGains(indiProfile_t* indi) {
                 if (indiRun.gainScheduleFf) {
                     kFf = evalPoly1D(&ffKPoly1D, maxTau);
                     pFf = -evalPoly1D(&ffPolePoly1D, maxTau); // ffPolePoly is defined as the polynomial through -p
-                    if (indiRun.useFeedforwardFilter) {
-                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, zFf, pFf, gyro.targetLooptime);
-                    } else {
-                        biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
-                    }
+                    zFf = indiRun.useFeedforwardFilter ? zFf : 0.f; // zFf is 0 here
                 }
                 break;
             case GAIN_SCHEDULE_2D_POLY:
@@ -1149,10 +1211,23 @@ static void updateScheduledGains(indiProfile_t* indi) {
                 if (indiRun.gainScheduleFf) {
                     kFf = evalPoly2D(&ffKPoly2D, maxTau, minC);
                     pFf = -evalPoly2D(&ffPolePoly2D, maxTau, minC);
-                    biquadFilterInitZeroPole(&indiRun.feedforwardFilter[axis], kFf, 0.0f, pFf, gyro.targetLooptime);
+                    zFf = 0.f;
                 }
                 break;
         }
+        if (indiRun.gainScheduleFf && (axis == FD_ROLL)) {
+            // the feedforward filter itself is re-built from these when the
+            // learning stops (initIndiRuntime), not every loop: that reset its state.
+            // One coefficient set for roll and pitch (the 2D schedules used to
+            // build per-axis filters from the per-axis minC; roll's is kept)
+            indi->feedforwardFilterCoefs[0] = kFf * 1e6f;
+            indi->feedforwardFilterCoefs[1] = zFf * 1e6f;
+            indi->feedforwardFilterCoefs[2] = pFf * 1e6f;
+            indiRun.feedforwardFilterCoefs[0] = kFf;
+            indiRun.feedforwardFilterCoefs[1] = zFf;
+            indiRun.feedforwardFilterCoefs[2] = pFf;
+        }
+
         // Ensure gains are above minimum
         indi->rateGains[axis] = MAX(indi->rateGains[axis], (uint16_t)(10.0f * kOmegaMin));
         indi->attGains[axis] = MAX(indi->attGains[axis], (uint16_t)(kEtaMin * indi->rateGains[axis]));
@@ -1332,8 +1407,8 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     indi->actNum = indiRun.actNum;
     int m = 0;
     for (int act = 0; act < indi->actNum; act++) {
-        if (!(config->actMask & (1 << act))) {
-            continue; // skip unselected actuators
+        if (!(config->actMask & (1 << act)) || (indiRun.actType[act] != INDI_ACT_TYPE_MOTOR)) {
+            continue; // skip unselected actuators and servos (packed motor index m, see initLearnerRls)
         }
 
         //              inv y-scale 
@@ -1357,25 +1432,25 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
             indi->actNonlinearity[act] = 50;
         }
 
-        actG1linIMU[act].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[m];
-        actG1linIMU[act].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[m];
-        actG1linIMU[act].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[m];
-        actG1rotIMU[act].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[1 + m];
-        actG1rotIMU[act].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[1 + m];
-        actG1rotIMU[act].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[1 + m];
-        actG2rotIMU[act].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[1 + learnRun.numMotors + m];
-        actG2rotIMU[act].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[1 + learnRun.numMotors + m];
-        actG2rotIMU[act].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[1 + learnRun.numMotors + m];
+        actG1linIMU[m].V.X = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[0].x[m];
+        actG1linIMU[m].V.Y = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[1].x[m];
+        actG1linIMU[m].V.Z = 0.1f     * 1e-5f * sq(maxOmega) *     1e2f     * fxRls[2].x[m];
+        actG1rotIMU[m].V.X = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[3].x[1 + m];
+        actG1rotIMU[m].V.Y = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[4].x[1 + m];
+        actG1rotIMU[m].V.Z = 1.f      * 1e-5f * sq(maxOmega) *     1e1f     * fxRls[5].x[1 + m];
+        actG2rotIMU[m].V.X = 1.f      * 1e-3f                *     1e5f     * fxRls[3].x[1 + learnRun.numMotors + m];
+        actG2rotIMU[m].V.Y = 1.f      * 1e-3f                *     1e5f     * fxRls[4].x[1 + learnRun.numMotors + m];
+        actG2rotIMU[m].V.Z = 1.f      * 1e-3f                *     1e5f     * fxRls[5].x[1 + learnRun.numMotors + m];
 
         fp_vector_t actG1linHover, actG1rotHover, actG2rotHover;
 
-        actG1linHover = actG1linIMU[act];
+        actG1linHover = actG1linIMU[m];
         rotate_vector_with_rotationMatrix(&actG1linHover, &imu_to_hoverR);
 
-        actG1rotHover = actG1rotIMU[act];
+        actG1rotHover = actG1rotIMU[m];
         rotate_vector_with_rotationMatrix(&actG1rotHover, &imu_to_hoverR);
 
-        actG2rotHover = actG2rotIMU[act];
+        actG2rotHover = actG2rotIMU[m];
         rotate_vector_with_rotationMatrix(&actG2rotHover, &imu_to_hoverR);
 
         if (config->hardcodeLinearForces) {
@@ -1413,7 +1488,6 @@ void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos) {
     // keep same:
     // indi->useIncrement = true;
     // indi->useRpmDotFeedback = true;
-    // indi->attRateDenom = 4; 
     // indi->useConstantG2 = false;
     // indi->useRpmFeedback = false;
     // indi->maxRateSp = 1800.f for all
@@ -1448,24 +1522,119 @@ void testLearner(void) {
 }
 
 // query
-#define LEARNING_SAFETY_TIME_MAX ((timeUs_t) 1000000) // 1 sec
+// --- query state machine
+//
+//   IDLE --(LEARNER_MODE and a probing trigger, see enableConditions)--> WAITING_FOR_LAUNCH
+//   WAITING_FOR_LAUNCH --(catapult done / armed after throw / in flight)--> DELAY
+//   DELAY/ACTIVE --(prober finished or timed out)--> DONE
+//   any --(LEARNER_MODE off)--> IDLE
+//
+// DONE is final: a new query needs LEARNER_MODE to be switched off and on again.
+//
+// Board misalignment (learner_*_misalignment, learner_randomize_misalignment,
+// for testing in simulation) is applied once, after the catapult launch and
+// before the query starts, and kept for the rest of the flight, so the learner
+// has to resolve it. It is undone when LEARNER_MODE is switched off, or when
+// the catapult sequence restarts.
 
 #include "flight/learning_prober.h"
 
+static bool learnerMisaligned = false;
+
+static bool learnerMisalignmentRequested(void) {
+    const learnerConfig_t *c = learnerConfig();
+    return (c->rollMisalignment != 0) || (c->pitchMisalignment != 0) || (c->yawMisalignment != 0);
+}
+
+static void learnerOverrideAttitude(const fp_quaternion_t *newAttitude) {
+    overrideAttitudeQuaternion((fp_quaternion_t *) newAttitude); // updates quat, eulers, rotation matrix and quat products
+#ifdef USE_EKF
+    float *theEkfX = ekf_get_X();
+    theEkfX[6] = newAttitude->w;
+    theEkfX[7] = newAttitude->x;
+    theEkfX[8] = newAttitude->y;
+    theEkfX[9] = newAttitude->z; // this probably messes up covariances, who cares
+#endif
+}
+
+// misalign the board after catapulting with 0 0 0 board alignment. A non-zero
+// configured board alignment could not be restored correctly, so then skip.
+static void learnerApplyMisalignment(void) {
+    if (learnerMisaligned || !learnerMisalignmentRequested()) {
+        return;
+    }
+    if ((boardAlignment()->rollDegrees != 0) || (boardAlignment()->pitchDegrees != 0) || (boardAlignment()->yawDegrees != 0)) {
+        return;
+    }
+
+    const learnerConfig_t *c = learnerConfig();
+    fp_euler_t boardEulers_fp = { 0 };
+    if (c->randomizeMisalignment) {
+        // Forward Right Down
+        boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(ABS(c->rollMisalignment)) * rngFloat();
+        boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(ABS(c->pitchMisalignment)) * rngFloat();
+        boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(ABS(c->yawMisalignment)) * rngFloat();
+    } else {
+        boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(c->rollMisalignment);
+        boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(c->pitchMisalignment);
+        boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(c->yawMisalignment);
+    }
+
+    i16_euler_t boardEulers_i16;
+    i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
+    boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
+    boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
+    boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
+    initBoardAlignment(boardAlignment());
+
+    fp_quaternion_t iboard_q;
+    quaternion_of_rotationMatrix(&iboard_q, &boardRotation);
+    iboard_q.w = -iboard_q.w;
+
+    fp_quaternion_t attitude; // FRD
+    getAttitudeQuaternion(&attitude);
+    fp_quaternion_t newAttitude = chain_quaternion(&attitude, &iboard_q);
+    learnerOverrideAttitude(&newAttitude);
+
+    learnerMisaligned = true;
+}
+
+// undo the misalignment (if any) and the learned hover rotation
+static void learnerResetFrames(void) {
+    if (learnerMisaligned) {
+        // use current board orientation to fix attitude
+        fp_quaternion_t board_q;
+        quaternion_of_rotationMatrix(&board_q, &boardRotation);
+
+        fp_quaternion_t attitude; // FRD
+        getAttitudeQuaternion(&attitude);
+        fp_quaternion_t newAttitude = chain_quaternion(&board_q, &attitude);
+        learnerOverrideAttitude(&newAttitude);
+
+        // reset board rotation to 0
+        boardAlignmentMutable()->rollDegrees  = 0;
+        boardAlignmentMutable()->pitchDegrees = 0;
+        boardAlignmentMutable()->yawDegrees   = 0;
+        initBoardAlignment(boardAlignment());
+
+        learnerMisaligned = false;
+    }
+
+    // reset hover rotation
+    hoverAttitude.w = 1.;
+    hoverAttitude.x = 0.;
+    hoverAttitude.y = 0.;
+    hoverAttitude.z = 0.;
+}
+
 void runLearningQueryStateMachine(timeUs_t current) {
-    for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
+    for (int i = 0; i < MAXU; i++) {
         outputFromLearningQuery[i] = 0.f;
     }
 
     const learnerConfig_t* config = learnerConfig();
-//    int numMotors = config->numMotors;
-//
-//    if ((numMotors > MAX_SUPPORTED_MOTORS) || (numMotors == 0)) {
-//        learningQueryState = LEARNING_QUERY_IDLE;
-//        return;
-//    }
 
-    bool idle_before_throw_query_requested = 
+    bool idle_before_throw_query_requested =
         FLIGHT_MODE(LEARNER_MODE)
         && (config->modeProbing & LEARN_PROBING_AFTER_THROW)
         && throwConfig()->idleBeforeThrow
@@ -1480,7 +1649,7 @@ void runLearningQueryStateMachine(timeUs_t current) {
         && ARMING_FLAG(ARMED)
         && !isTouchingGround();
 
-    bool post_launch_query_requested = 
+    bool post_launch_query_requested =
         !idle_before_throw_query_requested
         && !inflight_query_requested
         && FLIGHT_MODE(LEARNER_MODE)
@@ -1489,9 +1658,24 @@ void runLearningQueryStateMachine(timeUs_t current) {
 
     bool disableConditions = !FLIGHT_MODE(LEARNER_MODE);
 
+    // LEARNER_MODE switched off: abort or forget the query, undo misalignment
+    // and hover rotation. This is the only way back to IDLE.
+    static bool wasEnabled = false;
     if (disableConditions) {
+        if (wasEnabled) {
+            learnerResetFrames();
+            resetProber();
+        }
         learningQueryState = LEARNING_QUERY_IDLE;
     }
+    wasEnabled = !disableConditions;
+
+#ifdef USE_CATAPULT
+    // catapult sequence restarted (disarmed and catapult mode cycled)
+    if (learnerMisaligned && (catapultState < CATAPULT_DELAY)) {
+        learnerResetFrames();
+    }
+#endif
 
     bool enableConditions = !disableConditions
         && ( idle_before_throw_query_requested
@@ -1505,12 +1689,7 @@ doMore:
     switch (learningQueryState) {
         case LEARNING_QUERY_IDLE:
             if (enableConditions) {
-                // DEBUG BEUN
-                //bool success = calculateHoverAttitude(indiProfileLearned);
-                //if (learnRun.applyHoverRotation && success)
-                //    updateBodyFrameToHover(indiProfileLearned); // rotate G1, G2, IMU rotation matrix and current attitude state
-
-                if (learnerConfig()->applyHoverRotation) {
+                if (config->applyHoverRotation) {
                     // reset accelerometer trims
                     accelerometerConfigMutable()->accZero.raw[0] = 0;
                     accelerometerConfigMutable()->accZero.raw[1] = 0;
@@ -1520,51 +1699,18 @@ doMore:
                 }
 
                 initLearnerRls(false); // reset all RLS filters to 0 initial state, and reset lowpass filters
-                initServoProber(current); // reset prober state
+                resetProber();
+                initServoProber(current);
                 learningQueryState = LEARNING_QUERY_WAITING_FOR_LAUNCH; goto doMore;
             }
             break;
-        case LEARNING_QUERY_WAITING_FOR_LAUNCH: // catapult or throw
-            if ((config->modeHover & LEARN_DURING_PROBING)
-                    && (config->modeProbing & LEARN_PROBING_AFTER_CATAPULT)
-                    && (catapultState == CATAPULT_DONE)) {
-
-                // randomize board rotation after catapulting with 0 0 0 board rotation
-                fp_euler_t boardEulers_fp = { 0 };
-                if (learnerConfig()->randomizeMisalignment) {
-                    // Forward Right Down
-                    boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(ABS(learnerConfig()->rollMisalignment)) * rngFloat();
-                    boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(ABS(learnerConfig()->pitchMisalignment)) * rngFloat();
-                    boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(ABS(learnerConfig()->yawMisalignment)) * rngFloat();
-                } else {
-                    boardEulers_fp.angles.roll  = DEGREES_TO_RADIANS(learnerConfig()->rollMisalignment);
-                    boardEulers_fp.angles.pitch = DEGREES_TO_RADIANS(learnerConfig()->pitchMisalignment);
-                    boardEulers_fp.angles.yaw   = DEGREES_TO_RADIANS(learnerConfig()->yawMisalignment);
-                }
-
-                i16_euler_t boardEulers_i16;
-                i16_euler_of_fp_euler(&boardEulers_i16, &boardEulers_fp);
-                boardAlignmentMutable()->rollDegrees  = boardEulers_i16.angles.roll / 10;
-                boardAlignmentMutable()->pitchDegrees = boardEulers_i16.angles.pitch / 10;
-                boardAlignmentMutable()->yawDegrees   = boardEulers_i16.angles.yaw / 10;
-                initBoardAlignment(boardAlignment());
-
-                fp_quaternion_t iboard_q;
-                quaternion_of_rotationMatrix(&iboard_q, &boardRotation);
-                iboard_q.w = -iboard_q.w;
-
-                fp_quaternion_t attitude; // FRD
-                fp_quaternion_t newAttitude; // FRD
-                getAttitudeQuaternion(&attitude);
-                newAttitude = chain_quaternion(&attitude, &iboard_q);
-                overrideAttitudeQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
-#ifdef USE_EKF
-                float *theEkfX = ekf_get_X();
-                theEkfX[6] = newAttitude.w;
-                theEkfX[7] = newAttitude.x;
-                theEkfX[8] = newAttitude.y;
-                theEkfX[9] = newAttitude.z; // this probably messes up covariances, who cares
+        case LEARNING_QUERY_WAITING_FOR_LAUNCH: { // catapult or throw
+            bool catapultLaunched = false;
+#ifdef USE_CATAPULT
+            catapultLaunched = (config->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE);
 #endif
+            if (catapultLaunched) {
+                learnerApplyMisalignment();
             }
 
             // cue servo identification
@@ -1586,8 +1732,8 @@ doMore:
 
             // considered launched if succesfully activated inflight_query, or catapult/throw states correct
             bool launched = inflight_query_requested
-                || ((config->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE))
-                || ((config->modeProbing & LEARN_PROBING_AFTER_THROW)    && (throwState == THROW_STATE_ARMED_AFTER_THROW));
+                || catapultLaunched
+                || ((config->modeProbing & LEARN_PROBING_AFTER_THROW) && (throwState == THROW_STATE_ARMED_AFTER_THROW));
 
             if (launched) {
                 learningQueryEnabledAt = current;
@@ -1596,6 +1742,7 @@ doMore:
             }
 
             break;
+        }
         case LEARNING_QUERY_DELAY: // skip this now
         case LEARNING_QUERY_ACTIVE:
             // cycles through motors
@@ -1607,7 +1754,7 @@ doMore:
 
             if (proberRuntime.isFinished) {
                 // all motors done, or timeout reached
-                learningQueryState = LEARNING_QUERY_DONE;
+                learningQueryState = LEARNING_QUERY_DONE; goto doMore;
             } else {
                 // update output from prober
                 for (int act = 0; act < indiRun.actNum; act++) {
@@ -1634,51 +1781,25 @@ doMore:
 
             break;
         case LEARNING_QUERY_DONE:
-            if ((config->modeHover & LEARN_DURING_PROBING)
-                    && ( ((config->modeProbing & LEARN_PROBING_AFTER_CATAPULT) && (catapultState == CATAPULT_DONE)) 
-                        || ((config->modeProbing & LEARN_PROBING_AFTER_THROW) && (throwState == THROW_STATE_WAITING_FOR_THROW)) )
-                ) {
-
-                // use current board orientation to fix attitude
-                fp_quaternion_t board_q;
-                quaternion_of_rotationMatrix(&board_q, &boardRotation);
-
-                fp_quaternion_t attitude; // FRD
-                fp_quaternion_t newAttitude; // FRD
-                getAttitudeQuaternion(&attitude);
-                newAttitude = chain_quaternion(&board_q, &attitude);
-                overrideAttitudeQuaternion(&newAttitude); // updates quat, eulers, rotation matrix and quat products
-#ifdef USE_EKF
-                float *theEkfX = ekf_get_X();
-                theEkfX[6] = newAttitude.w;
-                theEkfX[7] = newAttitude.x;
-                theEkfX[8] = newAttitude.y;
-                theEkfX[9] = newAttitude.z; // this probably messes up covariances, who cares
-#endif
-
-                // reset hover rotation
-                hoverAttitude.w = 1.;
-                hoverAttitude.x = 0.;
-                hoverAttitude.y = 0.;
-                hoverAttitude.z = 0.;
-
-                // reset board rotation to 0
-                boardAlignmentMutable()->rollDegrees  = 0;
-                boardAlignmentMutable()->pitchDegrees = 0;
-                boardAlignmentMutable()->yawDegrees   = 0;
-                initBoardAlignment(boardAlignment());
-
-                // reset learning query
-                learningQueryState = LEARNING_QUERY_IDLE;
-            }
+            // final until LEARNER_MODE is switched off (see above)
             break;
     }
 }
 
+// true while the query drives the actuators and INDI is bypassed. While the
+// catapult launches, the catapult has precedence (the query waits for it).
 bool learnerQueryIsActive(void) {
-    return FLIGHT_MODE(LEARNER_MODE)
-        && (learningQueryState >= LEARNING_QUERY_WAITING_FOR_LAUNCH)
-        && (learningQueryState < LEARNING_QUERY_DONE);
+    if (!FLIGHT_MODE(LEARNER_MODE)
+            || (learningQueryState < LEARNING_QUERY_WAITING_FOR_LAUNCH)
+            || (learningQueryState >= LEARNING_QUERY_DONE)) {
+        return false;
+    }
+#ifdef USE_CATAPULT
+    if (FLIGHT_MODE(CATAPULT_MODE) && (catapultState > CATAPULT_IDLE) && (catapultState < CATAPULT_DONE)) {
+        return false;
+    }
+#endif
+    return true;
 }
 
 bool learnerQueryActuatorSelected(int i) {

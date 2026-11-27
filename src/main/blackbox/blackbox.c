@@ -2201,14 +2201,22 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->sigma_rls[0] = lrintf(1e3f*fxRls[3].x[0]);
     blackboxCurrent->sigma_rls[1] = lrintf(1e3f*fxRls[4].x[0]);
     blackboxCurrent->sigma_rls[2] = lrintf(1e3f*fxRls[5].x[0]);
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, (fxRls[3].n-1) >> 1); i++) {
+    // rotation RLS: x[0] inertia, then G1 of the selected motors (packed),
+    // then G2 starting at 1 + numMotors (see initLearnerRls). The tailsitter
+    // uses its own regressors: two halves of (n-1)/2
+#ifdef LEARNER_IS_TAILSITTER
+    const int rotHalf = (fxRls[3].n - 1) >> 1;
+#else
+    const int rotHalf = learnRun.numMotors;
+#endif
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, rotHalf); i++) {
         // rateDot (fxRls 3, 4, 5)
         blackboxCurrent->fx_p_rls_x[i]                    = lrintf(1e3f*fxRls[3].x[1 + i]);
         blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[1 + i]);
         blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[1 + i]);
-        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[1 + (fxRls[3].n >> 1) + i]);
-        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[1 + (fxRls[4].n >> 1) + i]);
-        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[1 + (fxRls[5].n >> 1) + i]);
+        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[1 + rotHalf + i]);
+        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[1 + rotHalf + i]);
+        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[1 + rotHalf + i]);
     }
 
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {

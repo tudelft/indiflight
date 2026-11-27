@@ -39,6 +39,7 @@
 #include "flight/trajectory_tracker.h"
 #include "flight/geofence.h"
 #include "flight/pos_att.h"
+#include "flight/throw.h"
 
 #ifdef USE_LOCAL_POSITION
 
@@ -336,8 +337,13 @@ void updatePosCtl(timeUs_t current) {
         rateSpBodyFromPos.V.Z = 0.f;
         posSpNed.trackPsi = false;
 
-        // latch reactivation until new arming cycle or non-position mode
-        latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE);
+        // latch reactivation until new arming cycle or non-position mode.
+        // Not while idling in hand before a throw: the throw makes a setpoint
+        bool idleBeforeThrow = false;
+#ifdef USE_THROW_TO_ARM
+        idleBeforeThrow = throwHoldsIdle();
+#endif
+        latch_descend = ARMING_FLAG(ARMED) && FLIGHT_MODE(POSITION_MODE) && !idleBeforeThrow;
     } else if (timeInDeadreckoning > DEADRECKONING_TIMEOUT_HOLD_POSITION_US
 #ifdef USE_GEOFENCE
                 || (geofenceAction == GEOFENCE_ACTION_HOLD)
@@ -380,6 +386,11 @@ void updatePosCtl(timeUs_t current) {
         if ( (!ARMING_FLAG(ARMED)) || (!FLIGHT_MODE(POSITION_MODE | GPS_RESCUE_MODE)) ) {
             resetIterms();
         }
+#ifdef USE_THROW_TO_ARM
+        if (throwHoldsIdle()) {
+            resetIterms(); // motors idle in hand, nothing to integrate
+        }
+#endif
 
 #ifdef USE_TRAJECTORY_TRACKER
         // use acc and body rate setpoints from trajectory tracker if it is active

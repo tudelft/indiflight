@@ -394,10 +394,32 @@ void initProber(timeUs_t currentTimeUs) {
             break;
     }
 
+    // never excite for longer than PROBER_SAFETY_TIME_MAX (plus the delays),
+    // whatever the type-specific estimate above says (modular_drone: 1s)
+    const timeUs_t delaysEndUs = currentTimeUs + 1000 * (config->preDelayMs + config->postDelayMs);
+    const timeDelta_t generationUs = cmpTimeUs(proberRuntime.safetyTimeoutUs, delaysEndUs);
+    proberRuntime.safetyTimeoutUs = delaysEndUs + constrain(generationUs, 0, PROBER_SAFETY_TIME_MAX);
+
     proberRuntime.isInitialized = true;
+    proberRuntime.isGenRunning = false;
     proberRuntime.isGenFinished = false;
     proberRuntime.isFinished = false;
 
+    setZeroOutputs();
+}
+
+static int servoStepIndex = 0;
+
+// forget any probing in progress or finished (learner query reset)
+void resetProber(void) {
+    proberRuntime.isInitialized = false;
+    proberRuntime.isGenRunning = false;
+    proberRuntime.isGenFinished = false;
+    proberRuntime.isFinished = false;
+    proberRuntime.isInitializedServo = false;
+    proberRuntime.isGenRunningServo = false;
+    proberRuntime.isGenFinishedServo = false;
+    servoStepIndex = 0;
     setZeroOutputs();
 }
 
@@ -411,7 +433,9 @@ void initServoProber(timeUs_t currentTimeUs) {
     }
     proberRuntime.isInitializedServo = true;
     proberRuntime.isGenRunningServo = false;
+    proberRuntime.isGenFinishedServo = false;
     proberRuntime.lastStepTimeUs = currentTimeUs;
+    servoStepIndex = 0;
 }
 
 #define LEARNER_SERVO_TIMESTEP_US (250000) // 250ms
@@ -423,7 +447,7 @@ void updateServoProber(timeUs_t currentTimeUs) {
     }
 
 
-    static int stepIndex = 0;
+    int stepIndex = servoStepIndex; // always < LEARNER_SERVO_NUM_STEPS here
     proberRuntime.isGenRunningServo = true;
 
     float steps[LEARNER_SERVO_NUM_STEPS] = {0.2f, -0.2f, 0.0f, 0.2f, 0.0f};
@@ -487,9 +511,9 @@ void updateServoProber(timeUs_t currentTimeUs) {
 
     timeDelta_t delta = cmpTimeUs(currentTimeUs, proberRuntime.lastStepTimeUs);
     if (delta > LEARNER_SERVO_TIMESTEP_US) {
-        if (stepIndex >= LEARNER_SERVO_NUM_STEPS) {
-            // finished
-            stepIndex = 0;
+        if (stepIndex + 1 >= LEARNER_SERVO_NUM_STEPS) {
+            // finished after the last step (stepping past it read steps[] out of bounds)
+            servoStepIndex = 0;
             proberRuntime.isGenFinishedServo = true;
             proberRuntime.isGenRunningServo = false;
             proberRuntime.isInitializedServo = false;
@@ -504,7 +528,7 @@ void updateServoProber(timeUs_t currentTimeUs) {
 #endif
 
         proberRuntime.lastStepTimeUs = currentTimeUs;
-        stepIndex++;
+        servoStepIndex = stepIndex + 1;
     }
 }
 
