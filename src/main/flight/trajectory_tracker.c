@@ -30,6 +30,7 @@
 #include "flight/indi.h"
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
+#include "flight/wind_estimator.h"
 
 
 #ifdef USE_TRAJECTORY_TRACKER
@@ -165,6 +166,10 @@ bool isActiveTrajectoryTrackerRecovery(void) {
     return tt_recovery_active;
 }
 
+bool isActiveSpinTrajectoryTracker(void) {
+    return tt_active && tt_spin_mode && !tt_recovery_active;
+}
+
 void getRefsTrajectoryTracker(float p) {
     // hard coded circular trajectory with radius R
     // x(t)   = R*cos(p(t))
@@ -242,6 +247,7 @@ void initSpinTrajectoryTracker(void) {
     tt_spin_mode = true;
     tt_spin_yaw0 = DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
     initTrajectoryTrackerCommon(true);
+    windEstimatorReset(); // new spin session, new wind estimate
 }
 
 static void initTrajectoryTrackerCommon(bool here) {

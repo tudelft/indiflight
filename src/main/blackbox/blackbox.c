@@ -73,6 +73,7 @@
 #include "flight/learning_prober.h"
 #include "flight/nn_control.h"
 #include "flight/trajectory_tracker.h"
+#include "flight/wind_estimator.h"
 #include "flight/catapult.h"
 #include "flight/throw.h"
 #include "flight/geofence.h"
@@ -475,6 +476,15 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
     {"tt_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+    // wind estimator (trajectory tracker spin mode), one TAG8_8SVB group of 8
+    {"wind_tilt", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_tilt", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_dir", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_dir_std", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_bias", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_bias", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_swept", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
+    {"wind_state", -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(POS)},
 #endif
 #ifdef USE_NN_CONTROL
     {"nn_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
@@ -843,6 +853,12 @@ typedef struct blackboxMainState_s {
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
     uint8_t tt_active;
+    int16_t wind_tilt[2];   // 1e-4, NED
+    int16_t wind_dir;       // 0.1 deg, wind from
+    int16_t wind_dir_std;   // 0.1 deg
+    int16_t wind_bias[2];   // 1e-4, heading frame (fwd, right)
+    int16_t wind_swept;     // deg
+    int16_t wind_state;     // windEstState_t
 #endif
 #ifdef USE_NN_CONTROL
     uint8_t nn_active;
@@ -1287,6 +1303,12 @@ static void writeIntraframe(void)
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         blackboxWriteUnsignedVB(blackboxCurrent->tt_active);
+        blackboxWriteSigned16VBArray(blackboxCurrent->wind_tilt, 2);
+        blackboxWriteSignedVB(blackboxCurrent->wind_dir);
+        blackboxWriteSignedVB(blackboxCurrent->wind_dir_std);
+        blackboxWriteSigned16VBArray(blackboxCurrent->wind_bias, 2);
+        blackboxWriteSignedVB(blackboxCurrent->wind_swept);
+        blackboxWriteSignedVB(blackboxCurrent->wind_state);
 #endif
 #ifdef USE_NN_CONTROL
         blackboxWriteUnsignedVB(blackboxCurrent->nn_active);
@@ -1626,11 +1648,21 @@ static void writeInterframe(void)
 #ifdef USE_TELEMETRY_PI
         blackboxWriteUnsignedVB(blackboxCurrent->latest_key_pressed - blackboxLast->latest_key_pressed);
 #endif
-#ifdef USE_NN_CONTROL
-        blackboxWriteUnsignedVB(blackboxCurrent->nn_active - blackboxLast->nn_active);
-#endif
 #ifdef USE_TRAJECTORY_TRACKER
         blackboxWriteUnsignedVB(blackboxCurrent->tt_active - blackboxLast->tt_active);
+
+        deltas[0] = blackboxCurrent->wind_tilt[0] - blackboxLast->wind_tilt[0];
+        deltas[1] = blackboxCurrent->wind_tilt[1] - blackboxLast->wind_tilt[1];
+        deltas[2] = blackboxCurrent->wind_dir - blackboxLast->wind_dir;
+        deltas[3] = blackboxCurrent->wind_dir_std - blackboxLast->wind_dir_std;
+        deltas[4] = blackboxCurrent->wind_bias[0] - blackboxLast->wind_bias[0];
+        deltas[5] = blackboxCurrent->wind_bias[1] - blackboxLast->wind_bias[1];
+        deltas[6] = blackboxCurrent->wind_swept - blackboxLast->wind_swept;
+        deltas[7] = blackboxCurrent->wind_state - blackboxLast->wind_state;
+        blackboxWriteTag8_8SVB(deltas, 8);
+#endif
+#ifdef USE_NN_CONTROL
+        blackboxWriteUnsignedVB(blackboxCurrent->nn_active - blackboxLast->nn_active);
 #endif
     }
 #else
@@ -2160,6 +2192,15 @@ static void loadMainState(timeUs_t currentTimeUs)
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
     blackboxCurrent->tt_active = lrintf(isActiveTrajectoryTracker());
+    const windEstimate_t *wind = getWindEstimate();
+    blackboxCurrent->wind_tilt[0] = lrintf(constrainf(wind->tilt[0], -1.f, 1.f) * 10000.f);
+    blackboxCurrent->wind_tilt[1] = lrintf(constrainf(wind->tilt[1], -1.f, 1.f) * 10000.f);
+    blackboxCurrent->wind_dir = lrintf(wind->dirDeg * 10.f);
+    blackboxCurrent->wind_dir_std = lrintf(constrainf(wind->dirStdDeg, 0.f, 180.f) * 10.f);
+    blackboxCurrent->wind_bias[0] = lrintf(constrainf(wind->biasBody[0], -1.f, 1.f) * 10000.f);
+    blackboxCurrent->wind_bias[1] = lrintf(constrainf(wind->biasBody[1], -1.f, 1.f) * 10000.f);
+    blackboxCurrent->wind_swept = lrintf(constrainf(wind->sweptYawDeg, 0.f, 32000.f));
+    blackboxCurrent->wind_state = wind->state;
 #endif
 #endif
 
@@ -2888,6 +2929,15 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_ATTITUDE_MAPPING, "%d",  posProfile->attitude_mapping);
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        // wind estimator compile-time tuning (wind_estimator.h)
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_harmonics", "%d",          WIND_EST_HARMONICS);
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_sample_hz", "%d",          WIND_EST_SAMPLE_HZ);
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_forget_time_s", "%d",      WIND_EST_FORGET_TIME_S);
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_min_sweep_deg", "%d",      WIND_EST_MIN_SWEEP_DEG);
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_max_horz_speed_cms", "%d", (int) lrintf(WIND_EST_MAX_HORZ_SPEED * 100.f));
+        BLACKBOX_PRINT_HEADER_LINE("wind_est_max_tilt_deg", "%d",       WIND_EST_MAX_TILT_DEG);
 #endif
         BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF

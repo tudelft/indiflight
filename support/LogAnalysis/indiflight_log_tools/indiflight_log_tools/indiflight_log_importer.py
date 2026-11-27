@@ -402,6 +402,12 @@ class IndiflightLog(object):
             ("velSp", range(3)),
             ("vel", range(3)),
             ("accSp", range(3)),
+            ("wind_tilt", range(2)),
+            ("wind_bias", range(2)),
+            ("wind_dir", -1),
+            ("wind_dir_std", -1),
+            ("wind_swept", -1),
+            ("wind_state", -1),
             ("extPos", range(3)),
             ("extVel", range(3)),
             ("extQuat", range(4)),
@@ -462,6 +468,8 @@ class IndiflightLog(object):
 
         # log scalar timeseries
         for s, ir in timeseries:
+            if not any(c == s or c.startswith(f"{s}[") for c in self.data.columns):
+                continue # not in this log (e.g. wind_* needs USE_TRAJECTORY_TRACKER)
             try:
                 for i in ir:
                     rr.send_columns(
@@ -698,6 +706,19 @@ class IndiflightLog(object):
             elif col.startswith('extAtt') or col.startswith('ekf_att'):
                 # extAtt, ekf_att: legacy, no longer in blackbox.c (/1000)
                 data[col] /= 1000.
+            elif col.startswith('wind_tilt') or col.startswith('wind_bias'):
+                # wind_tilt[0..1] (NED), wind_bias[0..1] (heading frame fwd,
+                # right): horizontal thrust axis component * 1e4 -> [-1, 1]
+                data[col] /= 10000.
+            elif col == 'wind_dir' or col == 'wind_dir_std':
+                # 0.1 deg -> rad. wind_dir: direction the wind comes FROM
+                data[col] /= 10. * self.RADIANS_TO_DEGREES
+            elif col == 'wind_swept':
+                # deg -> rad
+                data[col] /= self.RADIANS_TO_DEGREES
+            elif col == 'wind_state':
+                # windEstState_t: 0 idle, 1 collecting, 2 valid, 3 hold
+                data[col] = data[col].astype(int)
             elif col.startswith('ekf_acc_b'):
                 # ekf_acc_b[0..2]: mm/s^2 -> m/s^2
                 data[col] /= 1000.

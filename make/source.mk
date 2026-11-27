@@ -124,6 +124,7 @@ COMMON_SRC = \
             flight/servos_tricopter.c \
             flight/ekf.c \
             flight/trajectory_tracker.c \
+            flight/wind_estimator.c \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
@@ -312,6 +313,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/ekf.c \
             flight/ekf_calc.c \
             flight/trajectory_tracker.c \
+            flight/wind_estimator.c \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \

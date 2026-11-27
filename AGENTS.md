@@ -82,6 +82,22 @@ a `position_attitude_mapping_t` value with a matching entry in
 `lookupTablePositionAttitudeMapping` (`cli/settings.c`), a case in
 `updatePosCtl()`, and both lists in `make/source.mk`.
 
+## Wind direction estimator (trajectory tracker spin mode)
+
+`flight/wind_estimator.c`, compiled with `USE_TRAJECTORY_TRACKER`. While the
+spin mode (`initSpinTrajectoryTracker()`, keyboard `9`, then `2`/`3` for the
+yaw rate) is in control, it fits the horizontal thrust axis (-z of the hover
+frame, `getHoverAttitudeQuaternion()`) in NED against the heading:
+mean + harmonics up to `WIND_EST_HARMONICS` (least squares in running-mean
+form, one shared 5x5 normal matrix for N and E). The mean term points upwind
+(`wind_dir` = where the wind comes FROM); the co-rotating 1st harmonic is the
+body-fixed tilt (`wind_bias`). Wind speed is not observable (unknown drag).
+`initSpinTrajectoryTracker()` resets it, `updatePosCtl()` feeds it
+(`spinTracking`). Tuning is compile-time (`WIND_EST_*` in `wind_estimator.h`,
+overridable with `-D`), logged in the blackbox header. The core
+(`windEstCore*`) has no flight controller dependencies and compiles on the
+host without `USE_TRAJECTORY_TRACKER`.
+
 ## Adding or modifying a blackbox log signal
 
 Logged signals (per-loop fields, as opposed to header values) are defined only in

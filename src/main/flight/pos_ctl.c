@@ -37,6 +37,7 @@
 #include "config/config.h"
 #include "flight/indi.h"
 #include "flight/trajectory_tracker.h"
+#include "flight/wind_estimator.h"
 #include "flight/geofence.h"
 #include "flight/pos_att.h"
 #include "flight/throw.h"
@@ -310,6 +311,7 @@ void updatePosCtl(timeUs_t current) {
     }
 
     static timeUs_t lastHoldSpTimeUs = 0;
+    bool spinTracking = false; // trajectory tracker spin mode is in control (wind estimator samples)
 #ifdef USE_GEOFENCE
     if (geofenceAction == GEOFENCE_ACTION_HOLD) {
         if ((lastHoldSpTimeUs > 0) && (
@@ -395,6 +397,7 @@ void updatePosCtl(timeUs_t current) {
 #ifdef USE_TRAJECTORY_TRACKER
         // use acc and body rate setpoints from trajectory tracker if it is active
         updateTrajectoryTracker(current);
+        spinTracking = isActiveSpinTrajectoryTracker() && !manual_takeover;
         if (!isActiveTrajectoryTracker() || manual_takeover)
 #endif
         {
@@ -443,6 +446,12 @@ void updatePosCtl(timeUs_t current) {
             posGetAccSpNed(current);
         }
     }
+
+#ifdef USE_TRAJECTORY_TRACKER
+    updateWindEstimator(current, spinTracking && ARMING_FLAG(ARMED));
+#else
+    UNUSED(spinTracking);
+#endif
 
     // map acceleration setpoint to attitude and thrust setpoints (position_attitude_mapping)
     switch (posRuntime.attitude_mapping) {
