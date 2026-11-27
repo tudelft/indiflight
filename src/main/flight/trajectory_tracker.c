@@ -56,6 +56,11 @@ float tt_yaw_ref = 0.;
 float tt_yaw_rate_ref = 0.;
 bool tt_track_heading = false;
 
+// spin mode: hover at origin while yawing at a constant rate (radius 0 spiral)
+// tt_speed_factor is then the yaw rate in rad/s, not m/s / tt_R
+bool tt_spin_mode = false;
+float tt_spin_yaw0 = 0.0f;
+
 // time stuff
 float tt_speed_factor = 0.0f;
 float tt_progress = 0.0f;
@@ -66,6 +71,9 @@ timeUs_t last = 0;
 float tt_pos_gain = 1.5; //1.5;
 float tt_vel_gain = 2.5; //2.5;
 // float tt_yaw_gain = 1.0;
+
+// yaw rate change per keypress in spin mode, rad/s: one +-0.5 key step is 2*pi/100 rad/s, so 10 presses give 10 s per turn
+#define TT_SPIN_RATE_STEP (2.0f * M_PIf / 50.0f)
 
 // radius of circular trajectory
 float tt_R = 1.0f;
@@ -168,6 +176,24 @@ void getRefsTrajectoryTracker(float p) {
     // while (tt_progress >  M_PIf) tt_progress -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
     // while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
 
+    if (tt_spin_mode) {
+        // hold position, rotate about the vertical axis at tt_speed_factor
+        tt_pos_ref[0] = tt_origin.V.X;
+        tt_pos_ref[1] = tt_origin.V.Y;
+        tt_pos_ref[2] = tt_origin.V.Z;
+        for (int i = 0; i < 3; i++) {
+            tt_vel_ref[i] = 0.0f;
+            tt_acc_ref[i] = 0.0f;
+        }
+        float psi = tt_spin_yaw0 + p;
+        while (psi >  M_PIf) psi -= (2.0f * M_PIf);
+        while (psi < -M_PIf) psi += (2.0f * M_PIf);
+        tt_yaw_ref = psi;
+        tt_yaw_rate_ref = tt_speed_factor;
+        posSpNed.trackPsi = true; // spinning only makes sense with heading tracked
+        return;
+    }
+
     // position refs
 #define MAX_SPIRAL_ANGLE (6.f*2.f*M_PIf)
     while (p > MAX_SPIRAL_ANGLE) {
@@ -203,7 +229,22 @@ void getRefsTrajectoryTracker(float p) {
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
 
+static void initTrajectoryTrackerCommon(bool here);
+
 void initTrajectoryTracker(bool here) {
+    tt_spin_mode = false;
+    initTrajectoryTrackerCommon(here);
+}
+
+void initSpinTrajectoryTracker(void) {
+    // slow rotation about the vertical axis at the current position, starting at the current heading.
+    // use incrementSpeedTrajectoryTracker() to set the yaw rate
+    tt_spin_mode = true;
+    tt_spin_yaw0 = DECIDEGREES_TO_RADIANS(attitude.angles.yaw);
+    initTrajectoryTrackerCommon(true);
+}
+
+static void initTrajectoryTrackerCommon(bool here) {
     // reset everything
     tt_progress = 0.0f;
     tt_speed_factor = 0.0f;
@@ -232,12 +273,12 @@ void initTrajectoryTracker(bool here) {
 }
 
 void setSpeedTrajectoryTracker(float speed) {
-    tt_speed_factor = speed/tt_R;
+    tt_speed_factor = tt_spin_mode ? speed : speed/tt_R;
     tt_active = true;
 }
 
 void incrementSpeedTrajectoryTracker(float inc) {
-    tt_speed_factor += inc/tt_R;
+    tt_speed_factor += tt_spin_mode ? inc*TT_SPIN_RATE_STEP : inc/tt_R;
     tt_active = true;
 }
 

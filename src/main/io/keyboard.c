@@ -112,6 +112,7 @@ void processKey(uint8_t key) {
         case KEY_2: incrementSpeedTrajectoryTracker(-0.5f); break;
         case KEY_3: incrementSpeedTrajectoryTracker(+0.5f); break;
         case KEY_4: stopTrajectoryTracker(); break;
+        case KEY_9: initSpinTrajectoryTracker(); break; // then 2/3 change the yaw rate in steps of 2*pi/100 rad/s (1 turn per 100 s)
         case KEY_8: initRecoveryMode(); break;
         case KEY_H: toggleHeadingTracking(); break;
 #endif
@@ -119,7 +120,6 @@ void processKey(uint8_t key) {
         case KEY_6: nn_init(); break;
         case KEY_7: if (nn_is_active()) { nn_deactivate(); } else { nn_activate(); } break;
 #endif
-        //case KEY_9: disarm(DISARM_REASON_KEYBOARD); break;
     }
 }
 
