@@ -5,65 +5,59 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "INDIflight SITL",
-            "type": "cppdbg",
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/obj/main/indiflight_SITL.elf",
-            "args": [
-                "127.0.0.1"
-            ],
-            "stopAtEntry": true,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
+            "program": "${file}",
+            "args": "${command:pickArgs}",
+            "cwd": "${workspaceFolder}/",
+            "justMyCode": false
         },
         {
-            "name": "INDIflight MOCKUP",
-            "type": "cppdbg",
+            "name": "Tailsitter Sim",
+            "type": "debugpy",
             "request": "launch",
-            "program": "${userHome}/.venv/bin/python3",
-            "args": ["${workspaceFolder}/src/utils/indiflight_mockup_interface.py"],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
+            "program": "${workspaceFolder}/support/simulation/exampleTailsitterSim.py",
+            "args": [
+                "--sil",
+                "obj/main/indiflight_MOCKUP.so",
+                "--sil-profile-txt",
+                "./configs/profiles/DarkO.txt"
+            ],
+            "justMyCode": false
         },
         {
             // https://stackoverflow.com/questions/53519668/how-to-attach-to-remote-gdb-with-vscode
             "name": "MOCKUP docker",
             "type": "gdb",
             "request": "attach",
-            "executable": "${workspaceFolder}/obj/main/indiflight_MOCKUP.so",
+            //"executable": "${workspaceFolder}/obj/main/indiflight_MOCKUP.so",
             "target": "localhost:3333",
             "remote": true,
             "cwd": "${workspaceRoot}",
             "stopAtEntry": false,
+        },
+        {
+            "name": "J-Link Debug",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "jlink",
+            "device": "STM32H743VI", // e.g., STM32F103C8
+            "interface": "swd", // Use "jtag" for JTAG interface
+            //"runToMain": true,
+            "executable": "${workspaceFolder}/obj/main/indiflight_STM32H743.elf",
+            "serialNumber": "", // Optional: Specify the serial number of your J-Link if needed
+            //"interfaceSpeed": 4000, // Adjust speed if needed, e.g., 4000 for 4 MHz
+            //"preLaunchTask": "build", // Optionally, you can define a pre-launch task for building your project
+            //"postLaunchCommands": [
+            //    "monitor reset halt",
+            //    "monitor init"
+            //],
+            "cwd": "${workspaceFolder}"
+            //"gdbpath": "path/to/your/gdb", // Optional: Set the path to your GDB if it's not in your PATH
+            //"launchCompleteCommand": "exec-continue",
+            //"serverStarted": "Waiting for GDB connection",
+            //"showDevDebugOutput": true
         },
         {
             "cwd": "${workspaceRoot}",

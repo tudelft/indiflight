@@ -86,17 +86,20 @@
 #include "drivers/vtx_common.h"
 #include "drivers/vtx_rtc6705.h"
 #include "drivers/vtx_table.h"
+// #include "drivers/pitotmeter/pitotmeter.h"
+// #include "drivers/pitotmeter/pitotmeter_ms4525.h"
 
 #include "fc/board_info.h"
 #include "fc/dispatch.h"
 #include "fc/init.h"
+#include "fc/rc.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
 #include "fc/stats.h"
 #include "fc/tasks.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid.h"
@@ -107,6 +110,8 @@
 #include "flight/position.h"
 #include "flight/servos.h"
 #include "flight/learner.h"
+#include "flight/geofence.h"
+#include "flight/learning_prober.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -131,6 +136,8 @@
 #include "io/vtx_smartaudio.h"
 #include "io/vtx_tramp.h"
 #include "io/hil.h"
+#include "io/t4.h"
+#include "io/feetech.h"
 
 #include "msc/emfat_file.h"
 #ifdef USE_PERSISTENT_MSC_RTC
@@ -176,8 +183,10 @@
 #include "sensors/gyro.h"
 #include "sensors/gyro_init.h"
 #include "sensors/initialisation.h"
+#include "sensors/pitotmeter.h"
 
 #include "telemetry/telemetry.h"
+#include "telemetry/uros.h"
 
 #ifdef USE_HARDWARE_REVISION_DETECTION
 #include "hardware_revision.h"
@@ -732,8 +741,9 @@ void init(void)
     // Now reset the targetLooptime as it's possible for the validation to change the pid_process_denom
     gyroSetTargetLooptime(pidConfig()->pid_process_denom);
 
-    // Finally initialize the gyro filtering
+    // Finally initialize the gyro and acceleromter filtering
     gyroInitFilters();
+    accInitFilters();
 
     pidInit(currentPidProfile);
 #ifdef USE_INDI
@@ -741,12 +751,13 @@ void init(void)
     initIndiRuntime();
 #endif
 #ifdef USE_LEARNER
-    initLearner();
+    initLearnerFilters();
     //testLearner();
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     posCtlInit();
 #endif
+    setSticksReference();
 
     mixerInitProfile();
 
@@ -761,6 +772,16 @@ void init(void)
         servoDevInit(&servoConfig()->dev);
     }
     servosFilterInit();
+#endif
+
+#ifdef USE_ACTUATORS_T4
+    initActuatorsT4();
+    configureActuatorsT4Port();
+#endif
+
+#ifdef USE_SERVOS_FEETECH
+    initServosFeetech();
+    configureServosFeetechPort();
 #endif
 
 #ifdef USE_PINIO
@@ -796,7 +817,7 @@ void init(void)
     LED0_OFF;
     LED1_OFF;
 
-    imuInit();
+    ahrsInit();
 
     failsafeInit();
 
@@ -1051,11 +1072,30 @@ void init(void)
 #endif
 #endif
 
+#ifdef USE_GEOFENCE
+    geofenceInit();
+#endif
+
     swdPinsInit();
+
+#if defined(USE_PITOT)
+    pitotInit();
+    pitotStartCalibration();
+#endif
+
+#ifdef USE_LEARNER
+    initProberDebugPin();
+#endif
 
     unusedPinsInit();
 
     tasksInit();
 
     systemState |= SYSTEM_STATE_READY;
+
+#if defined(USE_TELEMETRY_UROS) && !defined(MOCKUP)
+    // likely a bug in uros causes this to fail if called multiple times if 
+    // loaded as a .so. urosInit will be run manually for MOCKUP
+    urosInit();
+#endif
 }

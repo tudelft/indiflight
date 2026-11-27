@@ -77,5 +77,5 @@
 
 #define USE_ADC
 
-#define USE_CUSTOM_DEFAULTS
+// #define USE_CUSTOM_DEFAULTS
 

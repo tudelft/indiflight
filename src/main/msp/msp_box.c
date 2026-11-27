@@ -53,8 +53,8 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
 //    { .boxId = BOXBARO, .boxName = "BARO", .permanentId = 3 },
     { .boxId = BOXANTIGRAVITY, .boxName = "ANTI GRAVITY", .permanentId = 4 },
     { .boxId = BOXMAG, .boxName = "MAG", .permanentId = 5 },
-    { .boxId = BOXHEADFREE, .boxName = "HEADFREE", .permanentId = 6 },
-    { .boxId = BOXHEADADJ, .boxName = "HEADADJ", .permanentId = 7 },
+//    { .boxId = BOXHEADFREE, .boxName = "HEADFREE", .permanentId = 6 },
+//    { .boxId = BOXHEADADJ, .boxName = "HEADADJ", .permanentId = 7 },
     { .boxId = BOXCAMSTAB, .boxName = "CAMSTAB", .permanentId = 8 },
 //    { .boxId = BOXCAMTRIG, .boxName = "CAMTRIG", .permanentId = 9 },
 //    { .boxId = BOXGPSHOME, .boxName = "GPS HOME", .permanentId = 10 },
@@ -101,13 +101,14 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXSTICKCOMMANDDISABLE, .boxName = "STICK COMMANDS DISABLE", .permanentId = 51},
     { .boxId = BOXBEEPERMUTE, .boxName = "BEEPER MUTE", .permanentId = 52},
     { .boxId = BOXREADY, .boxName = "READY", .permanentId = 53},
-    { .boxId = BOXVELCTL, .boxName = "VELOCITY CONTROL", .permanentId = 54},
     { .boxId = BOXPOSCTL, .boxName = "POSITION CONTROL", .permanentId = 55},
     { .boxId = BOXTHROWTOARM, .boxName = "THROWTOARM", .permanentId = 56 },
     { .boxId = BOXCATAPULT, .boxName = "CATAPULT", .permanentId = 57 },
     { .boxId = BOXLEARNER, .boxName = "LEARNER", .permanentId = 58 },
     { .boxId = BOXPIDCTL, .boxName = "LEGACY PIDs", .permanentId = 59 },
-    { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 }
+    { .boxId = BOXNNCTL, .boxName = "NN CONTROL", .permanentId = 60 },
+    { .boxId = BOXRESETHOME, .boxName = "RESET HOME", .permanentId = 61 },
+    { .boxId = BOXWAYPOINTS, .boxName = "WAYPOINTS", .permanentId = 62 } // 54 was VELOCITY CONTROL, don't reuse
 };
 
 // mask of enabled IDs, calculated on startup based on enabled features. boxId_e is used as bit index
@@ -197,6 +198,9 @@ void initActiveBoxIds(void)
 #ifdef USE_THROW_TO_ARM
     BME(BOXTHROWTOARM);
 #endif
+#if defined(USE_GPS) || defined(USE_BARO) || defined(USE_EKF)
+    BME(BOXRESETHOME);
+#endif
 #ifdef USE_CATAPULT
     BME(BOXCATAPULT);
 #endif
@@ -226,8 +230,6 @@ void initActiveBoxIds(void)
     if (sensors(SENSOR_ACC)) {
         BME(BOXANGLE);
         BME(BOXHORIZON);
-        BME(BOXHEADFREE);
-        BME(BOXHEADADJ);
         BME(BOXFPVANGLEMIX);
         if (featureIsEnabled(FEATURE_INFLIGHT_ACC_CAL)) {
             BME(BOXCALIB);
@@ -359,11 +361,9 @@ void initActiveBoxIds(void)
 
     BME(BOXSTICKCOMMANDDISABLE);
     BME(BOXREADY);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     BME(BOXPOSCTL);
-#endif
-#ifdef USE_VEL_CTL
-    BME(BOXVELCTL);
+    BME(BOXWAYPOINTS);
 #endif
 
 #undef BME

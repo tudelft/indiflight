@@ -34,6 +34,8 @@ typedef struct throwConfig_s {
     uint16_t gyroHighThresh;   // deg/s
     uint16_t momentumThresh;   // cm/s
     uint16_t releaseDelayMs;   // ms
+    uint8_t idleBeforeThrow;   // bool
+    uint8_t allowManualModes;  // bool
 } throwConfig_t;
 
 PG_DECLARE(throwConfig_t, throwConfig);
@@ -42,6 +44,13 @@ PG_DECLARE(throwConfig_t, throwConfig);
 float totalAccSq(void);
 float totalGyroSq(void);
 void updateThrowFallStateMachine(timeUs_t currentTimeUs);
+
+// idle before throw (throw_to_arm_idle_before_throw): armed in hand, motors at
+// idle until the throw. Call once per inner loop, before any controller.
+void updateThrowIdleHold(void);
+// true while no controller may drive the actuators: from arming with the
+// throw-to-arm switch on until the throw is detected (or disarm)
+bool throwHoldsIdle(void);
 
 typedef enum {
     THROW_STATE_IDLE = -1,
@@ -55,6 +64,7 @@ typedef enum {
 
 #define FALL_ACC_LOW_THRESH 3.f
 #define FALL_ACC_LOW_TIME_MS 400
+#define THROW_TO_ARM_EKF_DEINIT_TIME_US 3000000 // 3 seconds
 
 typedef enum {
     FALL_STATE_IDLE = -1,

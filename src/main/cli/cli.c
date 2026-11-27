@@ -25,9 +25,6 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
-#ifdef MOCKUP
-#include <stdio.h>
-#endif
 
 #include "platform.h"
 
@@ -109,7 +106,7 @@ bool cliMode = false;
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/indi.h"
@@ -117,6 +114,7 @@ bool cliMode = false;
 #include "flight/pos_ctl.h"
 #include "flight/position.h"
 #include "flight/servos.h"
+#include "flight/geofence.h"
 
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/beeper.h"
@@ -369,11 +367,7 @@ static void cliWriterFlush(void)
 
 void cliPrint(const char *str)
 {
-#ifdef MOCKUP
-    printf("%s", str);
-#else
     cliPrintInternal(cliWriter, str);
-#endif
 }
 
 void cliPrintLinefeed(void)
@@ -404,14 +398,10 @@ static void cliPutp(void *p, char ch)
 
 static void cliPrintfva(const char *format, va_list va)
 {
-#ifdef MOCKUP
-    vprintf(format, va);
-#else
     if (cliWriter) {
         tfp_format(cliWriter, cliPutp, format, va);
         cliWriterFlush();
     }
-#endif
 }
 
 static bool cliDumpPrintLinef(dumpFlags_t dumpMask, bool equalsDefault, const char *format, ...)
@@ -578,6 +568,11 @@ static void printValuePointer(const char *cmdName, const clivalue_t *var, const 
                 // uin32_t array
                 cliPrintf("%u", ((uint32_t *)valuePointer)[i]);
                 break;
+
+            case VAR_INT32:
+                // int32_t array
+                cliPrintf("%d", ((int32_t *)valuePointer)[i]);
+                break;
             }
 
             if (i < var->config.array.length - 1) {
@@ -606,6 +601,10 @@ static void printValuePointer(const char *cmdName, const clivalue_t *var, const 
             break;
         case VAR_UINT32:
             value = *(uint32_t *)valuePointer;
+
+            break;
+        case VAR_INT32:
+            value = *(int32_t *)valuePointer;
 
             break;
         }
@@ -690,6 +689,9 @@ static bool valuePtrEqualsDefault(const clivalue_t *var, const void *ptr, const 
             break;
         case VAR_UINT32:
             result = result && (((uint32_t *)ptr)[i] & mask) == (((uint32_t *)ptrDefault)[i] & mask);
+            break;
+        case VAR_INT32:
+            result = result && ((int32_t *)ptr)[i] == ((int32_t *)ptrDefault)[i];
             break;
         }
     }
@@ -991,6 +993,10 @@ static void cliSetVar(const clivalue_t *var, const uint32_t value)
 
         case VAR_UINT32:
             *(uint32_t *)ptr = value;
+            break;
+
+        case VAR_INT32:
+            *(int32_t *)ptr = value;
             break;
         }
     }
@@ -2131,6 +2137,57 @@ static void cliModeColor(const char *cmdName, char *cmdline)
 }
 #endif
 
+#ifdef USE_GEOFENCE
+static void cliGeofencePrint(void) {
+    cliPrintLinefeed();
+    cliPrintLinef("# geofence");
+    cliPrintLinef("geofence clear");
+    int n = MIN(GEOFENCE_MAX_VERTICES, geofenceConfig()->numActive);
+    for (int i = 0; i < n; i++) {
+        cliPrintLinef("geofence %d %d",
+            geofenceConfig()->vertices[i].lat,
+            geofenceConfig()->vertices[i].lon
+        );
+
+    }
+}
+
+static void cliGeofence(const char *cmdName, char *cmdline)
+{
+    const char *ptr;
+
+    if (isEmpty(cmdline)) {
+        cliGeofencePrint();
+        return;
+    }
+
+    ptr = cmdline;
+    if (!strncmp(ptr, "clear", 5)) {
+        memset(geofenceConfigMutable()->vertices, 0, GEOFENCE_MAX_VERTICES * sizeof(gpsLocation_t));
+        geofenceConfigMutable()->numActive = 0;
+        cliGeofencePrint();
+        return;
+    }
+
+    gpsLocation_t vertex;
+
+    vertex.lat = atoi(ptr);
+    if (!vertex.lat) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    ptr = nextArg(cmdline);
+    vertex.lon = atoi(ptr);
+    if (!vertex.lon) {
+        cliShowParseError(cmdName);
+        return;
+    }
+
+    geofenceAddPoint(&vertex);
+}
+#endif
+
 #ifdef USE_SERVOS
 static void printServo(dumpFlags_t dumpMask, const servoParam_t *servoParams, const servoParam_t *defaultServoParams, const char *headingStr)
 {
@@ -2390,7 +2447,7 @@ static void cliServoMix(const char *cmdName, char *cmdline)
 
         cliServoMix(cmdName, "reverse");
     } else {
-        enum {RULE = 0, TARGET, INPUT, RATE, SPEED, MIN, MAX, BOX, ARGS_COUNT};
+        enum {RULE = 0, ID, INPUT, RATE, SPEED, MIN, MAX, BOX, ARGS_COUNT};
         char *saveptr;
         char *ptr = strtok_r(cmdline, " ", &saveptr);
         while (ptr != NULL && check < ARGS_COUNT) {
@@ -2405,14 +2462,14 @@ static void cliServoMix(const char *cmdName, char *cmdline)
 
         int32_t i = args[RULE];
         if (i >= 0 && i < MAX_SERVO_RULES &&
-            args[TARGET] >= 0 && args[TARGET] < MAX_SUPPORTED_SERVOS &&
+            args[ID] >= 0 && args[ID] < MAX_SUPPORTED_SERVOS &&
             args[INPUT] >= 0 && args[INPUT] < INPUT_SOURCE_COUNT &&
             args[RATE] >= -100 && args[RATE] <= 100 &&
             args[SPEED] >= 0 && args[SPEED] <= MAX_SERVO_SPEED &&
             args[MIN] >= 0 && args[MIN] <= 100 &&
             args[MAX] >= 0 && args[MAX] <= 100 && args[MIN] < args[MAX] &&
             args[BOX] >= 0 && args[BOX] <= MAX_SERVO_BOXES) {
-            customServoMixersMutable(i)->targetChannel = args[TARGET];
+            customServoMixersMutable(i)->targetChannel = args[ID];
             customServoMixersMutable(i)->inputSource = args[INPUT];
             customServoMixersMutable(i)->rate = args[RATE];
             customServoMixersMutable(i)->speed = args[SPEED];
@@ -4222,7 +4279,7 @@ static void cliIndiProfile(const char *cmdName, char *cmdline)
 }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
 static void cliPositionProfile(const char *cmdName, char *cmdline)
 {
     if (isEmpty(cmdline)) {
@@ -4310,7 +4367,7 @@ static void cliDumpPositionProfile(const char *cmdName, uint8_t profileIndex, du
         return;
     }
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     positionProfileIndexToUse = profileIndex;
 
     cliPrintLinefeed();
@@ -4627,7 +4684,7 @@ STATIC_UNIT_TESTED void cliGet(const char *cmdName, char *cmdline)
 
                 break;
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             case PROFILE_POSITION_VALUE:
                 cliPositionProfile(cmdName, "");
 
@@ -4815,6 +4872,16 @@ STATIC_UNIT_TESTED void cliSet(const char *cmdName, char *cmdline)
                             // store value
                             *data = (uint32_t)strtoul((const char*) valPtr, NULL, 10);
                        }
+
+                        break;
+                    
+                    case VAR_INT32:
+                        {
+                            // fetch data pointer
+                            int32_t *data = (int32_t *)cliGetValuePointer(val) + i;
+                            // store value
+                            *data = (int32_t)strtol((const char*) valPtr, NULL, 10);
+                        }
 
                         break;
                     }
@@ -5020,14 +5087,14 @@ if (buildKey) {
 
     // Run status
 
-    const int gyroRate = getTaskDeltaTimeUs(TASK_GYRO) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_GYRO)));
+    const int imuRate = getTaskDeltaTimeUs(TASK_IMU) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_IMU)));
     int rxRate = getCurrentRxRefreshRate();
     if (rxRate != 0) {
         rxRate = (int)(1000000.0f / ((float)rxRate));
     }
     const int systemRate = getTaskDeltaTimeUs(TASK_SYSTEM) == 0 ? 0 : (int)(1000000.0f / ((float)getTaskDeltaTimeUs(TASK_SYSTEM)));
     cliPrintLinef("CPU:%d%%, cycle time: %d, GYRO rate: %d, RX rate: %d, System rate: %d",
-            constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE), getTaskDeltaTimeUs(TASK_GYRO), gyroRate, rxRate, systemRate);
+            constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE), getTaskDeltaTimeUs(TASK_IMU), imuRate, rxRate, systemRate);
 
     // Battery meter
 
@@ -6474,6 +6541,10 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
 
         printSerial(dumpMask, &serialConfig_Copy, serialConfig(), "serial");
 
+#ifdef USE_GEOFENCE
+        cliGeofencePrint();
+#endif
+
         if (!(dumpMask & HARDWARE_ONLY)) {
 #ifndef USE_QUAD_MIXER_ONLY
             const char *mixerHeadingStr = "mixer";
@@ -6572,7 +6643,7 @@ static void printConfig(const char *cmdName, char *cmdline, bool doDiff)
                     cliPrintHashLine("restore original indi profile selection");
                     cliIndiProfile(cmdName, "");
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
                     cliPrintHashLine("restore original position profile selection");
                     cliPositionProfile(cmdName, "");
 #endif
@@ -6771,6 +6842,9 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_LED_STRIP_STATUS_MODE
         CLI_COMMAND_DEF("led", "configure leds", NULL, cliLed),
 #endif
+#ifdef USE_GEOFENCE
+    CLI_COMMAND_DEF("geofence", "configure geofence vertexes in units of 1e7 deg", "[clear] | <latitude> <longitude>", cliGeofence),
+#endif
 #if defined(USE_BOARD_INFO)
     CLI_COMMAND_DEF("manufacturer_id", "get / set the id of the board manufacturer", "[manufacturer id]", cliManufacturerId),
 #endif
@@ -6799,7 +6873,7 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_INDI
     CLI_COMMAND_DEF("indiprofile", "change indi profile", "[<index>]", cliIndiProfile),
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     CLI_COMMAND_DEF("positionprofile", "change position profile", "[<index>]", cliPositionProfile),
 #endif
 #ifdef USE_RC_SMOOTHING_FILTER
@@ -6895,7 +6969,7 @@ static void cliHelp(const char *cmdName, char *cmdline)
     }
 }
 
-static void processCharacter(const char c)
+void processCharacter(const char c)
 {
     if (bufferIndex && (c == '\n' || c == '\r')) {
         // enter pressed

@@ -66,7 +66,8 @@
 #include "flight/dyn_notch_filter.h"
 #endif
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
+#include "flight/ekf.h"
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
 #include "flight/pid.h"
@@ -80,9 +81,10 @@
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
 #include "flight/nn_control.h"
+#include "flight/geofence.h"
 
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/pidaudio.h"
 #include "io/serial.h"
@@ -92,6 +94,8 @@
 #include "io/vtx_control.h"
 #include "io/vtx_rtc6705.h"
 #include "io/hil.h"
+#include "io/t4.h"
+#include "io/feetech.h"
 
 #include "msp/msp_serial.h"
 
@@ -114,6 +118,7 @@
 #include "sensors/gyro.h"
 
 #include "telemetry/telemetry.h"
+#include "telemetry/pi.h"
 
 #include "core.h"
 
@@ -155,7 +160,7 @@ enum {
 int16_t magHold;
 #endif
 
-static FAST_DATA_ZERO_INIT uint8_t pidUpdateCounter;
+static FAST_DATA_ZERO_INIT uint32_t imuUpdateCounter;
 
 static bool flipOverAfterCrashActive = false;
 
@@ -404,6 +409,24 @@ void updateArmingStatus(void)
             setArmingDisabled(ARMING_DISABLED_MOTOR_PROTOCOL);
         }
 
+#ifdef USE_EKF
+        if ( ( shouldBeUsedEkf() && !isConvergedEkf() )
+#ifdef USE_GEOFENCE
+                || ( geofenceState == GEOFENCE_STATE_ERROR )
+                || ( geofenceAction != GEOFENCE_ACTION_NONE )
+#endif
+                ) {
+            setArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_EKF_OR_SETPOINT);
+        }
+#endif
+        if (FLIGHT_MODE(HORIZON_MODE)) {
+            setArmingDisabled(ARMING_DISABLED_NN_MODE); // beun TODO
+        } else {
+            unsetArmingDisabled(ARMING_DISABLED_NN_MODE);
+        }
+
 #ifdef USE_NN_CONTROL
         if (FLIGHT_MODE(NN_MODE)) {
             setArmingDisabled(ARMING_DISABLED_NN_MODE);
@@ -450,7 +473,7 @@ void updateArmingStatus(void)
         }
 
 #ifdef USE_THROW_TO_ARM
-        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM)) {
+        if (IS_RC_MODE_ACTIVE(BOXTHROWTOARM) && !throwConfig()->idleBeforeThrow) {
             // Intended behaviour: 
             // 1. display "THROW_NOT_READY" when RC throwtoarm switch selected, 
             //    but conditions not met (throwState == IDLE). This is intended
@@ -520,6 +543,13 @@ void disarm(flightLogDisarmReason_e reason)
         if (!flipOverAfterCrashActive) {
             statsOnDisarm();
         }
+#endif
+#ifdef USE_LOCAL_POSITION
+        // invalidate previous setpoint
+        posSpNed.valid = false;
+#endif
+#ifdef USE_GPS
+        DISABLE_STATE(GPS_FIX_HOME);
 #endif
 #ifdef USE_TRAJECTORY_TRACKER
         if (isActiveTrajectoryTracker()) {
@@ -620,7 +650,6 @@ void tryArm(void)
         if (isModeActivationConditionPresent(BOXPREARM)) {
             ENABLE_ARMING_FLAG(WAS_ARMED_WITH_PREARM);
         }
-        imuQuaternionHeadfreeOffsetSet();
 
 #if defined(USE_DYN_NOTCH_FILTER)
         resetMaxFFT();
@@ -631,7 +660,7 @@ void tryArm(void)
         lastArmingDisabledReason = 0;
 
 #ifdef USE_GPS
-        GPS_reset_home_position();
+        //GPS_reset_home_position();
         //beep to indicate arming
         if (featureIsEnabled(FEATURE_GPS)) {
             if (STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueConfig()->minSats) {
@@ -644,6 +673,18 @@ void tryArm(void)
         }
 #else
         beeper(BEEPER_ARMING);
+#endif
+
+#ifdef USE_LOCAL_POSITION
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            // we should only be here if ekf converged
+#ifdef USE_THROW_TO_ARM
+            if (throwState == THROW_STATE_THROWN && !posSpNed.valid)
+#endif
+            {
+                setLocalPosSpHere();
+            }
+        }
 #endif
 
 #ifdef USE_PERSISTENT_STATS
@@ -1053,7 +1094,7 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (IS_RC_MODE_ACTIVE(BOXPOSCTL)) {// && sensors(SENSOR_ACC)) {
         // logic can be improved by considering ext_pos_state. this logic means
         // that whenever external pos drops out, we will get a 1 0 0 0 attitude
@@ -1067,7 +1108,11 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            if (extPosState >= EXT_POS_STILL_VALID) {
+            // only switch if converged ekf and no geofence
+            if (isConvergedEkf() && (geofenceState != GEOFENCE_STATE_ERROR) && (geofenceAction == GEOFENCE_ACTION_NONE) ) {
+                if (ARMING_FLAG(ARMED)) {
+                    setLocalPosSpHere();
+                }
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
@@ -1077,24 +1122,60 @@ void processRxModes(timeUs_t currentTimeUs)
             stopTrajectoryTracker();
         }
 #endif
+        if (FLIGHT_MODE(POSITION_MODE)) {
+            // invalidate previous setpoint when leaving position mode
+            posSpNed.valid = false;
+#ifdef USE_GEOFENCE
+            geofenceClearHold();
+#endif
+        }
         DISABLE_FLIGHT_MODE(POSITION_MODE);
     }
-#endif
 
-#ifdef USE_VEL_CTL
-    if (IS_RC_MODE_ACTIVE(BOXVELCTL)) {// && sensors(SENSOR_ACC)) {
-        // logic can be improved by considering ext_pos_state. this logic means
-        // that whenever external pos drops out, we will get a 1 0 0 0 attitude
-        // command, but no automatic piloted-fallback
-        //if (!FLIGHT_MODE(ANGLE_MODE))
-        //    ENABLE_FLIGHT_MODE(ANGLE_MODE); // prerequesite
-
-        if (!FLIGHT_MODE(VELOCITY_MODE))
-            ENABLE_FLIGHT_MODE(VELOCITY_MODE);
-    } else {
-        DISABLE_FLIGHT_MODE(VELOCITY_MODE);
+    if (!isConvergedEkf()) {
+        if (!ARMING_FLAG(ARMED)) {
+            posSpNed.valid = false;
+            DISABLE_FLIGHT_MODE(POSITION_MODE); // kick us out of position mode if we lose ekf initialized on ground
+        } 
+        if (ARMING_FLAG(ARMED) && !FLIGHT_MODE(POSITION_MODE)) {
+            // invalidate setpoint even if were are flying, because we're not in position mode
+            posSpNed.valid = false;
+        }
     }
+
+    // WAYPOINT_MODE runs on top of POSITION_MODE and is never active without it.
+    // It engages on the rising edge of (BOXWAYPOINTS && POSITION_MODE). pos_ctl
+    // switches it off when the waypoint plan is finished; it then stays off until
+    // the switch is cycled (or POSITION_MODE is re-entered).
+    static bool waypointRequestedPrev = false;
+    const bool waypointRequested = IS_RC_MODE_ACTIVE(BOXWAYPOINTS) && FLIGHT_MODE(POSITION_MODE);
+    if (!waypointRequested) {
+        DISABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    } else if (!waypointRequestedPrev) {
+        ENABLE_FLIGHT_MODE(WAYPOINT_MODE);
+    }
+    waypointRequestedPrev = waypointRequested;
 #endif
+
+    if (!ARMING_FLAG(ARMED)) {
+        if (IS_RC_MODE_ACTIVE(BOXRESETHOME)) {
+            // uninit ekf here?
+#ifdef USE_GPS
+            GPS_reset_home_position();
+#endif
+#ifdef USE_BARO
+            baroSetGroundLevel();
+            baro.altitude = 0; // set this now, or else EKF won't reset properly
+#endif
+#ifdef USE_EKF
+            forceDeinitEkf(); // will re-init on received position messages
+#endif
+#ifdef USE_GEOFENCE
+            geofenceInit(); // reset geofence state
+#endif
+        }
+    }
+
 
 #ifdef USE_CATAPULT
     if (IS_RC_MODE_ACTIVE(BOXCATAPULT) && (!IS_RC_MODE_ACTIVE(BOXTHROWTOARM))) {
@@ -1107,13 +1188,15 @@ void processRxModes(timeUs_t currentTimeUs)
 
 #ifdef USE_LEARNER
     if (IS_RC_MODE_ACTIVE(BOXLEARNER)) {
-        ENABLE_FLIGHT_MODE(LEARNER_MODE);
+        if (!FLIGHT_MODE(LEARNER_MODE)) {
+            ENABLE_FLIGHT_MODE(LEARNER_MODE);
+        }
     } else {
         if (FLIGHT_MODE(LEARNER_MODE)) {
             // reset to manually tuned parameters on transition
             if (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT - 1))
                 changeIndiProfile(0);
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
             if (systemConfig()->positionProfileIndex == (POSITION_PROFILE_COUNT - 1))
                 changePositionProfile(0);
 #endif
@@ -1172,15 +1255,6 @@ void processRxModes(timeUs_t currentTimeUs)
     }
 #endif
 
-    if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(HORIZON_MODE) || true) {
-        //LED1_ON; // @tblaha this LED is used for debugging now.
-        // increase frequency of attitude task to reduce drift when in angle or horizon mode
-        rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(acc.sampleRateHz / (float)imuConfig()->imu_process_denom));
-    } else {
-        //LED1_OFF;
-        rescheduleTask(TASK_ATTITUDE, TASK_PERIOD_HZ(100));
-    }
-
     if (!IS_RC_MODE_ACTIVE(BOXPREARM) && ARMING_FLAG(WAS_ARMED_WITH_PREARM)) {
         DISABLE_ARMING_FLAG(WAS_ARMED_WITH_PREARM);
     }
@@ -1197,18 +1271,6 @@ void processRxModes(timeUs_t currentTimeUs)
             DISABLE_FLIGHT_MODE(MAG_MODE);
         }
 #endif
-        if (IS_RC_MODE_ACTIVE(BOXHEADFREE) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
-            if (!FLIGHT_MODE(HEADFREE_MODE)) {
-                ENABLE_FLIGHT_MODE(HEADFREE_MODE);
-            }
-        } else {
-            DISABLE_FLIGHT_MODE(HEADFREE_MODE);
-        }
-        if (IS_RC_MODE_ACTIVE(BOXHEADADJ) && !FLIGHT_MODE(GPS_RESCUE_MODE)) {
-            if (imuQuaternionHeadfreeOffsetSet()) {
-               beeper(BEEPER_RX_SET);
-            }
-        }
     }
 #endif
 
@@ -1216,10 +1278,6 @@ void processRxModes(timeUs_t currentTimeUs)
         ENABLE_FLIGHT_MODE(PASSTHRU_MODE);
     } else {
         DISABLE_FLIGHT_MODE(PASSTHRU_MODE);
-    }
-
-    if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE) {
-        DISABLE_FLIGHT_MODE(HEADFREE_MODE);
     }
 
 #ifdef USE_TELEMETRY
@@ -1290,21 +1348,31 @@ bool isTouchingGround(void) {
         )) > sq(0.8f);
 
     bool throttleLow = true;
+#ifdef USE_LOCAL_POSITION
     if (FLIGHT_MODE(POSITION_MODE)) {
         // new flight mode
         throttleLow = indiRun.spfSpBody.V.Z > -3.f; // N/kg (ie. m/s^2)
+        throttleLow &= ( sq(velEstNed.V.X) + sq(velEstNed.V.Y) + sq(velEstNed.V.Z) ) < sq(3.f);
+    } else
+#endif
 #ifdef USE_GPS_RESCUE
-    } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
+    if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // existing GPS rescue, no idea if works, never tried
         throttleLow = gpsRescueGetThrottle() < 0.1f;
+    } else
 #endif
-    } else {
+    {
         // human pilot, get RC throttle
         float throttleLowThresh = (float) (rxConfig()->mincheck + 50);
         throttleLow = rcCommand[THROTTLE] < throttleLowThresh;
     }
 
-    return (accHigh && throttleLow && gyroLow);
+    throttleLow |= !ARMING_FLAG(ARMED);
+#ifdef USE_THROW_TO_ARM
+    throttleLow |= throwHoldsIdle(); // the setpoint may ask for thrust, but the motors idle
+#endif
+
+    return (accHigh && throttleLow && gyroLow && !isLaunchControlActive());
 }
 
 static FAST_CODE_NOINLINE void subTaskPidController(timeUs_t currentTimeUs)
@@ -1417,19 +1485,32 @@ static FAST_CODE_NOINLINE void subTaskRcCommand(timeUs_t currentTimeUs)
     processRcCommand();
 }
 
-FAST_CODE void taskGyroSample(timeUs_t currentTimeUs)
+FAST_CODE void taskImuSample(timeUs_t currentTimeUs)
 {
-    UNUSED(currentTimeUs);
     gyroUpdate();
-    if (pidUpdateCounter % activePidLoopDenom == 0) {
-        pidUpdateCounter = 0;
-    }
-    pidUpdateCounter++;
+#ifdef USE_ACC
+    accUpdate(currentTimeUs);
+#ifdef USE_THROW_TO_ARM
+    updateThrowFallStateMachine(currentTimeUs);
+#endif
+#else
+    UNUSED(currentTimeUs);
+#endif
+    imuUpdateCounter++;
 }
 
-FAST_CODE bool gyroFilterReady(void)
+FAST_CODE bool filterReady(void)
 {
-    if (pidUpdateCounter % activePidLoopDenom == 0) {
+    if ((imuUpdateCounter % activePidLoopDenom) == 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+FAST_CODE bool stateEstimationReady(void)
+{
+    if ((imuUpdateCounter % ahrsConfig()->ahrs_process_denom) == 0) {
         return true;
     } else {
         return false;
@@ -1438,15 +1519,32 @@ FAST_CODE bool gyroFilterReady(void)
 
 FAST_CODE bool innerLoopReady(void)
 {
-    if ((pidUpdateCounter % activePidLoopDenom) == (activePidLoopDenom / 2)) {
-        return true;
-    }
-    return false;
+    return filterReady();
 }
+
+#ifdef USE_EKF
+// FAST_CODE // TODO: troubleshoot why this takes so much ITCM_RAM on debug mode
+void taskEkf(timeUs_t currentTimeUs)
+{
+    updateEkf(currentTimeUs);
+}
+#endif
+
+#ifdef USE_ACC
+FAST_CODE void taskAhrs(timeUs_t currentTimeUs)
+{
+    ahrsUpdate(currentTimeUs);
+    ahrsDecider();
+}
+#endif
 
 FAST_CODE void taskFiltering(timeUs_t currentTimeUs)
 {
     gyroFiltering(currentTimeUs);
+
+#ifdef USE_ACC
+    accFiltering(currentTimeUs);
+#endif
 
 #ifdef USE_RPM_FILTER
     rpmFilterUpdate();
@@ -1458,12 +1556,26 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
 
     // this is the disarm safety!
     if (!ARMING_FLAG(ARMED)) {
-        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++)
+        for (int i=0; i < MAX_SUPPORTED_MOTORS; i++) {
             motor[i] = motor_disarmed[i];
+            motor_normalized[i] = scaleRangef(motor_disarmed[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+        }
+        for (int i=0; i < MAX_SUPPORTED_SERVOS; i++) {
+#ifdef USE_LEARNER
+            if (!(FLIGHT_MODE(LEARNER_MODE)))
+#endif
+            {
+                servo_normalized[i] = 0.f;
+            }
+        }
     }
 
 #ifdef HIL_BUILD
     hilSendActuators();
+    // todo: find better place for the returns of servos
+    for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+        servo_feedback[i] = hilInput.servo_angle[i];
+    }
 #else
 
 #ifdef USE_SERVOS
@@ -1471,7 +1583,24 @@ static FAST_CODE_NOINLINE void subTaskInnerLoopApplyToActuators(timeUs_t current
     if (isMixerUsingServos()) {
         writeServos();
     }
+    static unsigned servoCounter = 0;
+    if (++servoCounter % 4 == 0) {
+#ifdef USE_ACTUATORS_T4
+        sendActuatorsT4();
 #endif
+#ifdef USE_SERVOS_FEETECH
+        sendServosFeetech(currentTimeUs);
+#endif
+        servoCounter = 0;
+    }
+#ifdef USE_ACTUATORS_T4
+    handleActuatorsT4(); // is this the best place?
+#endif
+#ifdef USE_SERVOS_FEETECH
+    handleServosFeetech(currentTimeUs);
+#endif
+#endif // USE_SERVOS
+
     writeMotors();
 
 #endif
@@ -1516,8 +1645,110 @@ void resetInnerLoopCounter(void) {
     innerLoopCounter = 0;
 }
 
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+#define ACTUATOR_TEST_GRACE_PERIOD 2000000
+
+// static float testSignal(timeDelta_t timeSinceStartUs) {
+//   // parameters
+//   timeDelta_t periodUs = 200000; // 5Hz
+//   float amplitude = 0.2f; // 20% amplitude
+// 
+//   // make sure values are small for most accurate float calculations
+//   timeDelta_t deltaUs = (timeSinceStartUs % periodUs);
+// 
+//   // calculate sine output
+//   float phase = 2.0f * M_PIf * ((float) deltaUs) / ((float) (periodUs));
+//   return 0.5f + amplitude * sinf(phase); // must be between 0 and 1!
+// }
+
+//// Sine input settings
+#define ACTUATOR_TEST_N_AMPLITUDES 3
+#define ACTUATOR_TEST_N_FREQUENCIES 3
+#define ACTUATOR_TEST_SIN_US 3000000 // 3 sec
+static const float amplitudes[ACTUATOR_TEST_N_AMPLITUDES] = {0.1, 0.2, 0.3}; // [-]
+static const float frequencies[ACTUATOR_TEST_N_FREQUENCIES] = {0.5, 1, 2}; // [Hz]
+
+//// Step input settings
+#define ACTUATOR_TEST_N_STEPS 3
+#define ACTUATOR_TEST_STEP_US 2000000 // 2 sec
+static const float stepInputAmplitudes[ACTUATOR_TEST_N_STEPS] = {0.25, 0.5, 0.75};    
+
+//// Other settings
+#define ACTUATOR_TEST_BREAK_US 5000000 // 5 sec
+#define ACTUATOR_TEST_IDLE_OUTPUT 0.1f // 10% throttle
+
+static float testSignal(timeDelta_t timeSinceStartUs) {
+    timeDelta_t totalUs = 0, deltaUs = 0;
+
+    float phase = 0;
+    int i, j;
+
+    for (i = 0; i < ACTUATOR_TEST_N_AMPLITUDES; i++) {
+        for (j = 0; j < ACTUATOR_TEST_N_FREQUENCIES; j++) {
+            // If in first timeBreakUs microseconds of this iteration of the amplitude, frequency for loop return 0
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+                return ACTUATOR_TEST_IDLE_OUTPUT;
+            }
+            // If not currently in break add break time to total time
+            totalUs += ACTUATOR_TEST_BREAK_US;
+
+            // If in the last timeTestSinUs microsends of this iteration of the amplitude, frequency for loop return the sin value
+            if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_SIN_US) {
+                float periodUsFloat = 1000000.f / frequencies[j];
+                deltaUs = timeSinceStartUs - totalUs;
+
+                // Compute sin output
+                phase = 2.0f * M_PIf * ((float) deltaUs) / periodUsFloat;
+                // return phase;
+                return 0.5f + amplitudes[i] * sinf(phase);
+            }
+
+            // If not currently doing this sine, add sine test time to total time
+            totalUs += ACTUATOR_TEST_SIN_US;
+        }
+    }
+
+    for (i = 0; i < ACTUATOR_TEST_N_STEPS; i++) {
+        // If in first timeBreakUs microseconds of this iteration of the step input amplitude for loop return 0
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_BREAK_US) {
+            return ACTUATOR_TEST_IDLE_OUTPUT;
+        }
+
+        // If not currently in break add break time to total time
+        totalUs += ACTUATOR_TEST_BREAK_US;
+
+        // If in the last timeTestStepUs microsends of this iteration of the step input amplitude for loop return the step amplitude
+        if (totalUs <= timeSinceStartUs && timeSinceStartUs < totalUs + ACTUATOR_TEST_STEP_US) {
+            return stepInputAmplitudes[i];
+        }
+
+        // If not currently doing this step input, add step test time to total time
+        totalUs += ACTUATOR_TEST_STEP_US;
+    }
+    return ACTUATOR_TEST_IDLE_OUTPUT;
+}
+#endif
+
 // generates motor[i] commands according to the selected controller
 // does not handle arm/disarm logic, that's only done at the last step
+// not FAST_CODE (ITCM is full): the caller checks throwHoldsIdle()
+static NOINLINE void applyThrowIdleHoldOutputs(void)
+{
+#ifdef USE_THROW_TO_ARM
+    for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
+        motor_normalized[i] = 0.f;
+    }
+#ifdef USE_LEARNER
+    if (!learnerQueryIsActive())
+#endif
+    {
+        for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+            servo_normalized[i] = 0.f;
+        }
+    }
+#endif
+}
+
 FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
 {
 #if defined(SIMULATOR_BUILD) && defined(SIMULATOR_GYROPID_SYNC)
@@ -1534,8 +1765,17 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     subTaskRcCommand(currentTimeUs);
 
     uint8_t numMotors = getMotorCount();
+
+#ifdef USE_THROW_TO_ARM
+    updateThrowIdleHold();
+#endif
+
     for (int motor = 0; motor < MAX_SUPPORTED_MOTORS; motor++) {
         motor_normalized[motor] = 0.;
+    }
+
+    for (int servo = 0; servo < MAX_SUPPORTED_SERVOS; servo++) {
+        servo_normalized[servo] = 0.;
     }
 
 #ifdef USE_NN_CONTROL
@@ -1548,8 +1788,9 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         }
 
         float* nn_output = nn_get_motor_cmds();
-        for (int i = 0; i < numMotors; i++) 
+        for (int i = 0; i < numMotors; i++) {
             motor_normalized[i] = constrainf(nn_output[i], 0., 1.);
+        }
 
     } else
 #endif
@@ -1557,8 +1798,16 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
     if (!FLIGHT_MODE(PID_MODE)) {
         indiController(currentTimeUs);
 
-        for (int i = 0; i < numMotors; i++)
-            motor_normalized[i] = constrainf(indiRun.d[i], 0., 1.);
+        int m = 0;
+        int s = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && (m < numMotors)) {
+                motor_normalized[m++] = constrainf(indiRun.d[i], 0., 1.);
+            }
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_SERVO) && (s < MAX_SUPPORTED_SERVOS)) {
+                servo_normalized[s++] = constrainf(indiRun.d[i], -1., 1.);
+            }
+        }
 
     } else
 #endif 
@@ -1567,19 +1816,107 @@ FAST_CODE void taskMainInnerLoop(timeUs_t currentTimeUs)
         subTaskPidController(currentTimeUs);
         subTaskPidMixing(currentTimeUs);
 
-        for (int i = 0; i < numMotors; i++)
+        for (int i = 0; i < numMotors; i++) {
             motor_normalized[i] = scaleRangef(motor[i], mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh, 0., 1.);
+        }
     }
 
-#ifdef USE_INDI
-    indiUpdateActuatorState( motor_normalized );
+    // idle before throw: no controller output reaches the actuators, in any
+    // mode. Servos only follow the learner's servo identification.
+#ifdef USE_THROW_TO_ARM
+    if (throwHoldsIdle()) {
+        applyThrowIdleHoldOutputs();
+    }
 #endif
 
-    for (int i = 0; i < numMotors; i++)
-        motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+#ifdef USE_ACTUATOR_TEST_DANGEROUS
+#pragma message "WARNING: compiling with dangerous code."
+    // overwrite outputs with test commands
 
-    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++)
+    // initially, just set idle for all
+    for (int i = 0; i < numMotors; i++) {
+        motor_normalized[i] = 0.f;
+    }
+
+    // find time since armed
+    static timeUs_t lastArmedUs = 0;
+    static bool lastArmed = false;
+    if (!lastArmed && ARMING_FLAG(ARMED)) {
+        lastArmedUs = currentTimeUs;
+        beeperWarningBeeps(15); // warn user
+    }
+    lastArmed = ARMING_FLAG(ARMED);
+    timeDelta_t timeSinceArmUs = cmpTimeUs(currentTimeUs, lastArmedUs);
+
+    // wait for grace period
+    if (timeSinceArmUs >= ACTUATOR_TEST_GRACE_PERIOD) {
+        float y = testSignal(timeSinceArmUs - ACTUATOR_TEST_GRACE_PERIOD);
+        motor_normalized[0] = constrainf(y, 0.f, 1.f);
+    }
+#endif
+
+#ifdef USE_INDI
+#ifdef SERVO_FEEDBACK_AVAILABLE
+    // measured servo angles: servo_feedback is in centidegrees and normalized
+    // +-1 is +-100 deg (10000 cdeg), as in the T4 and Feetech drivers
+    // TODO: the feedback is not time-aligned with the command, and the
+    // 100 deg scale is hardcoded in several places (indi.c tailsitter path,
+    // learner, prober, drivers). Needs another look.
+    float servo_normalized_feedback[MAX_SUPPORTED_SERVOS];
+    for (int i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
+        servo_normalized_feedback[i] = constrainf(((float)servo_feedback[i]) * 1e-4f, -1.f, 1.f);
+    }
+    indiUpdateActuatorState( motor_normalized, servo_normalized_feedback );
+#else
+    // no servo angle measurement: use the command (servo_feedback stays 0)
+    indiUpdateActuatorState( motor_normalized, servo_normalized );
+#endif
+#endif
+
+    // apply motor lead-lag filter only after the commands are fed into the actuator state filter
+#ifdef USE_INDI
+    if (indiRun.useMotorLeadLag) {
+        int m = 0;
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && (m < numMotors)) {
+                float output = biquadFilterApply(&indiRun.motorLeadLagFilter[m], motor_normalized[m]);
+                motor_normalized[m++] = constrainf(output, 0.f, 1.f);
+            }
+        }
+    }
+#endif
+#ifdef INJECT_INPUT_DISTURBANCE
+#pragma message "WARNING: compiling with dangerous code."
+    // Ensure this only runs when not injecting an attitude setpoint and in angle mode (disable in horizon mode)
+    if (indiRun.injectInputDist && !indiRun.injectAttSp && FLIGHT_MODE(ANGLE_MODE)) {
+        for (int i = 0; i < indiRun.actNum; i++) {
+            if ((indiRun.actType[i] == INDI_ACT_TYPE_MOTOR) && indiRun.applyDistToMotor[i]) {
+                // inject disturbance into the motor output
+                motor_normalized[i] += indiRun.inputDistAmplitude;
+            }
+        }
+    }
+#endif
+    // again, after the lead-lag filter and disturbance injection
+#ifdef USE_THROW_TO_ARM
+    if (throwHoldsIdle()) {
+        applyThrowIdleHoldOutputs();
+    }
+#endif
+
+#ifdef USE_INDI
+    // INDI rpm loop must see the final commands that go to the ESCs
+    indiUpdateRpmCtlState( motor_normalized );
+#endif
+
+    // get real motor outputs for the hardware implementation used
+    for (int i = 0; i < numMotors; i++) {
+        motor[i] = scaleRangef(motor_normalized[i], 0., 1., mixerRuntime.motorOutputLow, mixerRuntime.motorOutputHigh);
+    }
+
+    for (int i = numMotors; i < MAX_SUPPORTED_MOTORS; i++) {
         motor[i] = motor_disarmed[i];
+    }
 
     subTaskInnerLoopApplyToActuators(currentTimeUs);
     subTaskInnerLoopTailEnd(currentTimeUs);

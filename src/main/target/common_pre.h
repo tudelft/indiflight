@@ -58,6 +58,9 @@
 #endif
 
 #if defined(MOCKUP)
+#ifdef HIL_BUILD
+#error "cannot have both MOCKUP and HIL_BUILD defined"
+#endif
 #undef USE_DSHOT
 #undef USE_SDCARD
 #undef USE_OSD
@@ -93,8 +96,8 @@
 #ifndef USE_BLACKBOX
 #define USE_BLACKBOX
 #endif
-#ifndef USE_IMU_CALC
-#define USE_IMU_CALC
+#ifndef USE_AHRS_CALC
+#define USE_AHRS_CALC
 #endif
 #endif
 
@@ -186,10 +189,10 @@
 #endif
 
 #if defined(STM32F4) || defined(STM32F7) || defined(STM32H7) || defined(STM32G4)
-#define TASK_GYROPID_DESIRED_PERIOD     125 // 125us = 8kHz
+#define TASK_IMUPID_DESIRED_PERIOD     125 // 125us = 8kHz
 #define SCHEDULER_DELAY_LIMIT           10
 #else
-#define TASK_GYROPID_DESIRED_PERIOD     1000 // 1000us = 1kHz
+#define TASK_IMUPID_DESIRED_PERIOD     1000 // 1000us = 1kHz
 #define SCHEDULER_DELAY_LIMIT           100
 #endif
 
@@ -299,7 +302,7 @@ extern uint8_t _dmaram_end__;
 #if !defined(SIMULATOR_BUILD)
 #define USE_GYRO_REGISTER_DUMP  // Adds gyroregisters command to cli to dump configured register values
 #endif
-//#define USE_IMU_CALC
+//#define USE_AHRS_CALC
 
 // all the settings for classic build
 #if !defined(CLOUD_BUILD) && !defined(SIMULATOR_BUILD)

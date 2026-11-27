@@ -53,7 +53,7 @@ static uint16_t calculateChecksum(const uint8_t *ibusPacket);
 #include "sensors/acceleration.h"
 #include "sensors/sensors.h"
 #include "sensors/barometer.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/position.h"
 #include "io/gps.h"
 
@@ -259,9 +259,6 @@ static uint16_t getMode(void)
     }
     if (FLIGHT_MODE(PASSTHRU_MODE)) {
         flightMode = 3; //Auto
-    }
-    if (FLIGHT_MODE(HEADFREE_MODE) || FLIGHT_MODE(MAG_MODE)) {
-        flightMode = 4; //Guided! (there in no HEAD, MAG so use Guided)
     }
     if (FLIGHT_MODE(HORIZON_MODE)) {
         flightMode = 7; //Circle! (there in no horizon so use Circle)

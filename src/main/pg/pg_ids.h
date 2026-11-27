@@ -41,7 +41,7 @@
 #define PG_FEATURE_CONFIG 19 // just has enabledFeatures
 #define PG_MIXER_CONFIG 20 // Cleanflight has single struct mixerConfig_t, betaflight has mixerConfig_t and servoMixerConfig_t
 #define PG_SERVO_MIXER 21 // Cleanflight has servoParam_t for each servo, betaflight has single servoParam_t
-#define PG_IMU_CONFIG 22 // Cleanflight has imuConfig_t, betaflight has imuRuntimeConfig_t with additional parameters
+#define PG_AHRS_CONFIG 22 // Cleanflight has ahrsConfig_t, betaflight has ahrsRuntimeConfig_t with additional parameters
 #define PG_PROFILE_SELECTION 23 // just contains current_profile_index
 #define PG_RX_CONFIG 24 // betaflight rxConfig_t contains different values
 #define PG_RC_CONTROLS_CONFIG 25 // Cleanflight has more parameters in rcControlsConfig_t
@@ -88,6 +88,9 @@
 #define PG_LEARNER_CONFIG 62
 #define PG_EKF_CONFIG 63
 #define PG_NN_CONFIG 64
+#define PG_GEOFENCE_CONFIG 65
+#define PG_PROBER_CONFIG 66
+#define PG_PITOTMETER_CONFIG 67
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

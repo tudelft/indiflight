@@ -42,6 +42,7 @@
 #include "drivers/system.h"
 #include "drivers/time.h"
 #include "drivers/usb_msc.h"
+#include "drivers/serial_usb_vcp.h"
 
 #include "msc/usbd_storage.h"
 
@@ -125,12 +126,26 @@ void mscWaitForButton(void)
     // In order to exit MSC mode simply disconnect the board, or push the button again.
     while (mscCheckButton());
     delay(DEBOUNCE_TIME_MS);
+
+    // In order to exit MSC mode simply disconnect the board, or push the button again.
+    // new: ejecting should also reset
     while (true) {
-        asm("NOP");
-        if (mscCheckButton()) {
-            systemResetFromMsc();
-        }
-        mscActivityLed();
+        #ifdef STM32H7
+                static uint8_t lastState = USBD_STATE_DEFAULT;
+                uint8_t currentState = USBD_Device.dev_state;
+        #endif
+                asm("NOP");
+                if (mscCheckButton()
+        #ifdef STM32H7
+                    || (lastState == USBD_STATE_CONFIGURED && currentState != USBD_STATE_CONFIGURED)
+        #endif
+                    ) {
+                    systemResetFromMsc();
+                }
+                mscActivityLed();
+        #ifdef STM32H7
+                lastState = currentState;
+        #endif
     }
 }
 

@@ -33,80 +33,126 @@
 
 // --- config
 typedef struct learnerConfig_s {
-    uint8_t mode;
-    uint8_t numAct;
-    uint16_t delayMs;
-    uint16_t stepMs;
-    uint16_t rampMs;
-    uint16_t overlapMs;
-    uint8_t stepAmp;
-    uint8_t rampAmp;
-    uint16_t gyroMax;
+    uint8_t modeProbing;
+    uint8_t modeFx;
+    uint8_t modeAct;
+    uint8_t modeHover;
+    uint16_t mixControlAfterMs;
+    uint8_t initFromProfileFx;
+    uint8_t initFromProfileAct;
+    uint16_t actMask;
     uint8_t imuFiltHz;
     uint8_t fxFiltHz;
     uint8_t motorFiltHz;
+    uint8_t servoFiltHz;
+    uint8_t useFortescue;
     uint8_t zetaRate;
     uint8_t zetaAttitude;
     uint8_t zetaVelocity;
     uint8_t zetaPosition;
-    uint8_t actLimit;
-    uint8_t applyIndiProfileAfterQuery;
-    uint8_t applyPositionProfileAfterQuery;
+    uint8_t zetaVelocityVert;
+    uint8_t zetaPositionVert;
+    int16_t rollMisalignment;
+    int16_t pitchMisalignment;
+    int16_t yawMisalignment;
+    uint8_t randomizeMisalignment;
+    uint8_t applyIndi;
+    uint8_t applyPosition;
+    uint8_t applyHoverRotation;
+    // from modular_drone
+    uint8_t simpleMotorModel;   // 1: omega - idle = a*d - tau*omegaDot. 0: omega = a*d + b*sqrt(d) + c - tau*omegaDot
+    uint32_t rlsLambda;         // RLS forgetting factor * 1e6. 1000000: no forgetting. 0: bandwidth equation (modular_drone), or with useFortescue: 1 while probing, fortescue after
+    uint32_t hardcodeMaxRpm;    // 0: learned max rpm. otherwise: use this max rpm for all motors
+    int16_t hardcodeG1Fz;       // used if hardcodeLinearForces. same units as indi_act_g1_fz, 0 is a valid value
+    uint8_t hardcodeLinearForces; // 0: learned fx, fy, fz. 1: use hardcodeG1Fx, hardcodeG1Fy, hardcodeG1Fz
+    int16_t hardcodeG1Fx;       // used if hardcodeLinearForces. same units as indi_act_g1_fx, 0 is a valid value
+    int16_t hardcodeG1Fy;       // used if hardcodeLinearForces. same units as indi_act_g1_fy, 0 is a valid value
+    uint8_t fxIncremental;      // multirotor only. 1: identify effectiveness from increments (modular_drone), 0: global model (tailsitter branch)
 } learnerConfig_t;
 
 PG_DECLARE(learnerConfig_t, learnerConfig);
 
 typedef enum learner_loops_e {
-    LEARNER_LOOP_RATE = 0,
-    LEARNER_LOOP_ATTITUDE,
-    LEARNER_LOOP_VELOCITY,
-    LEARNER_LOOP_POSITION,
+    LEARNER_LOOP_HORIZONTAL_RATE = 0,
+    LEARNER_LOOP_HORIZONTAL_ATTITUDE,
+    LEARNER_LOOP_HORIZONTAL_VELOCITY,
+    LEARNER_LOOP_HORIZONTAL_POSITION,
+    LEARNER_LOOP_VERTICAL_VELOCITY,
+    LEARNER_LOOP_VERTICAL_POSITION,
     LEARNER_LOOP_COUNT
 } learner_loops_t;
 
 typedef enum learning_mode_e {
-    LEARNING_OFF         = 0,
-    LEARN_DURING_FLIGHT  = 1 << 0,
-    LEARN_AFTER_CATAPULT = 1 << 1,
-    LEARN_AFTER_THROW    = 1 << 2,
+    LEARNING_OFF                    = 0,
+    LEARN_DURING_FLIGHT             = 1 << 0,
+    LEARN_DURING_PROBING            = 1 << 1,
 } learner_mode_t;
 
+typedef enum learning_probing_mode_e {
+    LEARN_PROBING_OFF               = 0,
+    LEARN_PROBING_DURING_FLIGHT     = 1 << 0, // allow query during flight
+    LEARN_PROBING_AFTER_THROW       = 1 << 1, // after throw
+    LEARN_PROBING_AFTER_CATAPULT    = 1 << 2, // after catapult
+} laerner_probing_mode_t;
+
 typedef struct learningRuntime_s {
+    bool initialized;
+    bool filtersInitialized;
+    bool mixControl;
+    int numActuators; // number of actuators (motors + servos)
+    int numMotors; // number of motors
+    int numServos; // number of servos
     fp_vector_t imuRate;
     fp_vector_t imuRateDot;
     fp_vector_t imuSpf;
-    float fxOmega[MAX_SUPPORTED_MOTORS];
-    float fxOmegaDiff[MAX_SUPPORTED_MOTORS];
-    float fxOmegaDotDiff[MAX_SUPPORTED_MOTORS];
+    float fxOmega[MAXU];
+    float fxOmegaDiff[MAXU];
+    float fxOmegaDot[MAXU];
+    float fxOmegaDotDot[MAXU];
+    fp_vector_t fxRateDot;
+    fp_vector_t fxSpf;
+    // increments for learner_fx_incremental
+    float fxOmegaDotDiff[MAXU];
     fp_vector_t fxRateDotDiff;
     fp_vector_t fxSpfDiff;
-    float motorOmega[MAX_SUPPORTED_MOTORS];
-    float motorOmegaDot[MAX_SUPPORTED_MOTORS];
-    float motorD[MAX_SUPPORTED_MOTORS];
-    float motorSqrtD[MAX_SUPPORTED_MOTORS];
+    float motorOmega[MAXU];
+    float motorOmegaDot[MAXU];
+    float motorD[MAXU];
+    float motorSqrtD[MAXU];
     float zeta[LEARNER_LOOP_COUNT];
     float gains[LEARNER_LOOP_COUNT];
-    bool applyIndiProfileAfterQuery;
-    bool applyPositionProfileAfterQuery;
 } learnerRuntime_t;
 
 extern learnerRuntime_t learnRun;
 
-extern rls_parallel_t motorRls[MAX_SUPPORTED_MOTORS];
+extern rls_t actRls[MAXU];
 extern rls_t imuRls;
-extern rls_parallel_t fxSpfRls;
-extern rls_parallel_t fxRateDotRls;
-
-void initLearnerRuntime(void);
+//extern rls_parallel_t fxSpfRls;
+//extern rls_parallel_t fxRateDotRls;
+extern rls_t fxRls[6];
+extern fp_quaternion_t hoverAttitude;
 
 
 // --- states and functions
 
 // learning stuff
-void initLearner(void);
+#define LEARNER_TIMINGS_NUM 7
+typedef struct learnerTimings_s {
+    timeUs_t start;
+    timeDelta_t filters;
+    timeDelta_t imu;
+    timeDelta_t fx;
+    timeDelta_t motor;
+    timeDelta_t gains;
+    timeDelta_t updating;
+    timeDelta_t hover;
+} learnerTimings_t;
+
+extern learnerTimings_t learnerTimings;
+
+void initLearnerFilters(void);
 void testLearner(void);
 void updateLearner(timeUs_t current);
-void updateGains(void);
 void updateLearnedParameters(indiProfile_t* indi, positionProfile_t* pos);
 
 // query stuff
@@ -115,7 +161,6 @@ typedef enum query_state_e {
     LEARNING_QUERY_WAITING_FOR_LAUNCH = 0,
     LEARNING_QUERY_DELAY,
     LEARNING_QUERY_ACTIVE,
-    LEARNING_QUERY_APPLYING,
     LEARNING_QUERY_DONE
 } learning_query_state_t;
 
@@ -137,3 +182,8 @@ typedef struct motor_state_s {
 } motor_state_t;
 
 void runLearningQueryStateMachine(timeUs_t current);
+
+// true while the learner query drives the actuators (from waiting for launch until done)
+bool learnerQueryIsActive(void);
+// true if actuator i is excited by the prober (prober_act_mask)
+bool learnerQueryActuatorSelected(int i);

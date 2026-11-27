@@ -145,7 +145,7 @@ static uint8_t m25p16_page_buffer[M25P16_PAGESIZE];
 
 static uint8_t m25p16_readStatus(flashDevice_t *fdevice)
 {
-    uint8_t status;
+    uint8_t status = 0;
     if (fdevice->io.mode == FLASHIO_SPI) {
         STATIC_DMA_DATA_AUTO uint8_t readStatus[2] = { M25P16_INSTRUCTION_READ_STATUS_REG, 0 };
         STATIC_DMA_DATA_AUTO uint8_t readyStatus[2];

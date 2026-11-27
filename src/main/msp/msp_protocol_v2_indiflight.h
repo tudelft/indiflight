@@ -24,3 +24,9 @@
 #define MSP2_SET_INDI_PROFILE               0x4003
 #define MSP2_LEARNING_CONFIG                0x4004
 #define MSP2_SET_LEARNING_CONFIG            0x4005
+
+// Blackbox logs on the SD card or flash. See src/main/blackbox/blackbox_download.h for the payload formats.
+#define MSP2_INDI_BLACKBOX_LOG_LIST         0x4006
+#define MSP2_INDI_BLACKBOX_LOG_READ         0x4007
+#define MSP2_INDI_BLACKBOX_LOG_CLOSE        0x4008
+#define MSP2_INDI_BLACKBOX_LOG_ERASE_ALL    0x4009

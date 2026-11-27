@@ -144,7 +144,7 @@
 
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 
@@ -832,7 +832,7 @@ static void osdElementCrashFlipArrow(osdElementParms_t *element)
         rollAngle = (rollAngle < 0 ? -180 : 180) - rollAngle;
     }
 
-    if ((isFlipOverAfterCrashActive() || (!ARMING_FLAG(ARMED) && !isUpright())) && !((imuConfig()->small_angle < 180 && isUpright()) || (rollAngle == 0 && pitchAngle == 0))) {
+    if ((isFlipOverAfterCrashActive() || (!ARMING_FLAG(ARMED) && !isUpright())) && !((ahrsConfig()->small_angle < 180 && isUpright()) || (rollAngle == 0 && pitchAngle == 0))) {
         if (abs(pitchAngle) < 2 * abs(rollAngle) && abs(rollAngle) < 2 * abs(pitchAngle)) {
             if (pitchAngle < 0) {
                 if (rollAngle > 0) {
@@ -996,8 +996,6 @@ static void osdElementFlymode(osdElementParms_t *element)
         strcpy(element->buff, "!FS!");
     } else if (FLIGHT_MODE(GPS_RESCUE_MODE)) {
         strcpy(element->buff, "RESC");
-    } else if (FLIGHT_MODE(HEADFREE_MODE)) {
-        strcpy(element->buff, "HEAD");
     } else if (FLIGHT_MODE(ANGLE_MODE)) {
         strcpy(element->buff, "ANGL");
     } else if (FLIGHT_MODE(HORIZON_MODE)) {

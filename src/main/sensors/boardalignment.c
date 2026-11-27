@@ -38,7 +38,7 @@
 #include "boardalignment.h"
 
 static bool standardBoardAlignment = true;     // board orientation correction
-static fp_rotationMatrix_t boardRotation;
+fp_rotationMatrix_t boardRotation;
 
 // no template required since defaults are zero
 PG_REGISTER(boardAlignment_t, boardAlignment, PG_BOARD_ALIGNMENT, 0);

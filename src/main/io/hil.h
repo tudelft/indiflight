@@ -28,11 +28,13 @@
 #pragma once
 
 #include <string.h>
+#include "platform.h"
 
 typedef struct hilInput_s {
     float gyro[3]; // deg/s
     float acc[3]; // g
-    float rpm[4]; // rpm
+    float rpm[MAX_SUPPORTED_MOTORS]; // rpm
+    float servo_angle[MAX_SUPPORTED_SERVOS]; // centidegree
 } hilInput_t;
 
 extern hilInput_t hilInput;

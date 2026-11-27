@@ -31,6 +31,7 @@
 #include "blackbox_encoding.h"
 #include "blackbox_fielddefs.h"
 #include "blackbox_io.h"
+#include "blackbox_download.h"
 
 #include "build/build_config.h"
 #include "build/debug.h"
@@ -64,19 +65,24 @@
 #include "flight/servos.h"
 #include "flight/gps_rescue.h"
 #include "flight/position.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/indi.h"
 #include "flight/pos_ctl.h"
 #include "flight/ekf.h"
 #include "flight/learner.h"
+#include "flight/learning_prober.h"
 #include "flight/nn_control.h"
+#include "flight/trajectory_tracker.h"
 #include "flight/catapult.h"
 #include "flight/throw.h"
+#include "flight/geofence.h"
 
 #include "io/beeper.h"
 #include "io/gps.h"
 #include "io/serial.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
+#include "io/t4.h"
+#include "io/keyboard.h"
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -88,9 +94,14 @@
 #include "sensors/acceleration.h"
 #include "sensors/barometer.h"
 #include "sensors/battery.h"
+#if defined(SITL) || defined(MOCKUP)
+#include <stdio.h>
+#include <time.h>
+#endif
 #include "sensors/compass.h"
 #include "sensors/gyro.h"
 #include "sensors/rangefinder.h"
+#include "sensors/pitotmeter.h"
 
 #if defined(ENABLE_BLACKBOX_LOGGING_ON_SPIFLASH_BY_DEFAULT)
 #define DEFAULT_BLACKBOX_DEVICE     BLACKBOX_DEVICE_FLASH
@@ -100,7 +111,7 @@
 #define DEFAULT_BLACKBOX_DEVICE     BLACKBOX_DEVICE_SERIAL
 #endif
 
-#if defined(MOCKUP) && (MAX_SUPPORTED_MOTORS == 8)
+#if (MAX_SUPPORTED_MOTORS == 8)
 #define BLACKBOX_LEARNER_LOG_8_MOTORS
 #define BLACKBOX_LEARNER_N 8
 #else
@@ -274,6 +285,13 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     /* Tricopter tail servo */
     {"servo",       5, UNSIGNED, .Ipredict = PREDICT(1500),    .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(TRICOPTER)},
 
+#ifdef USE_SERVO_FEEDBACK
+    {"servo_feedback", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"servo_feedback", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+#endif
+
     /* INDI stuff*/
 #ifdef USE_INDI
     {"quat",        0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -290,9 +308,18 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"quatSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"quatSp",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
+    {"quatSpPreFf", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"quatSpPreFf", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+
     {"gyroSp",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"gyroSp",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+
+    {"gyroFf",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFf",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"gyroFf",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
 
     {"alphaSp",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
     {"alphaSp",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
@@ -345,6 +372,15 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"omegaUnfiltered",       6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"omegaUnfiltered",       7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 
+    {"omegaSp",               0, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               2, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               3, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               4, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               5, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"omegaSp",               7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
     {"omega_dot",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"omega_dot",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"omega_dot",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
@@ -353,18 +389,61 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"omega_dot",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"omega_dot",   6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
     {"omega_dot",   7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
+    {"d", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"d", 7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
+    {"rpmCmd_f", 0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmCmd_f", 7, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
+    {"rpmOmega_f", 0, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 2, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 3, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 4, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 5, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmOmega_f", 7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+
+    {"rpmControlRan", 0, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 2, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 3, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 4, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 5, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
+    {"rpmControlRan", 7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(INDI)},
 #endif
 
-#if USE_POS_CTL
+#ifdef USE_PITOT
+    {"pitot_pressureZero", -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"pitot_pressure",     -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+    {"pitot_temperature",  -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB),      CONDITION(INDI)},
+    {"pitot_airSpeed",     -1, SIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(INDI)},
+#endif
+
+#ifdef USE_LOCAL_POSITION
     {"pos",         0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"pos",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"extTime",     -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 
-    {"extPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localPos",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"posSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"posSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -374,9 +453,9 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"vel",         1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"vel",         2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
-    {"extVel",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extVel",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extVel",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localVel",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
     {"velSp",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"velSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
@@ -386,30 +465,22 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"accSp",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
     {"accSp",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
 
-    {"extAtt",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extAtt",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"extAtt",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localQuat",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localQuat",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localQuat",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+    {"localQuat",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+
+#ifdef USE_TELEMETRY_PI
+    {"latest_key_pressed", -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 #endif
-#ifdef USE_VIO_POSE
-    {"vioTime",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
-    
-    {"vioPos",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioPos",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioPos",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioVel",       0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioVel",       1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioVel",       2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioQuat",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioQuat",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-
-    {"vioRate",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioRate",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
-    {"vioRate",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(POS)},
+#ifdef USE_TRAJECTORY_TRACKER
+    {"tt_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
 #endif
+#ifdef USE_NN_CONTROL
+    {"nn_active",    -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(UNSIGNED_VB), CONDITION(POS)},
+#endif
+
+#endif // USE_LOCAL_POSITION
 #ifdef USE_EKF
     {"ekf_pos",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_pos",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -419,9 +490,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_vel",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_vel",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
-    {"ekf_att",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
-    {"ekf_att",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
+    {"ekf_quat",     3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 
     {"ekf_acc_b",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_acc_b",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
@@ -431,53 +503,72 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"ekf_gyro_b",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
     {"ekf_gyro_b",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),     .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(EKF)},
 #endif
-
 #ifdef USE_LEARNER
     {"motor_0_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_0_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_0_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_0_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_1_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_1_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_1_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_1_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_2_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_2_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_2_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_2_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_3_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_3_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_3_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_3_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
 #ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
     {"motor_4_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_4_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_4_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_4_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_4_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_4_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_5_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_5_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_5_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_5_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_5_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_5_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_6_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_6_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_6_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_6_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_6_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_6_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"motor_7_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_7_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_7_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"motor_7_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_7_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"motor_7_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 
     {"imu_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"imu_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"imu_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"spf_corrected",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"spf_corrected",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"spf_corrected",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
 #ifdef BLACKBOX_LEARNER_LOG_8_MOTORS
     {"fx_x_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
@@ -522,6 +613,10 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_z_rls_x",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
     {"fx_z_rls_x",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
+
+    {"sigma_rls",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"sigma_rls",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"sigma_rls",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 
     {"fx_p_rls_x",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
     {"fx_p_rls_x",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
@@ -583,12 +678,62 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"fx_r_rls_x",  15, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), CONDITION(LEARNER)},
 #endif
 
-    {"learnerGains",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
-    {"learnerGains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
-    {"learnerGains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
-    {"learnerGains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_x_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_x_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_y_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_y_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_z_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_z_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_p_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_p_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_q_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_q_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_r_rls_e_var",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"fx_r_rls_lambda",   -1, UNSIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"learner_gains",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learner_gains",   5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"hoverAttitude",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"hoverAttitude",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+
+    {"learnerTimings",      0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      3, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      4, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      5, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
+    {"learnerTimings",      6, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(LEARNER)},
 #endif
 };
+
+#ifdef UNIT_TEST
+// Length of the "Field I name:..." header line (without "H " and newline) if
+// every row of blackboxMainFields[] were logged. Decoders cap header lines.
+size_t blackboxMainFieldNameLineLength(void)
+{
+    size_t len = strlen("Field I name:");
+    for (unsigned i = 0; i < ARRAYLEN(blackboxMainFields); i++) {
+        len += strlen(blackboxMainFields[i].name) + (i > 0 ? 1 : 0); // comma
+        const int8_t index = blackboxMainFields[i].fieldNameIndex;
+        if (index != -1) {
+            len += 2 + (index >= 100 ? 3 : index >= 10 ? 2 : 1); // "[%d]"
+        }
+    }
+    return len;
+}
+
+unsigned blackboxMainFieldCount(void)
+{
+    return ARRAYLEN(blackboxMainFields);
+}
+#endif
 
 #ifdef USE_GPS
 // GPS position/vel frame
@@ -618,25 +763,6 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
     {"rxSignalReceived",      -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
 };
-
-typedef enum BlackboxState {
-    BLACKBOX_STATE_DISABLED = 0,
-    BLACKBOX_STATE_STOPPED,
-    BLACKBOX_STATE_PREPARE_LOG_FILE,
-    BLACKBOX_STATE_SEND_HEADER,
-    BLACKBOX_STATE_SEND_MAIN_FIELD_HEADER,
-    BLACKBOX_STATE_SEND_GPS_H_HEADER,
-    BLACKBOX_STATE_SEND_GPS_G_HEADER,
-    BLACKBOX_STATE_SEND_SLOW_HEADER,
-    BLACKBOX_STATE_SEND_SYSINFO,
-    BLACKBOX_STATE_CACHE_FLUSH,
-    BLACKBOX_STATE_PAUSED,
-    BLACKBOX_STATE_RUNNING,
-    BLACKBOX_STATE_SHUTTING_DOWN,
-    BLACKBOX_STATE_START_ERASE,
-    BLACKBOX_STATE_ERASING,
-    BLACKBOX_STATE_ERASED
-} BlackboxState;
 
 
 typedef struct blackboxMainState_s {
@@ -670,11 +796,16 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
+#ifdef USE_SERVO_FEEDBACK
+    int16_t servo_feedback[MAX_SUPPORTED_SERVOS];
+#endif
 #ifdef USE_INDI
     int16_t quat[4];
     int16_t alpha[XYZ_AXIS_COUNT];
     int16_t quatSp[4];
+    int16_t quatSpPreFf[4];
     int16_t gyroSp[XYZ_AXIS_COUNT];
+    int16_t gyroFf[XYZ_AXIS_COUNT];
     int16_t alphaSp[XYZ_AXIS_COUNT];
     int16_t spfSp[XYZ_AXIS_COUNT];
     int16_t dv[MAXV];
@@ -682,43 +813,66 @@ typedef struct blackboxMainState_s {
     int16_t u_state[MAXU];
     uint16_t omega[MAXU];
     uint16_t omegaUnfiltered[MAXU];
+    uint16_t omegaSp[MAXU];
     int16_t omega_dot[MAXU];
+    int16_t d[MAXU];
+    int16_t rpmCmd_f[MAXU];
+    uint16_t rpmOmega_f[MAXU];
+    uint16_t rpmControlRan[MAXU];
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_PITOT
+    // pitot readings: pressures stored as centi-Pascals (×100) to preserve sign,
+    // temperature stored as centi-Kelvin (×100), airSpeed stored in cm/s (fits int16)
+    int32_t pitot_pressureZero;
+    int32_t pitot_pressure;
+    int16_t pitot_temperature;
+    int16_t pitot_airSpeed;
+#endif
+#ifdef USE_LOCAL_POSITION
     int32_t pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     uint32_t extTime; // will be in ms, so must be more than 32bit
-    int32_t extPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int32_t localPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int32_t posSp[XYZ_AXIS_COUNT];
     int16_t vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t extVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
+    int16_t localVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
     int16_t velSp[XYZ_AXIS_COUNT]; 
     int16_t accSp[XYZ_AXIS_COUNT]; // will be cm/s/s, so this is fine
-    int16_t extAtt[XYZ_AXIS_COUNT]; // will be degrees/1000
-#ifdef USE_VIO_POSE
-    uint32_t vioTime;           // will be in ms, so must be more than 32bit
-    int32_t vioPos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
-    int16_t vioVel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t vioQuat[4];
-    int16_t vioRate[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t localQuat[4]; // will be quaternion
+#ifdef USE_TELEMETRY_PI
+    uint8_t latest_key_pressed;
 #endif
+#ifdef USE_TRAJECTORY_TRACKER
+    uint8_t tt_active;
 #endif
+#ifdef USE_NN_CONTROL
+    uint8_t nn_active;
+#endif
+#endif // USE_LOCAL_POSITION
 #ifdef USE_EKF
-    int16_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
+    int32_t ekf_pos[XYZ_AXIS_COUNT]; // will be mm, so must be more than 16bit
     int16_t ekf_vel[XYZ_AXIS_COUNT]; // will be cm/s, so this is fine
-    int16_t ekf_att[XYZ_AXIS_COUNT]; // will be degrees/1000
+    int16_t ekf_quat[4];
     int16_t ekf_acc_b[XYZ_AXIS_COUNT];
     int16_t ekf_gyro_b[XYZ_AXIS_COUNT];
 #endif
 #ifdef USE_LEARNER
     int16_t motor_rls_x[BLACKBOX_LEARNER_N][BLACKBOX_LEARNER_MOTOR_RLS_N];
     int16_t imu_rls_x[XYZ_AXIS_COUNT];
+    int16_t spf_corrected[XYZ_AXIS_COUNT];
     int16_t fx_x_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_y_rls_x[BLACKBOX_LEARNER_N];
     int16_t fx_z_rls_x[BLACKBOX_LEARNER_N];
+    int16_t sigma_rls[XYZ_AXIS_COUNT];
     int16_t fx_p_rls_x[BLACKBOX_LEARNER_2N];
     int16_t fx_q_rls_x[BLACKBOX_LEARNER_2N];
     int16_t fx_r_rls_x[BLACKBOX_LEARNER_2N];
+    uint16_t eVarsMotor[BLACKBOX_LEARNER_N];
+    uint16_t eVarsFx[6];
+    uint16_t lambdasMotor[BLACKBOX_LEARNER_N];
+    uint16_t lambdasFx[6]; // 6 degrees of freedom
     uint16_t learnerGains[LEARNER_LOOP_COUNT];
+    int16_t hoverAttitude[4];
+    int32_t learnerTimings[LEARNER_TIMINGS_NUM];
 #endif
 } blackboxMainState_t;
 
@@ -741,6 +895,10 @@ typedef struct blackboxSlowState_s {
 extern boxBitmask_t rcModeActivationMask;
 
 static BlackboxState blackboxState = BLACKBOX_STATE_DISABLED;
+BlackboxState blackboxGetState(void)
+{
+    return blackboxState;
+}
 
 static uint32_t blackboxLastArmingBeep = 0;
 static uint32_t blackboxLastFlightModeFlags = 0; // New event tracking of flight modes
@@ -895,7 +1053,7 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
 #endif
 
     case CONDITION(POS):
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
         return isFieldEnabled(FIELD_SELECT(POS));
 #else
         return false;
@@ -1078,12 +1236,18 @@ static void writeIntraframe(void)
         }
     }
 
+#ifdef USE_SERVO_FEEDBACK
+    blackboxWriteSigned16VBArray(blackboxCurrent->servo_feedback, 4);
+#endif
+
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(INDI))) {
         blackboxWriteSigned16VBArray(blackboxCurrent->quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->alpha, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->quatSp, 4);
+        blackboxWriteSigned16VBArray(blackboxCurrent->quatSpPreFf, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->gyroSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->gyroFf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->alphaSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->spfSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->dv, MAXV);
@@ -1091,34 +1255,49 @@ static void writeIntraframe(void)
         blackboxWriteSigned16VBArray(blackboxCurrent->u_state, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omega, MAXU);
         blackboxWriteUnsigned16VBArray(blackboxCurrent->omegaUnfiltered, MAXU);
+        blackboxWriteUnsigned16VBArray(blackboxCurrent->omegaSp, MAXU);
         blackboxWriteSigned16VBArray(blackboxCurrent->omega_dot, MAXU);
+        blackboxWriteSigned16VBArray(blackboxCurrent->d, MAXU);
+        blackboxWriteSigned16VBArray(blackboxCurrent->rpmCmd_f, MAXU);
+        blackboxWriteUnsigned16VBArray(blackboxCurrent->rpmOmega_f, MAXU);
+        blackboxWriteUnsigned16VBArray(blackboxCurrent->rpmControlRan, MAXU);
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_PITOT
+    if (testBlackboxCondition(CONDITION(INDI))) {
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressureZero);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressure);
+        blackboxWriteUnsignedVB(blackboxCurrent->pitot_temperature);
+        blackboxWriteUnsignedVB(blackboxCurrent->pitot_airSpeed);
+    }
+#endif
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         blackboxWriteSignedVBArray(blackboxCurrent->pos, XYZ_AXIS_COUNT);
         blackboxWriteUnsignedVB(blackboxCurrent->extTime);
-        blackboxWriteSignedVBArray(blackboxCurrent->extPos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->localPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(blackboxCurrent->posSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->vel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->extVel, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->localVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->velSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->accSp, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->extAtt, XYZ_AXIS_COUNT);
-#ifdef USE_VIO_POSE
-        blackboxWriteUnsignedVB(blackboxCurrent->vioTime);
-        blackboxWriteSignedVBArray(blackboxCurrent->vioPos, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioVel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioQuat, 4);
-        blackboxWriteSigned16VBArray(blackboxCurrent->vioRate, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->localQuat, 4);
+#ifdef USE_TELEMETRY_PI
+        blackboxWriteUnsignedVB(blackboxCurrent->latest_key_pressed);
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        blackboxWriteUnsignedVB(blackboxCurrent->tt_active);
+#endif
+#ifdef USE_NN_CONTROL
+        blackboxWriteUnsignedVB(blackboxCurrent->nn_active);
 #endif
     }
 #endif
 #ifdef USE_EKF
     if (testBlackboxCondition(CONDITION(EKF))) {
-        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->ekf_pos, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_vel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_att, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->ekf_quat, 4);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->ekf_gyro_b, XYZ_AXIS_COUNT);
     }
@@ -1127,15 +1306,25 @@ static void writeIntraframe(void)
     if (testBlackboxCondition(CONDITION(LEARNER))) {
         for (int i = 0; i < BLACKBOX_LEARNER_N; i++ ) {
             blackboxWriteSigned16VBArray(blackboxCurrent->motor_rls_x[i], BLACKBOX_LEARNER_MOTOR_RLS_N);
+            blackboxWriteUnsignedVB(blackboxCurrent->eVarsMotor[i]);
+            blackboxWriteUnsignedVB(blackboxCurrent->lambdasMotor[i]);
         }
         blackboxWriteSigned16VBArray(blackboxCurrent->imu_rls_x, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->spf_corrected, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_x_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_y_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_z_rls_x, BLACKBOX_LEARNER_N);
+        blackboxWriteSigned16VBArray(blackboxCurrent->sigma_rls, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_p_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_q_rls_x, BLACKBOX_LEARNER_2N);
         blackboxWriteSigned16VBArray(blackboxCurrent->fx_r_rls_x, BLACKBOX_LEARNER_2N);
+        for (int i = 0; i < 6; i++ ) {
+            blackboxWriteUnsignedVB(blackboxCurrent->eVarsFx[i]);
+            blackboxWriteUnsignedVB(blackboxCurrent->lambdasFx[i]);
+        }
         blackboxWriteUnsigned16VBArray(blackboxCurrent->learnerGains, LEARNER_LOOP_COUNT);
+        blackboxWriteSigned16VBArray(blackboxCurrent->hoverAttitude, 4);
+        blackboxWriteSignedVBArray(blackboxCurrent->learnerTimings, LEARNER_TIMINGS_NUM);
     }
 #endif
 
@@ -1282,6 +1471,10 @@ static void writeInterframe(void)
             blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
         }
     }
+#ifdef USE_SERVO_FEEDBACK
+    arraySubInt16(deltas16, blackboxCurrent->servo_feedback, blackboxLast->servo_feedback, 4);
+    blackboxWriteSigned16VBArray(deltas16, 4);
+#endif
 
 #ifdef USE_INDI
     if (testBlackboxCondition(CONDITION(INDI))) {
@@ -1303,8 +1496,19 @@ static void writeInterframe(void)
         //blackboxWriteTag8_4S16(deltas);
         blackboxWriteSigned16VBArray(deltas16, 4);
 
+        // quat setpoints pre feedforward
+        arraySubInt16(deltas16, blackboxCurrent->quatSpPreFf, blackboxLast->quatSpPreFf, 4);
+        //for (int i=0; i < 4; i++)
+        //    deltas[i] = deltas16[i];
+        //blackboxWriteTag8_4S16(deltas);
+        blackboxWriteSigned16VBArray(deltas16, 4);
+
         // rotational rate setpoint
         arraySubInt16(deltas16, blackboxCurrent->gyroSp, blackboxLast->gyroSp, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+
+        // feedforward rotational rate setpoint
+        arraySubInt16(deltas16, blackboxCurrent->gyroFf, blackboxLast->gyroFf, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         // rotational accel setpoint
@@ -1330,7 +1534,7 @@ static void writeInterframe(void)
         for (int i=0; i < MAXU; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
-
+        
         // omega
         arraySubUint16(deltas16, blackboxCurrent->omega, blackboxLast->omega, MAXU);
         for (int i=0; i < MAXU; i++)
@@ -1343,8 +1547,38 @@ static void writeInterframe(void)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
 
+        // omegaSp: rpm loop setpoint
+        arraySubUint16(deltas16, blackboxCurrent->omegaSp, blackboxLast->omegaSp, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+
         // omega_dot
         arraySubInt16(deltas16, blackboxCurrent->omega_dot, blackboxLast->omega_dot, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+
+        // d: final command from the controller
+        arraySubInt16(deltas16, blackboxCurrent->d, blackboxLast->d, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+
+        // rpmCmd_f: delayed, motor-modelled, filtered command of the rpm loop
+        arraySubInt16(deltas16, blackboxCurrent->rpmCmd_f, blackboxLast->rpmCmd_f, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+
+        // rpmOmega_f: filtered rpm used by the rpm loop
+        arraySubUint16(deltas16, blackboxCurrent->rpmOmega_f, blackboxLast->rpmOmega_f, MAXU);
+        for (int i=0; i < MAXU; i++)
+            deltas[i] = deltas16[i];
+        blackboxWriteTag8_8SVB(deltas, MAXU);
+
+        // rpmControlRan: 1 if the closed loop law set d this loop
+        arraySubUint16(deltas16, blackboxCurrent->rpmControlRan, blackboxLast->rpmControlRan, MAXU);
         for (int i=0; i < MAXU; i++)
             deltas[i] = deltas16[i];
         blackboxWriteTag8_8SVB(deltas, MAXU);
@@ -1352,15 +1586,23 @@ static void writeInterframe(void)
 #else
     UNUSED(deltas16);
 #endif // USE_INDI
+#ifdef USE_PITOT
+    if (testBlackboxCondition(CONDITION(INDI))) {
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressureZero - blackboxLast->pitot_pressureZero);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_pressure - blackboxLast->pitot_pressure);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_temperature - blackboxLast->pitot_temperature);
+        blackboxWriteSignedVB(blackboxCurrent->pitot_airSpeed - blackboxLast->pitot_airSpeed);
+    }
+#endif
 
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     if (testBlackboxCondition(CONDITION(POS))) {
         arraySubInt32(deltas, blackboxCurrent->pos, blackboxLast->pos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         blackboxWriteUnsignedVB(blackboxCurrent->extTime - blackboxLast->extTime);
 
-        arraySubInt32(deltas, blackboxCurrent->extPos, blackboxLast->extPos, XYZ_AXIS_COUNT);
+        arraySubInt32(deltas, blackboxCurrent->localPos, blackboxLast->localPos, XYZ_AXIS_COUNT);
         blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         arraySubInt32(deltas, blackboxCurrent->posSp, blackboxLast->posSp, XYZ_AXIS_COUNT);
@@ -1369,7 +1611,7 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->vel, blackboxLast->vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->extVel, blackboxLast->extVel, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->localVel, blackboxLast->localVel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->velSp, blackboxLast->velSp, XYZ_AXIS_COUNT);
@@ -1378,22 +1620,17 @@ static void writeInterframe(void)
         arraySubInt16(deltas16, blackboxCurrent->accSp, blackboxLast->accSp, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->extAtt, blackboxLast->extAtt, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
-#ifdef USE_VIO_POSE
-        blackboxWriteUnsignedVB(blackboxCurrent->vioTime - blackboxLast->vioTime);
+        arraySubInt16(deltas16, blackboxCurrent->localQuat, blackboxLast->localQuat, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
-        arraySubInt32(deltas, blackboxCurrent->vioPos, blackboxLast->vioPos, XYZ_AXIS_COUNT);
-        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
-
-        arraySubInt16(deltas16, blackboxCurrent->vioVel, blackboxLast->vioVel, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
-
-        arraySubInt16(deltas16, blackboxCurrent->vioQuat, blackboxLast->vioQuat, 4);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
-
-        arraySubInt16(deltas16, blackboxCurrent->vioRate, blackboxLast->vioRate, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+#ifdef USE_TELEMETRY_PI
+        blackboxWriteUnsignedVB(blackboxCurrent->latest_key_pressed - blackboxLast->latest_key_pressed);
+#endif
+#ifdef USE_NN_CONTROL
+        blackboxWriteUnsignedVB(blackboxCurrent->nn_active - blackboxLast->nn_active);
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+        blackboxWriteUnsignedVB(blackboxCurrent->tt_active - blackboxLast->tt_active);
 #endif
     }
 #else
@@ -1402,14 +1639,14 @@ static void writeInterframe(void)
 
 #ifdef USE_EKF
     if (testBlackboxCondition(CONDITION(EKF))) {
-        arraySubInt16(deltas16, blackboxCurrent->ekf_pos, blackboxLast->ekf_pos, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt32(deltas, blackboxCurrent->ekf_pos, blackboxLast->ekf_pos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_vel, blackboxLast->ekf_vel, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
-        arraySubInt16(deltas16, blackboxCurrent->ekf_att, blackboxLast->ekf_att, XYZ_AXIS_COUNT);
-        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
+        arraySubInt16(deltas16, blackboxCurrent->ekf_quat, blackboxLast->ekf_quat, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
 
         arraySubInt16(deltas16, blackboxCurrent->ekf_acc_b, blackboxLast->ekf_acc_b, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
@@ -1423,12 +1660,24 @@ static void writeInterframe(void)
 
 #ifdef USE_LEARNER
     if (testBlackboxCondition(CONDITION(LEARNER))) {
+        int16_t dlambdasMotor[BLACKBOX_LEARNER_N], deVarsMotor[BLACKBOX_LEARNER_N];
+        int16_t dlambdasFx[6], deVarsFx[6];
+        arraySubUint16(dlambdasMotor, blackboxCurrent->lambdasMotor, blackboxLast->lambdasMotor, BLACKBOX_LEARNER_N);
+        arraySubUint16(deVarsMotor, blackboxCurrent->eVarsMotor, blackboxLast->eVarsMotor, BLACKBOX_LEARNER_N);
+        arraySubUint16(dlambdasFx, blackboxCurrent->lambdasFx, blackboxLast->lambdasFx, 6);
+        arraySubUint16(deVarsFx, blackboxCurrent->eVarsFx, blackboxLast->eVarsFx, 6);
+
         for (int i = 0; i < BLACKBOX_LEARNER_N; i++ ) {
             arraySubInt16(deltas16, blackboxCurrent->motor_rls_x[i], blackboxLast->motor_rls_x[i], BLACKBOX_LEARNER_MOTOR_RLS_N);
             blackboxWriteSigned16VBArray(deltas16, BLACKBOX_LEARNER_MOTOR_RLS_N);
+            blackboxWriteSignedVB(deVarsMotor[i]);
+            blackboxWriteSignedVB(dlambdasMotor[i]);
         }
 
         arraySubInt16(deltas16, blackboxCurrent->imu_rls_x, blackboxLast->imu_rls_x, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, 3);
+
+        arraySubInt16(deltas16, blackboxCurrent->spf_corrected, blackboxLast->spf_corrected, XYZ_AXIS_COUNT);
         blackboxWriteSigned16VBArray(deltas16, 3);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_x_rls_x, blackboxLast->fx_x_rls_x, BLACKBOX_LEARNER_N);
@@ -1439,6 +1688,9 @@ static void writeInterframe(void)
 
         arraySubInt16(deltas16, blackboxCurrent->fx_z_rls_x, blackboxLast->fx_z_rls_x, BLACKBOX_LEARNER_N);
         blackboxWriteSigned16VBArray(deltas16, BLACKBOX_LEARNER_N);
+
+        arraySubInt16(deltas16, blackboxCurrent->sigma_rls, blackboxLast->sigma_rls, XYZ_AXIS_COUNT);
+        blackboxWriteSigned16VBArray(deltas16, XYZ_AXIS_COUNT);
 
         arraySubInt16(deltas16, blackboxCurrent->fx_p_rls_x, blackboxLast->fx_p_rls_x, BLACKBOX_LEARNER_2N);
         for (int i=0; i < BLACKBOX_LEARNER_2N; i++)
@@ -1464,8 +1716,19 @@ static void writeInterframe(void)
         blackboxWriteTag8_8SVB(deltas+8, BLACKBOX_LEARNER_N);
 #endif
 
+        for (int i=0; i < 6; i++) {
+            blackboxWriteSignedVB(deVarsFx[i]);
+            blackboxWriteSignedVB(dlambdasFx[i]);
+        }
+
         arraySubUint16(deltas16, blackboxCurrent->learnerGains, blackboxLast->learnerGains, LEARNER_LOOP_COUNT);
         blackboxWriteSigned16VBArray(deltas16, LEARNER_LOOP_COUNT);
+
+        arraySubInt16(deltas16, blackboxCurrent->hoverAttitude, blackboxLast->hoverAttitude, 4);
+        blackboxWriteSigned16VBArray(deltas16, 4);
+
+        arraySubInt32(deltas, blackboxCurrent->learnerTimings, blackboxLast->learnerTimings, LEARNER_TIMINGS_NUM);
+        blackboxWriteSignedVBArray(deltas, LEARNER_TIMINGS_NUM);
     }
 #else
     UNUSED(deltas16);
@@ -1653,6 +1916,11 @@ static void startInTestMode(void)
                 return; // When in test mode, we cannot share the MSP and serial logger port!
             }
         }
+#ifdef USE_MSP_LOG_DOWNLOAD
+        if (!blackboxDownloadReleaseForLogging()) {
+            return; // An MSP log download or erase still holds the storage, try again next iteration
+        }
+#endif
         blackboxStart();
         startedLoggingInTestMode = true;
     }
@@ -1795,9 +2063,15 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->servo[5] = servo[5];
 #endif
 
+#ifdef USE_SERVO_FEEDBACK
+    for (int i = 0; i < MIN(MAX_SUPPORTED_SERVOS, 4); i++) {
+        blackboxCurrent->servo_feedback[i] = servo_feedback[i];
+    }
+#endif
+
 #ifdef USE_INDI
     fp_quaternion_t attitude_q;
-    getAttitudeQuaternion(&attitude_q);
+    getHoverAttitudeQuaternion(&attitude_q);
     blackboxCurrent->quat[0] = lrintf(attitude_q.w * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[1] = lrintf(attitude_q.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quat[2] = lrintf(attitude_q.y * UNIT_FLOAT_TO_SIGNED16VB);
@@ -1809,9 +2083,16 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->quatSp[1] = lrintf(indiRun.attSpNed.x * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[2] = lrintf(indiRun.attSpNed.y * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->quatSp[3] = lrintf(indiRun.attSpNed.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+    blackboxCurrent->quatSpPreFf[0] = lrintf(indiRun.attSpNedPreFeedforward.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[1] = lrintf(indiRun.attSpNedPreFeedforward.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[2] = lrintf(indiRun.attSpNedPreFeedforward.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->quatSpPreFf[3] = lrintf(indiRun.attSpNedPreFeedforward.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
     blackboxCurrent->gyroSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.X) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Y) * blackboxHighResolutionScale);
     blackboxCurrent->gyroSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateSpBody.V.Z) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[0] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.X) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[1] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.Y) * blackboxHighResolutionScale);
+    blackboxCurrent->gyroFf[2] = lrintf(RADIANS_TO_DEGREES(indiRun.ffRateSpBody.V.Z) * blackboxHighResolutionScale);
     blackboxCurrent->alphaSp[0] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.X) * 0.1f);
     blackboxCurrent->alphaSp[1] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Y) * 0.1f);
     blackboxCurrent->alphaSp[2] = lrintf(RADIANS_TO_DEGREES(indiRun.rateDotSpBody.V.Z) * 0.1f);
@@ -1825,50 +2106,60 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->u_state[i] = lrintf(indiRun.uState[i] * UNIT_FLOAT_TO_SIGNED16VB);
         blackboxCurrent->omega[i] = lrintf(indiRun.omega_fs[i]);
         blackboxCurrent->omegaUnfiltered[i] = lrintf(indiRun.omega[i]);
+        blackboxCurrent->omegaSp[i] = lrintf(indiRun.omegaSp[i]);
         blackboxCurrent->omega_dot[i] = lrintf(indiRun.omegaDot_fs[i] * 0.01f);
+        blackboxCurrent->d[i] = lrintf(indiRun.d[i] * UNIT_FLOAT_TO_SIGNED16VB);
+        blackboxCurrent->rpmCmd_f[i] = lrintf(indiRun.rpmCmd_f[i] * UNIT_FLOAT_TO_SIGNED16VB);
+        blackboxCurrent->rpmOmega_f[i] = lrintf(indiRun.rpmOmega_f[i]);
+        blackboxCurrent->rpmControlRan[i] = indiRun.rpmControlRan[i] ? 1 : 0;
     }
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_PITOT
+    /* Scale and store pitot readings:
+     * - pressureZero and pressure: store as centi-units (×100) to keep sign and some precision
+     * - temperature: store as centi-Kelvin (×100)
+     * - airSpeed: pitot.airSpeed is already in cm/s (float), store as int16
+     */
+    blackboxCurrent->pitot_pressureZero = lrintf(pitot.pressureZero * 100.0f);
+    blackboxCurrent->pitot_pressure = lrintf(pitot.pressure * 100.0f);
+    blackboxCurrent->pitot_temperature = lrintf(pitot.temperature * 100.0f);
+    blackboxCurrent->pitot_airSpeed = lrintf(pitot.airSpeed);
+#endif
+#ifdef USE_LOCAL_POSITION
     blackboxCurrent->pos[0] = lrintf(posEstNed.V.X * METER_TO_MM);
     blackboxCurrent->pos[1] = lrintf(posEstNed.V.Y * METER_TO_MM);
     blackboxCurrent->pos[2] = lrintf(posEstNed.V.Z * METER_TO_MM);
-    blackboxCurrent->extTime = lrintf(extPosNed.time_us);
-    blackboxCurrent->extPos[0] = lrintf(extPosNed.pos.V.X * METER_TO_MM);
-    blackboxCurrent->extPos[1] = lrintf(extPosNed.pos.V.Y * METER_TO_MM);
-    blackboxCurrent->extPos[2] = lrintf(extPosNed.pos.V.Z * METER_TO_MM);
+    blackboxCurrent->extTime = lrintf(posMeasNed.time_us);
+    blackboxCurrent->localPos[0] = lrintf(posMeasNed.pos.V.X * METER_TO_MM);
+    blackboxCurrent->localPos[1] = lrintf(posMeasNed.pos.V.Y * METER_TO_MM);
+    blackboxCurrent->localPos[2] = lrintf(posMeasNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->posSp[0] = lrintf(posSpNed.pos.V.X * METER_TO_MM);
     blackboxCurrent->posSp[1] = lrintf(posSpNed.pos.V.Y * METER_TO_MM);
     blackboxCurrent->posSp[2] = lrintf(posSpNed.pos.V.Z * METER_TO_MM);
     blackboxCurrent->vel[0] = lrintf(velEstNed.V.X * METER_TO_CM);
     blackboxCurrent->vel[1] = lrintf(velEstNed.V.Y * METER_TO_CM);
     blackboxCurrent->vel[2] = lrintf(velEstNed.V.Z * METER_TO_CM);
-    blackboxCurrent->extVel[0] = lrintf(extPosNed.vel.V.X * METER_TO_CM);
-    blackboxCurrent->extVel[1] = lrintf(extPosNed.vel.V.Y * METER_TO_CM);
-    blackboxCurrent->extVel[2] = lrintf(extPosNed.vel.V.Z * METER_TO_CM);
+    blackboxCurrent->localVel[0] = lrintf(posMeasNed.vel.V.X * METER_TO_CM);
+    blackboxCurrent->localVel[1] = lrintf(posMeasNed.vel.V.Y * METER_TO_CM);
+    blackboxCurrent->localVel[2] = lrintf(posMeasNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->velSp[0] = lrintf(posSpNed.vel.V.X * METER_TO_CM);
     blackboxCurrent->velSp[1] = lrintf(posSpNed.vel.V.Y * METER_TO_CM);
     blackboxCurrent->velSp[2] = lrintf(posSpNed.vel.V.Z * METER_TO_CM);
     blackboxCurrent->accSp[0] = lrintf(accSpNedFromPos.V.X * METER_TO_CM);
     blackboxCurrent->accSp[1] = lrintf(accSpNedFromPos.V.Y * METER_TO_CM);
     blackboxCurrent->accSp[2] = lrintf(accSpNedFromPos.V.Z * METER_TO_CM);
-    blackboxCurrent->extAtt[0] = lrintf(extPosNed.att.angles.roll * 1000.f); // milirad
-    blackboxCurrent->extAtt[1] = lrintf(extPosNed.att.angles.pitch * 1000.f); // milirad
-    blackboxCurrent->extAtt[2] = lrintf(extPosNed.att.angles.yaw * 1000.f); // milirad
-#ifdef USE_VIO_POSE
-    blackboxCurrent->vioTime = lrintf(vioPosNed.time_us);
-    blackboxCurrent->vioPos[0] = lrintf(vioPosNed.x * METER_TO_MM);
-    blackboxCurrent->vioPos[1] = lrintf(vioPosNed.y * METER_TO_MM);
-    blackboxCurrent->vioPos[2] = lrintf(vioPosNed.z * METER_TO_MM);
-    blackboxCurrent->vioVel[0] = lrintf(vioPosNed.vx * METER_TO_CM);
-    blackboxCurrent->vioVel[1] = lrintf(vioPosNed.vy * METER_TO_CM);
-    blackboxCurrent->vioVel[2] = lrintf(vioPosNed.vz * METER_TO_CM);
-    blackboxCurrent->vioQuat[0] = lrintf(vioPosNed.qw * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[1] = lrintf(vioPosNed.qx * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[2] = lrintf(vioPosNed.qy * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioQuat[3] = lrintf(vioPosNed.qz * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->vioRate[0] = lrintf(RADIANS_TO_DEGREES(vioPosNed.p));
-    blackboxCurrent->vioRate[1] = lrintf(RADIANS_TO_DEGREES(vioPosNed.q));
-    blackboxCurrent->vioRate[2] = lrintf(RADIANS_TO_DEGREES(vioPosNed.r));
+    blackboxCurrent->localQuat[0] = lrintf(posMeasNed.quat.w * UNIT_FLOAT_TO_SIGNED16VB); // guaranteed to be 16bit only
+    blackboxCurrent->localQuat[1] = lrintf(posMeasNed.quat.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->localQuat[2] = lrintf(posMeasNed.quat.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->localQuat[3] = lrintf(posMeasNed.quat.z * UNIT_FLOAT_TO_SIGNED16VB);
+#ifdef USE_TELEMETRY_PI
+    blackboxCurrent->latest_key_pressed = lrintf(latestKeyPressed());
+#endif
+#ifdef USE_NN_CONTROL
+    blackboxCurrent->nn_active = lrintf(nn_is_active());
+#endif
+#ifdef USE_TRAJECTORY_TRACKER
+    blackboxCurrent->tt_active = lrintf(isActiveTrajectoryTracker());
 #endif
 #endif
 
@@ -1880,45 +2171,83 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_vel[0] = lrintf(ekf_X[3] * METER_TO_CM);
     blackboxCurrent->ekf_vel[1] = lrintf(ekf_X[4] * METER_TO_CM);
     blackboxCurrent->ekf_vel[2] = lrintf(ekf_X[5] * METER_TO_CM);
-    blackboxCurrent->ekf_att[0] = lrintf(ekf_X[6] * 1000); // milirad
-    blackboxCurrent->ekf_att[1] = lrintf(ekf_X[7] * 1000); // milirad
-    blackboxCurrent->ekf_att[2] = lrintf(ekf_X[8] * 1000); // milirad
-    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
-    blackboxCurrent->ekf_gyro_b[0] = lrintf(RADIANS_TO_DEGREES(ekf_X[12])); // deg/s
-    blackboxCurrent->ekf_gyro_b[1] = lrintf(RADIANS_TO_DEGREES(ekf_X[13])); // deg/s
-    blackboxCurrent->ekf_gyro_b[2] = lrintf(RADIANS_TO_DEGREES(ekf_X[14])); // deg/s
+    blackboxCurrent->ekf_quat[0] = lrintf(ekf_X[6] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[1] = lrintf(ekf_X[7] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[2] = lrintf(ekf_X[8] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_quat[3] = lrintf(ekf_X[9] * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[10] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[11] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[12] * 1000); // mm/s^2
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[15])); // mdeg/s
 #endif
 
 #ifdef USE_LEARNER
     for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
         for (int i = 0; i < BLACKBOX_LEARNER_MOTOR_RLS_N; i++) {
-            blackboxCurrent->motor_rls_x[motor][i] = lrintf(1e3f*motorRls[motor].X[i]);
+            blackboxCurrent->motor_rls_x[motor][i] = lrintf(1e3f*actRls[motor].x[i]);
         }
     }
     for (int i = 0; i < 3; i++) {
         blackboxCurrent->imu_rls_x[i] = lrintf(1e3f*imuRls.x[i]);
+        blackboxCurrent->spf_corrected[i] = lrintf(100.f*learnRun.fxSpf.A[i]);
     }
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxSpfRls.n); i++) {
-        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxSpfRls.X[0*fxSpfRls.n + i]);
-        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxSpfRls.X[1*fxSpfRls.n + i]);
-        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxSpfRls.X[2*fxSpfRls.n + i]);
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRls[0].n); i++) {
+        // specific force setpoints (fxRls 0, 1, 2)
+        blackboxCurrent->fx_x_rls_x[i] = lrintf(1e3f*fxRls[0].x[i]);
+        blackboxCurrent->fx_y_rls_x[i] = lrintf(1e3f*fxRls[1].x[i]);
+        blackboxCurrent->fx_z_rls_x[i] = lrintf(1e3f*fxRls[2].x[i]);
     }
     // two for loops for the rate, because we need to ensure that the omega_dot
     // regressors start at BLACKBOX_LEARNER_N and not fxRateDotRls.n which is unknown
     // in the logs
-    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, fxRateDotRls.n >> 1); i++) {
-        blackboxCurrent->fx_p_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_q_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_r_rls_x[i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + i]);
-        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[0*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
-        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[1*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
-        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRateDotRls.X[2*fxRateDotRls.n + (fxRateDotRls.n >> 1) + i]);
+    blackboxCurrent->sigma_rls[0] = lrintf(1e3f*fxRls[3].x[0]);
+    blackboxCurrent->sigma_rls[1] = lrintf(1e3f*fxRls[4].x[0]);
+    blackboxCurrent->sigma_rls[2] = lrintf(1e3f*fxRls[5].x[0]);
+    // rotation RLS: x[0] inertia, then G1 of the selected motors (packed),
+    // then G2 starting at 1 + numMotors (see initLearnerRls). The tailsitter
+    // uses its own regressors: two halves of (n-1)/2
+#ifdef LEARNER_IS_TAILSITTER
+    const int rotHalf = (fxRls[3].n - 1) >> 1;
+#else
+    const int rotHalf = learnRun.numMotors;
+#endif
+    for (int i = 0; i < MIN(BLACKBOX_LEARNER_N, rotHalf); i++) {
+        // rateDot (fxRls 3, 4, 5)
+        blackboxCurrent->fx_p_rls_x[i]                    = lrintf(1e3f*fxRls[3].x[1 + i]);
+        blackboxCurrent->fx_q_rls_x[i]                    = lrintf(1e3f*fxRls[4].x[1 + i]);
+        blackboxCurrent->fx_r_rls_x[i]                    = lrintf(1e3f*fxRls[5].x[1 + i]);
+        blackboxCurrent->fx_p_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[3].x[1 + rotHalf + i]);
+        blackboxCurrent->fx_q_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[4].x[1 + rotHalf + i]);
+        blackboxCurrent->fx_r_rls_x[BLACKBOX_LEARNER_N+i] = lrintf(1e3f*fxRls[5].x[1 + rotHalf + i]);
+    }
+
+    for (int motor = 0; motor < BLACKBOX_LEARNER_N; motor++) {
+        blackboxCurrent->eVarsMotor[motor] = 0.001f * ((1 << 16) - 1) * actRls[motor].fortescue.errorMV.variance;
+        blackboxCurrent->lambdasMotor[motor] = UNIT_FLOAT_TO_UNSIGNED16VB * actRls[motor].lambda;
+    }
+
+    for (int axis = 0; axis < 6; axis++) {
+        blackboxCurrent->eVarsFx[axis] = 0.001f * ((1 << 16) - 1) * fxRls[axis].fortescue.errorMV.variance;
+        blackboxCurrent->lambdasFx[axis] = UNIT_FLOAT_TO_UNSIGNED16VB * fxRls[axis].lambda;
     }
 
     for (int loop = 0; loop < LEARNER_LOOP_COUNT; loop++)
         blackboxCurrent->learnerGains[loop] = lrintf(10.f * learnRun.gains[loop]);
+
+    blackboxCurrent->hoverAttitude[0] = lrintf(hoverAttitude.w * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[1] = lrintf(hoverAttitude.x * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[2] = lrintf(hoverAttitude.y * UNIT_FLOAT_TO_SIGNED16VB);
+    blackboxCurrent->hoverAttitude[3] = lrintf(hoverAttitude.z * UNIT_FLOAT_TO_SIGNED16VB); // FRD and not FLU
+
+    blackboxCurrent->learnerTimings[0] = learnerTimings.filters;
+    blackboxCurrent->learnerTimings[1] = learnerTimings.imu;
+    blackboxCurrent->learnerTimings[2] = learnerTimings.fx;
+    blackboxCurrent->learnerTimings[3] = learnerTimings.motor;
+    blackboxCurrent->learnerTimings[4] = learnerTimings.gains;
+    blackboxCurrent->learnerTimings[5] = learnerTimings.updating;
+    blackboxCurrent->learnerTimings[6] = learnerTimings.hover;
 #endif
 
 #else
@@ -2045,7 +2374,15 @@ static bool sendFieldDefinition(char mainFrameChar, char deltaFrameChar, const v
 // Buf must be at least FORMATTED_DATE_TIME_BUFSIZE
 STATIC_UNIT_TESTED char *blackboxGetStartDateTime(char *buf)
 {
-#ifdef USE_RTC_TIME
+#if defined(SITL) || defined(MOCKUP)
+    // simulation: use the host's local wall-clock time, so logs can be sorted by date
+    struct timespec ts;
+    struct tm tmLocal;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    localtime_r(&ts.tv_sec, &tmLocal);
+    size_t n = strftime(buf, FORMATTED_DATE_TIME_BUFSIZE, "%Y-%m-%dT%H:%M:%S", &tmLocal);
+    snprintf(buf + n, FORMATTED_DATE_TIME_BUFSIZE - n, ".%03d", (int)(ts.tv_nsec / 1000000));
+#elif defined(USE_RTC_TIME)
     dateTime_t dt;
     // rtcGetDateTime will fill dt with 0000-01-01T00:00:00
     // when time is not known.
@@ -2091,7 +2428,7 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_INDI
     const indiProfile_t *indiProfile = indiProfiles(systemConfig()->indiProfileIndex);
 #endif
-#ifdef USE_POS_CTL
+#ifdef USE_LOCAL_POSITION
     const positionProfile_t *posProfile = positionProfiles(systemConfig()->positionProfileIndex);
 #endif
 
@@ -2103,6 +2440,7 @@ static bool blackboxWriteSysinfo(void)
 #ifdef USE_BOARD_INFO
         BLACKBOX_PRINT_HEADER_LINE("Board information", "%s %s",            getManufacturerId(), getBoardName());
 #endif
+        BLACKBOX_PRINT_HEADER_LINE("MCU ID", "%08x%08x%08x",                U_ID_0, U_ID_1, U_ID_2);
         BLACKBOX_PRINT_HEADER_LINE("Log start datetime", "%s",              blackboxGetStartDateTime(buf));
         BLACKBOX_PRINT_HEADER_LINE("Craft name", "%s",                      pilotConfig()->craftName);
         BLACKBOX_PRINT_HEADER_LINE("I interval", "%d",                      blackboxIInterval);
@@ -2337,7 +2675,7 @@ static bool blackboxWriteSysinfo(void)
 
 #ifdef USE_GPS
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_PROVIDER, "%d",               gpsConfig()->provider)
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_SET_HOME_POINT_ONCE, "%d",    gpsConfig()->gps_set_home_point_once)
+        // BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_SET_HOME_POINT_ONCE, "%d",    gpsConfig()->gps_set_home_point_once)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GPS_USE_3D_SPEED, "%d",           gpsConfig()->gps_use_3d_speed)
 
 #ifdef USE_GPS_RESCUE
@@ -2379,6 +2717,13 @@ static bool blackboxWriteSysinfo(void)
 #endif
 #endif
 
+#ifdef USE_GEOFENCE
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_MAX_ALTITUDE, "%d", geofenceConfig()->maxAltMeters)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_HARD_OFFSET, "%d", geofenceConfig()->hardFenceOffset)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_GRACE_COUNT, "%d", geofenceConfig()->graceCount)
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_GEOFENCE_DESCEND_DELAY, "%d", geofenceConfig()->descendDelaySeconds)
+#endif
+
 #ifdef USE_INDI
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATTITUDE_GAINS, "%d,%d,%d",                indiProfile->attGains[0],
                                                                                               indiProfile->attGains[1],
@@ -2395,7 +2740,12 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_UPWARDS_ACCEL, "%d",            indiProfile->manualMaxUpwardsSpf);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_MANUAL_MAX_TILT, "%d",                     indiProfile->manualMaxTilt);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_INCREMENT, "%d",                       indiProfile->useIncrement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_ACCEL_FOR_SPFZ, "%d",                  indiProfile->useAccelForSpfz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_RPM_DOT_FEEDBACK, "%d",                indiProfile->useRpmDotFeedback);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_RPM_CTL, "%d",                         indiProfile->useRpmCtl);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RPM_CTL_GAIN, "%d",                        indiProfile->rpmCtlGain);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RPM_CTL_DELAY, "%d",                       indiProfile->rpmCtlDelay);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RPM_CTL_LPF_HZ, "%d",                      indiProfile->rpmCtlLpfHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_NUM, "%d",                             indiProfile->actNum);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_MS, "%d,%d,%d,%d",       indiProfile->actTimeConstMs[0],
                                                                                               indiProfile->actTimeConstMs[1],
@@ -2409,10 +2759,18 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actNonlinearity[1],
                                                                                               indiProfile->actNonlinearity[2],
                                                                                               indiProfile->actNonlinearity[3]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_LIMIT, "%d,%d,%d,%d",                  indiProfile->actLimit[0],
-                                                                                              indiProfile->actLimit[1],
-                                                                                              indiProfile->actLimit[2],
-                                                                                              indiProfile->actLimit[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_MIN, "%d,%d,%d,%d",                    indiProfile->actMin[0],
+                                                                                              indiProfile->actMin[1],
+                                                                                              indiProfile->actMin[2],
+                                                                                              indiProfile->actMin[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_MAX, "%d,%d,%d,%d",                    indiProfile->actMax[0],
+                                                                                              indiProfile->actMax[1],
+                                                                                              indiProfile->actMax[2],
+                                                                                              indiProfile->actMax[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TYPE, "%d,%d,%d,%d",                   indiProfile->actType[0],
+                                                                                              indiProfile->actType[1],
+                                                                                              indiProfile->actType[2],
+                                                                                              indiProfile->actType[3]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_G1_FX, "%d,%d,%d,%d",                  indiProfile->actG1_fx[0],
                                                                                               indiProfile->actG1_fx[1],
                                                                                               indiProfile->actG1_fx[2],
@@ -2449,6 +2807,19 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->actG2_yaw[1],
                                                                                               indiProfile->actG2_yaw[2],
                                                                                               indiProfile->actG2_yaw[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SCHEDULED, "%d",                 indiProfile->tails_use_scheduled);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_USE_SINE     , "%d",                 indiProfile->tails_use_sine);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_D0           , "%d,%d",              indiProfile->tails_d0[0], indiProfile->tails_d0[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXW          , "%d,%d",              indiProfile->tails_cxw[0], indiProfile->tails_cxw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CYW          , "%d,%d",              indiProfile->tails_cyw[0], indiProfile->tails_cyw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CZW          , "%d,%d",              indiProfile->tails_czw[0], indiProfile->tails_czw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CLW          , "%d,%d",              indiProfile->tails_clw[0], indiProfile->tails_clw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMW          , "%d,%d",              indiProfile->tails_cmw[0], indiProfile->tails_cmw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNW          , "%d,%d",              indiProfile->tails_cnw[0], indiProfile->tails_cnw[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CNWD         , "%d,%d",              indiProfile->tails_cnwd[0], indiProfile->tails_cnwd[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CXD          , "%d,%d",              indiProfile->tails_cxd[0], indiProfile->tails_cxd[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CMD          , "%d,%d",              indiProfile->tails_cmd[0], indiProfile->tails_cmd[1]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_TAILS_CND          , "%d,%d",              indiProfile->tails_cnd[0], indiProfile->tails_cnd[1]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_SYNC_LOWPASS_HZ, "%d",                     indiProfile->imuSyncLp2Hz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_WLS_AXES_WEIGHTS, "%d,%d,%d,%d,%d,%d",     indiProfile->wlsWv[0],
                                                                                               indiProfile->wlsWv[1],
@@ -2464,8 +2835,40 @@ static bool blackboxWriteSysinfo(void)
                                                                                               indiProfile->u_pref[1],
                                                                                               indiProfile->u_pref[2],
                                                                                               indiProfile->u_pref[3]);
-#endif
-#ifdef USE_POS_CTL
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_FF_FILTER, "%d",                       indiProfile->useFeedforwardFilter);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_FF_FILTER_COEFS, "%d,%d,%d",               indiProfile->feedforwardFilterCoefs[0],
+                                                                                              indiProfile->feedforwardFilterCoefs[1],
+                                                                                              indiProfile->feedforwardFilterCoefs[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_FF_COEFS, "%d,%d,%d,%d,%d",                indiProfile->feedforwardCoefs[0],
+                                                                                              indiProfile->feedforwardCoefs[1],
+                                                                                              indiProfile->feedforwardCoefs[2],
+                                                                                              indiProfile->feedforwardCoefs[3],
+                                                                                              indiProfile->feedforwardCoefs[4]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_MOTOR_LEAD_LAG, "%d",                  indiProfile->useMotorLeadLag);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_ATT_LEAD_LAG, "%d",                    indiProfile->useAttLeadLag);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ATT_COEFS, "%d,%d,%d,%d,%d",               indiProfile->attCoefs[0],
+                                                                                              indiProfile->attCoefs[1],
+                                                                                              indiProfile->attCoefs[2],
+                                                                                              indiProfile->attCoefs[3],
+                                                                                              indiProfile->attCoefs[4]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_RATE_COEFS, "%d,%d,%d,%d,%d",              indiProfile->rateCoefs[0],
+                                                                                              indiProfile->rateCoefs[1],
+                                                                                              indiProfile->rateCoefs[2],
+                                                                                              indiProfile->rateCoefs[3],
+                                                                                              indiProfile->rateCoefs[4]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_USE_GAIN_SCHEDULING, "%d",                 indiProfile->useGainScheduling);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_GAIN_SCHEDULING_TYPE, "%d",                indiProfile->gainSchedulingType);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_GAIN_SCHEDULE_FF, "%d",                    indiProfile->gainScheduleFf);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_TRUE_MS, "%d,%d,%d,%d",  indiProfile->actTimeConstTrueMs[0],
+                                                                                              indiProfile->actTimeConstTrueMs[1],
+                                                                                              indiProfile->actTimeConstTrueMs[2],
+                                                                                              indiProfile->actTimeConstTrueMs[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_INDI_ACT_TIME_CONSTANT_DES_MS, "%d,%d,%d,%d",   indiProfile->actTimeConstDesMs[0],
+                                                                                              indiProfile->actTimeConstDesMs[1],
+                                                                                              indiProfile->actTimeConstDesMs[2],
+                                                                                              indiProfile->actTimeConstDesMs[3]);
+#endif // USE_INDI
+#ifdef USE_LOCAL_POSITION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_P, "%d",  posProfile->horz_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_I, "%d",  posProfile->horz_i);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_HORIZONTAL_D, "%d",  posProfile->horz_d);
@@ -2483,26 +2886,36 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_P, "%d",  posProfile->weathervane_p);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_WEATHERVANE_MIN_V, "%d",  posProfile->weathervane_min_v);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_THRUST_ATTENUATION, "%d",  posProfile->use_spf_attenuation);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_STICK_TAKEOVER, "%d",  posProfile->stick_takeover);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_POSITION_ATTITUDE_MAPPING, "%d",  posProfile->attitude_mapping);
 #endif
+        BLACKBOX_PRINT_HEADER_LINE("ahrs_process_denom", "%d",  ahrsConfig()->ahrs_process_denom);
 #ifdef USE_EKF
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ATTITUDE_ESTIMATE, "%d",  ekfConfig()->use_attitude_estimate);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_POSITION_ESTIMATE, "%d",  ekfConfig()->use_position_estimate);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_ANGLE_MEASUREMENTS, "%d,%d,%d",  ekfConfig()->use_angle_measurements[0],
-                                                                                       ekfConfig()->use_angle_measurements[1],
-                                                                                       ekfConfig()->use_angle_measurements[2]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",  ekfConfig()->proc_noise_acc[0],
-                                                                                       ekfConfig()->proc_noise_acc[1],
-                                                                                       ekfConfig()->proc_noise_acc[2]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO, "%d,%d,%d",  ekfConfig()->proc_noise_gyro[0],
-                                                                                       ekfConfig()->proc_noise_gyro[1],
-                                                                                       ekfConfig()->proc_noise_gyro[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_QUAT_MEASUREMENT, "%d",       ekfConfig()->use_quat_measurement);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_USE_FOR_MANUAL_FLIGHT, "%d",      ekfConfig()->use_for_manual_flight);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_SOURCE, "%d",                ekfConfig()->meas_source);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC, "%d,%d,%d",       ekfConfig()->proc_noise_acc[0],
+                                                                                    ekfConfig()->proc_noise_acc[1],
+                                                                                    ekfConfig()->proc_noise_acc[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO, "%d,%d,%d",      ekfConfig()->proc_noise_gyro[0],
+                                                                                    ekfConfig()->proc_noise_gyro[1],
+                                                                                    ekfConfig()->proc_noise_gyro[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_ACC_BIAS, "%d,%d,%d",  ekfConfig()->proc_noise_acc_bias[0],
+                                                                                    ekfConfig()->proc_noise_acc_bias[1],
+                                                                                    ekfConfig()->proc_noise_acc_bias[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_PROC_NOISE_GYRO_BIAS, "%d,%d,%d", ekfConfig()->proc_noise_gyro_bias[0],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[1],
+                                                                                    ekfConfig()->proc_noise_gyro_bias[2]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_POSITION, "%d,%d,%d",  ekfConfig()->meas_noise_position[0],
-                                                                                       ekfConfig()->meas_noise_position[1],
-                                                                                       ekfConfig()->meas_noise_position[2]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_ANGLES, "%d,%d,%d",  ekfConfig()->meas_noise_angles[0],
-                                                                                       ekfConfig()->meas_noise_angles[1],
-                                                                                       ekfConfig()->meas_noise_angles[2]);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",  ekfConfig()->meas_delay);
+                                                                                    ekfConfig()->meas_noise_position[1],
+                                                                                    ekfConfig()->meas_noise_position[2]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_NOISE_QUAT, "%d,%d,%d,%d",   ekfConfig()->meas_noise_quat[0],
+                                                                                    ekfConfig()->meas_noise_quat[1],
+                                                                                    ekfConfig()->meas_noise_quat[2],
+                                                                                    ekfConfig()->meas_noise_quat[3]);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_MEAS_DELAY, "%d",                 ekfConfig()->meas_delay);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_HEIGHT_SOURCE, "%d",              ekfConfig()->height_source);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EKF_BARO_RPM_COEFF, "%d",             ekfConfig()->baro_rpm_coeff);
 #endif
 #ifdef USE_CATAPULT
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_CATAPULT_TARGET_ALTITUDE, "%d",  catapultConfig()->altitude);
@@ -2522,26 +2935,57 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_GYRO_HIGH, "%d",  throwConfig()->gyroHighThresh);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_MOMENTUM_THRESH, "%d",  throwConfig()->momentumThresh);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_RELEASE_DELAY_MS, "%d",  throwConfig()->releaseDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_IDLE_BEFORE_THROW, "%d",  throwConfig()->idleBeforeThrow);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_THROW_TO_ARM_ALLOW_MANUAL_MODES, "%d",  throwConfig()->allowManualModes);
 #endif
 #ifdef USE_LEARNER
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE, "%d",  learnerConfig()->mode);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_NUM_ACT, "%d",  learnerConfig()->numAct);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_DELAY_TIME_MS, "%d",  learnerConfig()->delayMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_TIME_MS, "%d",  learnerConfig()->stepMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_TIME_MS, "%d",  learnerConfig()->rampMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_OVERLAP_TIME_MS, "%d",  learnerConfig()->overlapMs);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_STEP_AMPLITUDE, "%d",  learnerConfig()->stepAmp);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RAMP_AMPLITUDE, "%d",  learnerConfig()->rampAmp);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_GYRO_MAX, "%d",  learnerConfig()->gyroMax);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_PROBING, "%d",  learnerConfig()->modeProbing);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_FX, "%d",  learnerConfig()->modeFx);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_ACT, "%d",  learnerConfig()->modeAct);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MODE_HOVER, "%d",  learnerConfig()->modeHover);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MIX_CONTROL_AFTER_MS, "%d",  learnerConfig()->mixControlAfterMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_INIT_FROM_PROFILE_FX, "%d",  learnerConfig()->initFromProfileFx);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_INIT_FROM_PROFILE_ACT, "%d",  learnerConfig()->initFromProfileAct);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ACT_MASK, "%d",  learnerConfig()->actMask);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_INCREMENTAL, "%d",  learnerConfig()->fxIncremental);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_TYPE, "%d",  proberConfig()->type);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_ACT_MASK, "%d",  proberConfig()->actMask);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_PRE_DELAY_MS, "%d",  proberConfig()->preDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_POST_DELAY_MS, "%d",  proberConfig()->postDelayMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_GYRO_MAX, "%d",  proberConfig()->gyroMax);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_STEP_MS, "%d",  proberConfig()->steps_stepMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_OVERLAP_MS, "%d",  proberConfig()->steps_overlapMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPS_AMPLITUDE, "%d",  proberConfig()->steps_amp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_STEP_MS, "%d",  proberConfig()->stepramps_stepMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_RAMP_MS, "%d",  proberConfig()->stepramps_rampMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_OVERLAP_MS, "%d",  proberConfig()->stepramps_overlapMs);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_STEP_AMPLITUDE, "%d",  proberConfig()->stepramps_stepAmp);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_PROBER_STEPRAMPS_RAMP_AMPLITUDE, "%d",  proberConfig()->stepramps_rampAmp);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_IMU_LOWPASS_HZ, "%d",  learnerConfig()->imuFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_FX_LOWPASS_HZ, "%d",  learnerConfig()->fxFiltHz);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_MOTOR_LOWPASS_HZ, "%d",  learnerConfig()->motorFiltHz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_SERVO_LOWPASS_HZ, "%d",  learnerConfig()->servoFiltHz);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_USE_FORTESCUE, "%d",  learnerConfig()->useFortescue);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_RATE, "%d",  learnerConfig()->zetaRate);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_ATTITUDE, "%d",  learnerConfig()->zetaAttitude);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY, "%d",  learnerConfig()->zetaVelocity);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION, "%d",  learnerConfig()->zetaPosition);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndiProfileAfterQuery);
-        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPositionProfileAfterQuery);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_VELOCITY_VERT, "%d",  learnerConfig()->zetaVelocityVert);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ZETA_POSITION_VERT, "%d",  learnerConfig()->zetaPositionVert);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_ROLL_MISALIGNMENT     , "%d", learnerConfig()->rollMisalignment);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_PITCH_MISALIGNMENT    , "%d", learnerConfig()->pitchMisalignment);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_YAW_MISALIGNMENT      , "%d", learnerConfig()->yawMisalignment);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RANDOMIZE_MISALIGNMENT, "%d", learnerConfig()->randomizeMisalignment);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_INDI, "%d",  learnerConfig()->applyIndi);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_POSITION, "%d",  learnerConfig()->applyPosition);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_APPLY_HOVER, "%d",  learnerConfig()->applyHoverRotation);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_SIMPLE_MOTOR_MODEL, "%d",  learnerConfig()->simpleMotorModel);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_RLS_LAMBDA, "%u",  (unsigned) learnerConfig()->rlsLambda);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_MAX_RPM, "%u",  (unsigned) learnerConfig()->hardcodeMaxRpm);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_LINEAR_FORCES, "%d",  learnerConfig()->hardcodeLinearForces);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_G1_FX, "%d",  learnerConfig()->hardcodeG1Fx);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_G1_FY, "%d",  learnerConfig()->hardcodeG1Fy);
+        BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_LEARNER_HARDCODE_G1_FZ, "%d",  learnerConfig()->hardcodeG1Fz);
 #endif
 #ifdef USE_NN_CONTROL
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_NN_RATE_DENOM, "%d",  nnConfig()->rate_denom);
@@ -2720,6 +3164,16 @@ STATIC_UNIT_TESTED void blackboxLogIteration(timeUs_t currentTimeUs)
     blackboxDeviceFlush();
 }
 
+#define EKF_TO_ARM_TIMEOUT (30000000) // 30 seconds
+static bool shouldRunBecauseEkfInitialized = false;
+static timeUs_t lastStartedBecauseEkfInitialized = 0;
+void blackboxStartBecauseEkfInitialized(void) {
+    if (blackboxState == BLACKBOX_STATE_STOPPED) {
+        shouldRunBecauseEkfInitialized = true;
+        lastStartedBecauseEkfInitialized = micros();
+    }
+}
+
 /**
  * Call each flight loop iteration to perform blackbox logging.
  */
@@ -2728,9 +3182,19 @@ void blackboxUpdate(timeUs_t currentTimeUs)
 {
     static BlackboxState cacheFlushNextState;
 
+    if (shouldRunBecauseEkfInitialized && (cmpTimeUs(currentTimeUs, lastStartedBecauseEkfInitialized) > EKF_TO_ARM_TIMEOUT)) {
+        shouldRunBecauseEkfInitialized = false;
+    }
+
     switch (blackboxState) {
     case BLACKBOX_STATE_STOPPED:
-        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW)) {
+        if (ARMING_FLAG(ARMED) || (throwState >= THROW_STATE_WAITING_FOR_THROW) || shouldRunBecauseEkfInitialized) {
+#ifdef USE_MSP_LOG_DOWNLOAD
+            if (!blackboxDownloadReleaseForLogging()) {
+                // An MSP log download or erase still holds the storage, try again next iteration
+                break;
+            }
+#endif
             blackboxOpen();
             blackboxStart();
         }
@@ -2846,7 +3310,7 @@ void blackboxUpdate(timeUs_t currentTimeUs)
     case BLACKBOX_STATE_RUNNING:
         // On entry to this state, blackboxIteration, blackboxPFrameIndex and blackboxIFrameIndex are reset to 0
         // Prevent the Pausing of the log on the mode switch if in Motor Test Mode
-        if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode) {
+        if (blackboxModeActivationConditionPresent && !IS_RC_MODE_ACTIVE(BOXBLACKBOX) && !startedLoggingInTestMode  && !shouldRunBecauseEkfInitialized) {
             blackboxSetState(BLACKBOX_STATE_PAUSED);
         } else if ((!ARMING_FLAG(ARMED)) && (throwState == THROW_STATE_IDLE) && !startedLoggingInTestMode) {
             blackboxFinish();

@@ -27,30 +27,37 @@
 #include "target.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include "common/maths.h"
 #include "common/time.h"
+#include "fc/core.h"
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/indi.h"
 #include "flight/indi_init.h"
+#include "flight/servos.h"
 #include "fc/init.h"
 #include "fc/runtime_config.h"
 #include "flight/mixer.h"
 #include "flight/mixer_init.h"
 
+#include "mockup/main.h"
+
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "fc/tasks.h"
 #include "scheduler/scheduler.h"
+
+#include "telemetry/uros.h"
 
 #ifndef USE_TELEMETRY_PI
 #error "MOCKUP target requires USE_TELEMETRY_PI"
 #endif
 
-#ifndef USE_POS_CTL
-#error "MOCKUP target requires USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "MOCKUP target requires USE_LOCAL_POSITION"
 #endif
 
 #ifndef USE_ACC
@@ -59,59 +66,66 @@
 
 void setImu(const float *g, const float *a) {
     // g in rad/s, a in N/kg
-
     for (int axis = 0; axis < 3; axis++) {
         gyro.gyroADC[axis]   = RADIANS_TO_DEGREES(g[axis]); // shouldnt be used
         acc.dev.ADCRaw[axis] = a[axis] / 9.81f * acc.dev.acc_1G; // input is in g
     }
-    gyroUpdate(); // rotate and pretend to downsample
-    getTask(TASK_FILTER)->attribute->taskFunc( micros() ); // filter gyro
-
-    accUpdate(micros());
-#ifdef USE_THROW_TO_ARM
-    updateThrowFallStateMachine(micros());
-#endif
 }
 
 void setMotorSpeed(const float *omega, const int n) {
     // in rad/s
     int lim = MIN(n, getMotorCount());
     for (int motor = 0; motor < lim; motor++) {
-        motorOmegaValues[motor] = omega[motor];
+        motorOmegaValues[motor] = omega[motor]; // rad/s
+    }
+}
+
+void setServoAngle(const float *angles, const int n) {
+    int lim = MIN(n, MAX_SUPPORTED_SERVOS);
+    for (int servo = 0; servo < lim; servo++) {
+        servo_feedback[servo] = (int16_t) 100*RADIANS_TO_DEGREES(angles[servo]); // rad to centidegrees
     }
 }
 
 void setMocap(const float *pos, const float *vel, const float *q) {
-    extPosState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
+    setMocapT(pos, vel, q, micros());
+}
+
+void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us) {
+    local_pos_ned_t new_pos;
+
+    new_pos.source = LOCAL_POS_SOURCE_MOCKUP;
+    new_pos.time_us = time_us;
     for (int axis = 0; axis < 3; axis++) {
-        extPosNed.pos.A[axis] = pos[axis];
-        extPosNed.vel.A[axis] = vel[axis];
+        new_pos.pos.A[axis] = pos[axis];
+        new_pos.vel.A[axis] = vel[axis];
     }
-    fp_euler_t eulers;
-    fp_quaternion_t quat;
-    // the quaternion x,y,z are in ENU, we convert them to NED
-    quat.w = q[0];
-    quat.x = q[1];
-    quat.y = q[2];
-    quat.z = q[3];
-    fp_quaternionProducts_t qP;
-    quaternionProducts_of_quaternion(&qP, &quat);
-    fp_euler_of_quaternionProducts (&eulers, &qP);
-    extPosNed.att.angles.roll = eulers.angles.roll;
-    extPosNed.att.angles.pitch = eulers.angles.pitch;
-    extPosNed.att.angles.yaw = eulers.angles.yaw;
+    new_pos.quat.w = q[0];
+    new_pos.quat.x = q[1];
+    new_pos.quat.y = q[2];
+    new_pos.quat.z = q[3];
+
+    new_pos.vel_valid = true;
+    new_pos.quat_valid = true;
+
+    setLocalPosMeas(&new_pos);
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {
-    posSetpointState = EXT_POS_NEW_MESSAGE; // just always set this.. don't know how to handle it better
-    extLatestMsgTime = micros();
-    // meters, NED. rad
-    for (int axis = 0; axis < 3; axis++)
-        posSpNed.pos.A[axis] = pos[axis];
+    local_pos_sp_ned_t sp;
 
-    posSpNed.psi = yaw;
-    posSpNed.trackPsi = true;
+    sp.source = LOCAL_POS_SOURCE_MOCKUP;
+    sp.time_us = micros();
+    //posLatestMsgTimeReceived = micros();
+    // meters, NED. rad
+    for (int axis = 0; axis < 3; axis++) {
+        sp.pos.A[axis] = pos[axis];
+    }
+
+    sp.psi = yaw;
+    sp.trackPsi = true;
+
+    setLocalPosSp(&sp);
 }
 
 void getMotorOutputCommands(float *cmd, int n) {
@@ -125,33 +139,53 @@ void getMotorOutputCommands(float *cmd, int n) {
     }
 }
 
-void tick(const timeDelta_t dtUs)
+void getServoOutputCommands(float *cmd, int n) {
+    int lim = MIN(n, MAX_SUPPORTED_SERVOS);
+    for (int m = 0; m < lim; m++) {
+        cmd[m] = servo_normalized[m];
+    }
+}
+
+#define MOCKUP_TICK_DT_US 125
+
+void tick(void)
 {
-    clock_tick( dtUs );
+    clock_tick( MOCKUP_TICK_DT_US );
     timeUs_t currentTimeUs = micros();
 
     unsetArmingDisabled(0xffffffff); // disable all, always
 
-    static uint8_t counter = 0;
-    if (++counter % 2 == 1) {
-        // todo: make this demon nicer
-        counter = 1;
-        if (throwState == THROW_STATE_THROWN) {
-            // because we bypass updateArmingStatus, we need to do this here manually
-            armingFlags = 1;
+    if (throwState == THROW_STATE_THROWN) {
+        // because we bypass updateArmingStatus, we need to do this here manually
+        armingFlags = 1;
+    }
+
+    /* copied from scheduler */
+    getTask(TASK_IMU)->attribute->taskFunc( currentTimeUs );
+
+    bool filterInnerLoopShouldRun = filterReady(); // save running this function twice
+    if (filterInnerLoopShouldRun) {
+        getTask(TASK_FILTER)->attribute->taskFunc( currentTimeUs );
+#ifdef USE_TELEMETRY_UROS
+        static int i = 0;
+        if (++i % 16 == 0) {
+            urosUpdate(currentTimeUs);
         }
-        getTask(TASK_ATTITUDE)->attribute->taskFunc( currentTimeUs );
+#endif
+    }
+
+    if (stateEstimationReady()) {
 #ifdef USE_EKF
         getTask(TASK_EKF)->attribute->taskFunc( currentTimeUs );
 #endif
+        // run fallback attitude estimator (which also runs the decider)
+        getTask(TASK_AHRS)->attribute->taskFunc( currentTimeUs );
+
+        // addition in mockup, just run POS_CTL right after EKF
         getTask(TASK_POS_CTL)->attribute->taskFunc( currentTimeUs );
-    } 
+    }
 
-    getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
-
-    if (cmpTimeUs(currentTimeUs, extLatestMsgTime) > EXT_POS_TIMEOUT_US) {
-        extPosState = EXT_POS_NO_SIGNAL;
-    } else {
-        extPosState = EXT_POS_STILL_VALID;
+    if (filterInnerLoopShouldRun) {
+        getTask(TASK_INNER_LOOP)->attribute->taskFunc( currentTimeUs );
     }
 }

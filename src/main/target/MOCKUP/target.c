@@ -50,7 +50,7 @@
 const timerHardware_t timerHardware[1]; // unused
 
 #include "drivers/accgyro/accgyro_fake.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 
 #include "config/feature.h"
 #include "config/config.h"
@@ -77,8 +77,6 @@ uint32_t SystemCoreClock;
 
 static struct timespec start_time;
 static double simRate = 1.0;
-static pthread_t tcpWorker, udpWorker;
-static bool workerRunning = true;
 //static udpLink_t stateLink, pwmLink;
 //static pthread_mutex_t updateLock;
 static pthread_mutex_t mainLoopLock;
@@ -132,7 +130,7 @@ int lockMainPID(void)
 //    fakeGyroSet(fakeGyroDev, x, y, z);
 ////    printf("[gyr]%lf,%lf,%lf\n", pkt->imu_angular_velocity_rpy[0], pkt->imu_angular_velocity_rpy[1], pkt->imu_angular_velocity_rpy[2]);
 //
-//#if !defined(USE_IMU_CALC)
+//#if !defined(USE_AHRS_CALC)
 //#if defined(SET_IMU_FROM_EULER)
 //    // set from Euler
 //    double w = pkt->imu_orientation_quat[0];
@@ -157,15 +155,15 @@ int lockMainPID(void)
 //    double t3 = +2.0 * (w * z + x * y);
 //    double t4 = +1.0 - 2.0 * (ysqr + z * z);
 //    zf = atan2(t3, t4) * RAD2DEG;
-//    imuSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
+//    ahrsSetAttitudeRPY(xf, -yf, zf); // yes! pitch was inverted!!
 //#else
-//    imuSetAttitudeQuat(pkt->imu_orientation_quat[0], pkt->imu_orientation_quat[1], pkt->imu_orientation_quat[2], pkt->imu_orientation_quat[3]);
+//    ahrsSetAttitudeQuat(pkt->imu_orientation_quat[0], pkt->imu_orientation_quat[1], pkt->imu_orientation_quat[2], pkt->imu_orientation_quat[3]);
 //#endif
 //#endif
 //
-//#if defined(SIMULATOR_IMU_SYNC)
-//    imuSetHasNewData(deltaSim*1e6);
-//    imuUpdateAttitude(micros());
+//#if defined(SIMULATOR_AHRS_SYNC)
+//    ahrsSetHasNewData(deltaSim*1e6);
+//    ahrsUpdate(micros());
 //#endif
 //
 //
@@ -240,19 +238,15 @@ void systemInit(void)
 
 void systemReset(void)
 {
+    // no worker threads in MOCKUP. The python side reloads the .so after a
+    // reset (see indiflight_mockup_interface.py), after calling mockupShutdown()
     printf("[system]Reset!\n");
-    workerRunning = false;
-    pthread_join(tcpWorker, NULL);
-    pthread_join(udpWorker, NULL);
 }
 void systemResetToBootloader(bootloaderRequestType_e requestType)
 {
     UNUSED(requestType);
 
     printf("[system]ResetToBootloader!\n");
-    workerRunning = false;
-    pthread_join(tcpWorker, NULL);
-    pthread_join(udpWorker, NULL);
     exit(0);
 }
 
@@ -490,7 +484,8 @@ static FILE *eepromFd = NULL;
 void FLASH_Unlock(void)
 {
     if (eepromFd != NULL) {
-        fprintf(stderr, "[FLASH_Unlock] eepromFd != NULL\n");
+        // normal: loadEEPROMFromFile() keeps the file open, the first write
+        // after it reuses that handle and FLASH_Lock() closes it
         return;
     }
 
@@ -532,6 +527,20 @@ void FLASH_Lock(void)
         printf("[FLASH_Lock] saved '%s'\n", EEPROM_FILENAME);
     } else {
         fprintf(stderr, "[FLASH_Lock] eeprom is not unlocked\n");
+    }
+}
+
+// Release process-level resources before the .so is dlclose()d. File
+// descriptors survive dlclose, so without this the TCP listen sockets stay
+// bound and the next instance fails with "bind port ... failed!!".
+void mockupShutdown(void)
+{
+    dyad_shutdown(); // closes all TCP serial streams
+
+    if (eepromFd != NULL) {
+        // left open by loadEEPROMFromFile() if no write happened since
+        fclose(eepromFd);
+        eepromFd = NULL;
     }
 }
 

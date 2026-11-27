@@ -99,11 +99,10 @@ typedef enum {
     /* Actual tasks */
     TASK_SYSTEM = 0,
     TASK_MAIN,
-    TASK_GYRO,
+    TASK_IMU,
     TASK_FILTER,
     TASK_INNER_LOOP,
-    TASK_ACCEL,
-    TASK_ATTITUDE,
+    TASK_AHRS,
     TASK_RX,
     TASK_SERIAL,
     TASK_DISPATCH,
@@ -131,22 +130,26 @@ typedef enum {
 #if defined(USE_BARO) || defined(USE_GPS)
     TASK_ALTITUDE,
 #endif
+#ifdef USE_PITOT
+    TASK_PITOT,
+#endif
 #ifdef USE_DASHBOARD
     TASK_DASHBOARD,
 #endif
 #ifdef USE_TELEMETRY
     TASK_TELEMETRY,
 #endif
-#ifdef HIL_BUILD
-    TASK_HIL,
-#endif
-#ifdef USE_GPS_PI
-    TASK_GPS_PI,
+#ifdef USE_TELEMETRY_UROS
+    TASK_UROS,
 #endif
 #ifdef USE_TELEMETRY_PI
     TASK_KEYBOARD,
 #endif
-#ifdef USE_POS_CTL
+#ifdef HIL_BUILD
+    TASK_HIL,
+#endif
+#ifdef USE_LOCAL_POSITION
+    TASK_LOCAL_POSITION,
     TASK_POS_CTL,
 #endif
 #ifdef USE_EKF

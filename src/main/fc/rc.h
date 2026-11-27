@@ -29,6 +29,11 @@
 #define RC_SMOOTHING_AUTO_FACTOR_MAX 250
 #endif
 
+#define RC_STICK_MOVEMENT_THRESHOLD 0.1f // stick movement threshold to detect stick activity
+
+void setSticksReference(void);
+bool haveSticksMoved(void);
+
 void processRcCommand(void);
 float getSetpointRate(int axis);
 float getRcDeflection(int axis);

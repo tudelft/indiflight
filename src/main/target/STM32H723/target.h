@@ -95,6 +95,6 @@
 #define USE_LEDSTRIP_CACHE_MGMT
 #endif
 
-#if !defined(USE_EXST)
-#define USE_CUSTOM_DEFAULTS
-#endif
+// #if !defined(USE_EXST)
+// #define USE_CUSTOM_DEFAULTS
+// #endif

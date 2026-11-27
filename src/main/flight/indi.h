@@ -37,6 +37,7 @@
 #define MAXU MAX_SUPPORTED_MOTORS
 #define MAX_SUPPORTED_PSEUDOCONTROLS 6
 #define MAXV MAX_SUPPORTED_PSEUDOCONTROLS
+#define RPM_CTL_MAX_DELAY 32 // max ESC command delay N_d of the INDI rpm controller, in loop iterations
 
 #if (MAXU > 8)
 #error "Blackbox will crash. Fix it to accept more that MAXU > 8"
@@ -46,6 +47,15 @@
 #error "Blackbox will crash. Fix it to accept more that MAXV > 8"
 #endif
 
+enum actuator_type_e {
+    INDI_ACT_TYPE_OFF = 0,
+    INDI_ACT_TYPE_MOTOR = 1,
+    INDI_ACT_TYPE_SERVO = 2
+};
+
+#ifdef INJECT_ATTITUDE_SETPOINTS
+#include "common/signal_generator.h"
+#endif
 typedef struct indiProfile_s {
     // ---- Att/Rate config
     uint16_t attGains[3]; // attitude error to rotational accel gain * 10
@@ -58,6 +68,7 @@ typedef struct indiProfile_s {
     uint8_t manualMaxTilt; // in manual flight in deg (0, 180)
     // ---- general INDI config
     uint8_t useIncrement;          // bool: use incremental law. NDI (or more precisely linDI) otherwise
+    uint8_t useAccelForSpfz;       // bool: if false, estimate current thrust using actuator model and effectiveness matrix, not accelero
     uint8_t useRpmDotFeedback;     // bool: make use of dshot rpm derivative data in feedback loop if available
     // ---- INDI actuator config
     uint8_t actNum;                 // number of actuators
@@ -69,7 +80,9 @@ typedef struct indiProfile_s {
     uint32_t actMaxRpm[MAXU];       // max rpm.
     uint32_t actHoverRpm[MAXU];     // approximate rpm in hover flight. FIXME: make an estimator for this
     uint8_t actNonlinearity[MAXU];  // motor nonlinearity percentage between (0, 100)
-    uint8_t actLimit[MAXU];         // limit motor output in percent (100 full power)
+    int8_t actMin[MAXU];         // limit motor output in percent (+100 full power)
+    int8_t actMax[MAXU];         // limit motor output in percent (+100 full power)
+    uint8_t actType[MAXU];         // 0: off, 1: motor, 2: servo
     int16_t actG1_fx[MAXU];      // actuator effectiveness (N/kg) / u * 100
     int16_t actG1_fy[MAXU];      // actuator effectiveness * 100
     int16_t actG1_fz[MAXU];      // actuator effectiveness * 100
@@ -85,13 +98,28 @@ typedef struct indiProfile_s {
     uint8_t wlsWv[MAXV];         // control objective weighing (1, 100)
     uint8_t wlsWu[MAXU];         // actuator penalties (1, 100)
     int8_t u_pref[MAXU];         // least energy consumption u * 100
+    // ---- tailsitter
+    uint8_t tails_use_scheduled;
+    uint8_t tails_use_sine;
+    int16_t tails_d0[2];
+    int16_t tails_cxw[2];
+    int16_t tails_cyw[2];
+    int16_t tails_czw[2];
+    int16_t tails_clw[2];
+    int16_t tails_cmw[2];
+    int16_t tails_cnw[2];
+    int16_t tails_cnwd[2];
+    int16_t tails_cxd[2];
+    int16_t tails_cmd[2];
+    int16_t tails_cnd[2];
+    int16_t tails_cmdd[2];
+    int16_t tails_cndd[2];
 
     // -------- inaccessible parameters for now (will always be the values from the reset function)
     // ---- Att/Rate config
-    uint8_t attRateDenom;        // only execute attitude loop every attRateDenom loops
     // ---- general INDI config
     uint8_t useConstantG2;         // bool: do not adapt spinup terms based on rpm data, if available and useWls is true
-    uint8_t useRpmFeedback;        // bool: make use of dshot rpm data in feedback loop if available. FIXME: actually implement this
+    uint8_t rpmCtlGain;            // INDI rpm loop gain K * 10, K normalised so 1 = omegaMax per full command (paper nominal). 0: off (open loop). Replaces the unused useRpmFeedback (same offset/size)
     // ---- WLS config
     uint8_t useWls;              // bool: enable Wls in favour of static pinv
     uint8_t wlsWarmstart;        // bool: use warmstarting of wls
@@ -100,6 +128,45 @@ typedef struct indiProfile_s {
     uint16_t wlsCondBound;       // condition number bound / 1e4
     uint16_t wlsTheta;           // objective segragation / 1e-4
     uint8_t wlsNanLimit;        // disarm because of consequtive failures in wls. Keep low FIXME: make this fallback to pinv
+
+    // -------- Parameters for motor lead-lag filter
+    uint8_t useMotorLeadLag; // bool: use motor lead-lag filter
+    uint8_t actTimeConstTrueMs[MAXU]; // natural (true) motor time constant for actuator lead-lag in ms
+    uint8_t actTimeConstDesMs[MAXU]; // desired time constant for actuator lead-lag in ms
+
+    // -------- Parameters for feedforward control
+    int32_t feedforwardCoefs[5]; // feedforward coefficients for the feedforward INJECTION control law / 1e-6
+    uint8_t useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    int32_t feedforwardFilterCoefs[3]; // K, z, p, feedforward filter coefficients for the feedforward FILTER control law (need to clear this up or choose one) / 1e-6
+
+    // -------- Parameters for attitude lead lag control
+    uint8_t useAttLeadLag; // bool: use attitude lead-lag filter
+    int32_t rateCoefs[5]; // time constant for attitude lead-lag in ms
+    int32_t attCoefs[5]; // desired time constant for attitude lead-lag in ms
+
+    // -------- Parameters for gain-scheduling
+    uint8_t useGainScheduling; // bool: use gain scheduling
+    uint8_t gainSchedulingType; // What type of gain scheduling is used. 0: 1D Interp, 1: 2D Interp, 2: 1D Poly, 3: 2D Poly
+    uint8_t gainScheduleFf; // Whether to take feedforward values from gain-scheduling
+
+    // -------- Parameters for attitude injection
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    bool injectAttSp; // whether to inject attitude setpoints
+    int8_t attSpInjectionType; // What type of injection is used. 0: None, 1: Impulse, 2: Doublet, 3: Step
+    int16_t attSpInjectionAmplitude; // amplitude of injection in degrees * 10
+    int16_t attSpInjectionDuration;  // duration of injection in ms
+    int16_t attSpInjectionDurationDown; // for doublet, duration of negative pulse in ms
+    
+    // -------- Parameters for input disturbance injection
+    bool injectInputDist; // whether to inject input disturbance
+    int16_t inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
+
+    // -------- closed loop rpm controller (rpmCtlGain lives further up)
+    // NB: any change to this struct needs a PG_INDI_PROFILE version bump in indi.c
+    uint8_t rpmCtlDelay;     // N_d: ESC command processing delay, in loop iterations [0, RPM_CTL_MAX_DELAY]
+    uint16_t rpmCtlLpfHz;    // H_tau_f: 1st order low pass on ESC rpm AND on the modelled command, Hz. 0: unfiltered
+    uint8_t useRpmCtl;       // bool: enable the INDI rpm loop (still needs rpmCtlGain > 0 and dshot rpm telemetry)
 } indiProfile_t;
 
 // linearization
@@ -116,16 +183,15 @@ typedef struct indiRuntime_s {
     fp_vector_t rateGains;
     float attMaxTiltRate; // rad/s
     float attMaxYawRate;  // rad/s
-    uint8_t attRateDenom;
     bool manualUseCoordinatedYaw;     // bool: coordinate yaw in manual flight in Angle/Horizon mode
     float manualMaxUpwardsSpf; // 255 means sum(G1[2, :])
     float manualMaxTilt; // rad
     // ---- general INDI config
     bool useIncrement;
+    bool useAccelForSpfz;
     bool useConstantG2;
-    bool useRpmFeedback;
     bool useRpmDotFeedback;
-    fp_vector_t maxRateSp;          // maximum rate setpoint in deg/s
+    fp_vector_t maxRateSp;          // maximum rate setpoint in rad/s
     // ---- INDI actuator config
     uint8_t actNum;
     /*
@@ -137,7 +203,9 @@ typedef struct indiRuntime_s {
     float actHoverOmega[MAXU];   // rad/s
     float actTimeConstS[MAXU];   // sec
     float actNonlinearity[MAXU]; // - 
-    float actLimit[MAXU];        // 
+    float actMin[MAXU];        // 
+    float actMax[MAXU];        // 
+    uint8_t actType[MAXU];        // 0: off, 1: motor, 2: servo
     float actG1[MAXV][MAXU];
     float actG2[3][MAXU];
     float G2_scaler[MAXU];
@@ -154,6 +222,22 @@ typedef struct indiRuntime_s {
     float wlsCondBound;
     float wlsTheta;
     uint8_t wlsNanLimit;
+    // ---- tailsitter config
+    bool tailsUseScheduled;
+    bool tailsUseSine;
+    float tailsD0[2];
+    float tailsCxw[2];
+    float tailsCyw[2];
+    float tailsCzw[2];
+    float tailsClw[2];
+    float tailsCmw[2];
+    float tailsCnw[2];
+    float tailsCnwd[2];
+    float tailsCxd[2];
+    float tailsCmd[2];
+    float tailsCnd[2];
+    float tailsCmdd[2];
+    float tailsCndd[2];
     // ---- runtime values -- actauators
     float d[MAXU]; // command issued to the actuators on [-1, 1] scale
     float u[MAXU]; // control variable proportional to output force, but on [-1, 1], for motors [0, 1]
@@ -168,33 +252,98 @@ typedef struct indiRuntime_s {
     // ---- runtime values -- axes
     fp_vector_t attGainsCasc; // attitude gains simulating parallel PD
     fp_quaternion_t attSpNed; // attitude setpoint in NED coordinates
+    fp_quaternion_t attSpNedPreFeedforward; // attitude setpoint in NED coordinates before feedforward
     fp_quaternion_t attErrBody; // attitude error in body coordinates
     fp_vector_t rateSpBody; // rate setpoint in body coordinates
     fp_vector_t rateSpBodyCommanded; // rate setpoint before attitude control
     fp_vector_t rateDotSpBody; // rate derivative setpoint in body coordinates
     fp_vector_t spfSpBody; // specific force setpoint in body coordinates
     float dv[MAXV]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    float du[MAXU]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
+    float du_fs[MAXU]; // delta-pseudo controls in N/kg and Nm/(kgm^2)
     //fp_vector_t rate_fs; // sync-filtered gyro in rad/s
-    fp_vector_t rate; // unfiltered gyro in rad/s
-    fp_vector_t rateDot; // unfiltered gyro derivative in rad/s/s
+    fp_vector_t rateIMU; // unfiltered gyro in rad/s
+    fp_vector_t rate_f; // unfiltered gyro in rad/s
+    fp_vector_t rateDotIMU; // unfiltered gyro derivative in rad/s/s
     fp_vector_t rateDot_fs; // sync-filtered gyro derivative in rad/s/s
-    fp_vector_t spf; // unfiltered accelerometer (specific force) in N/kg
+    fp_vector_t spfIMU; // unfiltered accelerometer (specific force) in N/kg
     fp_vector_t spf_fs; // sync-filterd accelerometer (specific force) in N/kg
     // ---- filters
     pt1Filter_t uLagFilter[MAXU]; // to simulate spinup
     biquadFilter_t uStateFilter[MAXU]; // only support 2nd order butterworth second order section for now
     biquadFilter_t omegaFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t duFilter[MAXU]; // only support 2nd order butterworth second order section for now
+    biquadFilter_t servo_lagFilter[MAXU];
     biquadFilter_t rateFilter[3]; // only support 2nd order butterworth second order section for now
     biquadFilter_t spfFilter[3]; // only support 2nd order butterworth second order section for now
+
+    // ---- closed loop rpm controller
+    // INDI rpm control (Mancinelli et al., IMAV 2023, Fig. 4):
+    //   d = H_f(H_d(z^-Nd d_applied)) + K * (omegaSp - H_f(omega_esc)) / omegaMax
+    bool useRpmCtl; // enable the INDI rpm loop
+    float rpmCtlGain; // K, normalised. 0: off
+    uint8_t rpmCtlDelay; // N_d in loop iterations
+    float rpmCtlLpfHz; // H_tau_f cutoff Hz, 0: off
+    float omegaSp[MAXU]; // motor speed setpoint rad/s (omegaMax * sqrt(u))
+    float rpmCmdHist[MAXU][RPM_CTL_MAX_DELAY + 1]; // applied commands, for the N_d delay
+    uint8_t rpmCmdHistIdx[MAXU]; // next write position in rpmCmdHist
+    pt1Filter_t rpmCmdMotorModel[MAXU]; // H_tau_d: 1st order motor dynamics, actTimeConstMs
+    pt1Filter_t rpmCmdFilter[MAXU]; // H_tau_f on the command path
+    pt1Filter_t rpmOmegaFilter[MAXU]; // H_tau_f on the ESC rpm
+    float rpmCmd_f[MAXU]; // delayed, motor-modelled, filtered applied command [0, 1]
+    float rpmOmega_f[MAXU]; // filtered ESC rpm, rad/s
+    bool rpmControlRan[MAXU]; // closed loop law set d[i] this loop. false: open loop or overridden
+
     // ---- housekeeping
     float dT; // target looptime in Sec
     float indiFrequency; // frequency in Hz
-    uint8_t attExecCounter; // count executions (wrapping)
     uint16_t nanCounter; // count times consequtive nans appear in allocation
     // ---- control law selection
-    bool bypassControl; // no control at all. u and d are unmodified by loop
+    // bool bypassControl; // no control at all. u and d are unmodified by loop
     bool controlAttitude; // attempt to reach tilt given by attSpNed
     bool trackAttitudeYaw; // also attempt to reach yaw given by attSpNed
+
+    // ---- actuator time constant modification lead-lag filter
+    bool useMotorLeadLag; // bool: use motor lead-lag filter
+    float actTimeConstTrueS[MAXU];
+    float actTimeConstDesS[MAXU];
+    biquadFilter_t motorLeadLagFilter[MAXU];
+
+    // ---- feedforward control
+    float feedforwardCoefs[5]; // feedforward coefficients for the feedforward control law b0, b1, b2, a1, a2
+    bool useFeedforwardFilter; // If true use the FILTER feedforward, if false use INJECTION
+    float feedforwardFilterCoefs[3]; // feedforward coefficients for feedforward control law k, z, p (TODO: Yes its double now)
+    biquadFilter_t feedforwardFilter[3]; 
+    fp_vector_t ffRateSpBody;   
+
+    // ---- leadlag attitude control
+    bool useAttLeadLag; // bool: use attitude lead-lag filter
+    float attCoefs[5];
+    float rateCoefs[5];
+    biquadFilter_t attLlFilter[3];  // attitude control filter
+    biquadFilter_t rateLlFilter[3]; // rate control filter
+
+    // ---- gain scheduling
+    bool useGainScheduling; // whether to use gain scheduling
+    uint8_t gainSchedulingType; // 0: 1D interpolation, 1: 2D interpolation, 2: 1D polynomial, 3: 2D polynomial
+    bool gainScheduleFf; // Whether to take feedforward values from gain-scheduling
+
+    // ---- attitude injection
+    #ifdef INJECT_ATTITUDE_SETPOINTS
+    bool attSpInjectionStarted; // whether the injection of attitude setpoints has started
+    signal_mode_t attSpInjectionType; // What type of injection is used. 1: None, 2: Impulse, 3: Doublet, 4: Step
+    float attSpInjectionAmplitude; // amplitude of injection in degrees
+    float attSpInjectionDuration;  // duration of injection in s
+    float attSpInjectionDurationDown; // for doublet, duration of negative pulse in s
+    timeUs_t attSpInjectionStartTime; // time when the injection started
+    bool injectAttSp; // whether to inject attitude setpoints
+    #endif
+
+    #ifdef INJECT_INPUT_DISTURBANCE
+    bool injectInputDist; // whether to inject input disturbance
+    float inputDistAmplitude; // amplitude of input disturbance in percent
+    bool applyDistToMotor[MAXU]; // whether to apply disturbance to motor
+    #endif
 } indiRuntime_t;
 
 #define INDI_PROFILE_COUNT 3
@@ -208,8 +357,11 @@ float indiLinearization(actLin_t* lin, float in);
 float indiOutputCurve(actLin_t* lin, float in);
 
 float getYawWithoutSingularity(void);
-fp_vector_t coordinatedYaw(float yaw);
+fp_vector_t extrinsicYaw(float yaw);
+fp_vector_t coordinateTurn(void);
+fp_vector_t sideslipStabilization(float gain);
 void getSetpoints(timeUs_t current);
 void getAlphaSpBody(timeUs_t current);
 void getMotorCommands(timeUs_t current);
-void indiUpdateActuatorState( float* motor_normalized );
+void indiUpdateActuatorState( float* motor_normalized, float* servo_normalized );
+void indiUpdateRpmCtlState( const float* motor_normalized );

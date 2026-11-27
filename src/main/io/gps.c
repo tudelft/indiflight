@@ -46,6 +46,7 @@
 #include "io/dashboard.h"
 #endif
 #include "io/gps.h"
+#include "io/local_pos.h"
 #include "io/serial.h"
 
 #include "config/config.h"
@@ -53,9 +54,10 @@
 //#include "fc/gps_lap_timer.h"
 #include "fc/runtime_config.h"
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/pid.h"
 #include "flight/gps_rescue.h"
+#include "flight/geofence.h"
 
 #include "scheduler/scheduler.h"
 
@@ -66,7 +68,7 @@
 // GPS
 // **********************
 bool realGPSConfigured = false;
-int32_t GPS_home[2];
+int32_t GPS_home[3]; // lat, lon (deg*1e8), altCm
 uint16_t GPS_distanceToHome;        // distance to home point in meters
 uint32_t GPS_distanceToHomeCm;
 int16_t GPS_directionToHome;        // direction to home or hol point in degrees * 10
@@ -1348,6 +1350,10 @@ void gpsUpdate(timeUs_t currentTimeUs)
     gpsState_e gpsCurrentState = gpsData.state;
     gpsData.now = millis();
 
+#ifdef USE_GEOFENCE
+    // geofenceUpdateWatchdog();
+#endif
+
     if (gpsPort) {
         DEBUG_SET(DEBUG_GPS_CONNECTION, 7, serialRxBytesWaiting(gpsPort));
         static uint8_t wait = 0;
@@ -1445,10 +1451,6 @@ void gpsUpdate(timeUs_t currentTimeUs)
 
     static bool hasBeeped = false;
     if (!ARMING_FLAG(ARMED)) {
-        if (!gpsConfig()->gps_set_home_point_once) {
-        // clear the home fix icon between arms if the user configuration is to reset home point between arms
-            DISABLE_STATE(GPS_FIX_HOME);
-        }
         // while disarmed, beep when requirements for a home fix are met
         // ?? should we also beep if home fix requirements first appear after arming?
         if (!hasBeeped && STATE(GPS_FIX) && gpsSol.numSat >= gpsRescueConfig()->minSats) {
@@ -2551,6 +2553,7 @@ void GPS_reset_home_position(void)
             // those checks are always true for tryArm, but may not be true for gyro cal
             GPS_home[GPS_LATITUDE] = gpsSol.llh.lat;
             GPS_home[GPS_LONGITUDE] = gpsSol.llh.lon;
+            GPS_home[GPS_ALTITUDE] = gpsSol.llh.altCm;
             GPS_calc_longitude_scaling(gpsSol.llh.lat);
             ENABLE_STATE(GPS_FIX_HOME);
             // no point beeping success here since:
@@ -2602,12 +2605,47 @@ void GPS_calculateDistanceAndDirectionToHome(void)
     }
 }
 
+#ifdef USE_LOCAL_POSITION
+static bool localPosFromGpsSol(local_pos_ned_t* local) {
+    if (!STATE(GPS_FIX_HOME)) {
+        return false;
+    }
+    local->source = LOCAL_POS_SOURCE_GPS;
+    local->time_us = micros(); // better sync with GPS here?
+    gpsLocation_t home = {GPS_home[GPS_LATITUDE], GPS_home[GPS_LONGITUDE], GPS_home[GPS_ALTITUDE]};
+
+    llh_to_local(&(gpsSol.llh), &home, &(local->pos));
+
+    local->vel_valid = false;
+    local->vel.V.X = 0.;
+    local->vel.V.Y = 0.;
+    local->vel.V.Z = 0.;
+    local->quat_valid = false;
+    local->quat.w = 1.;
+    local->quat.x = 0.;
+    local->quat.y = 0.;
+    local->quat.z = 0.;
+
+    return true;
+}
+#endif
+
 void onGpsNewData(void)
 {
     if (!STATE(GPS_FIX)) {
         // if we don't have a 3D fix don't give data to GPS rescue
         return;
     }
+
+#ifdef USE_LOCAL_POSITION
+    local_pos_ned_t newPos;
+    if (localPosFromGpsSol(&newPos)) {
+        setLocalPosMeas(&newPos);
+    }
+#endif
+#ifdef USE_GEOFENCE
+    geofenceUpdate(&gpsSol.llh);
+#endif
 
     gpsDataIntervalSeconds = gpsSol.navIntervalMs / 1000.0f;
 

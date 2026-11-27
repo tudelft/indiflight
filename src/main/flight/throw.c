@@ -27,12 +27,15 @@
 #include "platform.h"
 
 #include "fc/runtime_config.h"
+#include "fc/core.h"
 #include "fc/rc_modes.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "sensors/gyro.h"
 #include "sensors/acceleration.h"
 #include "flight/indi.h"
+#include "flight/ekf.h"
+#include "flight/pos_ctl.h"
 
 #include "pg/pg_ids.h"
 
@@ -46,22 +49,20 @@ throwState_t throwState = THROW_STATE_IDLE;
 #error "Can only use USE_THROW_TO_ARM with USE_ACC"
 #endif
 
-#if !defined(USE_THROWING_WITHOUT_POSITION) && !defined(USE_POS_CTL)
-#error "Either define USE_THROWING_WITHOUT_POSITION or enable position control with USE_POS_CTL"
-#endif
-
 #pragma message "You are compiling with dangerous code!"
 
 
 // config
-PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(throwConfig_t, throwConfig, PG_THROW_CONFIG, 1);
 PG_RESET_TEMPLATE(throwConfig_t, throwConfig,
     .accHighThresh = 20,
     .accClipThresh = 45,     // m/s/s
     .accLowAgainThresh = 20, // m/s/s
     .gyroHighThresh = 600,   // deg/s
     .momentumThresh = 400,   // cm/s
-    .releaseDelayMs = 250   // ms
+    .releaseDelayMs = 250,   // ms
+    .idleBeforeThrow = 0,    // boolean
+    .allowManualModes = 0    // boolean
 );
 
 // ---externs
@@ -85,6 +86,30 @@ fallState_t fallState = FALL_STATE_IDLE
 #endif
 
 
+static bool throwIdleHold = false;
+
+// Latched on the arming edge, so that switching the throw-to-arm switch on in
+// flight never cuts the motors. Released only by the throw (THROWN) or disarm;
+// switching throw-to-arm off while held keeps idling until disarm.
+NOINLINE void updateThrowIdleHold(void) { // not inlined into the inner loop: ITCM is full
+    static bool wasArmed = false;
+    const bool armed = ARMING_FLAG(ARMED);
+
+    if (armed && !wasArmed) {
+        throwIdleHold = throwConfig()->idleBeforeThrow
+            && IS_RC_MODE_ACTIVE(BOXTHROWTOARM)
+            && (throwState < THROW_STATE_THROWN);
+    }
+    if (!armed || (throwState >= THROW_STATE_THROWN)) {
+        throwIdleHold = false;
+    }
+    wasArmed = armed;
+}
+
+bool throwHoldsIdle(void) {
+    return throwIdleHold;
+}
+
 // implementations
 float totalAccSq(void) {
     return sq(GRAVITYf) * sq(acc.dev.acc_1G_rec) * 
@@ -106,15 +131,9 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
     lastCall = currentTimeUs;
 
     // disable state machines (and possibly abort throw/fall if in progress)
-    bool disableConditions = ARMING_FLAG(ARMED)
-#ifndef USE_THROWING_WITHOUT_POSITION
-        || !FLIGHT_MODE(POSITION_MODE)
-#endif
-        || FLIGHT_MODE(CATAPULT_MODE) // downright dangerous to accidentally throw with catapult?
+    bool disableConditions = false
+        || FLIGHT_MODE(CATAPULT_MODE | NN_MODE) // downright dangerous to accidentally throw with catapult?
         || (getArmingDisableFlags() & doNotTolerateDuringThrow) // any critical arming inhibitor?
-#ifdef USE_INDI
-        || ( !FLIGHT_MODE(PID_MODE) && (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) ) // cannot guarantee safe launch in learned indi profile
-#endif
         || !IS_RC_MODE_ACTIVE(BOXTHROWTOARM) || !IS_RC_MODE_ACTIVE(BOXARM) || IS_RC_MODE_ACTIVE(BOXPARALYZE); // any critical RC setting (may be redundant)
 
     if (disableConditions && (throwState >= THROW_STATE_WAITING_FOR_THROW) && (throwState < THROW_STATE_THROWN)) {
@@ -125,25 +144,29 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
 
     // throwing state machine
     bool enableConditions;
+    bool autoMode = FLIGHT_MODE(POSITION_MODE); // NN/catapult disabled already
     timeDelta_t timeSinceRelease;
     switch(throwState) {
         case THROW_STATE_IDLE:
             // enable if we dont disable, have accel, and no disable flags than angle, arm and prearm 
             enableConditions = 
                 !disableConditions
-                && acc.isAccelUpdatedAtLeastOnce &&
-                #ifdef USE_POS_CTL
-                    (
-#ifdef USE_THROWING_WITHOUT_POSITION
-                    !FLIGHT_MODE(POSITION_MODE) ||
+                && acc.isAccelUpdatedAtLeastOnce
+                && isTouchingGround()
+#ifdef USE_LOCAL_POSITION
+                && ( (!autoMode && throwConfig()->allowManualModes)
+                        || (autoMode && isConvergedEkf()) ) // no setpoint needed: THROWN arrests motion if there is none
+#else
+                && !autoMode
+                && throwConfig()->allowManualModes
 #endif
-                    ( (extPosState >= EXT_POS_STILL_VALID)
-                    && (posSetpointState >= EXT_POS_STILL_VALID) ) ) &&
-                #endif
-                true;
+                ;
 
            if (enableConditions && timingValid) { 
                 throwState = THROW_STATE_WAITING_FOR_THROW;
+#ifdef USE_LOCAL_POSITION
+                posSpNed.trackPsi = false; // don't care about yaw when being thrown
+#endif
             }
             break;
         case THROW_STATE_WAITING_FOR_THROW:
@@ -181,15 +204,25 @@ void updateThrowFallStateMachine(timeUs_t currentTimeUs) {
             timeSinceRelease = cmpTimeUs(currentTimeUs, leftHandSince);
             if (timeSinceRelease > (1e3 * throwConfig()->releaseDelayMs)) {
                 throwState = THROW_STATE_THROWN;
+#ifdef USE_LOCAL_POSITION
+                if (autoMode && isConvergedEkf()) {
+                    if (posSpNed.valid) {
+                        posArrestZMotionOnly();
+                    } else {
+                        posArrestMotion();
+                    }
+                } 
+#endif
                 beeper(BEEPER_SILENCE);
             }
             break;
         case THROW_STATE_THROWN:
-            if (ARMING_FLAG(ARMED))
+            if (ARMING_FLAG(ARMED)) {
                 throwState = THROW_STATE_ARMED_AFTER_THROW;
-            else if (cmpTimeUs(currentTimeUs, leftHandSince) > 3e6)
+            } else if (cmpTimeUs(currentTimeUs, leftHandSince) > 3e6) {
                 // 3 seconds timeout
                 throwState = THROW_STATE_IDLE;
+            }
             break;
         case THROW_STATE_ARMED_AFTER_THROW:
             if (!ARMING_FLAG(ARMED))

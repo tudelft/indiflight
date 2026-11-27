@@ -30,6 +30,12 @@
 
 #pragma once
 
+typedef enum {
+    POSITION_ATTITUDE_MAPPING_NDI = 0,  // multirotor dynamic inversion (pos_att_ndi.c)
+    POSITION_ATTITUDE_MAPPING_INDI,     // incremental, hybrids, untested (pos_att_indi.c)
+    POSITION_ATTITUDE_MAPPING_DF,       // differential flatness, Tal (2022), tailsitter model (pos_att_df.c)
+} position_attitude_mapping_t;
+
 typedef struct positionProfile_s {
     uint8_t horz_p; // m/s/s per m * 10
     uint8_t horz_i; // m/s/s per m/s * s  * 10
@@ -48,10 +54,20 @@ typedef struct positionProfile_s {
     uint8_t weathervane_p; // deg/s per deg * 10
     uint16_t weathervane_min_v; // cm/s min speed to use weathervaneing
     uint8_t use_spf_attenuation;  // bool: enable correcting thrust setpoint if target attitude has not yet been reached
+    uint8_t stick_takeover;       // bool: moving the sticks while armed aborts automatic flight (manual takeover)
+    uint8_t attitude_mapping;     // position_attitude_mapping_t: acceleration setpoint to attitude/thrust (pos_att_*.c)
     // --- inaccessible from CLI / dump files for now
     uint16_t vert_max_iterm; // cm/s
     uint16_t horz_max_iterm; // cm/s
 } positionProfile_t;
+
+typedef struct positionWaypoint_s {
+    fp_vector_t location; // local cartesian NED coordinates in m
+    float tolerance; // horizontal acceptance radius in m
+    float heightTolerance; // vertical acceptance distance in m
+    float velocityLimit; // maximum waypoint velocity in m/s
+    float heading; // yaw setpoint in rad; if > 0, yaw is tracked (trackPsi), otherwise yaw is free
+} positionWaypoint_t;
 
 typedef struct positionRuntime_s {
     float horz_p; // m/s/s per m 
@@ -73,17 +89,23 @@ typedef struct positionRuntime_s {
     float weathervane_p; // deg/s per deg
     float weathervane_min_v; // m/s min speed to use weathervaneing
     bool use_spf_attenuation;
+    bool stick_takeover;
+    position_attitude_mapping_t attitude_mapping;
+    bool arrest_motion; // if true, command zero velocity until it is reached
+    bool arrest_z_motion_only; // if true, only command zero velocity in z direction
 } positionRuntime_t;
 
 #define POSITION_PROFILE_COUNT 3
 PG_DECLARE_ARRAY(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles);
 
+void posCtlInit(void);
+
+#define DEADRECKONING_TIMEOUT_HOLD_POSITION_US  2000000  // 1 sec
+#define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 3500000  // 2.5 sec
+
 extern positionRuntime_t posRuntime;
 void initPositionRuntime();
 void changePositionProfile(uint8_t profileIndex);
-
-#define DEADRECKONING_TIMEOUT_HOLD_POSITION_US 500000
-#define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 2000000
 
 extern fp_vector_t accSpNedFromPos;
 extern fp_quaternion_t attSpNedFromPos;
@@ -91,8 +113,9 @@ extern fp_vector_t spfSpBodyFromPos;
 extern fp_vector_t rateSpBodyFromPos;
 
 void resetIterms();
-void posCtlInit(void);
+void posArrestMotion();
+void posArrestZMotionOnly();
 void updatePosCtl(timeUs_t current);
+void posGetVelSpNedFromPosSp(void);
+void posGetVelSpNedFromSticks(void);
 void posGetAccSpNed(timeUs_t current);
-void posGetAttSpNedAndSpfSpBody(timeUs_t current);
-void posGetRateSpBody(timeUs_t current);

@@ -56,7 +56,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/pid.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/failsafe.h"
 
 #include "io/gps.h"

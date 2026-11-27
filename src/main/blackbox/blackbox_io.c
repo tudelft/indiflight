@@ -123,7 +123,7 @@ static struct {
     } state;
 } blackboxSITLFile;
 
-#define LOGFILE_DIR "./logs"
+#define LOGFILE_DIR "./logs-mockup"
 #define LOGFILE_PREFIX "LOG"
 #define LOGFILE_SUFFIX ".BFL"
 
@@ -708,6 +708,26 @@ static bool blackboxSDCardBeginLog(void)
 
     // Not finished init yet
     return false;
+}
+
+/**
+ * Returns true if blackbox holds no SD card file handles and is not in the middle of preparing a log, i.e. other
+ * code may temporarily use the filesystem and its working directory.
+ */
+bool blackboxSDCardIsIdle(void)
+{
+    return blackboxSDCard.logFile == NULL && blackboxSDCard.logDirectory == NULL
+        && (blackboxSDCard.state == BLACKBOX_SDCARD_INITIAL || blackboxSDCard.state == BLACKBOX_SDCARD_READY_TO_CREATE_LOG);
+}
+
+/**
+ * Forget that the working directory is the log directory, so the next log start re-opens "logs" from the root
+ * directory. Only call while blackboxSDCardIsIdle(), and make sure the working directory is the root directory again
+ * before the next log is started.
+ */
+void blackboxSDCardResetWorkingDirectory(void)
+{
+    blackboxSDCard.state = BLACKBOX_SDCARD_INITIAL;
 }
 
 #endif // USE_SDCARD

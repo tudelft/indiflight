@@ -47,7 +47,7 @@
 
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 
@@ -240,14 +240,6 @@ void renderOsdWarning(char *warningText, bool *blinking, uint8_t *displayAttr)
     }
 
 #endif // USE_GPS_RESCUE
-
-    // Show warning if in HEADFREE flight mode
-    if (FLIGHT_MODE(HEADFREE_MODE)) {
-        tfp_sprintf(warningText, "HEADFREE");
-        *displayAttr = DISPLAYPORT_SEVERITY_WARNING;
-        *blinking = true;
-        return;
-    }
 
 #ifdef USE_ADC_INTERNAL
     const int16_t coreTemperature = getCoreTemperatureCelsius();

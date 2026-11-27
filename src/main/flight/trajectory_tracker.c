@@ -24,8 +24,9 @@
 #include "trajectory_tracker.h"
 
 #include <math.h>
-#include "flight/imu.h"
-#include "io/external_pos.h"
+#include "flight/ahrs.h"
+#include "flight/ekf.h"
+#include "io/local_pos.h"
 #include "flight/indi.h"
 #include "pos_ctl.h"
 #include "fc/runtime_config.h"
@@ -33,12 +34,16 @@
 
 #ifdef USE_TRAJECTORY_TRACKER
 
-#ifndef USE_POS_CTL
-#error "USE_TRAJECTORY_TRACKER only works in combination with USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "USE_TRAJECTORY_TRACKER only works in combination with USE_LOCAL_POSITION"
 #endif
 
 // state of trajectory tracker:
 bool tt_active = false;
+
+// origin
+fp_vector_t tt_origin = {0};
+float tt_z = -1.5f;
 
 // acceleration and yaw rate setpoints
 float tt_acc_sp[3] = {0};
@@ -58,12 +63,12 @@ float tt_time = 0.0f;
 timeUs_t last = 0;
 
 // gains
-float tt_pos_gain = 2.0; //1.5;
-float tt_vel_gain = 3.0; //2.5;
+float tt_pos_gain = 1.5; //1.5;
+float tt_vel_gain = 2.5; //2.5;
 // float tt_yaw_gain = 1.0;
 
 // radius of circular trajectory
-float tt_R = 3.0f;
+float tt_R = 1.0f;
 
 // recovery algorithm
 bool tt_recovery_active = false;
@@ -124,9 +129,9 @@ void getRefsRecoveryTrajectory(float t) {
     while (theta < -M_PIf) theta += (2.0f * M_PIf);
 
     // position refs
-    tt_pos_ref[0] = R*cosf(theta);
-    tt_pos_ref[1] = R*sinf(theta);
-    tt_pos_ref[2] = -1.5f;
+    tt_pos_ref[0] = tt_origin.V.X + R*cosf(theta);
+    tt_pos_ref[1] = tt_origin.V.Y + R*sinf(theta);
+    tt_pos_ref[2] = tt_origin.V.Z;
 
     // velocity refs
     tt_vel_ref[0] = -R*sinf(theta)*omega;
@@ -160,36 +165,60 @@ void getRefsTrajectoryTracker(float p) {
     // psi(t) = p(t) + pi/2
     // where:
     // dp/dt  = speed_factor (piecewise constant)
-    while (tt_progress >  M_PIf) tt_progress -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
-    while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
+    // while (tt_progress >  M_PIf) tt_progress -= (2.0f * M_PIf);  // always wrap input angle to -PI..PI
+    // while (tt_progress < -M_PIf) tt_progress += (2.0f * M_PIf);
 
     // position refs
-    tt_pos_ref[0] = tt_R*cosf(p);
-    tt_pos_ref[1] = tt_R*sinf(p);
-    tt_pos_ref[2] = -1.5f;
+#define MAX_SPIRAL_ANGLE (6.f*2.f*M_PIf)
+    while (p > MAX_SPIRAL_ANGLE) {
+        p -= MAX_SPIRAL_ANGLE;
+    }
+
+    float R;
+    if (p > MAX_SPIRAL_ANGLE*0.5f) {
+        R = 0.1f*(MAX_SPIRAL_ANGLE - p);
+    } else {
+        R = 0.1f*p;
+    }
+
+    tt_pos_ref[0] = tt_origin.V.X + R*tt_R*cosf(p);
+    tt_pos_ref[1] = tt_origin.V.Y + R*tt_R*sinf(p);
+    tt_pos_ref[2] = tt_origin.V.Z;
 
     // velocity refs
-    tt_vel_ref[0] = -tt_R*tt_speed_factor*sinf(p);
-    tt_vel_ref[1] = tt_R*tt_speed_factor*cosf(p);
+    tt_vel_ref[0] = -R*tt_R*tt_speed_factor*sinf(p);
+    tt_vel_ref[1] = +R*tt_R*tt_speed_factor*cosf(p);
     tt_vel_ref[2] = 0.0f;
 
     // acceleration refs
-    tt_acc_ref[0] = -tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
-    tt_acc_ref[1] = -tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
+    tt_acc_ref[0] = -R*tt_R*tt_speed_factor*tt_speed_factor*cosf(p);
+    tt_acc_ref[1] = -R*tt_R*tt_speed_factor*tt_speed_factor*sinf(p);
     tt_acc_ref[2] = 0.0f;
 
     // heading
     tt_yaw_ref = p + M_PIf/2.0f;
     tt_yaw_rate_ref = tt_speed_factor;
+    // tt_yaw_ref = M_PIf/2.0f;
+    // tt_yaw_rate_ref = 0.;
     posSpNed.trackPsi = tt_track_heading; // choice: track heading or neglect it?
 }
 
-void initTrajectoryTracker(void) {
+void initTrajectoryTracker(bool here) {
     // reset everything
     tt_progress = 0.0f;
     tt_speed_factor = 0.0f;
     tt_yaw_ref = 0.f;
     //tt_active = true; //dont activate yet, just go the starting point with default controller
+
+    if (here) {
+        tt_origin.V.X = posEstNed.V.X;
+        tt_origin.V.Y = posEstNed.V.Y;
+        tt_origin.V.Z = posEstNed.V.Z;
+    } else {
+        tt_origin.V.X = 0.0f;
+        tt_origin.V.Y = 0.0f;
+        tt_origin.V.Z = tt_z;
+    }
 
     // setpoint = starting point of trajectory
     getRefsTrajectoryTracker(0.0f);
@@ -198,7 +227,8 @@ void initTrajectoryTracker(void) {
     posSpNed.pos.V.Z = tt_pos_ref[2];
     posSpNed.psi = tt_yaw_ref;
     posSpNed.trackPsi = true;
-    posSetpointState = EXT_POS_NEW_MESSAGE;
+    posSpNed.valid = true;
+    posSpNed.time_us = micros();
 }
 
 void setSpeedTrajectoryTracker(float speed) {
@@ -286,11 +316,12 @@ void updateTrajectoryTracker(timeUs_t current) {
         // overwrite yawSetpoint (from pos_ctl.c)
         posSpNed.psi = tt_yaw_ref;
 
-        posSetpointState = EXT_POS_NEW_MESSAGE;
+        //posSpNed.valid = true;
+        posSpNed.time_us = current;
 
         // overwrite rateSpBody 
         if (posSpNed.trackPsi) {
-            rateSpBodyFromPos = coordinatedYaw(tt_yaw_rate_ref);
+            rateSpBodyFromPos = extrinsicYaw(tt_yaw_rate_ref);
         } else {
             rateSpBodyFromPos.V.X = 0;
             rateSpBodyFromPos.V.Y = 0;

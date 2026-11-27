@@ -33,11 +33,10 @@ class flightModeFlags():
     ANGLE_MODE       = (1 << 0)
     HORIZON_MODE     = (1 << 1)
     MAG_MODE         = (1 << 2)
-    HEADFREE_MODE    = (1 << 6)
     PASSTHRU_MODE    = (1 << 8)
     FAILSAFE_MODE    = (1 << 10)
     GPS_RESCUE_MODE  = (1 << 11)
-    VELOCITY_MODE    = (1 << 12)
+    WAYPOINT_MODE    = (1 << 12)
     POSITION_MODE    = (1 << 13)
     CATAPULT_MODE    = (1 << 14)
     LEARNER_MODE     = (1 << 15)
@@ -51,8 +50,8 @@ class flightLogDisarmReason():
 class boxId():
     # not for flight modes
     BOXARM = (1 << 0)
-    BOXPREARM = (1 << 34)
-    BOXTHROWTOARM = (1 << 35)
+    BOXPREARM = (1 << 35)
+    BOXTHROWTOARM = (1 << 36)
 
 hid_codes = {
     'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08,
@@ -71,15 +70,20 @@ float_ptr = np.ctypeslib.ndpointer(dtype=ct.c_float, ndim=1)
 timeUs_t = ct.c_uint32
 
 class IndiflightSITLMockup():
-    def __init__(self, libfile, N=4):
+    def __init__(self, libfile, Nr=4, Ns=0):
         self.libfile = libfile
-        self.N = N
+        self.Nr = Nr
+        self.Ns = Ns
+        self.lib = None
+        self.lib_handle = None
 
         # arrays
         self.gyro = np.zeros(3, dtype=ct.c_float)
         self.acc = np.zeros(3, dtype=ct.c_float)
-        self.motorOmega = np.zeros(self.N, dtype=ct.c_float)
-        self.motorCommands = np.zeros(self.N, dtype=ct.c_float)
+        self.motor_normalized_cmds = np.zeros(self.Nr, dtype=ct.c_float)
+        self.motorOmega            = np.zeros(self.Nr, dtype=ct.c_float)
+        self.servo_normalized_cmds = np.zeros(self.Ns, dtype=ct.c_float)
+        self.servoFeedback         = np.zeros(self.Ns, dtype=ct.c_float)
 
         self.pos = np.zeros(3, dtype=ct.c_float)
         self.vel = np.zeros(3, dtype=ct.c_float)
@@ -102,16 +106,38 @@ class IndiflightSITLMockup():
 
 #%% loading and config
     def _loadLibAndInit(self):
+        if self.lib_handle is not None:
+            # close sockets/files of this instance; dlclose does not, so the
+            # next init() would fail to bind the TCP serial ports
+            self.lib.mockupShutdown()
+
+            del self.armingFlags
+            del self.flightModeFlags
+            del self.rcModeActivationMask
+            del self.lib
+
+            dlclose = ct.CDLL(None).dlclose
+            dlerror = ct.CDLL(None).dlerror
+            dlclose.argtypes = [ct.c_void_p]
+            dlclose.restype = ct.c_int
+            dlerror.restype = ct.c_char_p
+
+            if dlclose(self.lib_handle) != 0:
+                print(f"Closing lib failed: {dlerror()}")
+
         self.lib = ct.CDLL( self.libfile )
+        self.lib_handle = self.lib._handle
         self.lib.init()
 
         # argtypes
         self.lib.setImu.argtypes = [float_ptr, float_ptr]
         self.lib.setMotorSpeed.argtypes = [float_ptr, ct.c_int]
+        self.lib.setServoAngle.argtypes = [float_ptr, ct.c_int]
         self.lib.setMocap.argtypes = [float_ptr, float_ptr, float_ptr]
         self.lib.setPosSetpoint.argtypes = [float_ptr, ct.c_float]
         self.lib.getMotorOutputCommands.argtypes = [float_ptr, ct.c_int]
-        self.lib.tick.argtypes = [timeUs_t]
+        self.lib.getServoOutputCommands.argtypes = [float_ptr, ct.c_int]
+        self.lib.tick.argtypes = []
         self.lib.processCharacterInteractive.argtypes = [ct.c_char]
         self.lib.processKey.argtypes = [ct.c_uint8]
         self.lib.disarm.argtypes = [ct.c_uint8]
@@ -123,9 +149,6 @@ class IndiflightSITLMockup():
         # also, this actually is a packed struct of multiple uint32.
         # ain't nobody got time for that. we support first 64 rc boxes
         self.rcModeActivationMask = self.getVariableReference(ct.c_uint64, "rcModeActivationMask") 
-
-        # disable logging by default
-        self.setLogging( False )
 
     def getVariableReference(self, type, variable):
         return type.in_dll(self.lib, variable)
@@ -143,7 +166,7 @@ class IndiflightSITLMockup():
         for char in "batch end\nsave\n":
             self.lib.processCharacterInteractive(bytes(char, 'utf-8'))
 
-        # realod lib
+        ## realod lib
         self._loadLibAndInit()
 
     def issueCliCommand(self, string):
@@ -165,19 +188,31 @@ class IndiflightSITLMockup():
 
         self._loadLibAndInit()
 
+    def initUros(self):
+        # self.lib.urosInit()
+        pass
+
 #%% sending and receiving sensor data / flight control outputs
     def sendImu(self, gyro, acc):
         self.gyro[:] = gyro
         self.acc[:] = acc
         self.lib.setImu(self.gyro, self.acc)
 
-    def sendMotorSpeeds(self, omega):
+    def sendMotorSpeeds(self, omega): # rad/s
         n = len(omega)
-        if n > self.N:
-            raise TypeError("too many elements in omega. Must be at most self.N")
+        if n > self.Nr:
+            raise TypeError(f"too many elements in omega. Must be at most self.Nr: {self.Nr}")
 
         self.motorOmega[:n] = omega
         self.lib.setMotorSpeed(self.motorOmega, n)
+
+    def sendServoAngles(self, angles): # rad
+        n = len(angles)
+        if n > self.Ns:
+            raise TypeError(f"too many elements in omega. Must be at most self.Ns: {self.Ns}")
+
+        self.servoFeedback[:n] = angles
+        self.lib.setServoAngle(self.servoFeedback, n)
 
     def sendMocap(self, pos, vel, quat):
         self.pos[:] = pos
@@ -191,8 +226,12 @@ class IndiflightSITLMockup():
         self.lib.setPosSetpoint(self.posSp, self.yawSp)
 
     def getMotorCommands(self):
-        self.lib.getMotorOutputCommands(self.motorCommands, self.N)
-        return np.array(self.motorCommands, dtype=float)
+        self.lib.getMotorOutputCommands(self.motor_normalized_cmds, self.Nr)
+        return np.array(self.motor_normalized_cmds, dtype=float)
+
+    def getServoCommands(self):
+        self.lib.getServoOutputCommands(self.servo_normalized_cmds, self.Ns)
+        return np.array(self.servo_normalized_cmds, dtype=float)
 
     def sendKeyboard(self, key):
         if key in hid_codes.keys():
@@ -233,9 +272,9 @@ class IndiflightSITLMockup():
         self.armingFlags.value = 0 # make extra sure
 
 #%% finally: tick the inner loop controls
-    def tick(self, dtUs):
+    def tick(self):
         # ToDo: timing of IMU and EKF stuff is now really hardcoded
-        self.lib.tick( dtUs )
+        self.lib.tick()
 
 
 if __name__=="__main__":

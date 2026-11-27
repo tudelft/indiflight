@@ -76,6 +76,23 @@ include $(ROOT)/make/system-id.mk
 # developer preferences, edit these at will, they'll be gitignored
 -include $(ROOT)/make/local.mk
 
+BOARD ?=
+ifeq ($(BOARD),)
+BOARD_OPTIONS =
+else
+BOARD_OPTIONS = $(shell grep '^#define' configs/boards/$(BOARD).txt | awk '{print "\047"$$2"\047" }')
+ifeq ($(TARGET),)
+TARGET = $(shell grep '^#define TARGET=' configs/boards/$(BOARD).txt | cut -f2- -d=)
+endif
+endif
+
+PROFILE ?=
+ifeq ($(PROFILE),)
+PROFILE_OPTIONS =
+else
+PROFILE_OPTIONS = $(shell grep '^#define' configs/profiles/$(PROFILE).txt | awk '{print "\047"$$2"\047" }')
+endif
+
 # pre-build sanity checks
 include $(ROOT)/make/checks.mk
 
@@ -103,12 +120,39 @@ endif
 
 include $(ROOT)/make/targets.mk
 
+REVISION ?=
+
+ifeq ($(REVISION),)
 GITHASH := $(shell git log -1 --format="%h")
 DIRTYFLAG =
 ifneq ($(shell git diff --shortstat),)
 DIRTYFLAG = +dirty
 endif
-REVISION := $(GITHASH)$(DIRTYFLAG)
+REVISION = $(GITHASH)$(DIRTYFLAG)
+endif
+
+check_dirty :
+	@echo "checking dirty"
+ifeq (y,$(YES))
+	@echo "Skipping dirty-checks"
+else
+ifneq (,$(findstring dirty,$(REVISION)))
+	@echo "Uncommited changes. Continue with build? [y/N] (pass YES=y to skip)"; \
+		read answer; \
+		if [ "$$answer" != "y" ]; then \
+		  echo "Aborting target"; \
+		  exit 1; \
+		fi
+endif
+	@if [ -d $(TARGET_OBJ_DIR) ]; then \
+		echo "!!!! NOT CLEANED !!!!. Continue with build? [y/N] (pass YES=y to skip)"; \
+			read answer; \
+			if [ "$$answer" != "y" ]; then \
+			  echo "Aborting target"; \
+			  exit 1; \
+			fi \
+	fi
+endif
 
 FC_VER_MAJOR := $(shell grep " FC_VERSION_MAJOR" src/main/build/version.h | awk '{print $$3}' )
 FC_VER_MINOR := $(shell grep " FC_VERSION_MINOR" src/main/build/version.h | awk '{print $$3}' )
@@ -245,11 +289,15 @@ CFLAGS     += $(ARCH_FLAGS) \
               -DUSE_STDPERIPH_DRIVER \
               -D$(TARGET) \
               $(TARGET_FLAGS) \
+			  -DCLOUD_BUILD \
               -D'__FORKNAME__="$(FORKNAME)"' \
               -D'__TARGET__="$(TARGET)"' \
               -D'__REVISION__="$(REVISION)"' \
               -pipe \
               -MMD -MP \
+			  -Wno-deprecated-declarations \
+			  $(addprefix -D,$(BOARD_OPTIONS)) \
+			  $(addprefix -D,$(PROFILE_OPTIONS)) \
               $(EXTRA_FLAGS)
 
 ASFLAGS     = $(ARCH_FLAGS) \
@@ -260,6 +308,8 @@ ASFLAGS     = $(ARCH_FLAGS) \
 
 ifeq ($(LD_FLAGS),)
 LD_FLAGS     = -lm \
+			  -L$(ROOT)/lib/main/micro_ros_arduino/src/cortex-m7/fpv5-sp-d16-hardfp \
+			  -lmicroros \
               -nostartfiles \
               --specs=nano.specs \
               -lc \
@@ -313,7 +363,7 @@ TARGET_MAP      = $(OBJECT_DIR)/$(FORKNAME)_$(TARGET_NAME).map
 
 TARGET_EXST_HASH_SECTION_FILE = $(TARGET_OBJ_DIR)/exst_hash_section.bin
 
-TARGET_EF_HASH      := $(shell echo -n "$(EXTRA_FLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
+TARGET_EF_HASH      := $(shell echo -n "$(CFLAGS)" | openssl dgst -md5 | awk '{print $$2;}')
 TARGET_EF_HASH_FILE := $(TARGET_OBJ_DIR)/.efhash_$(TARGET_EF_HASH)
 
 CLEAN_ARTIFACTS := $(TARGET_BIN)
@@ -521,6 +571,16 @@ st-flash_$(TARGET): $(TARGET_BIN)
 ## st-flash          : flash firmware (.bin) onto flight controller
 st-flash: st-flash_$(TARGET)
 
+## flash with Segger hardware (e.g. jlink edu mini. need to install extra software)
+jlink_flash:
+	$(V0) $(MAKE) $(TARGET_HEX) || exit 1
+	echo "loadfile $(TARGET_HEX)\n exit" > .jlink-commandfile
+ifeq ($(TARGET),STM32H743)
+	$(V0) /usr/bin/JLinkExe -AutoConnect 1 -ExitOnError 1 -NoGui 1 -Device $(TARGET)VI -If SWD -Speed 4000 -CommandFile .jlink-commandfile
+else
+	@echo "target not yet implemented for jlink flashing"
+endif
+
 ifneq ($(OPENOCD_COMMAND),)
 openocd-gdb: $(TARGET_ELF)
 	$(V0) $(OPENOCD_COMMAND) & $(CROSS_GDB) $(TARGET_ELF) -ex "target remote localhost:3333" -ex "load"
@@ -533,13 +593,13 @@ $(TARGETS_ZIP):
 	$(V0) $(MAKE) hex TARGET=$(subst _zip,,$@)
 	$(V0) $(MAKE) zip TARGET=$(subst _zip,,$@)
 
-zip:
+zip: check_dirty
 	$(V0) zip $(TARGET_ZIP) $(TARGET_HEX)
 
-binary:
+binary: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_BIN)
 
-hex:
+hex: check_dirty
 ifeq ($(TARGET),MOCKUP)
 # generate shared library instead
 	$(V0) $(MAKE) -j $(TARGET_SO)
@@ -547,10 +607,10 @@ else
 	$(V0) $(MAKE) -j $(TARGET_HEX)
 endif
 
-dfu:
+dfu: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_DFU)
 
-so:
+so: check_dirty
 	$(V0) $(MAKE) -j $(TARGET_SO)
 
 TARGETS_REVISION = $(addsuffix _rev,$(VALID_TARGETS))
@@ -676,14 +736,25 @@ $(TARGET_EF_HASH_FILE):
 	@echo "EF HASH -> $(TARGET_EF_HASH_FILE)"
 	$(V1) touch $(TARGET_EF_HASH_FILE)
 
-# pi-protocol make script
-$(PI_GEN_FILES) : $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
-	@echo "generating pi protocol headers"
-	cd lib/main/pi-protocol/ && make generate CONFIG=config.yaml
-	@echo "done"
+### CODE GENERATED dependencies
+# prevent partial deletion of generated files
+# requires gnu make 4.3. "&" prevents this command from being run multiple times
+.PRECIOUS=$(PI_GEN_FILES) $(EKF_GEN_FILES)
+.SECONDARY=$(PI_GEN_FILES) $(EKF_GEN_FILES)
 
-# rebuild everything when makefile changes or the extra flags have changed or pi-protocol has changed
-$(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildcard make/*) $(PI_GEN_FILES)
+# pi-protocol make script
+$(PI_GEN_FILES) &: $(PI_DIR)/pi-protocol.c $(PI_DIR)/../config.yaml $(wildcard $(PI_DIR)/../msgs/*) $(wildcard $(PI_DIR)/../templates/*.j2) $(PI_DIR)/../python/generate.py
+	@echo "#### generating pi protocol..."
+	cd lib/main/pi-protocol/ && make generate CONFIG=config.yaml
+
+# ekf c code
+$(EKF_GEN_FILES) &: $(EKF_DIR)/generate_ekf.py $(wildcard $(EKF_DIR)/*.j2)
+	@echo "#### generating ekf..."
+	cd $(EKF_DIR) && python3 generate_ekf.py
+
+# rebuild everything when makefile changes or the extra flags have changed or generated code has changed.
+# The generated headers must also exist before any object compiles (parallel builds on a fresh clone).
+$(TARGET_OBJS): $(TARGET_EF_HASH_FILE) Makefile $(TARGET_DIR)/target.mk $(wildcard make/*) $(PI_GEN_FILES) $(EKF_GEN_FILES)
 
 # include auto-generated dependencies
 -include $(TARGET_DEPS)
@@ -692,3 +763,8 @@ include $(ROOT)/make/remote_flash.mk
 
 echo-cflags:
 	@echo $(CFLAGS)
+
+# total number of objects, parsed by entrypoint.sh for the [n/N] progress counter
+ifeq ($(PROGRESS),y)
+$(info %%TOTAL $(words $(sort $(TARGET_OBJS))))
+endif

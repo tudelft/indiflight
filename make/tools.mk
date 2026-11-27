@@ -30,10 +30,18 @@ arm_sdk_version:
 
 ARM_SDK_URL_BASE  := https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10
 # source: https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads
+# Detected here because the Dockerfile runs this file standalone, without system-id.mk.
+# arm64 Linux is e.g. the builder container on Apple Silicon.
+ARM_SDK_HOST_ARCH ?= $(shell uname -m)
 ifeq ($(OSFAMILY), linux)
-  ARM_SDK_URL  := $(ARM_SDK_URL_BASE)-x86_64-linux.tar.bz2
+  ifneq ($(filter aarch64 arm64,$(ARM_SDK_HOST_ARCH)),)
+    ARM_SDK_URL  := $(ARM_SDK_URL_BASE)-aarch64-linux.tar.bz2
+  else
+    ARM_SDK_URL  := $(ARM_SDK_URL_BASE)-x86_64-linux.tar.bz2
+  endif
 endif
 
+# x86_64 only for this release; runs under Rosetta on Apple Silicon
 ifeq ($(OSFAMILY), macosx)
   ARM_SDK_URL  := $(ARM_SDK_URL_BASE)-mac.tar.bz2
 endif

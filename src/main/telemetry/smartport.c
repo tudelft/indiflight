@@ -53,7 +53,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/position.h"
@@ -783,10 +783,6 @@ void processSmartPortTelemetry(smartPortPayload_t *payload, volatile bool *clear
 
                 if (FLIGHT_MODE(MAG_MODE)) {
                     tmpi += 100;
-                }
-
-                if (FLIGHT_MODE(HEADFREE_MODE)) {
-                    tmpi += 4000;
                 }
 
                 smartPortSendPackage(id, (uint32_t)tmpi);

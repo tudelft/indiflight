@@ -4,6 +4,8 @@
  * Copyright 2023 Robin Ferede (Delft University of Technology)
  * Copyright 2024 Till Blaha (Delft University of Technology)
  *     Improved integration with legacy estimator, added parameters
+ * Copyright 2025 Till Blaha (Delft University of Technology)
+ *     Upstream quaternion EKF, remove legacy estimator
  *
  * This file is part of Indiflight.
  *
@@ -25,44 +27,54 @@
 
 #include "ekf.h"
 
-#include "io/external_pos.h"  		// for extPosNed
+#include "io/local_pos.h"  		    // for posMeasNed
+#include "io/gps.h"      		    // for indicating if we are converged
 #include "fc/runtime_config.h"		// for FLIGHT_MODE
 #include "common/maths.h"      		// for DEGREES_TO_RADIANS
 #include "sensors/gyro.h"			// for gyro
 #include "sensors/acceleration.h"   // for acc
-#include "imu.h"                    // for fallback if no GPS
+#include "ahrs.h"                   // for fallback if no GPS
+#include "telemetry/pi.h"
 #include "pi-messages.h"            // for keeping track of message times
+#include "sensors/barometer.h"
+#include "flight/indi.h"
+#include "flight/throw.h"
+#include "drivers/dshot.h"
+#include <stdbool.h>
 
 #include "pg/pg_ids.h"              // for config
 
 #ifdef USE_EKF
 
-#ifndef USE_ACC
-#error "USE_EKF requires USE_ACC"
+#ifndef USE_LOCAL_POSITION
+#error "USE_EKF requires USE_LOCAL_POSITION"
 #endif
 
-#ifndef USE_GYRO
-#error "USE_EKF requires USE_GYRO"
-#endif
-
-#ifndef USE_GPS_PI
-#error "USE_EKF requires USE_GPS_PI"
-#endif
-
-PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 0);
+PG_REGISTER_WITH_RESET_TEMPLATE(ekfConfig_t, ekfConfig, PG_EKF_CONFIG, 2);
 PG_RESET_TEMPLATE(ekfConfig_t, ekfConfig, 
-    .use_attitude_estimate = 0,
-    .use_position_estimate = 0,
-    .use_angle_measurements = { 1, 1, 1 },
-    .proc_noise_acc = { 5000, 5000, 5000 },
-    .proc_noise_gyro = { 1000, 1000, 1000 },
-    .meas_noise_position = { 10, 10, 10 },
-    .meas_noise_angles = { 100, 100, 100 },
+    .use_quat_measurement = 1,
+    .use_for_manual_flight = 0,
+    .meas_source = LOCAL_POS_SOURCE_PI,
+    .proc_noise_acc       = { 500000, 500000, 500000 },
+    .proc_noise_gyro      = { 100000, 100000, 100000 },
+    .proc_noise_acc_bias  = { 100, 100, 100 },
+    .proc_noise_gyro_bias = { 10, 10, 10 },
+    .meas_noise_position  = { 1000, 1000, 1000 },
+    .meas_noise_quat      = { 50000, 50000, 50000, 50000 },
     .meas_delay = 0,
+    .height_source = EKF_HEIGHT_SOURCE_POS_MEAS,
+    .baro_rpm_coeff = 0,
 ); 
 
+fp_quaternion_t qEkf = QUATERNION_INITIALIZE;
+fp_vector_t posEstNed = {0};
+fp_vector_t velEstNed = {0};
+
 bool ekf_initialized = false;
-timeUs_t lastTimeUs = 0;
+bool ekf_converged = false;
+bool ekf_should_use = false;
+timeUs_t lastInitializedTimeUs = 0;
+timeUs_t lastPredictTimeUs = 0;
 
 float ekf_Z[N_MEASUREMENTS] = {0.};
 float ekf_U[N_INPUTS] = {0.};
@@ -124,161 +136,247 @@ void ekf_update_delayed(float Z[N_MEASUREMENTS], float t) {
 	}
 }
 
+bool isConvergedEkf(void) {
+    return ekf_converged;
+}
+
+bool shouldBeUsedEkf(void) {
+    return ekf_should_use;
+}
+
+void forceDeinitEkf(void) {
+    ekf_initialized = false;
+    ekf_converged = false;
+}
+
+
+// height measurement (NED z) used by the ekf: baro or posMeasNed, see ekf_height_source
+static float getEkfHeightMeasurement(void) {
+#if defined(USE_BARO)
+    if ((ekfConfig()->height_source == EKF_HEIGHT_SOURCE_BARO) && sensors(SENSOR_BARO)) {
+        float height = 0.01f * baro.altitude; // cm to m
+#if defined(USE_DSHOT) && defined(USE_DSHOT_TELEMETRY) && defined(USE_INDI)
+        // calibrate sensor for prop speeds. doesnt take into account ground effect
+        if ((ekfConfig()->baro_rpm_coeff != 0) && isDshotTelemetryActive() && (indiRun.actNum > 0)) {
+            float mean = 0.f; // rad/s
+            for (int i=0; i<indiRun.actNum; i++) {
+                mean += indiRun.omega_fs[i];
+            }
+            mean /= indiRun.actNum;
+            height += 1e-3f * ekfConfig()->baro_rpm_coeff * sq(1e-3f*mean);
+        }
+#endif
+        return -height; // NED
+    }
+#endif
+    return posMeasNed.pos.V.Z;
+}
+
 void initEkf(timeUs_t currentTimeUs) {
+    if ( !(posMeasNed.new)
+            || (cmpTimeUs(currentTimeUs, posMeasNed.time_us) > EKF_MAX_MEAS_AGE_US) ) {
+        return;
+    }
+    posMeasNed.new = false;
+
 	// set ekf parameters
-	ekf_use_phi = ekfConfig()->use_angle_measurements[0];
-	ekf_use_theta = ekfConfig()->use_angle_measurements[1];
-	ekf_use_psi = ekfConfig()->use_angle_measurements[2];
+	bool use_quat = ekfConfig()->use_quat_measurement && posMeasNed.quat_valid;
 
 	// process noise covariance
 	float Q[N_STATES] = {
-		((float) ekfConfig()->proc_noise_acc[0]) * 1e-4f, // ax
-		((float) ekfConfig()->proc_noise_acc[1]) * 1e-4f, // ay
-		((float) ekfConfig()->proc_noise_acc[2]) * 1e-4f, // az
-		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-4f, // p
-		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-4f, // q
-		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-4f // r
+		((float) ekfConfig()->proc_noise_acc[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc[2]) * 1e-6f, // az
+		((float) ekfConfig()->proc_noise_gyro[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro[2]) * 1e-6f, // r
+		((float) ekfConfig()->proc_noise_acc_bias[0]) * 1e-6f, // ax
+		((float) ekfConfig()->proc_noise_acc_bias[1]) * 1e-6f, // ay
+		((float) ekfConfig()->proc_noise_acc_bias[2]) * 1e-6f, // az 
+		((float) ekfConfig()->proc_noise_gyro_bias[0]) * 1e-6f, // p
+		((float) ekfConfig()->proc_noise_gyro_bias[1]) * 1e-6f, // q
+		((float) ekfConfig()->proc_noise_gyro_bias[2]) * 1e-6f // r
 	};
 
 	// measurement noise covariance
 	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-4f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-4f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-4f, // posD
-		((float) ekfConfig()->meas_noise_angles[0]) * 1e-4f, // phi
-		((float) ekfConfig()->meas_noise_angles[1]) * 1e-4f, // theta
-		((float) ekfConfig()->meas_noise_angles[2]) * 1e-4f, // psi
+		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
+		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
+		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
+		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
+		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
+		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
+		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
 	};
 
-	// sets initial state to the latest external pos and att
+    // sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
-		extPosNed.pos.V.X,
-		extPosNed.pos.V.Y,
-		extPosNed.pos.V.Z,
+		posMeasNed.pos.V.X,
+		posMeasNed.pos.V.Y,
+		posMeasNed.pos.V.Z,
 		0., 0., 0., // vel
-		extPosNed.att.angles.roll,
-		extPosNed.att.angles.pitch,
-		extPosNed.att.angles.yaw,
+        1., 0., 0., 0., // quaternion
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
 
 	// sets initial covariance to 1
 	float P_diag0[N_STATES] = {
-		1., 1., 1., // pos
-		1., 1., 1., // vel
-		1., 1., 1., // att
-		1., 1., 1., 1., 1., 1. // acc and gyro biases (to turn off bias estimation, set these to 0)!
+		1., 1., 1.,     // pos
+		1., 1., 1.,     // vel
+		1., 1., 1., 1., // att
+		1e-2f, 1e-2f, 1e-2f, // acc biases (to turn off bias estimation, set these to 0)!
+        1e-2f, 1e-2f, 1e-2f  // gyro biases (to turn off bias estimation, set these to 0)!
 	};
 
-    ekf_Z[5] = extPosNed.att.angles.yaw;
-	
+    if (use_quat) {
+		X0[6] = posMeasNed.quat.w;
+		X0[7] = posMeasNed.quat.x;
+		X0[8] = posMeasNed.quat.y;
+		X0[9] = posMeasNed.quat.z;
+    } else {
+        P_diag0[13] = 0.f; // turn off gyro bias estimation
+        P_diag0[14] = 0.f; // turn off gyro bias estimation
+        P_diag0[15] = 0.f; // turn off gyro bias estimation
+        Q[13] = 0.f;
+        Q[14] = 0.f;
+        Q[15] = 0.f;
+    }
+
+    X0[2] = getEkfHeightMeasurement();
+
 	// initialize ekf
+    ekf_set_use_quat(use_quat);
 	ekf_set_Q(Q);
 	ekf_set_R(R);
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
-	lastTimeUs = currentTimeUs;
+    lastInitializedTimeUs = currentTimeUs;
+	lastPredictTimeUs = currentTimeUs;
 }
 
-void runEkf(timeUs_t currentTimeUs) {
-    static timeUs_t lastUpdateTimestamp = 0;
+void updateEkf(timeUs_t currentTimeUs) {
+#ifdef USE_TELEMETRY_PI
+    // stream inputs over serial
+    static unsigned counter = 0;
+    if ((++counter % 16)) {
+        piSendEkfInputs();
+    }
+#endif
+
+    // --- check init and convergence
+    // if not init, try init and exit
+    if (!ekf_initialized) {
+#ifdef USE_GPS
+        // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+        //gpsSetFixState(false);
+#endif
+        ekf_converged = false;
+        initEkf(currentTimeUs);
+        return;
+    }
+
+    // set ekf converged if healthy for long enough
+    if (!ekf_converged && cmpTimeUs(currentTimeUs, lastInitializedTimeUs) > EKF_CONVERGE_TIME_US) {
+        ekf_converged = true;
+    }
+
+#ifdef USE_GPS
+    // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+    if (ekf_converged) {
+        //gpsSetFixState(true);
+    }
+#endif
+
+    // --- check if ekf will be used by control/ahrs
+    ekf_should_use = ( FLIGHT_MODE(POSITION_MODE)
+                            || FLIGHT_MODE(NN_MODE)
+                            || FLIGHT_MODE(CATAPULT_MODE) );
+    ekf_should_use |= ekfConfig()->use_for_manual_flight;
+
+    // --- deinit because of lost position, if we are not flying/expecting to fly soon
+    bool ekf_inhibit_deinit = ekf_should_use && ARMING_FLAG(ARMED);
+    timeDelta_t deinit_timeout = EKF_DEINIT_TIMEOUT;
+
+#ifdef USE_THROW_TO_ARM
+    // if expected to be thrown at any moment, increase deinit timeout
+    if (throwState >= THROW_STATE_WAITING_FOR_THROW) {
+        deinit_timeout = MAX(deinit_timeout, THROW_TO_ARM_EKF_DEINIT_TIME_US);
+    }
+#endif
+
+    // deinit if lost position signal
+    if ( !ekf_inhibit_deinit && cmpTimeUs(currentTimeUs, posMeasNed.time_us) > deinit_timeout ) {
+        ekf_initialized = false;
+        ekf_converged = false;
+#ifdef USE_GPS
+        // todo: make this prettier, now it's abusing the already-present GPS indicator in configurator
+        //gpsSetFixState(false);
+#endif
+        return;
+    }
+
+
+    // --- actually run ekf ---
+
 	// PREDICTION STEP
     // FRD frame's, which we have now everywhere in INDIFlight
-	ekf_U[0] = GRAVITYf * ((float)acc.accADCf[0]) / ((float)acc.dev.acc_1G);
-	ekf_U[1] = GRAVITYf * ((float)acc.accADCf[1]) / ((float)acc.dev.acc_1G);
-	ekf_U[2] = GRAVITYf * ((float)acc.accADCf[2]) / ((float)acc.dev.acc_1G);
-	ekf_U[3] = DEGREES_TO_RADIANS(gyro.gyroADCf[0]);
-	ekf_U[4] = DEGREES_TO_RADIANS(gyro.gyroADCf[1]);
-	ekf_U[5] = DEGREES_TO_RADIANS(gyro.gyroADCf[2]);
+	ekf_U[0] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[0];
+	ekf_U[1] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[1];
+	ekf_U[2] = GRAVITYf * ((float) acc.dev.acc_1G_rec) * acc.accADCafterRpm[2];
+	ekf_U[3] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[0] );
+	ekf_U[4] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[1] );
+	ekf_U[5] = DEGREES_TO_RADIANS( gyro.gyroADCafterRpm[2] );
 
 	// add to history (will be used in the update step)
 	// ekf_add_to_history(currentTimeUs * 1e-6);
 
 	// PREDICTION STEP
-	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
+	float dt = cmpTimeUs(currentTimeUs, lastPredictTimeUs) * 1e-6f;
 	ekf_predict(ekf_U, dt);
+	lastPredictTimeUs = currentTimeUs;
 
 	// UPDATE STEP 			(only when new measurement is available)
-	if (cmpTimeUs(extLatestMsgTime, lastUpdateTimestamp) > 0) {
-        lastUpdateTimestamp = extLatestMsgTime;
-		ekf_Z[0] = extPosNed.pos.V.X;
-		ekf_Z[1] = extPosNed.pos.V.Y;
-		ekf_Z[2] = extPosNed.pos.V.Z;
-		ekf_Z[3] = extPosNed.att.angles.roll;
-		ekf_Z[4] = extPosNed.att.angles.pitch;
+	if ( posMeasNed.new 
+            && cmpTimeUs(posMeasNed.time_us, currentTimeUs) <= EKF_MAX_MEAS_AGE_US) {
 
-		// fix yaw discontinuity (rad)
-		float delta_psi = extPosNed.att.angles.yaw - ekf_Z[5];
-		while (delta_psi > M_PI) {
-			delta_psi -= 2 * M_PI;
-		}
-		while (delta_psi < -M_PI) {
-			delta_psi += 2 * M_PI;
-		}
+        posMeasNed.new = false;
 
-		ekf_Z[5] += delta_psi;
+		ekf_Z[0] = posMeasNed.pos.V.X;
+		ekf_Z[1] = posMeasNed.pos.V.Y;
+        ekf_Z[2] = getEkfHeightMeasurement();
+
+        bool use_quat = ekfConfig()->use_quat_measurement && posMeasNed.quat_valid;
+
+        if (use_quat) {
+            ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
+            ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
+            ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
+            ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
+        } else {
+            ekf_Z[3] = 0.f;
+            ekf_Z[4] = 0.f;
+            ekf_Z[5] = 0.f;
+            ekf_Z[6] = 0.f;
+        }
 
 		// old update:
 		ekf_update(ekf_Z);
 
 		// new update that takes into account the time delay:
-		// ekf_update_delayed(ekf_Z, extLatestMsgTime * 1e-6);
+		// ekf_update_delayed(ekf_Z, posLatestMsgTime * 1e-6);
 		// float delay = ((float) ekfConfig()->meas_delay) * 1e-3f; // in seconds
 		// ekf_update_delayed(ekf_Z, currentTimeUs * 1e-6 - delay);
-	} 
-	// else {
-	// 	// no new measurement available, only predict
-	// 	float dt = (currentTimeUs - lastTimeUs) * 1e-6;
-	// 	ekf_predict(ekf_U, dt);
-	// }
-	lastTimeUs = currentTimeUs;
-}
+	}
 
-void updateEkf(timeUs_t currentTimeUs) {
-	// reset ekf EXT_POS_NO_SIGNAL
-    if (extPosState == EXT_POS_NO_SIGNAL) {
-        ekf_initialized = false;
-    } else if (!ekf_initialized) {
-        // when ekf is not initialized, we need to wait for the first external position message
-        if (extPosState != EXT_POS_NO_SIGNAL) {
-            // INIT EKF
-            initEkf(currentTimeUs);
-        }
-    } else {
-        // ekf is initialized and POSITION_MODE, we can run the ekf
-		runEkf(currentTimeUs);
-    }
+    float *ekf_X = ekf_get_X();
 
-    // run fallback in advance so it doesnt lose sync
-    imuUpdateAttitude(currentTimeUs);
+    // update position
+    posEstNed = (fp_vector_t) { .V = {ekf_X[0], ekf_X[1], ekf_X[2]} };
+    velEstNed = (fp_vector_t) { .V = {ekf_X[3], ekf_X[4], ekf_X[5]} };
 
-    // update system state with EKF data, if possible and configured
-    if (ekf_initialized && (extPosState != EXT_POS_NO_SIGNAL)) {
-        // additional safety check: use EKF only, if recent update from optitrack
-        float *ekf_X = ekf_get_X();
-
-        if (ekfConfig()->use_attitude_estimate) {
-            fp_quaternion_t q;
-            fp_euler_t e = { .angles.roll = ekf_X[6], .angles.pitch = ekf_X[7], .angles.yaw = ekf_X[8] }; // rad
-            quaternion_of_fp_euler(&q, &e);
-            setAttitudeWithQuaternion(&q);
-        }
-
-        if (ekfConfig()->use_position_estimate) {
-            fp_vector_t posNed_set;
-            posNed_set.V.X = ekf_X[0];
-            posNed_set.V.Y = ekf_X[1];
-            posNed_set.V.Z = ekf_X[2];
-
-            fp_vector_t velNed_set;
-            velNed_set.V.X = ekf_X[3];
-            velNed_set.V.Y = ekf_X[4];
-            velNed_set.V.Z = ekf_X[5];
-
-            setPositionState(posNed_set, velNed_set);
-        }
-    }
+    // set ekf quaternion
+    qEkf = (fp_quaternion_t) { .w = ekf_X[6], .x = ekf_X[7], .y = ekf_X[8], .z = ekf_X[9] };
 }
 
 #endif // USE_EKF

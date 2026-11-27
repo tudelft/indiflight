@@ -24,8 +24,9 @@
 
 #include "pg/pg_ids.h"
 #include "io/beeper.h"
-#include "io/external_pos.h"
-#include "flight/imu.h"
+#include "io/local_pos.h"
+#include "flight/ahrs.h"
+#include "flight/ekf.h"
 #include "flight/indi.h"
 #include "fc/runtime_config.h"
 #include "common/rng.h"
@@ -41,8 +42,8 @@ catapult_state_t catapultState = CATAPULT_IDLE;
 #error "must use catapult with USE_INDI"
 #endif
 
-#ifndef USE_POS_CTL
-#error "muse use catapult with USE_POS_CTL"
+#ifndef USE_LOCAL_POSITION
+#error "must use catapult with USE_LOCAL_POSITION"
 #endif
 
 // extern
@@ -156,13 +157,10 @@ void runCatapultStateMachine(timeUs_t current) {
 
     bool disableConditions = !FLIGHT_MODE(POSITION_MODE)
                 || !FLIGHT_MODE(CATAPULT_MODE)
-                || (extPosState == EXT_POS_NO_SIGNAL)
-                || (posSetpointState == EXT_POS_NO_SIGNAL)
+                || !isConvergedEkf()
+                || !posSpNed.valid
 #ifdef USE_INDI
                 || (systemConfig()->indiProfileIndex == (INDI_PROFILE_COUNT-1)) // cannot guarantee safe launch here
-#endif
-#if defined(USE_EKF) && false
-                || !ekf_is_healthy() // TODO: implement this!
 #endif
                 ;
     bool enableConditions = !disableConditions && !ARMING_FLAG(ARMED);

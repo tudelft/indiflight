@@ -41,7 +41,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/failsafe.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/feedforward.h"
 #include "flight/gps_rescue.h"
 #include "flight/pid_init.h"
@@ -98,6 +98,29 @@ static float rcDeflectionSmoothed[3];
 
 #define RC_RX_RATE_MIN_US                       950   // 0.950ms to fit 1kHz without an issue
 #define RC_RX_RATE_MAX_US                       65500 // 65.5ms or 15.26hz
+
+static float sticksReference[4];
+
+void setSticksReference(void)
+{
+    for (int i = 0; i < 3; i++) {
+        sticksReference[i] = getRcDeflection(i);
+    }
+    sticksReference[THROTTLE] = 1e-3f * (rcCommand[THROTTLE] - 1000.f); // should be [0., 1.]
+}
+
+bool haveSticksMoved(void)
+{
+    for (int i = 0; i < 3; i++) {
+        if (fabsf(getRcDeflection(i) - sticksReference[i]) > RC_STICK_MOVEMENT_THRESHOLD) {
+            return true;
+        }
+    }
+    if (fabsf(1e-3f * (rcCommand[THROTTLE] - 1000.f) - sticksReference[THROTTLE]) > RC_STICK_MOVEMENT_THRESHOLD) {
+        return true;
+    }
+    return false;
+}
 
 bool getShouldUpdateFeedforward(void)
 // only used in pid.c, when feedforward is enabled, to initiate a new FF value
@@ -583,7 +606,7 @@ FAST_CODE void processRcCommand(void)
             DEBUG_SET(DEBUG_ANGLERATE, axis, lrintf(angleRate));
         }
         // adjust raw setpoint steps to camera angle (mixing Roll and Yaw)
-        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX) && !FLIGHT_MODE(HEADFREE_MODE)) {
+        if (rxConfig()->fpvCamAngleDegrees && IS_RC_MODE_ACTIVE(BOXFPVANGLEMIX)) {
             scaleRawSetpointToFpvCamAngle();
         }
     }
@@ -654,23 +677,6 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
                 fix12_t throttleScaler = qConstruct(rcCommand[THROTTLE] - 1000, 1000);
                 rcCommand[THROTTLE] = rxConfig()->midrc + qMultiply(throttleScaler, PWM_RANGE_MAX - rxConfig()->midrc);
             }
-        }
-    }
-    if (FLIGHT_MODE(HEADFREE_MODE)) {
-        static fp_vector_t  rcCommandBuff;
-
-        rcCommandBuff.V.X = rcCommand[ROLL];
-        rcCommandBuff.V.Y = rcCommand[PITCH];
-        if ((!FLIGHT_MODE(ANGLE_MODE) && (!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommandBuff.V.Z = rcCommand[YAW];
-        } else {
-            rcCommandBuff.V.Z = 0;
-        }
-        imuQuaternionHeadfreeTransformVectorEarthToBody(&rcCommandBuff);
-        rcCommand[ROLL] = rcCommandBuff.V.X;
-        rcCommand[PITCH] = rcCommandBuff.V.Y;
-        if ((!FLIGHT_MODE(ANGLE_MODE)&&(!FLIGHT_MODE(HORIZON_MODE)) && (!FLIGHT_MODE(GPS_RESCUE_MODE)))) {
-            rcCommand[YAW] = rcCommandBuff.V.Z;
         }
     }
 }

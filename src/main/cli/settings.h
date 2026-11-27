@@ -146,6 +146,12 @@ typedef enum {
     TABLE_FREQ_DOMAIN,
     TABLE_SWITCH_MODE,
 #endif
+#ifdef USE_LEARNER
+    TABLE_PROBER_TYPE,
+#endif
+#ifdef USE_LOCAL_POSITION
+    TABLE_POSITION_ATTITUDE_MAPPING,
+#endif
     LOOKUP_TABLE_COUNT
 } lookupTableIndex_e;
 
@@ -166,6 +172,7 @@ typedef enum {
     VAR_UINT16 = (2 << VALUE_TYPE_OFFSET),
     VAR_INT16 = (3 << VALUE_TYPE_OFFSET),
     VAR_UINT32 = (4 << VALUE_TYPE_OFFSET),
+    VAR_INT32 = (5 << VALUE_TYPE_OFFSET), 
 
     // value section, bits 3-5
     MASTER_VALUE = (0 << VALUE_SECTION_OFFSET),

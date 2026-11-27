@@ -37,8 +37,10 @@
 // Use floating point M_PI instead explicitly.
 #define M_PIf       3.14159265358979323846f
 #define M_EULERf    2.71828182845904523536f
+#define M_LN2f      0.69314718055994530942f
 
 #define GRAVITYf 9.80665f
+#define REARTHf 6371000.f
 
 #define RAD    (M_PIf / 180.0f)
 #define DEGREES_TO_DECIDEGREES(angle) ((angle) * 10)
@@ -50,6 +52,14 @@
 
 #define CM_S_TO_KM_H(centimetersPerSecond) ((centimetersPerSecond) * 36 / 1000)
 #define CM_S_TO_MPH(centimetersPerSecond) ((centimetersPerSecond) * 10000 / 5080 / 88)
+
+// Standard Sea Level values
+// Ref:https://en.wikipedia.org/wiki/Standard_sea_level
+#define SSL_AIR_DENSITY		1.225f // kg/m^3
+#define SSL_AIR_PRESSURE	101325.01576f // Pascal
+#define SSL_AIR_TEMPERATURE	288.15f // K
+
+#define C_TO_KELVIN(temp)                   (temp + 273.15f)
 
 #define MIN(a,b) \
   __extension__ ({ __typeof__ (a) _a = (a); \
@@ -132,6 +142,7 @@ void i16_euler_of_fp_euler(i16_euler_t *ei, const fp_euler_t *ef);
 void fp_euler_of_i16_euler(fp_euler_t *ef, const i16_euler_t *ei);
 void fp_euler_of_rotationMatrix(fp_euler_t *e, const fp_rotationMatrix_t *r);
 void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternionProducts_t *qp);
+void fp_euler_of_quaternionProducts_ZXY(fp_euler_t *e, const fp_quaternionProducts_t *qp);
 
 void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e);
 void rotationMatrix_of_quaternionProducts(fp_rotationMatrix_t *r, const fp_quaternionProducts_t *qP);
@@ -146,6 +157,7 @@ void quaternionProducts_of_quaternion(fp_quaternionProducts_t *qP, const fp_quat
 void rotate_vector_with_quaternion(fp_vector_t *v, const fp_quaternion_t *q);
 fp_quaternion_t chain_quaternion(const fp_quaternion_t* qA_I, const fp_quaternion_t* qB_A);
 fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
+void quaternion_integrate_body_rates(fp_quaternion_t* q, const fp_vector_t* w, float dt);
 
 // vector operation primitives
 
@@ -154,6 +166,12 @@ fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis);
     _orig.V.X += _sc * _add.V.X; \
     _orig.V.Y += _sc * _add.V.Y; \
     _orig.V.Z += _sc * _add.V.Z; \
+}
+
+#define VEC3_ELEM_MULT(_orig, _gains) { \
+    _orig.V.X *= _gains.V.X; \
+    _orig.V.Y *= _gains.V.Y; \
+    _orig.V.Z *= _gains.V.Z; \
 }
 
 #define VEC3_ELEM_MULT_ADD(_orig, _gains, _add) { \

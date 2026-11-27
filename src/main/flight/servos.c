@@ -25,6 +25,13 @@
 
 #include "platform.h"
 
+#include "flight/servos.h"
+
+int16_t servo[MAX_SUPPORTED_SERVOS];
+float servo_normalized[MAX_SUPPORTED_SERVOS] = { 0 };
+int16_t servo_feedback[MAX_SUPPORTED_SERVOS] = { 0 };
+
+
 #ifdef USE_SERVOS
 
 #include "build/build_config.h"
@@ -42,10 +49,9 @@
 #include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
-#include "flight/servos.h"
 
 #include "io/gimbal.h"
 
@@ -90,8 +96,6 @@ void pgResetFn_servoParams(servoParam_t *instance)
 
 // no template required since default is zero
 PG_REGISTER(gimbalConfig_t, gimbalConfig, PG_GIMBAL_CONFIG, 0);
-
-int16_t servo[MAX_SUPPORTED_SERVOS];
 
 static uint8_t servoRuleCount = 0;
 static servoMixer_t currentServoMixer[MAX_SERVO_RULES];

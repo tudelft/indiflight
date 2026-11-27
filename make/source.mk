@@ -52,6 +52,7 @@ COMMON_SRC = \
             drivers/transponder_ir_arcitimer.c \
             drivers/transponder_ir_ilap.c \
             drivers/transponder_ir_erlt.c \
+			drivers/pitotmeter/pitotmeter_ms4525.c \
             fc/board_info.c \
             fc/dispatch.c \
             fc/hardfaults.c \
@@ -67,8 +68,10 @@ COMMON_SRC = \
             io/transponder_ir.c \
             io/usb_cdc_hid.c \
             io/usb_msc.c \
-            io/external_pos.c \
+            io/local_pos.c \
 			io/hil.c \
+			io/t4.c \
+			io/feetech.c \
             msp/msp.c \
             msp/msp_box.c \
             msp/msp_serial.c \
@@ -77,6 +80,7 @@ COMMON_SRC = \
             sensors/battery.c \
             sensors/current.c \
             sensors/voltage.c \
+			sensors/pitotmeter.c \
             target/config_helper.c \
             fc/init.c \
             fc/controlrate_profile.c \
@@ -95,9 +99,10 @@ COMMON_SRC = \
             fc/rc_modes.c \
             flight/position.c \
             flight/failsafe.c \
+            flight/geofence.c \
             flight/gps_rescue.c \
             flight/dyn_notch_filter.c \
-            flight/imu.c \
+            flight/ahrs.c \
             flight/feedforward.c \
             flight/mixer.c \
             flight/mixer_init.c \
@@ -105,20 +110,24 @@ COMMON_SRC = \
             flight/pid.c \
             flight/pid_init.c \
             flight/pos_ctl.c \
+            flight/pos_att_ndi.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_df.c \
             flight/indi.c \
             flight/indi_init.c \
             flight/catapult.c \
             flight/learner.c \
+            flight/learning_prober.c \
             flight/throw.c \
             flight/rpm_filter.c \
             flight/servos.c \
             flight/servos_tricopter.c \
             flight/ekf.c \
-            flight/ekf_calc.c \
             flight/trajectory_tracker.c \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
+            flight/gain_schedule.c \
             io/serial_4way.c \
             io/serial_4way_avrootloader.c \
             io/serial_4way_stk500v2.c \
@@ -155,12 +164,13 @@ COMMON_SRC = \
             blackbox/blackbox.c \
             blackbox/blackbox_encoding.c \
             blackbox/blackbox_io.c \
+            blackbox/blackbox_download.c \
             cms/cms.c \
             cms/cms_menu_blackbox.c \
             cms/cms_menu_failsafe.c \
             cms/cms_menu_firmware.c \
             cms/cms_menu_gps_rescue.c\
-            cms/cms_menu_imu.c \
+            cms/cms_menu_ahrs.c \
             cms/cms_menu_ledstrip.c \
             cms/cms_menu_main.c \
             cms/cms_menu_misc.c \
@@ -212,6 +222,7 @@ COMMON_SRC = \
             telemetry/msp_shared.c \
             telemetry/ibus.c \
             telemetry/ibus_shared.c \
+            telemetry/uros.c \
             sensors/esc_sensor.c \
             io/vtx.c \
             io/vtx_rtc6705.c \
@@ -253,6 +264,7 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
 			common/rls.c \
             common/sdft.c \
             common/typeconversion.c \
+            common/ortho_signals.c \
             drivers/accgyro/accgyro_mpu.c \
             drivers/accgyro/accgyro_mpu3050.c \
             drivers/accgyro/accgyro_spi_bmi160.c \
@@ -283,13 +295,18 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             fc/rc_controls.c \
             fc/runtime_config.c \
             flight/dyn_notch_filter.c \
-            flight/imu.c \
+            flight/geofence.c \
+            flight/ahrs.c \
             flight/mixer.c \
             flight/pid.c \
             flight/pos_ctl.c \
+            flight/pos_att_ndi.c \
+            flight/pos_att_indi.c \
+            flight/pos_att_df.c \
             flight/indi.c \
             flight/catapult.c \
             flight/learner.c \
+            flight/learning_prober.c \
             flight/throw.c \
             flight/rpm_filter.c \
             flight/ekf.c \
@@ -298,8 +315,10 @@ SPEED_OPTIMISED_SRC := $(SPEED_OPTIMISED_SRC) \
             flight/nn_control.c \
             flight/neural_controllers/nn_controller.c \
             flight/neural_controllers/neural_network.c \
-			io/external_pos.c \
+			io/local_pos.c \
             io/keyboard.c \
+			io/t4.c \
+			io/feetech.c \
             rx/ibus.c \
             rx/rx.c \
             rx/rx_spi.c \
@@ -377,7 +396,7 @@ SIZE_OPTIMISED_SRC := $(SIZE_OPTIMISED_SRC) \
             cms/cms_menu_failsafe.c \
             cms/cms_menu_firmware.c \
             cms/cms_menu_gps_rescue.c\
-            cms/cms_menu_imu.c \
+            cms/cms_menu_ahrs.c \
             cms/cms_menu_ledstrip.c \
             cms/cms_menu_main.c \
             cms/cms_menu_misc.c \
@@ -510,6 +529,32 @@ SRC += $(PI_DIR)/pi-messages.c
 #SIZE_OPTIMISED_SRC += $(PI_DIR)/pi-messages.c
 endif
 
+# Do the same for ekf c code
+EKF_DIR = $(ROOT)/lib/main/ekf_c_code_generation
+EKF_BUILD_DIR = $(EKF_DIR)/build
+EKF_GEN_FILES = $(EKF_BUILD_DIR)/ekf_calc.h $(EKF_BUILD_DIR)/ekf_calc.c
+ifneq ($(EKF_DIR),)
+INCLUDE_DIRS += $(EKF_BUILD_DIR)
+SRC += $(EKF_GEN_FILES)
+SPEED_OPTIMISED_SRC += $(EKF_GEN_FILES)
+endif
+
+INCLUDE_DIRS += $(ROOT)/lib/main/micro_ros_arduino/src
+
+#INCLUDE_DIRS += /opt/ros/humble/include/rcl
+#INCLUDE_DIRS += /opt/ros/humble/include/rcutils
+#INCLUDE_DIRS += /opt/ros/humble/include/rmw
+INCLUDE_DIRS += /opt/ros/humble/include/rcl_yaml_param_parser
+#INCLUDE_DIRS += /opt/ros/humble/include/rosidl_runtime_c
+#INCLUDE_DIRS += /opt/ros/humble/include/rosidl_typesupport_interface
+#INCLUDE_DIRS += /opt/ros/humble/include/rcl_action
+#INCLUDE_DIRS += /opt/ros/humble/include/action_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/unique_identifier_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/builtin_interfaces
+#INCLUDE_DIRS += /opt/ros/humble/include/std_msgs
+#INCLUDE_DIRS += /opt/ros/humble/include/lib
+#INCLUDE_DIRS += ../../../rclc/rclc/include
+
 # Do the same for the ActiveSetCtlAlloc
 AS_SRC_DIR = $(ROOT)/lib/main/ActiveSetCtlAlloc/src
 
@@ -571,7 +616,9 @@ LAPACK_FILTER_OUT := arithchk.c main.c uninit.c backspac.c getarg_.c iargc_.c
 LAPACK_SOURCE_F2CLIB = $(filter-out $(addprefix $(LAPACK_DIR)/F2CLIBS/libf2c/, $(LAPACK_FILTER_OUT)), $(wildcard $(LAPACK_DIR)/F2CLIBS/libf2c/*.c))
 LAPACK_SOURCE_NO_OPTIM += $(LAPACK_SOURCE_F2CLIB)
 
-LAPACK_SOURCE_INSTALL = dlamch.c dsecnd.c second.c slamch.c
+# slamch/dlamch replaced by common/lapack_lamch.c (the f2c ones hang with
+# -ffast-math). It is picked up by the common/*.c wildcard
+LAPACK_SOURCE_INSTALL = dsecnd.c second.c
 LAPACK_SOURCE_NO_OPTIM += $(addprefix $(LAPACK_DIR)/INSTALL/, $(LAPACK_SOURCE_INSTALL))
 
 ### ADD SOURCES

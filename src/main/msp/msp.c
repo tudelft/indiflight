@@ -30,6 +30,7 @@
 
 #include "blackbox/blackbox.h"
 #include "blackbox/blackbox_io.h"
+#include "blackbox/blackbox_download.h"
 
 #include "build/build_config.h"
 #include "build/debug.h"
@@ -84,7 +85,7 @@
 
 #include "flight/failsafe.h"
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/pid_init.h"
@@ -1362,7 +1363,7 @@ case MSP_NAME:
     case MSP_ARMING_CONFIG:
         sbufWriteU8(dst, armingConfig()->auto_disarm_delay);
         sbufWriteU8(dst, 0);
-        sbufWriteU8(dst, imuConfig()->small_angle);
+        sbufWriteU8(dst, ahrsConfig()->small_angle);
         break;
 
     case MSP_RC_TUNING:
@@ -2518,6 +2519,24 @@ static mspResult_e mspFcProcessOutCommandWithArg(mspDescriptor_t srcDesc, int16_
 
         break;
 
+#ifdef USE_MSP_LOG_DOWNLOAD
+    case MSP2_INDI_BLACKBOX_LOG_LIST:
+        blackboxDownloadMspList(src, dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_READ:
+        blackboxDownloadMspRead(src, dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_CLOSE:
+        blackboxDownloadMspClose(dst);
+        break;
+
+    case MSP2_INDI_BLACKBOX_LOG_ERASE_ALL:
+        blackboxDownloadMspEraseAll(src, dst);
+        break;
+#endif
+
     case MSP2_GET_TEXT:
         {
             // type byte, then length byte followed by the actual characters
@@ -2666,7 +2685,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         armingConfigMutable()->auto_disarm_delay = sbufReadU8(src);
         sbufReadU8(src); // reserved
         if (sbufBytesRemaining(src)) {
-          imuConfigMutable()->small_angle = sbufReadU8(src);
+          ahrsConfigMutable()->small_angle = sbufReadU8(src);
         }
         break;
 
@@ -2813,6 +2832,7 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         if (sbufBytesRemaining(src) >= 2) {
             // Added in API version 1.43
             gpsConfigMutable()->gps_set_home_point_once = sbufReadU8(src);
+            gpsConfigMutable()->gps_set_home_point_once = false; // always disable this now
             gpsConfigMutable()->gps_ublox_use_galileo = sbufReadU8(src);
         }
         break;

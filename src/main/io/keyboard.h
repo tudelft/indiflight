@@ -25,3 +25,4 @@
 
 void processKey(uint8_t key);
 void processKeyboard(void);
+uint8_t latestKeyPressed(void);

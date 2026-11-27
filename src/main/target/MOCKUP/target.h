@@ -40,11 +40,11 @@
 
 // use simulatior's attitude directly
 // disable this if wants to test AHRS algorithm
-//#undef USE_IMU_CALC
+//#undef USE_AHRS_CALC
 
 //#define SIMULATOR_ACC_SYNC
 //#define SIMULATOR_GYRO_SYNC
-//#define SIMULATOR_IMU_SYNC
+//#define SIMULATOR_AHRS_SYNC
 //#define SIMULATOR_GYROPID_SYNC
 
 // file name to save config
@@ -56,8 +56,8 @@
 #define U_ID_1 1
 #define U_ID_2 2
 
-#undef TASK_GYROPID_DESIRED_PERIOD
-#define TASK_GYROPID_DESIRED_PERIOD     100
+#undef TASK_IMUPID_DESIRED_PERIOD
+#define TASK_IMUPID_DESIRED_PERIOD     100
 
 #undef SCHEDULER_DELAY_LIMIT
 #define SCHEDULER_DELAY_LIMIT           1
@@ -141,6 +141,11 @@
 
 #undef USE_I2C
 #undef USE_SPI
+#undef USE_FLASH
+#undef USE_FLASH_M25P16
+#undef USE_FLASH_W25M
+#undef USE_FLASH_W25N01G
+#undef USE_FLASH_W25Q128FV
 
 #define TARGET_FLASH_SIZE 2048
 
@@ -269,6 +274,7 @@ void delayMicroseconds_real(uint32_t us);
 //timeUs_t micros(void);
 
 int lockMainPID(void);
+void mockupShutdown(void); // call before dlclose() of the .so
 
 // dshot motor feedback emulation
 extern float motorOmegaValues[MAX_SUPPORTED_MOTORS];

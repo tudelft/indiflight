@@ -97,11 +97,61 @@ blackbox_unittest_SRC :=  \
 		$(USER_DIR)/common/typeconversion.c \
 		$(USER_DIR)/drivers/accgyro/gyro_sync.c
 
+blackbox_download_unittest_SRC := \
+		$(USER_DIR)/blackbox/blackbox_download.c \
+		$(USER_DIR)/common/huffman.c \
+		$(USER_DIR)/common/huffman_table.c \
+		$(USER_DIR)/common/streambuf.c \
+		$(USER_DIR)/io/asyncfatfs/fat_standard.c
+
+blackbox_download_unittest_DEFINES := \
+		USE_SDCARD= \
+		USE_FLASHFS= \
+		USE_HUFFMAN= \
+		USE_MSP_LOG_DOWNLOAD=
+
 blackbox_encoding_unittest_SRC :=  \
 		$(USER_DIR)/blackbox/blackbox_encoding.c \
 		$(USER_DIR)/common/encoding.c \
 		$(USER_DIR)/common/printf.c \
 		$(USER_DIR)/common/typeconversion.c
+
+# blackbox.c with every feature that adds rows to blackboxMainFields[].
+# Needs the lib/main/ActiveSetCtlAlloc submodule (included by flight/indi.h).
+blackbox_header_unittest_SRC := \
+		$(USER_DIR)/blackbox/blackbox.c \
+		$(USER_DIR)/blackbox/blackbox_encoding.c \
+		$(USER_DIR)/blackbox/blackbox_io.c \
+		$(USER_DIR)/common/encoding.c \
+		$(USER_DIR)/common/printf.c \
+		$(USER_DIR)/common/maths.c \
+		$(USER_DIR)/common/typeconversion.c \
+		$(USER_DIR)/drivers/accgyro/gyro_sync.c
+
+blackbox_header_unittest_DEFINES := \
+		USE_INDI= \
+		USE_LOCAL_POSITION= \
+		USE_TELEMETRY_PI= \
+		USE_TRAJECTORY_TRACKER= \
+		USE_NN_CONTROL= \
+		USE_EKF= \
+		USE_LEARNER= \
+		BLACKBOX_LEARNER_LOG_8_MOTORS= \
+		USE_PITOT= \
+		USE_RANGEFINDER= \
+		USE_SERVOS_FEETECH= \
+		AS_N_U=8 \
+		AS_N_V=6 \
+		AS_SINGLE_FLOAT= \
+		AS_COST_TRUNCATE= \
+		AS_RECORD_COST= \
+		AS_RECORD_COST_N=5
+
+blackbox_header_unittest_INCLUDE_DIRS := \
+		$(TEST_DIR)/blackbox_header_stubs \
+		$(ROOT)/lib/main/ActiveSetCtlAlloc/src \
+		$(ROOT)/lib/main/ActiveSetCtlAlloc/src/common \
+		$(ROOT)/lib/main/ActiveSetCtlAlloc/src/lib
 
 cli_unittest_SRC := \
 		$(USER_DIR)/cli/cli.c \

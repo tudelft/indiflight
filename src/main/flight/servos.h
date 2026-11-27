@@ -134,6 +134,19 @@ typedef struct servoProfile_s {
 } servoProfile_t;
 
 extern int16_t servo[MAX_SUPPORTED_SERVOS];
+extern float servo_normalized[MAX_SUPPORTED_SERVOS];
+extern int16_t servo_feedback[MAX_SUPPORTED_SERVOS]; // centi degrees
+
+// a driver that fills servo_feedback[] is compiled in (enables blackbox logging)
+#if defined(USE_ACTUATORS_T4) || defined(USE_SERVOS_FEETECH)
+#define USE_SERVO_FEEDBACK
+#endif
+
+// servo_feedback[] holds measured angles: from a driver, or from the
+// simulation (HIL_BUILD, MOCKUP). Otherwise INDI uses the servo command.
+#if defined(USE_SERVO_FEEDBACK) || defined(HIL_BUILD) || defined(MOCKUP)
+#define SERVO_FEEDBACK_AVAILABLE
+#endif
 
 bool isMixerUsingServos(void);
 void writeServos(void);

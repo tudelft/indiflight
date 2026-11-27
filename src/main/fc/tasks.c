@@ -54,7 +54,7 @@
 #include "fc/runtime_config.h"
 
 #include "flight/gps_rescue.h"
-#include "flight/imu.h"
+#include "flight/ahrs.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/position.h"
@@ -67,10 +67,12 @@
 
 
 #include "io/asyncfatfs/asyncfatfs.h"
+
+#include "blackbox/blackbox_download.h"
 #include "io/beeper.h"
 #include "io/dashboard.h"
 #include "io/flashfs.h"
-#include "io/external_pos.h"
+#include "io/local_pos.h"
 #include "io/gps.h"
 #include "io/ledstrip.h"
 #include "io/piniobox.h"
@@ -104,9 +106,11 @@
 #include "sensors/gyro.h"
 #include "sensors/sensors.h"
 #include "sensors/rangefinder.h"
+#include "sensors/pitotmeter.h"
 
 #include "telemetry/telemetry.h"
 #include "telemetry/crsf.h"
+#include "telemetry/uros.h"
 
 #ifdef USE_BST
 #include "i2c_bst.h"
@@ -137,6 +141,10 @@ static void taskMain(timeUs_t currentTimeUs)
 
 #ifdef USE_SDCARD
     afatfs_poll();
+#endif
+
+#ifdef USE_MSP_LOG_DOWNLOAD
+    blackboxDownloadUpdate(millis());
 #endif
 
 #ifdef USE_FLASHFS
@@ -173,16 +181,6 @@ static void taskBatteryAlerts(timeUs_t currentTimeUs)
     batteryUpdateStates(currentTimeUs);
     batteryUpdateAlarms();
 }
-
-#ifdef USE_ACC
-static void taskUpdateAccelerometer(timeUs_t currentTimeUs)
-{
-    accUpdate(currentTimeUs);
-#ifdef USE_THROW_TO_ARM
-    updateThrowFallStateMachine(currentTimeUs);
-#endif
-}
-#endif
 
 typedef enum {
     RX_STATE_CHECK,
@@ -290,6 +288,13 @@ static void taskUpdateBaro(timeUs_t currentTimeUs)
 }
 #endif
 
+#ifdef USE_PITOT
+static void taskUpdatePitot(timeUs_t currentTimeUs)
+{
+    pitotUpdate(currentTimeUs);
+}
+#endif
+
 #ifdef USE_MAG
 static void taskUpdateMag(timeUs_t currentTimeUs)
 {
@@ -346,12 +351,16 @@ static void taskHil(timeUs_t currentTimeUs)
 }
 #endif
 
-#ifdef USE_GPS_PI
-static void taskGpsPi(timeUs_t currentTimeUs)
+#ifdef USE_LOCAL_POSITION
+//static void taskLocalPosition(timeUs_t currentTimeUs)
+//{
+//    getLocalPos(currentTimeUs);
+//    getFakeGps(currentTimeUs);
+//    getPosSetpoint(currentTimeUs);
+//}
+static void taskPosCtl(timeUs_t currentTimeUs)
 {
-    getExternalPos(currentTimeUs);
-    getFakeGps(currentTimeUs);
-    getPosSetpoint(currentTimeUs);
+    updatePosCtl(currentTimeUs);
 }
 #endif
 
@@ -360,20 +369,6 @@ static void taskKeyboard(timeUs_t currentTimeUs)
 {
     UNUSED(currentTimeUs);
     processKeyboard();
-}
-#endif
-
-#ifdef USE_POS_CTL
-static void taskPosCtl(timeUs_t currentTimeUs)
-{
-    updatePosCtl(currentTimeUs);
-}
-#endif
-
-#ifdef USE_EKF
-static void taskEkf(timeUs_t currentTimeUs)
-{
-    updateEkf(currentTimeUs);
 }
 #endif
 
@@ -407,8 +402,8 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_MAIN] = DEFINE_TASK("SYSTEM", "UPDATE", NULL, taskMain, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM_HIGH),
     [TASK_SERIAL] = DEFINE_TASK("SERIAL", NULL, NULL, taskHandleSerial, TASK_PERIOD_HZ(100), TASK_PRIORITY_LOW), // 100 Hz should be enough to flush up to 115 bytes @ 115200 baud
     [TASK_BATTERY_ALERTS] = DEFINE_TASK("BATTERY_ALERTS", NULL, NULL, taskBatteryAlerts, TASK_PERIOD_HZ(5), TASK_PRIORITY_MEDIUM),
-    [TASK_BATTERY_VOLTAGE] = DEFINE_TASK("BATTERY_VOLTAGE", NULL, NULL, batteryUpdateVoltage, TASK_PERIOD_HZ(SLOW_VOLTAGE_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM), // Freq may be updated in tasksInit
-    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_BATTERY_VOLTAGE] = DEFINE_TASK("BATTERY_VOLTAGE", NULL, NULL, batteryUpdateVoltage, TASK_PERIOD_HZ(VOLTAGE_TASK_FREQ_HZ), TASK_PRIORITY_MEDIUM), // Freq may be updated in tasksInit
+    [TASK_BATTERY_CURRENT] = DEFINE_TASK("BATTERY_CURRENT", NULL, NULL, batteryUpdateCurrentMeter, TASK_PERIOD_HZ(200), TASK_PRIORITY_MEDIUM),
 
 #ifdef USE_TRANSPONDER
     [TASK_TRANSPONDER] = DEFINE_TASK("TRANSPONDER", NULL, NULL, transponderUpdate, TASK_PERIOD_HZ(250), TASK_PRIORITY_LOW),
@@ -418,13 +413,16 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_STACK_CHECK] = DEFINE_TASK("STACKCHECK", NULL, NULL, taskStackCheck, TASK_PERIOD_HZ(10), TASK_PRIORITY_LOWEST),
 #endif
 
-    [TASK_GYRO] = DEFINE_TASK("GYRO", NULL, NULL, taskGyroSample, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
-    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_GYROPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_IMU] = DEFINE_TASK("GYRO", NULL, NULL, taskImuSample, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_FILTER] = DEFINE_TASK("FILTER", NULL, NULL, taskFiltering, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+    [TASK_INNER_LOOP] = DEFINE_TASK("INNER LOOP", NULL, NULL, taskMainInnerLoop, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+
+#ifdef USE_EKF
+    [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
+#endif
 
 #ifdef USE_ACC
-    [TASK_ACCEL] = DEFINE_TASK("ACC", NULL, NULL, taskUpdateAccelerometer, TASK_PERIOD_HZ(1000), TASK_PRIORITY_MEDIUM),
-    [TASK_ATTITUDE] = DEFINE_TASK("ATTITUDE", NULL, NULL, imuUpdateAttitude, TASK_PERIOD_HZ(100), TASK_PRIORITY_MEDIUM),
+    [TASK_AHRS] = DEFINE_TASK("AHRS", NULL, NULL, taskAhrs, TASK_IMUPID_DESIRED_PERIOD, TASK_PRIORITY_REALTIME),
 #endif
 
     [TASK_RX] = DEFINE_TASK("RX", NULL, rxUpdateCheck, taskUpdateRxMain, TASK_PERIOD_HZ(33), TASK_PRIORITY_HIGH), // If event-based scheduling doesn't work, fallback to periodic scheduling
@@ -454,6 +452,10 @@ task_attribute_t task_attributes[TASK_COUNT] = {
     [TASK_ALTITUDE] = DEFINE_TASK("ALTITUDE", NULL, NULL, taskCalculateAltitude, TASK_PERIOD_HZ(TASK_ALTITUDE_RATE_HZ), TASK_PRIORITY_LOW),
 #endif
 
+#ifdef USE_PITOT
+    [TASK_PITOT] = DEFINE_TASK("PITOT", NULL, NULL, taskUpdatePitot, TASK_PERIOD_HZ(TASK_PITOT_RATE_HZ), TASK_PRIORITY_LOW),
+#endif
+
 #ifdef USE_DASHBOARD
     [TASK_DASHBOARD] = DEFINE_TASK("DASHBOARD", NULL, NULL, dashboardUpdate, TASK_PERIOD_HZ(10), TASK_PRIORITY_LOW),
 #endif
@@ -463,27 +465,24 @@ task_attribute_t task_attributes[TASK_COUNT] = {
 #endif
 
 #ifdef USE_TELEMETRY
-    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(2000), TASK_PRIORITY_LOW),
+    [TASK_TELEMETRY] = DEFINE_TASK("TELEMETRY", NULL, NULL, taskTelemetry, TASK_PERIOD_HZ(50), TASK_PRIORITY_LOW),
+#endif
+
+#ifdef USE_TELEMETRY_UROS
+    [TASK_UROS] = DEFINE_TASK("UROS", NULL, NULL, urosUpdate, TASK_PERIOD_HZ(20), TASK_PRIORITY_LOW),
 #endif
 
 #ifdef HIL_BUILD
     [TASK_HIL] = DEFINE_TASK("HIL", NULL, NULL, taskHil, TASK_PERIOD_HZ(1000), TASK_PRIORITY_HIGH),
 #endif
 
-#ifdef USE_GPS_PI
-    [TASK_GPS_PI] = DEFINE_TASK("GPS_PI", NULL, NULL, taskGpsPi, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+#ifdef USE_LOCAL_POSITION
+//    [TASK_LOCAL_POSITION] = DEFINE_TASK("LOCAL_POSITION", NULL, NULL, taskLocalPosition, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
+    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_TELEMETRY_PI
     [TASK_KEYBOARD] = DEFINE_TASK("KEYBOARD", NULL, NULL, taskKeyboard, TASK_PERIOD_HZ(50), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_POS_CTL
-    [TASK_POS_CTL] = DEFINE_TASK("POS_CTL", NULL, NULL, taskPosCtl, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
-#endif
-
-#ifdef USE_EKF
-    [TASK_EKF] = DEFINE_TASK("EKF", NULL, NULL, taskEkf, TASK_PERIOD_HZ(500), TASK_PRIORITY_MEDIUM),
 #endif
 
 #ifdef USE_LED_STRIP
@@ -556,13 +555,6 @@ void tasksInit(void)
     const bool useBatteryVoltage = batteryConfig()->voltageMeterSource != VOLTAGE_METER_NONE;
     setTaskEnabled(TASK_BATTERY_VOLTAGE, useBatteryVoltage);
 
-#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
-    // If vbat motor output compensation is used, use fast vbat samplingTime
-    if (isSagCompensationConfigured()) {
-        rescheduleTask(TASK_BATTERY_VOLTAGE, TASK_PERIOD_HZ(FAST_VOLTAGE_TASK_FREQ_HZ));
-    }
-#endif
-
     const bool useBatteryCurrent = batteryConfig()->currentMeterSource != CURRENT_METER_NONE;
     setTaskEnabled(TASK_BATTERY_CURRENT, useBatteryCurrent);
     const bool useBatteryAlerts = batteryConfig()->useVBatAlerts || batteryConfig()->useConsumptionAlerts || featureIsEnabled(FEATURE_OSD);
@@ -573,10 +565,10 @@ void tasksInit(void)
 #endif
 
     if (sensors(SENSOR_GYRO)) {
-        rescheduleTask(TASK_GYRO, gyro.sampleLooptime);
+        rescheduleTask(TASK_IMU, gyro.sampleLooptime);
         rescheduleTask(TASK_FILTER, gyro.targetLooptime);
         rescheduleTask(TASK_INNER_LOOP, gyro.targetLooptime);
-        setTaskEnabled(TASK_GYRO, true);
+        setTaskEnabled(TASK_IMU, true);
         setTaskEnabled(TASK_FILTER, true);
         setTaskEnabled(TASK_INNER_LOOP, true);
         schedulerEnableGyro();
@@ -584,12 +576,7 @@ void tasksInit(void)
 
 #if defined(USE_ACC)
     if (sensors(SENSOR_ACC) && acc.sampleRateHz) {
-        setTaskEnabled(TASK_ACCEL, true);
-        rescheduleTask(TASK_ACCEL, TASK_PERIOD_HZ(acc.sampleRateHz));
-#if !defined(USE_EKF)
-        // attitude task is still run in ekf.c, as fallback
-        setTaskEnabled(TASK_ATTITUDE, true);
-#endif
+        setTaskEnabled(TASK_AHRS, true);
     }
 #endif
 
@@ -627,6 +614,10 @@ void tasksInit(void)
     setTaskEnabled(TASK_ALTITUDE, sensors(SENSOR_BARO) || featureIsEnabled(FEATURE_GPS));
 #endif
 
+#ifdef USE_PITOT
+    setTaskEnabled(TASK_PITOT, true);
+#endif
+
 #ifdef USE_DASHBOARD
     setTaskEnabled(TASK_DASHBOARD, featureIsEnabled(FEATURE_DASHBOARD));
 #endif
@@ -646,21 +637,22 @@ void tasksInit(void)
     }
 #endif
 
+#ifdef USE_TELEMETRY_UROS
+    setTaskEnabled(TASK_UROS, true);
+#endif
+
 #ifdef HIL_BUILD
     setTaskEnabled(TASK_HIL, true);
 #endif
 
-#ifdef USE_GPS_PI
+#ifdef USE_LOCAL_POSITION
     // todo! CHECK OTHER FLAGS for consistency
-    setTaskEnabled(TASK_GPS_PI, true);
+    setTaskEnabled(TASK_LOCAL_POSITION, true);
+    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_TELEMETRY_PI
     setTaskEnabled(TASK_KEYBOARD, true);
-#endif
-
-#ifdef USE_POS_CTL
-    setTaskEnabled(TASK_POS_CTL, true);
 #endif
 
 #ifdef USE_EKF

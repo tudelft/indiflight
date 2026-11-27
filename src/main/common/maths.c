@@ -140,6 +140,13 @@ FAST_CODE void fp_euler_of_quaternionProducts(fp_euler_t *e, const fp_quaternion
     e->angles.yaw   = atan2_approx((2.0f * (qp->wz + qp->xy)), (1.0f - 2.0f * (qp->yy + qp->zz)));
 }
 
+FAST_CODE void fp_euler_of_quaternionProducts_ZXY(fp_euler_t *e, const fp_quaternionProducts_t *qp) {
+    // https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions#Conversion_formulae_between_formalisms
+    // z-x'-y'' rotation order: intrinsic rotations around yaw then roll then pitch
+    e->angles.roll  = asin_approx(2.0f * (qp->wx + qp->yz));
+    e->angles.pitch = atan2_approx((2.0f * (qp->wy - qp->xz)), (1.0f - 2.0f * (qp->xx + qp->yy)));
+    e->angles.yaw   = atan2_approx((2.0f * (qp->wz - qp->xy)), (1.0f - 2.0f * (qp->xx + qp->zz)));
+}
 
 FAST_CODE void rotationMatrix_of_fp_euler(fp_rotationMatrix_t *r, const fp_euler_t *e) {
     float cosx, sinx, cosy, siny, cosz, sinz;
@@ -371,6 +378,20 @@ FAST_CODE fp_vector_t quatRotMatCol(const fp_quaternion_t* q, uint8_t axis) {
             break;
     }
     return res;
+}
+
+// fwd euler integrate body rates w over interval dt: q <-- q + 0.5dt * q * (0 w)
+void quaternion_integrate_body_rates(fp_quaternion_t* q, const fp_vector_t* w, float dt)
+{
+    fp_quaternion_t buffer = *q;
+    QUAT_SCALAR_MULT(buffer, (0.5f*dt));
+
+    q->w += (-buffer.x * w->V.X - buffer.y * w->V.Y - buffer.z * w->V.Z);
+    q->x += (+buffer.w * w->V.X + buffer.y * w->V.Z - buffer.z * w->V.Y);
+    q->y += (+buffer.w * w->V.Y - buffer.x * w->V.Z + buffer.z * w->V.X);
+    q->z += (+buffer.w * w->V.Z + buffer.x * w->V.Y - buffer.y * w->V.X);
+
+    QUAT_NORMALIZE((*q));
 }
 
 // columns major. upper factor
